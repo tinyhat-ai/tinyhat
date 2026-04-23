@@ -5,9 +5,10 @@ Subcommands:
     routine.py status         Print current state + last run date. Exit 0.
     routine.py on             Set enabled=true. Exit 0.
     routine.py off            Set enabled=false. Exit 0.
-    routine.py check          Exit 0 if a run should fire today (enabled +
-                              no run-stamp for today). Exit 1 otherwise.
-                              Also prints a one-line reason.
+    routine.py check          Print ``skip: <reason>`` or ``fire: <reason>``
+                              so the agent can dispatch on the prefix, then
+                              exit 0. Never returns non-zero — the prefix
+                              is the signal, not the exit code.
     routine.py clear-archive  Delete everything under archive/, keep latest/.
     routine.py where          Print the paths Tinyhat reads and writes.
 
@@ -87,21 +88,23 @@ def cmd_off(root: Path) -> int:
 
 
 def cmd_check(root: Path) -> int:
-    """Return 0 if a daily run should fire now.
+    """Print the fire/skip decision and always exit 0.
 
-    Exit 0 only when routine is enabled AND the last run's date is not
-    today. The skill uses this as a gate before launching a background
-    review.
+    The caller (the audit skill's load-time block) reads the ``skip:``
+    vs ``fire:`` prefix on stdout, not the exit code. Returning non-zero
+    would force skill authors to tack `|| true` onto the invocation,
+    which then fails the Bash-tool permission check as a compound
+    command.
     """
     data = _load_routine(root)
     if not data.get("enabled", True):
         print("skip: routine disabled")
-        return 1
+        return 0
     last = _last_run_date(root)
     today = _today()
     if last == today:
         print(f"skip: already ran today ({last})")
-        return 1
+        return 0
     print(f"fire: last_run={last or '(never)'}, today={today}")
     return 0
 

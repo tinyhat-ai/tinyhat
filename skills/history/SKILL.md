@@ -1,6 +1,6 @@
 ---
 description: Open the skill-audit history page — a local index of the latest report plus every dated archive snapshot (up to 31), with links to each. Triggers on "show my skill audit history", "browse my tinyhat audits over time", "list all my skill audits", "see previous skill audits", "open the audit archive", "show the tinyhat archive", or explicit /tinyhat:history invocations.
-allowed-tools: Bash(open *) Bash(xdg-open *) Bash(start *) Bash(python3 *) Read
+allowed-tools: Bash(open *) Bash(xdg-open *) Bash(start *) Bash(python3 *) Bash(CLAUDE_PLUGIN_DATA=* python3 *) Read
 ---
 
 # tinyhat:history — browse all skill-audit reports
@@ -26,7 +26,7 @@ of Tinyhat that loaded this skill.
    - If the new path is missing but `${CLAUDE_PLUGIN_DATA}/latest/report.html` exists,
      regenerate the index without running a new audit:
      ```bash
-     CLAUDE_PLUGIN_DATA="${CLAUDE_PLUGIN_DATA}" python3 "${CLAUDE_SKILL_DIR}/../../scripts/render_report.py" --index-only
+     python3 "${CLAUDE_SKILL_DIR}/../../scripts/render_report.py" --index-only
      ```
    - If no reports exist at all, tell the user and hand off to
      `/tinyhat:audit` to create the first snapshot.

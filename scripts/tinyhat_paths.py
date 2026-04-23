@@ -1,18 +1,23 @@
 #!/usr/bin/env python3
 """Resolve Tinyhat's writable home under Claude Code plugin data.
 
-The skill-side env var `CLAUDE_PLUGIN_DATA` is the only authoritative
-source for the home path — it's the one Claude Code renders into
-skills via `${CLAUDE_PLUGIN_DATA}`. When it is missing (shell-side
-invocations during development), this module scans existing
-`~/.claude/plugins/data/tinyhat*` siblings for one that already looks
-like a Tinyhat home and prefers that over guessing a fresh name from
-`plugin.json`. Shell and skill invocations converge instead of
-silently writing to different homes.
+Priority order for picking the home directory:
 
-`reconcile_homes(new_root)` then pulls any other Tinyhat-shaped
-directory (legacy `~/.claude/tinyhat/` plus any plugin-data sibling)
-into `new_root`, so a machine that was already split-brained heals on
+1. ``CLAUDE_PLUGIN_DATA`` env var when present.
+2. ``<plugin>-<marketplace>`` derived from the script install path
+   (``.../plugins/cache/<marketplace>/<plugin>/<version>/scripts/``).
+   This matches Claude Code's own data-dir naming and keeps the
+   script-side view aligned with the skill-side view even when the env
+   var isn't forwarded into the child process — so no inline
+   ``CLAUDE_PLUGIN_DATA=...`` prefix is needed in skill bash blocks.
+3. Any existing Tinyhat-shaped ``~/.claude/plugins/data/tinyhat*``
+   sibling (most-recently-modified first) — for dev checkouts that
+   don't live under a marketplace cache.
+4. ``<plugin-name>`` from ``plugin.json`` as a last resort.
+
+``reconcile_homes(new_root)`` then pulls any other Tinyhat-shaped
+directory (legacy ``~/.claude/tinyhat/`` plus any plugin-data sibling)
+into ``new_root`` so a machine that was already split-brained heals on
 the first run after this patch.
 """
 
@@ -37,7 +42,35 @@ def _sanitize_plugin_id(value: str) -> str:
     return slug or "tinyhat"
 
 
+def _cached_install_plugin_id() -> str | None:
+    """Derive ``<plugin>-<marketplace>`` from the script install path.
+
+    Claude Code installs marketplace plugins at
+    ``~/.claude/plugins/cache/<marketplace>/<plugin>/<version>/`` and
+    names the matching data dir ``<plugin>-<marketplace>``. When that's
+    where the script is running from, return the sanitized id so the
+    script-side resolution matches the skill-side ``${CLAUDE_PLUGIN_DATA}``
+    without needing the env var to be forwarded explicitly.
+    """
+    try:
+        version_dir = PLUGIN_ROOT
+        plugin_dir = version_dir.parent
+        marketplace_dir = plugin_dir.parent
+        cache_dir = marketplace_dir.parent
+    except AttributeError:
+        return None
+    if cache_dir.name != "cache" or cache_dir.parent.name != "plugins":
+        return None
+    if not plugin_dir.name or not marketplace_dir.name:
+        return None
+    return _sanitize_plugin_id(f"{plugin_dir.name}-{marketplace_dir.name}")
+
+
 def _fallback_plugin_id() -> str:
+    inferred = _cached_install_plugin_id()
+    if inferred:
+        return inferred
+
     manifest_path = PLUGIN_ROOT / ".claude-plugin" / "plugin.json"
     try:
         data = json.loads(manifest_path.read_text(encoding="utf-8"))
@@ -96,16 +129,24 @@ def default_home_root() -> Path:
 
     Priority:
 
-    1. ``CLAUDE_PLUGIN_DATA`` env var (authoritative for skill-side runs).
-    2. Any existing Tinyhat-shaped `~/.claude/plugins/data/tinyhat*`
+    1. ``CLAUDE_PLUGIN_DATA`` env var (authoritative when present).
+    2. ``<plugin>-<marketplace>`` inferred from the script install path
+       (``.../plugins/cache/<marketplace>/<plugin>/<version>/``). This
+       matches Claude Code's own per-plugin data-dir naming, so the
+       script-side and skill-side views converge without relying on the
+       env var being forwarded into the child process.
+    3. Any existing Tinyhat-shaped `~/.claude/plugins/data/tinyhat*`
        directory — most recently modified wins. Lets shell-side
-       invocations discover an existing home instead of creating a
-       fresh sibling.
-    3. ``~/.claude/plugins/data/<plugin-id>`` from ``plugin.json``.
+       invocations from a dev checkout discover an existing home
+       instead of creating a fresh sibling.
+    4. ``~/.claude/plugins/data/<plugin-id>`` from ``plugin.json``.
     """
     raw = os.getenv("CLAUDE_PLUGIN_DATA")
     if raw:
         return Path(raw).expanduser()
+    inferred = _cached_install_plugin_id()
+    if inferred:
+        return PLUGIN_DATA_ROOT / inferred
     existing = _scan_sibling_homes()
     if existing:
         return existing[0]
