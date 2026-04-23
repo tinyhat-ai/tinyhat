@@ -17,12 +17,15 @@ I keep coming back to the way humans swap roles: *"put on your marketing hat."* 
 
 ## Install
 
-Inside Claude Code:
+Inside Claude Code, add the Tinyloop marketplace and install the plugin from it:
 
 ```text
-/plugin install tinyhat-ai/tinyhat
+/plugin marketplace add tinyhat-ai/tinyhat
+/plugin install tinyhat@tinyloop
 /reload-plugins
 ```
+
+The first line registers Tinyloop's marketplace (this repo doubles as its own marketplace). The second installs the `tinyhat` plugin from it. After this, `/plugin marketplace update tinyloop` pulls newer versions.
 
 Requires Python 3.9+ on your `PATH` (pre-installed on macOS and most Linux).
 

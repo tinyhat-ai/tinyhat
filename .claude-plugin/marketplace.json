@@ -1,0 +1,33 @@
+{
+  "$schema": "https://anthropic.com/claude-code/marketplace.schema.json",
+  "name": "tinyloop",
+  "owner": {
+    "name": "Tinyloop",
+    "email": "tinyhat@tinyloop.co"
+  },
+  "metadata": {
+    "description": "Tinyloop's Claude Code plugin marketplace. Currently hosts Tinyhat; future Tinyloop-branded plugins will land here too."
+  },
+  "plugins": [
+    {
+      "name": "tinyhat",
+      "source": "./",
+      "description": "Local, read-only skill-lifecycle observability for Claude Code. Produces an agent-authored report about which skills you actually use, which look dormant, and what to create next.",
+      "homepage": "https://github.com/tinyhat-ai/tinyhat",
+      "repository": "https://github.com/tinyhat-ai/tinyhat",
+      "license": "MIT",
+      "category": "observability",
+      "keywords": [
+        "skills",
+        "observability",
+        "lifecycle",
+        "local",
+        "read-only"
+      ],
+      "author": {
+        "name": "Tinyloop",
+        "email": "tinyhat@tinyloop.co"
+      }
+    }
+  ]
+}
