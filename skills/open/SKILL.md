@@ -1,6 +1,6 @@
 ---
 description: Open the most recent Tinyhat skill-audit report (HTML) in the user's default browser, or answer a specific question about it from the persisted JSON — does NOT regenerate. Triggers on "open my latest skill audit", "show my latest tinyhat report", "open the last skill audit", "what did the skill audit say", "remind me what the audit said about X", "which skills are dormant", "open the skill audit report", "open tinyhat", or explicit /tinyhat:open invocations. If no report exists yet, hand off to /tinyhat:audit to create the first one.
-allowed-tools: Bash(open *) Bash(xdg-open *) Bash(start *) Bash(python3 *) Read
+allowed-tools: Bash(open *) Bash(xdg-open *) Bash(start *) Bash(python3 *) Bash(CLAUDE_PLUGIN_DATA=* python3 *) Read
 ---
 
 # tinyhat:open — read from or open the latest audit
@@ -89,10 +89,12 @@ xdg-open "${CLAUDE_PLUGIN_DATA}/latest/report.html"    # Linux
 start "${CLAUDE_PLUGIN_DATA}/latest/report.html"       # Windows
 ```
 
-If unsure which OS, use Python's `webbrowser` module (cross-platform):
+If unsure which OS, use Python's `webbrowser` module (cross-platform).
+Pass the scripts dir as argv so the helper imports from the same
+bundled `tinyhat_paths` as the rest of the plugin:
 
 ```bash
-CLAUDE_PLUGIN_DATA="${CLAUDE_PLUGIN_DATA}" python3 -c "import os, webbrowser, pathlib; webbrowser.open(pathlib.Path(os.environ['CLAUDE_PLUGIN_DATA'], 'latest', 'report.html').as_uri())"
+python3 -c 'import sys, webbrowser; sys.path.insert(0, sys.argv[1]); from tinyhat_paths import default_home_root; webbrowser.open((default_home_root() / "latest" / "report.html").as_uri())' "${CLAUDE_SKILL_DIR}/../../scripts"
 ```
 
 3. In one short sentence, tell the user what they're looking at — the

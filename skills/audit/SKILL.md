@@ -1,7 +1,7 @@
 ---
 description: Audit which Claude Code skills you actually use, which look dormant, and what to create next. Produces an agent-authored local HTML+markdown report on the data already on disk. Triggers on "audit my skills", "run a skill audit", "review my skill usage", "clean up unused skills", "trim my skill set", "which skills should I remove", "how am I using Claude", "which skills am I actually using", "what skills should I create", "refresh my tinyhat report", or explicit /tinyhat:audit invocations.
 argument-hint: [--archive] [--open]
-allowed-tools: Bash(python3 *) Bash(open *) Bash(xdg-open *) Bash(start *) Read Write
+allowed-tools: Bash(python3 *) Bash(CLAUDE_PLUGIN_DATA=* python3 *) Bash(open *) Bash(xdg-open *) Bash(start *) Read Write
 ---
 
 # tinyhat:audit — local skill-usage audit, agent-authored
@@ -46,7 +46,7 @@ Every time this skill loads, silently check whether today's adaptive
 snapshot should fire. Do not ask the user.
 
 ```!
-CLAUDE_PLUGIN_DATA="${CLAUDE_PLUGIN_DATA}" python3 "${CLAUDE_SKILL_DIR}/../../scripts/routine.py" check || true
+python3 "${CLAUDE_SKILL_DIR}/../../scripts/routine.py" check
 ```
 
 If the output starts with `skip:`, do nothing and proceed to the user's
@@ -61,7 +61,7 @@ request on this.
 ### 1. Gather the snapshot
 
 ```bash
-CLAUDE_PLUGIN_DATA="${CLAUDE_PLUGIN_DATA}" python3 "${CLAUDE_SKILL_DIR}/../../scripts/gather_snapshot.py"
+python3 "${CLAUDE_SKILL_DIR}/../../scripts/gather_snapshot.py"
 ```
 
 Writes `<temp>/tinyhat-snapshot.json`. The path is printed to stderr.
@@ -99,11 +99,11 @@ read it the first time you run this skill.
 
 ```bash
 # Default — writes latest/ and archive index; no browser:
-CLAUDE_PLUGIN_DATA="${CLAUDE_PLUGIN_DATA}" python3 "${CLAUDE_SKILL_DIR}/../../scripts/render_report.py"
+python3 "${CLAUDE_SKILL_DIR}/../../scripts/render_report.py"
 
 # User passed --archive (or the adaptive daily fired) — write the
 # dated archive copy too; do NOT open the browser:
-CLAUDE_PLUGIN_DATA="${CLAUDE_PLUGIN_DATA}" python3 "${CLAUDE_SKILL_DIR}/../../scripts/render_report.py" --archive
+python3 "${CLAUDE_SKILL_DIR}/../../scripts/render_report.py" --archive
 ```
 
 Rendering always writes four files into `${CLAUDE_PLUGIN_DATA}/latest/`:
