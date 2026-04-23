@@ -9,12 +9,15 @@ Tinyhat is local-only and read-only against Claude's data. It writes files to **
 | `~/.claude/tinyhat/routine.json` | Adaptive-daily on/off + install timestamp | On first run; overwritten on `/tinyhat:audit routine on|off` |
 | `~/.claude/tinyhat/latest/report.html` | Latest report, self-contained HTML | Every `/tinyhat:audit` run |
 | `~/.claude/tinyhat/latest/report.md` | Latest report, markdown mirror | Every `/tinyhat:audit` run |
+| `~/.claude/tinyhat/latest/snapshot.json` | Durable data snapshot — the facts | Every `/tinyhat:audit` run |
+| `~/.claude/tinyhat/latest/analysis.json` | Durable agent analysis — the editorial layer | Every `/tinyhat:audit` run |
 | `~/.claude/tinyhat/latest/run-stamp.txt` | ISO local-date of last successful run | Every `/tinyhat:audit` run |
 | `~/.claude/tinyhat/archive/YYYY-MM-DD/report.{html,md}` | Dated snapshot | When `--archive` is passed or the adaptive daily fires |
+| `~/.claude/tinyhat/archive/YYYY-MM-DD/{snapshot,analysis}.json` | Dated JSONs alongside the HTML/MD | When `--archive` is passed or the adaptive daily fires |
 | `~/.claude/tinyhat/archive/index.html` | Browseable index of latest + all archives | Every render call |
 | `~/.claude/tinyhat/feedback.jsonl` | Optional local feedback log (reserved) | Never in v0 (feedback goes via `mailto:`) |
-| `<tempdir>/tinyhat-snapshot.json` | Transient data snapshot | Every `gather_snapshot.py` call |
-| `<tempdir>/tinyhat-analysis.json` | Transient agent-authored analysis | Every `/tinyhat:audit` run |
+| `<tempdir>/tinyhat-snapshot.json` | Transient mirror of latest/snapshot.json (pipeline hand-off) | Every `gather_snapshot.py` call |
+| `<tempdir>/tinyhat-analysis.json` | Transient mirror of latest/analysis.json (pipeline hand-off) | Every `/tinyhat:audit` run |
 
 `<tempdir>` is whatever `python3 -c 'import tempfile; print(tempfile.gettempdir())'` returns on your OS:
 - macOS: `/var/folders/.../T/`
@@ -29,12 +32,16 @@ Tinyhat is local-only and read-only against Claude's data. It writes files to **
 ├── latest/
 │   ├── report.html         ← open this to see the most recent report
 │   ├── report.md
+│   ├── snapshot.json       ← the facts the report was built from
+│   ├── analysis.json       ← the agent's editorial layer
 │   └── run-stamp.txt       ← one line: YYYY-MM-DD of the last run
 └── archive/
     ├── index.html          ← open this to browse all reports
     ├── 2026-04-23/
     │   ├── report.html
-    │   └── report.md
+    │   ├── report.md
+    │   ├── snapshot.json
+    │   └── analysis.json
     ├── 2026-04-22/
     │   └── ...
     └── ...                 (up to 31 dated dirs; older pruned automatically)
@@ -83,22 +90,25 @@ cat ~/.claude/tinyhat/latest/run-stamp.txt
 
 Or inside Claude Code: `/tinyhat:audit routine status`.
 
-### The raw snapshot JSON (for debugging attribution)
+### The durable snapshot JSON (the facts)
 
 ```bash
-python3 -c 'import tempfile, pathlib; p = pathlib.Path(tempfile.gettempdir()) / "tinyhat-snapshot.json"; print(p)'
-# copy that path and open it
+cat ~/.claude/tinyhat/latest/snapshot.json
 ```
 
 Top-level keys: `meta`, `stats`, `inventory`, `top_skills`, `skill_counts`, `last_seen`, `sessions`, `events`, `events_audit`, `tool_totals`, `aggregate_tools`, `daily_rollups`, `dormant_by_origin`, `installed_by_origin`, `surface_rollups`, `coverage`. See [development.md](local-development.md) for the shape.
 
-### The agent-authored analysis JSON (for debugging framing)
+The transient mirror at `<tempdir>/tinyhat-snapshot.json` is the same data — it's the hand-off between `gather_snapshot.py` and `render_report.py`. The copy under `latest/` is the one you (or Claude, on a follow-up turn) should read.
+
+### The agent-authored analysis JSON (the editorial layer)
 
 ```bash
-python3 -c 'import tempfile, pathlib; p = pathlib.Path(tempfile.gettempdir()) / "tinyhat-analysis.json"; print(p)'
+cat ~/.claude/tinyhat/latest/analysis.json
 ```
 
 Shape: `headline`, `headline_sub`, `what_stands_out[]`, `dormant_commentary`, `skill_recommendations[]`, `coverage_note`. Schema details in [`skills/audit/references/writing-the-analysis.md`](../skills/audit/references/writing-the-analysis.md).
+
+Same story as snapshot.json — there's a transient mirror under `<tempdir>/tinyhat-analysis.json`, but `latest/analysis.json` is the durable copy a follow-up question will read from.
 
 ## Retention
 
