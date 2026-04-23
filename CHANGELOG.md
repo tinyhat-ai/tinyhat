@@ -13,6 +13,13 @@ for fixes. Breaking changes stay in minor bumps until we explicitly
 ship `1.0.0`. Release-please is configured to honor this
 (`bump-minor-pre-major: true`, `bump-patch-for-minor-pre-major: true`).
 
+## [0.1.5](https://github.com/tinyhat-ai/tinyhat/compare/v0.1.4...v0.1.5) (2026-04-23)
+
+
+### Bug Fixes
+
+* **audit:** Improve first-run report flow ([#49](https://github.com/tinyhat-ai/tinyhat/issues/49)) ([6e9f055](https://github.com/tinyhat-ai/tinyhat/commit/6e9f055748920ce36d49a1ae042a3949f3d598b2))
+
 ## [0.1.4](https://github.com/tinyhat-ai/tinyhat/compare/v0.1.3...v0.1.4) (2026-04-23)
 
 
