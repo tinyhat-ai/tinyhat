@@ -13,6 +13,13 @@ for fixes. Breaking changes stay in minor bumps until we explicitly
 ship `1.0.0`. Release-please is configured to honor this
 (`bump-minor-pre-major: true`, `bump-patch-for-minor-pre-major: true`).
 
+## [0.1.4](https://github.com/tinyhat-ai/tinyhat/compare/v0.1.3...v0.1.4) (2026-04-23)
+
+
+### Features
+
+* **audit:** Chat summary + persisted JSONs instead of auto-opening HTML ([#45](https://github.com/tinyhat-ai/tinyhat/issues/45)) ([39471c4](https://github.com/tinyhat-ai/tinyhat/commit/39471c41718d2a5c7f6179cf85c70064e0a12830))
+
 ## [0.1.3](https://github.com/tinyhat-ai/tinyhat/compare/v0.1.2...v0.1.3) (2026-04-23)
 
 
