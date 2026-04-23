@@ -13,6 +13,13 @@ for fixes. Breaking changes stay in minor bumps until we explicitly
 ship `1.0.0`. Release-please is configured to honor this
 (`bump-minor-pre-major: true`, `bump-patch-for-minor-pre-major: true`).
 
+## [0.1.6](https://github.com/tinyhat-ai/tinyhat/compare/v0.1.5...v0.1.6) (2026-04-23)
+
+
+### Bug Fixes
+
+* **paths:** Reconcile split-brain plugin-data homes (closes [#52](https://github.com/tinyhat-ai/tinyhat/issues/52)) ([#54](https://github.com/tinyhat-ai/tinyhat/issues/54)) ([685f4b9](https://github.com/tinyhat-ai/tinyhat/commit/685f4b93343e83d85007fe3e7809fdb045aefa86))
+
 ## [0.1.5](https://github.com/tinyhat-ai/tinyhat/compare/v0.1.4...v0.1.5) (2026-04-23)
 
 
