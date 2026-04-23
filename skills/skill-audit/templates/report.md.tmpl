@@ -1,0 +1,50 @@
+# Skill Value Review
+
+**Window:** {{WINDOW_LABEL}}
+**Generated:** {{GENERATED_AT}}
+
+> {{HEADLINE}}
+
+---
+
+## Snapshot
+
+| Metric | Value |
+|---|---:|
+| Installed skills | {{INSTALLED_COUNT}} |
+| Active skills | {{ACTIVE_COUNT}} |
+| Skill runs detected | {{SKILL_RUNS_TOTAL}} |
+| Recent sessions scanned | {{SESSIONS_TOTAL}} |
+| Sessions with skills | {{SESSIONS_WITH_SKILLS}} |
+| Turns scanned | {{TURNS_TOTAL}} |
+| Token activity (incl. cache) | {{TOKENS_TOTAL_COMPACT}} |
+
+## What stands out
+
+{{STANDOUTS_MD}}
+
+## Top skills
+
+| Skill | What it does | Runs | Last used |
+|---|---|---:|---|
+{{TOP_SKILLS_TABLE}}
+
+## Dormant surface
+
+- {{UNUSED_COUNT}} of {{INSTALLED_COUNT}} installed skills showed no detected use in this window ({{UNUSED_PCT}}%).
+
+{{DORMANT_COMMENTARY}}
+
+| Source | Unused skills |
+|---|---:|
+{{DORMANT_TABLE}}
+
+## Skill recommendations
+
+{{RECOMMENDATIONS_MD}}
+
+## Coverage
+
+{{COVERAGE_MD}}
+
+> Open the HTML snapshot for the doughnut charts, activity patterns, and expandable session details.

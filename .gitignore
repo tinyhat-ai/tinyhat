@@ -89,3 +89,17 @@ AGENTS.local.md
 *.probe.out.txt
 claude-config-probe.out.txt
 claude-session-format-probe.out.txt
+
+# --- Tinyhat local-dev test harnesses -----------------------------------
+# These shadow the production skills/*/ for in-session testing without
+# restarting Claude Code. Delete before merging any PR that depends on
+# them. They use hardcoded paths and are maintainer-machine-specific.
+.claude/skills/skill-audit/
+.claude/skills/open-latest-audit/
+.claude/skills/audit-history/
+
+# --- CI scratch + generated artifacts -----------------------------------
+.ruff_cache/
+dist/
+build/
+*.egg-info/

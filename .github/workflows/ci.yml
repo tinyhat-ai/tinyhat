@@ -1,0 +1,82 @@
+name: CI
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  lint:
+    name: lint
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+
+      - name: Install ruff
+        run: python -m pip install --upgrade pip "ruff==0.6.9"
+
+      - name: ruff check
+        run: ruff check .
+
+      - name: ruff format --check
+        run: ruff format --check .
+
+  smoke:
+    name: smoke
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+        python-version: ["3.9", "3.11", "3.12"]
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python ${{ matrix.python-version }}
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+
+      - name: Byte-compile scripts
+        run: python -m compileall -q scripts
+
+      - name: Gather snapshot against an empty machine
+        run: |
+          mkdir -p "$RUNNER_TEMP/tinyhat-ci/home"
+          python3 scripts/gather_snapshot.py --output "$RUNNER_TEMP/tinyhat-ci/snapshot.json"
+          test -s "$RUNNER_TEMP/tinyhat-ci/snapshot.json"
+
+      - name: Render report with fallback analysis
+        run: |
+          python3 scripts/render_report.py \
+            --snapshot "$RUNNER_TEMP/tinyhat-ci/snapshot.json" \
+            --home-root "$RUNNER_TEMP/tinyhat-ci/home"
+          test -s "$RUNNER_TEMP/tinyhat-ci/home/latest/report.html"
+          test -s "$RUNNER_TEMP/tinyhat-ci/home/latest/report.md"
+          test -s "$RUNNER_TEMP/tinyhat-ci/home/archive/index.html"
+
+      - name: Archive + retention smoke test
+        run: |
+          python3 scripts/render_report.py \
+            --snapshot "$RUNNER_TEMP/tinyhat-ci/snapshot.json" \
+            --home-root "$RUNNER_TEMP/tinyhat-ci/home" \
+            --archive
+          ls "$RUNNER_TEMP/tinyhat-ci/home/archive/"
+
+      - name: Routine CLI smoke test
+        run: |
+          python3 scripts/routine.py --home-root "$RUNNER_TEMP/tinyhat-ci/home" status
+          python3 scripts/routine.py --home-root "$RUNNER_TEMP/tinyhat-ci/home" off
+          python3 scripts/routine.py --home-root "$RUNNER_TEMP/tinyhat-ci/home" on
+          python3 scripts/routine.py --home-root "$RUNNER_TEMP/tinyhat-ci/home" where
