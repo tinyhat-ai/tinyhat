@@ -13,6 +13,24 @@ for fixes. Breaking changes stay in minor bumps until we explicitly
 ship `1.0.0`. Release-please is configured to honor this
 (`bump-minor-pre-major: true`, `bump-patch-for-minor-pre-major: true`).
 
+## [0.1.8](https://github.com/tinyhat-ai/tinyhat/compare/v0.1.7...v0.1.8) (2026-04-23)
+
+
+### Features
+
+* **skills:** Add review-changelog and wire into release flow ([#70](https://github.com/tinyhat-ai/tinyhat/issues/70)) ([6286ddf](https://github.com/tinyhat-ai/tinyhat/commit/6286ddfc229995fa75e3163f7cb6ab99b81c558d)), closes [#42](https://github.com/tinyhat-ai/tinyhat/issues/42)
+
+
+### Bug Fixes
+
+* **audit:** Direct agent to Bash heredoc for analysis JSON (closes [#39](https://github.com/tinyhat-ai/tinyhat/issues/39)) ([#75](https://github.com/tinyhat-ai/tinyhat/issues/75)) ([55b461a](https://github.com/tinyhat-ai/tinyhat/commit/55b461af95b855a31462f0e65a272d1f21e5515b))
+* **audit:** Heads-up note when regenerating a same-day report (closes [#37](https://github.com/tinyhat-ai/tinyhat/issues/37)) ([#69](https://github.com/tinyhat-ai/tinyhat/issues/69)) ([26719f0](https://github.com/tinyhat-ai/tinyhat/commit/26719f0897fb3b2eecf4b3c644453febb57aa1a1))
+* **audit:** Unbreak skill's load-time block + drop env-var prefix (closes [#63](https://github.com/tinyhat-ai/tinyhat/issues/63)) ([#67](https://github.com/tinyhat-ai/tinyhat/issues/67)) ([17b12cc](https://github.com/tinyhat-ai/tinyhat/commit/17b12cce57357bd2bfe57cd39df53137f97a2ec2))
+* **release:** Bump plugin.json version with every release (closes [#64](https://github.com/tinyhat-ai/tinyhat/issues/64)) ([#65](https://github.com/tinyhat-ai/tinyhat/issues/65)) ([4ec820a](https://github.com/tinyhat-ai/tinyhat/commit/4ec820a2b4d130dfa880ae1699cd3e81f4e2a540))
+* **report:** Archived reports link back to archive index correctly ([#68](https://github.com/tinyhat-ai/tinyhat/issues/68)) ([512de9d](https://github.com/tinyhat-ai/tinyhat/commit/512de9d88624dbfb583512c1b316fc5226209aed)), closes [#14](https://github.com/tinyhat-ai/tinyhat/issues/14)
+* **report:** Hero doughnut arcs now match their integer labels (closes [#71](https://github.com/tinyhat-ai/tinyhat/issues/71)) ([#76](https://github.com/tinyhat-ai/tinyhat/issues/76)) ([54addf9](https://github.com/tinyhat-ai/tinyhat/commit/54addf9461c71d0f576aa0d21bb95fe86c538282))
+* **snapshot:** Split gather output into compact + detail (closes [#38](https://github.com/tinyhat-ai/tinyhat/issues/38)) ([#72](https://github.com/tinyhat-ai/tinyhat/issues/72)) ([f015c72](https://github.com/tinyhat-ai/tinyhat/commit/f015c72e340e0057dbf1e7ce3b8cc2947ba2df15))
+
 ## [0.1.7](https://github.com/tinyhat-ai/tinyhat/compare/v0.1.6...v0.1.7) (2026-04-23)
 
 
