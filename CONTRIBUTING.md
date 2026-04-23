@@ -122,6 +122,13 @@ pre-commit install
 
 Our `.pre-commit-config.yaml` runs the same checks as CI.
 
+## Influencing priorities
+
+Want something moved up the queue?
+Open a PR against [`roadmap/`](roadmap/) — the ordering is public and editable.
+The [`propose-roadmap`](.claude/skills/propose-roadmap/SKILL.md) skill (or `/propose-roadmap` inside Claude Code) walks you through the right PR format.
+One move per PR; every move links to an issue.
+
 ## Questions / discussion
 
 - Open an issue using the [bug report](.github/ISSUE_TEMPLATE/bug_report.yml)

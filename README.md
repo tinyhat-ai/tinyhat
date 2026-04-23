@@ -48,6 +48,7 @@ Deeper docs live in [`docs/`](docs/):
 - [`docs/artifacts.md`](docs/artifacts.md) — every file Tinyhat writes, and how to open or reset it
 - [`docs/architecture.md`](docs/architecture.md) — how the code is laid out
 - [`docs/local-development.md`](docs/local-development.md) — how to hack on it
+- [`roadmap/`](roadmap/) — what's being built now, next, and later; open a PR to propose a priority change
 
 ## Contributing
 

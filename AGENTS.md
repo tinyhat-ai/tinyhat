@@ -44,6 +44,7 @@ and open the relevant `SKILL.md` before executing the operation.
 | Cut a release | [`release`](.claude/skills/release/SKILL.md) | Reviewing or merging a release-please PR, smoke-testing a published release, or rolling one back. Covers the pre-1.0 versioning policy and the manual-release escape hatch. |
 | Onboard a new agent | [`add-agent`](.claude/skills/add-agent/SKILL.md) | Before a new coding agent touches this repo. Covers machine-user provisioning, SSH alias, identity-table row, `.gitignore` rules. |
 | Edit a guidance file | [`update-guidance`](.claude/skills/update-guidance/SKILL.md) | When changing `AGENTS.md`, `CLAUDE.md`, any `SKILL.md`, or `CLAUDE.local.md*`. Covers where each piece belongs, line budgets, anchor hygiene. |
+| Propose a roadmap change | [`propose-roadmap`](.claude/skills/propose-roadmap/SKILL.md) | When moving an item between `roadmap/` files, adding a new candidate, or flagging something for rejection. Covers PR format and the one-move-per-PR rule. |
 
 When a skill's `description` matches what you're about to do, invoke it
 instead of improvising. When in doubt, start with `update-guidance`.
