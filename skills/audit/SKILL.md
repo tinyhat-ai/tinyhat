@@ -31,6 +31,21 @@ actually worth mentioning.
 | `--archive` | Also write today's dated archive snapshot. |
 | `--no-open` | Skip the browser. Used by the adaptive daily run. |
 
+## Load-time: persist the plugin root
+
+`${CLAUDE_PLUGIN_ROOT}` only expands inside `!`-prefixed blocks.
+Non-`!` Bash blocks (the ones you run via the `Bash` tool later) see it
+empty. Persist it to a known file at load time so those calls can find
+the scripts no matter which version the user has installed.
+
+```!
+mkdir -p ~/.claude/tinyhat && printf '%s' "${CLAUDE_PLUGIN_ROOT}" > ~/.claude/tinyhat/.plugin-root
+```
+
+All non-`!` Bash blocks below resolve the scripts dir with
+`"$(cat ~/.claude/tinyhat/.plugin-root)/scripts/..."`. Don't hardcode
+the plugin path — it changes per user and per version.
+
 ## Load-time daily check (before handling the user's request)
 
 Every time this skill loads, silently check whether today's adaptive
@@ -50,7 +65,7 @@ today's snapshot refreshed. Never block the user's request on this.
 ### 1. Gather the snapshot
 
 ```bash
-python3 "${CLAUDE_PLUGIN_ROOT}/scripts/gather_snapshot.py"
+python3 "$(cat ~/.claude/tinyhat/.plugin-root)/scripts/gather_snapshot.py"
 ```
 
 Writes `<temp>/tinyhat-snapshot.json`. The path is printed to stderr.
@@ -85,10 +100,10 @@ read it the first time you run this skill.
 
 ```bash
 # Manual, opens in browser:
-python3 "${CLAUDE_PLUGIN_ROOT}/scripts/render_report.py" --open
+python3 "$(cat ~/.claude/tinyhat/.plugin-root)/scripts/render_report.py" --open
 
 # Adaptive daily or explicit --archive:
-python3 "${CLAUDE_PLUGIN_ROOT}/scripts/render_report.py" --archive
+python3 "$(cat ~/.claude/tinyhat/.plugin-root)/scripts/render_report.py" --archive
 ```
 
 The renderer also rewrites `~/.claude/tinyhat/archive/index.html` so
@@ -109,11 +124,11 @@ One or two sentences max. Reference one specific observation from
 
 ## Paths
 
-- Scripts: `${CLAUDE_PLUGIN_ROOT}/scripts/` (`gather_snapshot.py`, `render_report.py`, `routine.py`)
+- Scripts: `${CLAUDE_PLUGIN_ROOT}/scripts/` — resolved at runtime via `~/.claude/tinyhat/.plugin-root` (written in the load-time `!` block)
 - Transient: `<tempdir>/tinyhat-snapshot.json`, `<tempdir>/tinyhat-analysis.json`
 - Latest: `~/.claude/tinyhat/latest/report.{md,html}` + `run-stamp.txt`
 - Archive: `~/.claude/tinyhat/archive/YYYY-MM-DD/report.{md,html}` + `index.html`
-- Routine state: `~/.claude/tinyhat/routine.json`
+- Routine state: `~/.claude/tinyhat/routine.json`, `~/.claude/tinyhat/.plugin-root`
 
 ## Gotchas
 

@@ -9,13 +9,24 @@ Open `~/.claude/tinyhat/archive/index.html`. That page lists the
 latest report plus every dated archive snapshot (up to 31) with
 one-click links. Each entry opens its own `report.html`.
 
+## Load-time: persist the plugin root
+
+`${CLAUDE_PLUGIN_ROOT}` only expands inside `!`-prefixed blocks. The
+index-regenerate call below runs via the `Bash` tool where that
+variable is empty. Persist it to a known file at load time so the call
+can find `render_report.py` no matter which version is installed.
+
+```!
+mkdir -p ~/.claude/tinyhat && printf '%s' "${CLAUDE_PLUGIN_ROOT}" > ~/.claude/tinyhat/.plugin-root
+```
+
 ## Flow
 
 1. Check whether `~/.claude/tinyhat/archive/index.html` exists.
    - If missing but `~/.claude/tinyhat/latest/report.html` exists,
      regenerate the index without running a new audit:
      ```bash
-     python3 "${CLAUDE_PLUGIN_ROOT}/scripts/render_report.py" --index-only
+     python3 "$(cat ~/.claude/tinyhat/.plugin-root)/scripts/render_report.py" --index-only
      ```
    - If no reports exist at all, tell the user and hand off to
      `/tinyhat:audit` to create the first snapshot.

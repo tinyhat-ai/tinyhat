@@ -230,7 +230,7 @@ tinyhat/
 └── README.md                        ← user-facing install + usage
 ```
 
-**Plugin paths in SKILL.md** use `${CLAUDE_PLUGIN_ROOT}`. That variable is only set when the skill runs as a plugin (loaded via `--plugin-dir` or `/plugin install`). If you try to run the plugin's `SKILL.md` bash snippets from a regular shell, that variable is empty — use the real path or run the script directly.
+**Plugin paths in SKILL.md** use `${CLAUDE_PLUGIN_ROOT}`, which the plugin harness only populates inside `!`-prefixed fenced blocks (load-time execution). Non-`!` Bash blocks — what the agent runs via the `Bash` tool after the skill has loaded — see the variable empty, which would leave a call like `python3 "${CLAUDE_PLUGIN_ROOT}/scripts/gather_snapshot.py"` pointing at `/scripts/gather_snapshot.py`. Every SKILL.md in this plugin sidesteps this by persisting the resolved path to `~/.claude/tinyhat/.plugin-root` in a load-time `!` block, then reading it back with `python3 "$(cat ~/.claude/tinyhat/.plugin-root)/scripts/..."` in the agent-executed blocks. Follow the same pattern for any new SKILL.md script call. If you're running a `SKILL.md` snippet from a regular shell outside the plugin harness, substitute the real plugin path directly.
 
 **Temp file location** is the platform temp dir (`/var/folders/...` on macOS, `/tmp` on Linux, `%TEMP%` on Windows). Find it with:
 
