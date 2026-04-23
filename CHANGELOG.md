@@ -13,6 +13,18 @@ for fixes. Breaking changes stay in minor bumps until we explicitly
 ship `1.0.0`. Release-please is configured to honor this
 (`bump-minor-pre-major: true`, `bump-patch-for-minor-pre-major: true`).
 
+## [0.1.7](https://github.com/tinyhat-ai/tinyhat/compare/v0.1.6...v0.1.7) (2026-04-23)
+
+
+### Features
+
+* **dev:** Add internal dev-reset skill for fresh first-run testing ([#59](https://github.com/tinyhat-ai/tinyhat/issues/59)) ([2bc7647](https://github.com/tinyhat-ai/tinyhat/commit/2bc7647e251d8232f1c404bdc90d3719c0481fdb))
+
+
+### Bug Fixes
+
+* **paths:** Forward CLAUDE_PLUGIN_DATA from skill body into python3 env ([#61](https://github.com/tinyhat-ai/tinyhat/issues/61)) ([1ecaccf](https://github.com/tinyhat-ai/tinyhat/commit/1ecaccf8dc4332b0544202db646a8c125d687ac2))
+
 ## [0.1.6](https://github.com/tinyhat-ai/tinyhat/compare/v0.1.5...v0.1.6) (2026-04-23)
 
 
