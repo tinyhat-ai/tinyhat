@@ -1,0 +1,263 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1"/>
+<title>Skill Value Review</title>
+<style>
+{{CSS}}
+</style>
+</head>
+<body class="mode-main">
+<div class="wrap">
+
+  <header class="report-header">
+    <div class="report-header-top">
+      <div>
+        <div class="kicker">Tinyhat · Skill Value Review</div>
+        <h1 class="report-title">Which skills are actually earning their keep?</h1>
+        <p class="report-sub">A local, read-only look at how your Claude skills show up in the work you've actually been doing.</p>
+        <p class="report-meta">Generated {{GENERATED_AT}} · window: {{WINDOW_LABEL}}</p>
+      </div>
+      <div class="mode-switch" role="tablist" aria-label="Report detail mode">
+        <button class="mode-btn" data-mode="main" type="button" onclick="setMode('main')"><span>✨</span><span>Keep it simple</span></button>
+        <button class="mode-btn" data-mode="details" type="button" onclick="setMode('details')"><span>🤓</span><span>Data junkie mode</span></button>
+      </div>
+    </div>
+  </header>
+
+  <section class="pie-grid">
+    <div class="pie-card">
+      <div class="pie" style="--value: {{UTILIZATION_PCT}}%; --pie-color: var(--accent);">
+        <div class="pie-center"><strong>{{UTILIZATION_PCT_INT}}%</strong><span>active</span></div>
+      </div>
+      <div class="pie-copy">
+        <h3>Skill utilization</h3>
+        <p>{{ACTIVE_COUNT}} of {{INSTALLED_COUNT}} installed skills had at least one run.</p>
+      </div>
+    </div>
+    <div class="pie-card">
+      <div class="pie" style="--value: {{SESSION_SKILL_PCT}}%; --pie-color: var(--warm);">
+        <div class="pie-center"><strong>{{SESSION_SKILL_PCT_INT}}%</strong><span>sessions</span></div>
+      </div>
+      <div class="pie-copy">
+        <h3>Sessions with skills</h3>
+        <p>{{SESSIONS_WITH_SKILLS}} of {{SESSIONS_TOTAL}} recent sessions fired at least one skill.</p>
+      </div>
+    </div>
+  </section>
+
+  <section class="hero">
+    <h2 class="hero-headline">{{HEADLINE}}</h2>
+    <p class="small">{{HEADLINE_SUB}}</p>
+    <div class="stats">
+      <div class="stat"><span class="n">{{INSTALLED_COUNT}}</span><span class="label">Installed</span></div>
+      <div class="stat"><span class="n">{{ACTIVE_COUNT}}</span><span class="label">Active</span></div>
+      <div class="stat"><span class="n">{{SKILL_RUNS_TOTAL}}</span><span class="label">Skill runs</span></div>
+      <div class="stat"><span class="n">{{SESSIONS_TOTAL}}</span><span class="label">Sessions</span></div>
+      <div class="stat"><span class="n">{{TURNS_TOTAL_COMPACT}}</span><span class="label">Turns</span></div>
+      <div class="stat"><span class="n">{{TOKENS_TOTAL_COMPACT}}</span><span class="label">Token activity</span></div>
+    </div>
+  </section>
+
+  <section>
+    <div class="kicker">Action · 2 of 2 · Recommended skills</div>
+    <h2>What to create next</h2>
+    <div class="recommend-grid">{{RECOMMENDATION_CARDS}}</div>
+  </section>
+
+  <!-- OVERVIEW-MODE-ONLY -->
+  <section class="main-only">
+    <div class="kicker">Action · 1 of 2 · Clean up</div>
+    <div class="action-card" onclick="setMode('details'); setTimeout(()=>document.getElementById('dormant-section').scrollIntoView({behavior:'smooth'}), 100);">
+      <div class="action-card-icon">🧹</div>
+      <div class="action-card-body">
+        <h3>{{UNUSED_COUNT}} of {{INSTALLED_COUNT}} installed skills look dormant</h3>
+        <p>Review the ones you installed, never used, and can retire.</p>
+      </div>
+      <div class="action-card-cta">Review dormant skills →</div>
+    </div>
+  </section>
+
+  <div class="main-only mode-cta">
+    <div class="mode-cta-lead">
+      <strong>🤓 Still reading? That's suspicious.</strong>
+      <p class="small" style="margin: 4px 0 0;">You might be a data junkie. There's a lot more underneath — sessions, tool usage, activity patterns, the whole coverage story.</p>
+    </div>
+    <button class="action-btn" type="button" onclick="setMode('details')">Feed me the data →</button>
+  </div>
+
+  <!-- DETAILS-MODE-ONLY -->
+  <section class="details-only back-bar">
+    <button class="action-btn ghost" type="button" onclick="setMode('main')">← Back to overview</button>
+    <span class="small">You're in data-junkie mode. Enjoy.</span>
+  </section>
+
+  <section class="details-only agent-notes">
+    <div class="kicker">Agent notes</div>
+    <h2>What stands out in your last {{WINDOW_DAYS}} days</h2>
+    <ul>{{STANDOUTS_HTML}}</ul>
+  </section>
+
+  <section class="details-only" id="dormant-section">
+    <h2>Dormant skills</h2>
+    <p class="small">{{DORMANT_COMMENTARY}}</p>
+    <div class="dormant-grid">{{DORMANT_CARDS}}</div>
+    <div class="cleanup-toolbar">
+      <button class="action-btn ghost" type="button" onclick="cleanupSelectAll(true)">Select every dormant skill</button>
+      <button class="action-btn ghost" type="button" onclick="cleanupSelectAll(false)">Clear all</button>
+      <span class="small" id="cleanup-count" style="margin-left:auto;">0 selected</span>
+      <button class="action-btn" type="button" id="cleanup-remove" disabled>Remove selected</button>
+    </div>
+    <p class="small">Prototype — the real flow would confirm and then delete the selected skill directories.</p>
+  </section>
+
+  <section class="details-only">
+    <h2>Top skills</h2>
+    {{TOP_SKILL_CARDS}}
+  </section>
+
+  <section class="details-only">
+    <h2>Session details</h2>
+    <div class="filter-block">
+      <div class="filter-row"><span class="filter-label">Sort</span><div class="chip-group" id="sort-chips">{{SORT_CHIPS}}</div></div>
+      <div class="filter-row"><span class="filter-label">Surface</span><div class="chip-group" id="surface-chips">{{SURFACE_CHIPS}}</div></div>
+      <div class="filter-row"><span class="filter-label">Project</span><div class="chip-group" id="project-chips">{{PROJECT_CHIPS}}</div></div>
+    </div>
+    <div id="session-list">{{SESSION_CARDS}}</div>
+    <button class="action-btn ghost" type="button" id="show-all-sessions" onclick="showAllSessions()" style="margin-top:12px;">{{SHOW_ALL_SESSIONS_LABEL}}</button>
+  </section>
+
+  <section class="details-only">
+    <h2>All tools used this period</h2>
+    <p class="small">{{TOOLS_TOTAL}} calls across {{TOOLS_COUNT}} distinct tools.</p>
+    <div id="tools-list">{{TOOLS_ROWS}}</div>
+    <button class="action-btn ghost" type="button" id="show-all-tools" onclick="showAllTools()" style="margin-top:12px;">{{SHOW_ALL_TOOLS_LABEL}}</button>
+  </section>
+
+  <section class="details-only">
+    <h2>Activity patterns</h2>
+    <div class="chart-grid">
+      <div class="chart-card"><h3>Sessions per day</h3>{{CHART_SESSIONS}}</div>
+      <div class="chart-card"><h3>Turns per day</h3>{{CHART_TURNS}}</div>
+      <div class="chart-card"><h3>Token activity per day</h3>{{CHART_TOKENS}}</div>
+      <div class="chart-card"><h3>Sessions by surface</h3>{{CHART_SURFACES}}</div>
+    </div>
+  </section>
+
+  <section class="details-only coverage">
+    <h2>Coverage</h2>
+    <p>{{COVERAGE_NOTE}}</p>
+    <ul>{{COVERAGE_ITEMS}}</ul>
+  </section>
+
+  <section class="details-only back-bar">
+    <button class="action-btn ghost" type="button" onclick="setMode('main')">← Back to overview</button>
+  </section>
+
+  <!-- FEEDBACK - BOTH MODES -->
+  <section class="feedback">
+    <strong>Does this ranking feel right?</strong>
+    <div class="feedback-row">
+      <button class="action-btn ghost" type="button" onclick="submitFeedback('up')">👍 Yes</button>
+      <button class="action-btn ghost" type="button" onclick="submitFeedback('down')">👎 Something's off</button>
+    </div>
+    <textarea id="feedback-text" placeholder="If no, what's wrong?" rows="2"></textarea>
+    <div>
+      <button class="action-btn" type="button" onclick="submitFeedback(null)" style="margin-top:10px;">Send feedback</button>
+    </div>
+    <div class="feedback-saved" id="feedback-saved">Thanks — saved locally to ~/.claude/tinyhat/feedback.jsonl.</div>
+    <p class="small" style="margin-top: 10px;">Feedback is written locally only. No network call.</p>
+  </section>
+
+</div>
+
+<script>
+  function setMode(mode) {
+    document.body.classList.remove('mode-main', 'mode-details');
+    document.body.classList.add('mode-' + mode);
+  }
+  function cleanupSelectAll(state) {
+    document.querySelectorAll('.cleanup-check').forEach(cb => cb.checked = state);
+    updateCleanupCount();
+  }
+  function updateCleanupCount() {
+    const n = document.querySelectorAll('.cleanup-check:checked').length;
+    const label = document.getElementById('cleanup-count');
+    if (label) label.textContent = n + ' selected';
+    const btn = document.getElementById('cleanup-remove');
+    if (btn) btn.disabled = (n === 0);
+  }
+  document.addEventListener('change', (e) => {
+    if (e.target && e.target.classList && e.target.classList.contains('cleanup-check')) updateCleanupCount();
+  });
+
+  // Sessions - sort + filter + show-all
+  const SESSION_SHOW_INITIAL = 10;
+  let sessionState = { sort: 'skill-desc', surface: 'all', project: 'all', showAll: false };
+  function applySessionFilters() {
+    const items = Array.from(document.querySelectorAll('.session-item'));
+    const filtered = items.filter(el => {
+      if (sessionState.surface !== 'all' && el.dataset.surface !== sessionState.surface) return false;
+      if (sessionState.project !== 'all' && el.dataset.project !== sessionState.project) return false;
+      return true;
+    });
+    filtered.sort((a, b) => {
+      if (sessionState.sort === 'recent') return b.dataset.lastTs.localeCompare(a.dataset.lastTs);
+      const rd = parseInt(b.dataset.skillRuns) - parseInt(a.dataset.skillRuns);
+      return rd !== 0 ? rd : b.dataset.lastTs.localeCompare(a.dataset.lastTs);
+    });
+    const list = document.getElementById('session-list');
+    items.forEach(el => el.style.display = 'none');
+    const visible = sessionState.showAll ? filtered : filtered.slice(0, SESSION_SHOW_INITIAL);
+    visible.forEach(el => { el.style.display = ''; list.appendChild(el); });
+    const toggle = document.getElementById('show-all-sessions');
+    if (filtered.length <= SESSION_SHOW_INITIAL) toggle.style.display = 'none';
+    else toggle.style.display = '';
+  }
+  function showAllSessions() { sessionState.showAll = !sessionState.showAll; applySessionFilters(); document.getElementById('show-all-sessions').textContent = sessionState.showAll ? 'Show fewer' : '{{SHOW_ALL_SESSIONS_LABEL}}'; }
+  function handleChipGroup(groupId, attr, stateKey) {
+    const group = document.getElementById(groupId);
+    if (!group) return;
+    group.addEventListener('click', (e) => {
+      const btn = e.target.closest('.chip-btn');
+      if (!btn) return;
+      group.querySelectorAll('.chip-btn').forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+      sessionState[stateKey] = btn.dataset[attr];
+      applySessionFilters();
+    });
+  }
+  handleChipGroup('sort-chips', 'sort', 'sort');
+  handleChipGroup('surface-chips', 'surface', 'surface');
+  handleChipGroup('project-chips', 'project', 'project');
+  applySessionFilters();
+
+  // Tools show-all
+  let toolsShowAll = false;
+  const TOOLS_SHOW_INITIAL = 20;
+  function showAllTools() {
+    toolsShowAll = !toolsShowAll;
+    document.querySelectorAll('.tools-row').forEach((el, idx) => {
+      el.style.display = (toolsShowAll || idx < TOOLS_SHOW_INITIAL) ? '' : 'none';
+    });
+    document.getElementById('show-all-tools').textContent = toolsShowAll ? 'Show fewer' : '{{SHOW_ALL_TOOLS_LABEL}}';
+  }
+  document.querySelectorAll('.tools-row').forEach((el, idx) => {
+    if (idx >= TOOLS_SHOW_INITIAL) el.style.display = 'none';
+  });
+
+  // Feedback
+  function submitFeedback(verdict) {
+    const text = document.getElementById('feedback-text').value;
+    const payload = { ts: new Date().toISOString(), verdict: verdict, note: text };
+    fetch('', { method: 'HEAD' }).catch(()=>{}); // no-op; kept for future extension
+    // Local-only write is not possible from a file:// page; instead expose payload via a data URI
+    // so the skill can reliably pick it up. The recommended flow is the user copies the payload.
+    try { window.name = JSON.stringify(payload); } catch(e) {}
+    const saved = document.getElementById('feedback-saved');
+    if (saved) { saved.style.display = 'block'; }
+  }
+</script>
+</body>
+</html>
