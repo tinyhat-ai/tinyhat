@@ -71,10 +71,14 @@ Check:
   subjects verbatim. If a subject is cryptic, amend it by editing
   `CHANGELOG.md` *in the release PR itself* — release-please won't
   overwrite manual edits.
-- **`version.txt` and `.release-please-manifest.json` both move to
-  the new version.** Both get touched by the bot.
+- **`version.txt`, `.release-please-manifest.json`, and
+  `.claude-plugin/plugin.json` all move to the new version.** All
+  three get touched by the bot — `plugin.json` is wired in via
+  `extra-files` in `.release-please-config.json` so the installed
+  plugin label tracks the tag.
 - **No unrelated file changes.** The only touched files should be
-  `CHANGELOG.md`, `version.txt`, `.release-please-manifest.json`.
+  `CHANGELOG.md`, `version.txt`, `.release-please-manifest.json`,
+  `.claude-plugin/plugin.json`.
 
 ### 3. Merge the release PR (squash)
 

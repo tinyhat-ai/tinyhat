@@ -1,6 +1,6 @@
 {
   "name": "tinyhat",
-  "version": "0.1.0",
+  "version": "0.1.7",
   "description": "Telemetry, usage analytics, and cost intelligence for Claude Code skills — ask Claude which skills you use most, what they cost per invocation, and which ones are dead code. Replay any captured invocation against a cheaper model (Haiku, GPT, Gemini, or local Ollama) and see the cost delta before you commit to a routing change. Reads the session transcripts Claude Code already writes to disk; no backend, no proxy, no hooks required.",
   "author": {
     "name": "Tinyloop",
