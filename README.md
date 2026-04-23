@@ -7,14 +7,16 @@
 [![Version](https://img.shields.io/github/v/tag/tinyhat-ai/tinyhat?label=version&sort=semver)](https://github.com/tinyhat-ai/tinyhat/releases)
 [![Conventional Commits](https://img.shields.io/badge/Conventional%20Commits-1.0.0-blue.svg)](https://www.conventionalcommits.org)
 
-Tinyhat is a Claude Code plugin built around a simple loop: **create what you use, retire what you don't, share what works.**
+![Top of a Tinyhat audit report asking "Which skills are actually earning their keep?" with two summary cards: 11% skill utilization — 14 of 122 installed skills had at least one run — and 31% of sessions with skills, meaning 18 of 58 recent sessions fired at least one skill.](docs/images/audit-summary.png)
+
+*The top of a fresh Tinyhat audit — a local, read-only report on which of your Claude Code skills actually show up in the work you've been doing. Every run is written by the Claude agent from your own session history, not a canned template.*
+
+Tinyhat is a Claude Code plugin that uses that report to close a simple loop: **create what you use, retire what you don't, share what works.**
 
 Other tools hand you a pre-built skill library.
 Tinyhat bets the opposite way — a skill shaped by your real work beats any starter skill copied from elsewhere.
 The first version of a skill isn't the product; the loop is.
 
-To close the loop, Tinyhat scans your local Claude Code data and produces a short, read-only report of what's getting used, what looks dormant, and what's worth creating or retiring next.
-The editorial framing is written by the Claude agent at runtime, so the report reflects *your* week, not a canned template.
 Team skill-sharing follows naturally once the individual loop is working.
 
 Everything runs locally. No hooks, no daemons, no network calls.
