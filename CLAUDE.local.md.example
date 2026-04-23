@@ -1,0 +1,37 @@
+# CLAUDE.local.md.example — template
+
+Copy to `CLAUDE.local.md` (gitignored) and fill in. This `.example` is
+committed and must stay free of private URLs, internal names, or
+anything you'd not want in the open-source release.
+
+`CLAUDE.local.md` is loaded by Claude Code in addition to `CLAUDE.md`
+when present. It's where maintainer-private context lives (the table
+of bot identities the maintainer runs, links to private docs, internal
+deadlines, etc.). External contributors don't need one.
+
+## Suggested structure (keep it short — this file is loaded every turn)
+
+- **Why this matters to us.** A few lines on how the project fits the
+  broader business bet. Enough for agent judgment, not a sales deck.
+- **Design trade-off defaults.** 3–5 bullets on which side to favor
+  when the public docs are silent. Should be stable, not per-task.
+- **Where long-form strategy lives.** One sentence saying such docs
+  exist elsewhere and how to pull the latest. **Do not name private
+  repos, URLs, or internal services in this `.example` file** — that
+  belongs only in `CLAUDE.local.md`.
+- **Internal contribution notes.** How internal humans sign commits,
+  where design discussions happen, who to escalate to.
+- **Bot identity table (optional).** If you run AI agents under
+  dedicated bot identities, list each bot's author name, author email,
+  signing key path, SSH host alias, and GitHub user. The `commit` and
+  `open-pr` skills look this table up at run time — if it's absent,
+  those skills fall back to whatever default git identity the machine
+  has.
+
+## Hard rules for every `CLAUDE.local.md`
+
+- Treat contents as confidential; never copy into commits, PRs, or
+  external systems.
+- Never name private repos / internal services in any committed file.
+- Before every commit, re-check
+  [AGENTS.md — Local override files](AGENTS.md#local-override-files).

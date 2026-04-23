@@ -1,0 +1,4 @@
+# Every change to this repo requires review from the maintainer.
+# Combined with branch protection (Require review from CODEOWNERS),
+# this prevents any agent from self-merging a PR.
+*  @farid-tinyloop
