@@ -26,7 +26,6 @@ import sys
 from datetime import datetime, timezone
 from pathlib import Path
 
-
 DEFAULT_HOME_ROOT = Path.home() / ".claude" / "tinyhat"
 
 

@@ -43,6 +43,7 @@ def _local_tz() -> ZoneInfo | timezone:
     try:
         # Python 3.9+ stdlib: reads TZ / /etc/localtime
         from time import tzname as _tzname  # noqa: F401
+
         return datetime.now().astimezone().tzinfo or timezone.utc
     except Exception:
         return timezone.utc
@@ -58,6 +59,7 @@ DEFAULT_ANALYSIS_PATH = Path(tempfile.gettempdir()) / "tinyhat-analysis.json"
 # ---------------------------------------------------------------------------
 # Fallback analysis — used when the agent hasn't written one.
 # ---------------------------------------------------------------------------
+
 
 def _format_compact(value: float) -> str:
     v = float(value)
@@ -113,48 +115,59 @@ def _fallback_recommendations(snapshot: dict) -> list[dict]:
     recs: list[dict] = []
 
     impl = [
-        r for r in sessions
+        r
+        for r in sessions
         if r["tool_uses"].get("Edit", 0) >= 15 and r["tool_uses"].get("Bash", 0) >= 15
     ]
     if len(impl) >= 2:
         te = sum(r["tool_uses"].get("Edit", 0) for r in impl)
         tb = sum(r["tool_uses"].get("Bash", 0) for r in impl)
-        recs.append({
-            "name": "implement-feature",
-            "confidence": "high",
-            "headline": "Shape the heavy implementation runs you already do.",
-            "why": f"{len(impl)} recent sessions leaned hard on Edit + Bash ({te} edits, {tb} shell calls), which points to a repeatable build-fix-verify workflow worth turning into a skill.",
-            "triggers": ["implement", "fix", "add support for", "update the code"],
-        })
+        recs.append(
+            {
+                "name": "implement-feature",
+                "confidence": "high",
+                "headline": "Shape the heavy implementation runs you already do.",
+                "why": f"{len(impl)} recent sessions leaned hard on Edit + Bash ({te} edits, {tb} shell calls), which points to a repeatable build-fix-verify workflow worth turning into a skill.",
+                "triggers": ["implement", "fix", "add support for", "update the code"],
+            }
+        )
 
     explore = [
-        r for r in sessions
+        r
+        for r in sessions
         if r["tool_uses"].get("Read", 0) >= 25 and r["tool_uses"].get("Grep", 0) >= 5
     ]
     if len(explore) >= 2:
         tr = sum(r["tool_uses"].get("Read", 0) for r in explore)
         tg = sum(r["tool_uses"].get("Grep", 0) for r in explore)
-        recs.append({
-            "name": "explore-codebase",
-            "confidence": "high" if len(explore) >= 5 else "medium",
-            "headline": "Standardize the understand-before-editing workflow.",
-            "why": f"{len(explore)} recent sessions were dominated by Read + Grep ({tr} reads, {tg} searches). A focused exploration skill could make those investigations faster and more consistent.",
-            "triggers": ["how does", "where is", "trace", "walk me through"],
-        })
+        recs.append(
+            {
+                "name": "explore-codebase",
+                "confidence": "high" if len(explore) >= 5 else "medium",
+                "headline": "Standardize the understand-before-editing workflow.",
+                "why": f"{len(explore)} recent sessions were dominated by Read + Grep ({tr} reads, {tg} searches). A focused exploration skill could make those investigations faster and more consistent.",
+                "triggers": ["how does", "where is", "trace", "walk me through"],
+            }
+        )
 
     research = [
-        r for r in sessions
+        r
+        for r in sessions
         if r["tool_uses"].get("WebSearch", 0) + r["tool_uses"].get("WebFetch", 0) >= 4
     ]
     if len(research) >= 2:
-        tw = sum(r["tool_uses"].get("WebSearch", 0) + r["tool_uses"].get("WebFetch", 0) for r in research)
-        recs.append({
-            "name": "research-and-write-brief",
-            "confidence": "medium",
-            "headline": "Turn repeated research-plus-writing into one polished move.",
-            "why": f"{len(research)} recent sessions mixed web lookups with writing ({tw} web calls). That pattern usually benefits from a dedicated research-to-brief skill.",
-            "triggers": ["research", "look up", "summarize", "write a brief"],
-        })
+        tw = sum(
+            r["tool_uses"].get("WebSearch", 0) + r["tool_uses"].get("WebFetch", 0) for r in research
+        )
+        recs.append(
+            {
+                "name": "research-and-write-brief",
+                "confidence": "medium",
+                "headline": "Turn repeated research-plus-writing into one polished move.",
+                "why": f"{len(research)} recent sessions mixed web lookups with writing ({tw} web calls). That pattern usually benefits from a dedicated research-to-brief skill.",
+                "triggers": ["research", "look up", "summarize", "write a brief"],
+            }
+        )
     return recs[:3]
 
 
@@ -178,21 +191,31 @@ def _fallback_coverage_note(snapshot: dict) -> str:
         f"Scanned {c['cli_transcripts']} Claude Code transcripts and {c['cowork_transcripts']} Cowork transcripts from local disk.",
     ]
     if c["gstack_telemetry_present"]:
-        parts.append(f"Found local GStack telemetry ({c['gstack_events']} recent events) and kept the ranking anchored to transcript-backed inventory matches.")
+        parts.append(
+            f"Found local GStack telemetry ({c['gstack_events']} recent events) and kept the ranking anchored to transcript-backed inventory matches."
+        )
     else:
         parts.append("No local GStack telemetry file was used in this run.")
     if c["unknown_event_count"]:
-        parts.append(f"Ignored {c['unknown_event_count']} events under {c['unknown_name_count']} unknown names.")
+        parts.append(
+            f"Ignored {c['unknown_event_count']} events under {c['unknown_name_count']} unknown names."
+        )
     if c["bare_read_skill_md_count"]:
-        parts.append(f"Dropped {c['bare_read_skill_md_count']} bare Read SKILL.md events as likely false positives.")
-    parts.append("Counts use only local data and blend direct Skill calls with likely Read SKILL.md matches, so ties and one-off rows are directional.")
+        parts.append(
+            f"Dropped {c['bare_read_skill_md_count']} bare Read SKILL.md events as likely false positives."
+        )
+    parts.append(
+        "Counts use only local data and blend direct Skill calls with likely Read SKILL.md matches, so ties and one-off rows are directional."
+    )
     return " ".join(parts)
 
 
 def analysis_with_fallbacks(snapshot: dict, analysis: dict | None) -> dict:
     analysis = dict(analysis or {})
     analysis.setdefault("headline", _fallback_headline(snapshot))
-    analysis.setdefault("headline_sub", "Everything else on this page is supporting evidence for that headline.")
+    analysis.setdefault(
+        "headline_sub", "Everything else on this page is supporting evidence for that headline."
+    )
     analysis.setdefault("what_stands_out", _fallback_standouts(snapshot))
     analysis.setdefault("dormant_commentary", _fallback_dormant_commentary(snapshot))
     analysis.setdefault("skill_recommendations", _fallback_recommendations(snapshot))
@@ -203,6 +226,7 @@ def analysis_with_fallbacks(snapshot: dict, analysis: dict | None) -> dict:
 # ---------------------------------------------------------------------------
 # Markdown rendering
 # ---------------------------------------------------------------------------
+
 
 def _md_table_rows(rows: list[list[str]]) -> str:
     return "\n".join("| " + " | ".join(r) + " |" for r in rows)
@@ -216,28 +240,38 @@ def render_markdown(snapshot: dict, analysis: dict) -> str:
     generated = datetime.fromisoformat(meta["generated_at"].replace("Z", "+00:00"))
     window_label = f"last {meta['window_days']} days"
 
-    standouts = "\n".join(f"- {line}" for line in analysis["what_stands_out"]) or "- (no observations)"
+    standouts = (
+        "\n".join(f"- {line}" for line in analysis["what_stands_out"]) or "- (no observations)"
+    )
 
     top_rows: list[list[str]] = []
     for s_row in snapshot.get("top_skills", [])[:6]:
         summary = s_row["summary"] or "No short description found in the local skill file."
-        top_rows.append([
-            f"`{s_row['skill']}`", summary.replace("|", "\\|"),
-            str(s_row["runs"]), s_row["last_used"] or "—",
-        ])
+        top_rows.append(
+            [
+                f"`{s_row['skill']}`",
+                summary.replace("|", "\\|"),
+                str(s_row["runs"]),
+                s_row["last_used"] or "—",
+            ]
+        )
     top_skills_table = _md_table_rows(top_rows) if top_rows else "| (no active skills) |  |  |  |"
 
     unused_count = s["installed_count"] - s["active_count"]
     unused_pct = int(100 * unused_count / s["installed_count"]) if s["installed_count"] else 0
     dormant_rows: list[list[str]] = []
-    for origin, names in sorted(snapshot.get("dormant_by_origin", {}).items(), key=lambda kv: -len(kv[1])):
+    for origin, names in sorted(
+        snapshot.get("dormant_by_origin", {}).items(), key=lambda kv: -len(kv[1])
+    ):
         dormant_rows.append([origin, str(len(names))])
     dormant_table = _md_table_rows(dormant_rows) if dormant_rows else "| (none) | 0 |"
 
     rec_lines = []
     for rec in analysis["skill_recommendations"]:
         rec_lines.append(f"- `{rec['name']}` — {rec['why']}")
-    recommendations_md = "\n".join(rec_lines) or "- No clear recommendation stood out from recent session patterns."
+    recommendations_md = (
+        "\n".join(rec_lines) or "- No clear recommendation stood out from recent session patterns."
+    )
 
     coverage_md = f"- {analysis['coverage_note']}"
 
@@ -271,10 +305,18 @@ def render_markdown(snapshot: dict, analysis: dict) -> str:
 # HTML rendering
 # ---------------------------------------------------------------------------
 
+
 def _svg_bar_chart(
-    points: list[dict], key: str, color: str, value_label: str,
-    *, label_key: str = "date", width: int = 520, height: int = 240,
-    y_axis_title: str | None = None, x_axis_title: str | None = None,
+    points: list[dict],
+    key: str,
+    color: str,
+    value_label: str,
+    *,
+    label_key: str = "date",
+    width: int = 520,
+    height: int = 240,
+    y_axis_title: str | None = None,
+    x_axis_title: str | None = None,
 ) -> str:
     if not points:
         return '<p class="small">No data available.</p>'
@@ -313,7 +355,7 @@ def _svg_bar_chart(
         value_cls = "chart-value inside" if inside else "chart-value"
         bars.append(
             f'<g><rect x="{x:.1f}" y="{y:.1f}" width="{bar_w}" height="{bh:.1f}" rx="6" fill="{color}">'
-            f'<title>{html.escape(label)}: {value_txt} {html.escape(value_label)}</title></rect>'
+            f"<title>{html.escape(label)}: {value_txt} {html.escape(value_label)}</title></rect>"
             f'<text x="{x + bar_w/2:.1f}" y="{value_y:.1f}" text-anchor="middle" class="{value_cls}">{html.escape(value_txt)}</text>'
             f'<text x="{x + bar_w/2:.1f}" y="{height - margin_bottom + 14:.1f}" text-anchor="middle" class="chart-label">{html.escape(short)}</text></g>'
         )
@@ -343,7 +385,9 @@ def _svg_bar_chart(
 
 
 def _surface_label(s: str) -> str:
-    return {"cli_terminal": "CLI", "desktop_code_tab": "Desktop Code tab", "cowork": "Cowork"}.get(s, s)
+    return {"cli_terminal": "CLI", "desktop_code_tab": "Desktop Code tab", "cowork": "Cowork"}.get(
+        s, s
+    )
 
 
 def _origin_slug(origin: str) -> str:
@@ -371,13 +415,16 @@ def render_html(snapshot: dict, analysis: dict) -> str:
     sess_total = s["sessions_total"]
     sess_skill_pct = (100 * s["sessions_with_skills"] / sess_total) if sess_total else 0
 
-    standouts_html = "\n".join(f"<li>{html.escape(item)}</li>" for item in analysis["what_stands_out"])
+    standouts_html = "\n".join(
+        f"<li>{html.escape(item)}</li>" for item in analysis["what_stands_out"]
+    )
 
     # Recommendation cards
     rec_cards = []
     for idx, rec in enumerate(analysis["skill_recommendations"], 1):
         triggers_html = " ".join(
-            f'<span class="chip chip-soft">&ldquo;{html.escape(t)}&rdquo;</span>' for t in rec.get("triggers", [])
+            f'<span class="chip chip-soft">&ldquo;{html.escape(t)}&rdquo;</span>'
+            for t in rec.get("triggers", [])
         )
         rec_cards.append(
             f'<article class="recommend-card">'
@@ -395,7 +442,9 @@ def render_html(snapshot: dict, analysis: dict) -> str:
             f'</div></article>'
         )
     if not rec_cards:
-        rec_cards.append('<article class="recommend-card"><p class="small">No strong recommendation stood out. Run Tinyhat again after another week of work — patterns usually emerge with more sessions.</p></article>')
+        rec_cards.append(
+            '<article class="recommend-card"><p class="small">No strong recommendation stood out. Run Tinyhat again after another week of work — patterns usually emerge with more sessions.</p></article>'
+        )
 
     # Dormant cards (origin-grouped)
     dormant_cards = []
@@ -410,7 +459,9 @@ def render_html(snapshot: dict, analysis: dict) -> str:
         rows = []
         for name in names:
             meta_i = inventory.get(name, {})
-            summary = (meta_i.get("summary") or "No short description found in the local skill file.").strip()
+            summary = (
+                meta_i.get("summary") or "No short description found in the local skill file."
+            ).strip()
             rows.append(
                 f'<label class="cleanup-row">'
                 f'<input type="checkbox" class="cleanup-check" data-skill="{html.escape(name)}" data-origin="{html.escape(slug)}"/>'
@@ -427,7 +478,9 @@ def render_html(snapshot: dict, analysis: dict) -> str:
             f'</article>'
         )
     if not dormant_cards:
-        dormant_cards.append('<article class="dormant-card"><p class="small">Nothing dormant — every installed skill fired at least once.</p></article>')
+        dormant_cards.append(
+            '<article class="dormant-card"><p class="small">Nothing dormant — every installed skill fired at least once.</p></article>'
+        )
 
     # Top skill cards
     top_cards = []
@@ -447,7 +500,9 @@ def render_html(snapshot: dict, analysis: dict) -> str:
             f'</article>'
         )
     if not top_cards:
-        top_cards.append('<article class="skill-card"><p class="small">No active skills in the window.</p></article>')
+        top_cards.append(
+            '<article class="skill-card"><p class="small">No active skills in the window.</p></article>'
+        )
 
     # Session cards
     sessions = snapshot.get("sessions", [])
@@ -463,14 +518,20 @@ def render_html(snapshot: dict, analysis: dict) -> str:
             except (ValueError, TypeError):
                 local_dt_str = last_ts_raw[:16].replace("T", " ")
         title = row.get("title") or row.get("project") or "Untitled session"
-        skill_chips = " ".join(
-            f'<span class="chip">{html.escape(k)} · {v}</span>'
-            for k, v in sorted(row.get("skill_counter", {}).items(), key=lambda kv: -kv[1])[:4]
-        ) or '<span class="chip chip-soft">No named skills</span>'
+        skill_chips = (
+            " ".join(
+                f'<span class="chip">{html.escape(k)} · {v}</span>'
+                for k, v in sorted(row.get("skill_counter", {}).items(), key=lambda kv: -kv[1])[:4]
+            )
+            or '<span class="chip chip-soft">No named skills</span>'
+        )
         top_tools = sorted(row.get("tool_uses", {}).items(), key=lambda kv: -kv[1])[:5]
-        tool_chips = " ".join(
-            f'<span class="chip chip-soft">{html.escape(t)} · {n}</span>' for t, n in top_tools
-        ) or '<span class="chip chip-soft">No tool data</span>'
+        tool_chips = (
+            " ".join(
+                f'<span class="chip chip-soft">{html.escape(t)} · {n}</span>' for t, n in top_tools
+            )
+            or '<span class="chip chip-soft">No tool data</span>'
+        )
         session_cards.append(
             f'<details class="session-item" data-skill-runs="{row["skill_runs"]}" '
             f'data-surface="{html.escape(row["surface"])}" data-project="{html.escape(row["project"])}" '
@@ -501,13 +562,19 @@ def render_html(snapshot: dict, analysis: dict) -> str:
         '<button type="button" class="chip-btn active" data-sort="skill-desc">Most skills first</button>'
         '<button type="button" class="chip-btn" data-sort="recent">Most recent first</button>'
     )
-    surface_chips = '<button type="button" class="chip-btn active" data-surface="all">All</button>' + "".join(
-        f'<button type="button" class="chip-btn" data-surface="{html.escape(s)}">{html.escape(_surface_label(s))}</button>'
-        for s in surfaces_seen
+    surface_chips = (
+        '<button type="button" class="chip-btn active" data-surface="all">All</button>'
+        + "".join(
+            f'<button type="button" class="chip-btn" data-surface="{html.escape(s)}">{html.escape(_surface_label(s))}</button>'
+            for s in surfaces_seen
+        )
     )
-    project_chips = '<button type="button" class="chip-btn active" data-project="all">All</button>' + "".join(
-        f'<button type="button" class="chip-btn" data-project="{html.escape(p)}">{html.escape(p)}</button>'
-        for p in projects_seen
+    project_chips = (
+        '<button type="button" class="chip-btn active" data-project="all">All</button>'
+        + "".join(
+            f'<button type="button" class="chip-btn" data-project="{html.escape(p)}">{html.escape(p)}</button>'
+            for p in projects_seen
+        )
     )
 
     # Tools — ship per-session payload so JS can recompute on filter change.
@@ -523,23 +590,52 @@ def render_html(snapshot: dict, analysis: dict) -> str:
     ]
     tools_payload_json = json.dumps(tools_session_payload)
 
-    tools_surface_chips = '<button type="button" class="chip-btn active" data-surface="all">All</button>' + "".join(
-        f'<button type="button" class="chip-btn" data-surface="{html.escape(s)}">{html.escape(_surface_label(s))}</button>'
-        for s in surfaces_seen
+    tools_surface_chips = (
+        '<button type="button" class="chip-btn active" data-surface="all">All</button>'
+        + "".join(
+            f'<button type="button" class="chip-btn" data-surface="{html.escape(s)}">{html.escape(_surface_label(s))}</button>'
+            for s in surfaces_seen
+        )
     )
-    tools_project_chips = '<button type="button" class="chip-btn active" data-project="all">All</button>' + "".join(
-        f'<button type="button" class="chip-btn" data-project="{html.escape(p)}">{html.escape(p)}</button>'
-        for p in projects_seen
+    tools_project_chips = (
+        '<button type="button" class="chip-btn active" data-project="all">All</button>'
+        + "".join(
+            f'<button type="button" class="chip-btn" data-project="{html.escape(p)}">{html.escape(p)}</button>'
+            for p in projects_seen
+        )
     )
 
     # Charts — bigger (wider + taller) for the details mode.
     daily = snapshot.get("daily_rollups", [])
     chart_kw = {"width": 820, "height": 320}
-    chart_sessions = _svg_bar_chart(daily, "sessions", "#0f5c63", "sessions", y_axis_title="Sessions", x_axis_title="Day", **chart_kw)
-    chart_turns = _svg_bar_chart(daily, "turns", "#3f8c8d", "turns", y_axis_title="Turns", x_axis_title="Day", **chart_kw)
-    chart_tokens = _svg_bar_chart(daily, "tokens", "#b56b45", "tokens", y_axis_title="Tokens", x_axis_title="Day", **chart_kw)
-    surface_points = [{"date": _surface_label(k), "value": v} for k, v in snapshot.get("surface_rollups", {}).items()]
-    chart_surfaces = _svg_bar_chart(surface_points, "value", "#7d8f52", "sessions", y_axis_title="Sessions", x_axis_title="Surface", **chart_kw)
+    chart_sessions = _svg_bar_chart(
+        daily,
+        "sessions",
+        "#0f5c63",
+        "sessions",
+        y_axis_title="Sessions",
+        x_axis_title="Day",
+        **chart_kw,
+    )
+    chart_turns = _svg_bar_chart(
+        daily, "turns", "#3f8c8d", "turns", y_axis_title="Turns", x_axis_title="Day", **chart_kw
+    )
+    chart_tokens = _svg_bar_chart(
+        daily, "tokens", "#b56b45", "tokens", y_axis_title="Tokens", x_axis_title="Day", **chart_kw
+    )
+    surface_points = [
+        {"date": _surface_label(k), "value": v}
+        for k, v in snapshot.get("surface_rollups", {}).items()
+    ]
+    chart_surfaces = _svg_bar_chart(
+        surface_points,
+        "value",
+        "#7d8f52",
+        "sessions",
+        y_axis_title="Sessions",
+        x_axis_title="Surface",
+        **chart_kw,
+    )
 
     # Coverage items
     c = snapshot["coverage"]
@@ -556,7 +652,9 @@ def render_html(snapshot: dict, analysis: dict) -> str:
     show_all_tools_label = f"Show all {len(aggregate_tools)} tools"
 
     # Mailto feedback subject — URL-encoded so special chars survive.
-    feedback_subject_base = quote(f"Tinyhat feedback — report {generated_local.strftime('%Y-%m-%d %H:%M')}")
+    feedback_subject_base = quote(
+        f"Tinyhat feedback — report {generated_local.strftime('%Y-%m-%d %H:%M')}"
+    )
 
     subs = {
         "CSS": css,
@@ -612,6 +710,7 @@ def render_html(snapshot: dict, analysis: dict) -> str:
 # Archive + retention
 # ---------------------------------------------------------------------------
 
+
 def enforce_retention(archive_dir: Path, keep: int = 31) -> None:
     if not archive_dir.is_dir():
         return
@@ -630,7 +729,11 @@ def render_index(home_root: Path) -> str:
     Lists latest/ first, then every archive/YYYY-MM-DD/ in reverse-
     chronological order. Each entry links to its report.html.
     """
-    css = (TEMPLATE_DIR / "report.css").read_text(encoding="utf-8") if (TEMPLATE_DIR / "report.css").is_file() else ""
+    css = (
+        (TEMPLATE_DIR / "report.css").read_text(encoding="utf-8")
+        if (TEMPLATE_DIR / "report.css").is_file()
+        else ""
+    )
     archive_dir = home_root / "archive"
     archives = []
     if archive_dir.is_dir():
@@ -642,7 +745,9 @@ def render_index(home_root: Path) -> str:
     tz_abbr = datetime.now(local_tz).strftime("%Z") or "local"
 
     latest_stamp_path = home_root / "latest" / "run-stamp.txt"
-    latest_date = latest_stamp_path.read_text(encoding="utf-8").strip() if latest_stamp_path.is_file() else ""
+    latest_date = (
+        latest_stamp_path.read_text(encoding="utf-8").strip() if latest_stamp_path.is_file() else ""
+    )
 
     rows = []
     if (home_root / "latest" / "report.html").is_file():
@@ -662,7 +767,9 @@ def render_index(home_root: Path) -> str:
             f'<div class="index-row-arrow">→</div></a>'
         )
     if not rows:
-        rows.append('<p class="small">No reports yet. Run Tinyhat once to produce the first snapshot.</p>')
+        rows.append(
+            '<p class="small">No reports yet. Run Tinyhat once to produce the first snapshot.</p>'
+        )
 
     return f"""<!doctype html>
 <html lang="en"><head><meta charset="utf-8"/>
@@ -697,9 +804,17 @@ def main() -> int:
         default=str(DEFAULT_HOME_ROOT),
         help="Root directory for Tinyhat output (default: ~/.claude/tinyhat)",
     )
-    parser.add_argument("--archive", action="store_true", help="Also write archive/YYYY-MM-DD/ snapshot and enforce retention.")
-    parser.add_argument("--open", action="store_true", help="Open the rendered HTML in the default browser.")
-    parser.add_argument("--index-only", action="store_true", help="Regenerate archive/index.html only (no report).")
+    parser.add_argument(
+        "--archive",
+        action="store_true",
+        help="Also write archive/YYYY-MM-DD/ snapshot and enforce retention.",
+    )
+    parser.add_argument(
+        "--open", action="store_true", help="Open the rendered HTML in the default browser."
+    )
+    parser.add_argument(
+        "--index-only", action="store_true", help="Regenerate archive/index.html only (no report)."
+    )
     args = parser.parse_args()
 
     if args.index_only:
@@ -711,7 +826,10 @@ def main() -> int:
 
     snapshot_path = Path(args.snapshot)
     if not snapshot_path.is_file():
-        print(f"error: snapshot not found at {snapshot_path}. Run gather_snapshot.py first.", file=sys.stderr)
+        print(
+            f"error: snapshot not found at {snapshot_path}. Run gather_snapshot.py first.",
+            file=sys.stderr,
+        )
         return 1
     snapshot = json.loads(snapshot_path.read_text(encoding="utf-8"))
 
@@ -721,7 +839,10 @@ def main() -> int:
         try:
             analysis_raw = json.loads(analysis_path.read_text(encoding="utf-8"))
         except json.JSONDecodeError as exc:
-            print(f"warn: analysis JSON at {analysis_path} is invalid ({exc}); using fallbacks.", file=sys.stderr)
+            print(
+                f"warn: analysis JSON at {analysis_path} is invalid ({exc}); using fallbacks.",
+                file=sys.stderr,
+            )
     analysis = analysis_with_fallbacks(snapshot, analysis_raw)
 
     home_root = Path(args.home_root).expanduser()

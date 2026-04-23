@@ -23,10 +23,9 @@ import re
 import sys
 import tempfile
 from collections import Counter, defaultdict
+from collections.abc import Iterable, Iterator
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
-from typing import Iterable, Iterator
-
 
 HOME = Path.home()
 CLI_TRANSCRIPT_ROOT = HOME / ".claude" / "projects"
@@ -36,7 +35,9 @@ CLI_TRANSCRIPT_ROOT = HOME / ".claude" / "projects"
 # If Anthropic ships the desktop app on other OSes, add their paths here.
 _MAC_APPSUPPORT = HOME / "Library" / "Application Support" / "Claude"
 _WIN_APPDATA = Path(os.environ.get("APPDATA", "")) / "Claude" if os.environ.get("APPDATA") else None
-_WIN_LOCALAPPDATA = Path(os.environ.get("LOCALAPPDATA", "")) / "Claude" if os.environ.get("LOCALAPPDATA") else None
+_WIN_LOCALAPPDATA = (
+    Path(os.environ.get("LOCALAPPDATA", "")) / "Claude" if os.environ.get("LOCALAPPDATA") else None
+)
 _LINUX_CONFIG = HOME / ".config" / "Claude"
 
 _DESKTOP_ROOTS = [p for p in (_MAC_APPSUPPORT, _WIN_APPDATA, _WIN_LOCALAPPDATA, _LINUX_CONFIG) if p]
@@ -66,10 +67,34 @@ FALLBACK_SKILL_SUMMARIES = {
 }
 
 HARNESS_BUILTINS = {
-    "model", "clear", "compact", "loop", "init", "help", "exit", "quit",
-    "reset", "ide", "mcp", "login", "logout", "config", "terminal-setup",
-    "doctor", "theme", "status", "vim", "release-notes", "upgrade", "bug",
-    "cost", "review", "pr-comments", "add-dir", "hooks", "permissions",
+    "model",
+    "clear",
+    "compact",
+    "loop",
+    "init",
+    "help",
+    "exit",
+    "quit",
+    "reset",
+    "ide",
+    "mcp",
+    "login",
+    "logout",
+    "config",
+    "terminal-setup",
+    "doctor",
+    "theme",
+    "status",
+    "vim",
+    "release-notes",
+    "upgrade",
+    "bug",
+    "cost",
+    "review",
+    "pr-comments",
+    "add-dir",
+    "hooks",
+    "permissions",
     "memory",
 }
 
@@ -77,6 +102,7 @@ HARNESS_BUILTINS = {
 # ---------------------------------------------------------------------------
 # Skill inventory
 # ---------------------------------------------------------------------------
+
 
 def _detect_pack(path: Path) -> str | None:
     parent = path.parent.parent
@@ -174,6 +200,7 @@ def build_inventory() -> dict:
 # SKILL.md summary extraction
 # ---------------------------------------------------------------------------
 
+
 def _parse_frontmatter(text: str) -> tuple[str, str]:
     if not text.startswith("---"):
         return "", text
@@ -267,7 +294,9 @@ def _skill_summary(path_str: str, skill_name: str = "") -> str:
     except OSError:
         return FALLBACK_SKILL_SUMMARIES.get(skill_name, "")
     frontmatter, body = _parse_frontmatter(text)
-    summary = _extract_description_from_frontmatter(frontmatter) or _extract_description_from_body(body)
+    summary = _extract_description_from_frontmatter(frontmatter) or _extract_description_from_body(
+        body
+    )
     # Drop gstack's PROACTIVE preamble if it leaked past the fm parser.
     if summary.lower().startswith("if proactive"):
         summary = ""
@@ -278,11 +307,12 @@ def _skill_summary(path_str: str, skill_name: str = "") -> str:
 # Transcripts
 # ---------------------------------------------------------------------------
 
+
 def _iter_jsonl(path: Path) -> Iterator[dict]:
     try:
         with path.open("r", encoding="utf-8") as fh:
-            for line in fh:
-                line = line.strip()
+            for raw_line in fh:
+                line = raw_line.strip()
                 if not line:
                     continue
                 try:
@@ -457,6 +487,7 @@ def _session_metadata(path: Path) -> dict:
 # Skill event attribution
 # ---------------------------------------------------------------------------
 
+
 def _extract_events_from_transcript(
     path: Path,
     surface: str,
@@ -506,7 +537,9 @@ def _extract_events_from_transcript(
             content = msg.get("content") if isinstance(msg, dict) else []
             if not isinstance(content, list):
                 continue
-            tool_blocks = [b for b in content if isinstance(b, dict) and b.get("type") == "tool_use"]
+            tool_blocks = [
+                b for b in content if isinstance(b, dict) and b.get("type") == "tool_use"
+            ]
             follow_up_tool_count = max(0, len(tool_blocks) - 1)
             for idx, block in enumerate(tool_blocks):
                 name = block.get("name")
@@ -514,15 +547,25 @@ def _extract_events_from_transcript(
                 if name == "Skill":
                     skill = inp.get("skill")
                     if skill:
-                        yield {**base_event, "type": "skill_tool", "via": "skill_tool",
-                               "skill": skill, "likely_bare": False}
+                        yield {
+                            **base_event,
+                            "type": "skill_tool",
+                            "via": "skill_tool",
+                            "skill": skill,
+                            "likely_bare": False,
+                        }
                 elif name == "Read":
                     fp = inp.get("file_path") or ""
                     match = SKILL_MD_PATH_RE.search(fp)
                     if match:
-                        likely_bare = (len(tool_blocks) == 1)
-                        yield {**base_event, "type": "read_skill_md", "via": "read_skill_md",
-                               "skill": match.group(1), "likely_bare": likely_bare}
+                        likely_bare = len(tool_blocks) == 1
+                        yield {
+                            **base_event,
+                            "type": "read_skill_md",
+                            "via": "read_skill_md",
+                            "skill": match.group(1),
+                            "likely_bare": likely_bare,
+                        }
                 _ = idx, follow_up_tool_count
 
         elif etype == "user":
@@ -546,8 +589,13 @@ def _extract_events_from_transcript(
                 if isinstance(raw, str):
                     text = raw
             for match in COMMAND_NAME_RE.finditer(text):
-                yield {**base_event, "type": "slash_command", "via": "slash_command",
-                       "skill": match.group(1), "likely_bare": False}
+                yield {
+                    **base_event,
+                    "type": "slash_command",
+                    "via": "slash_command",
+                    "skill": match.group(1),
+                    "likely_bare": False,
+                }
 
 
 def _read_gstack_events() -> list[dict]:
@@ -556,8 +604,8 @@ def _read_gstack_events() -> list[dict]:
     events: list[dict] = []
     try:
         with GSTACK_USAGE_PATH.open("r", encoding="utf-8") as fh:
-            for line in fh:
-                line = line.strip()
+            for raw_line in fh:
+                line = raw_line.strip()
                 if not line:
                     continue
                 try:
@@ -568,20 +616,24 @@ def _read_gstack_events() -> list[dict]:
                 ts = record.get("ts")
                 if not skill or not ts:
                     continue
-                events.append({
-                    "type": "gstack_telemetry",
-                    "skill": skill,
-                    "ts": ts,
-                    "session_id": record.get("session_id") or record.get("session") or f"gstack:{skill}:{ts}",
-                    "subagent_session_id": None,
-                    "surface": "cli_terminal",
-                    "via": "gstack_telemetry",
-                    "project": record.get("repo") or "(unknown project)",
-                    "transcript": str(GSTACK_USAGE_PATH),
-                    "from_subagent": False,
-                    "source": "gstack",
-                    "likely_bare": False,
-                })
+                events.append(
+                    {
+                        "type": "gstack_telemetry",
+                        "skill": skill,
+                        "ts": ts,
+                        "session_id": record.get("session_id")
+                        or record.get("session")
+                        or f"gstack:{skill}:{ts}",
+                        "subagent_session_id": None,
+                        "surface": "cli_terminal",
+                        "via": "gstack_telemetry",
+                        "project": record.get("repo") or "(unknown project)",
+                        "transcript": str(GSTACK_USAGE_PATH),
+                        "from_subagent": False,
+                        "source": "gstack",
+                        "likely_bare": False,
+                    }
+                )
     except OSError:
         return []
     return events
@@ -647,6 +699,7 @@ def _reject_unknown(
 # Rollups
 # ---------------------------------------------------------------------------
 
+
 def _origin_bucket(raw_scope: str) -> str:
     if raw_scope == "personal":
         return "Personal"
@@ -674,9 +727,15 @@ def _format_compact(value: float) -> str:
 
 
 def _build_daily_rollups(sessions: list[dict]) -> list[dict]:
-    daily: dict[str, dict] = defaultdict(lambda: {
-        "sessions": 0, "skill_sessions": 0, "turns": 0, "tokens": 0, "skill_runs": 0,
-    })
+    daily: dict[str, dict] = defaultdict(
+        lambda: {
+            "sessions": 0,
+            "skill_sessions": 0,
+            "turns": 0,
+            "tokens": 0,
+            "skill_runs": 0,
+        }
+    )
     for row in sessions:
         last_ts = _parse_ts(row.get("last_ts"))
         if not last_ts:
@@ -696,6 +755,7 @@ def _build_daily_rollups(sessions: list[dict]) -> list[dict]:
 # Snapshot
 # ---------------------------------------------------------------------------
 
+
 def build_snapshot(window_days: int = 30) -> dict:
     now = datetime.now(timezone.utc)
     cutoff = now - timedelta(days=window_days)
@@ -714,21 +774,25 @@ def build_snapshot(window_days: int = 30) -> dict:
 
     # Drop bare Read SKILL.md (false-positive mitigation).
     audit_bare = [e for e in raw_events if e["type"] == "read_skill_md" and e.get("likely_bare")]
-    ranking_events = [e for e in raw_events if not (e["type"] == "read_skill_md" and e.get("likely_bare"))]
+    ranking_events = [
+        e for e in raw_events if not (e["type"] == "read_skill_md" and e.get("likely_bare"))
+    ]
 
     # Cross-check against inventory — unknown names go to audit only.
     known_transcript, unknown = _reject_unknown(ranking_events, inventory)
 
     # Window + dedupe.
     in_window = [
-        e for e in known_transcript
+        e
+        for e in known_transcript
         if (_parse_ts(e["ts"]) or datetime.min.replace(tzinfo=timezone.utc)) >= cutoff
     ]
     in_window_dedup = _dedupe_same_session(in_window)
 
     # Optional gstack telemetry — merge if present.
     gstack_events = [
-        e for e in _read_gstack_events()
+        e
+        for e in _read_gstack_events()
         if (_parse_ts(e["ts"]) or datetime.min.replace(tzinfo=timezone.utc)) >= cutoff
     ]
     gstack_known, _ = _reject_unknown(gstack_events, inventory)
@@ -761,22 +825,24 @@ def build_snapshot(window_days: int = 30) -> dict:
 
             session_events = events_by_session.get(session_id, [])
             skill_counter = Counter(e["skill"] for e in session_events)
-            session_rows.append({
-                "session_id": session_id,
-                "title": meta["title"],
-                "surface": surface,
-                "project": project,
-                "last_ts": meta["last_ts"],
-                "last_used": last_ts.strftime("%Y-%m-%d") if last_ts else None,
-                "turns": meta["turns"],
-                "tokens_total": meta["tokens_total"],
-                "tool_uses": meta["tool_uses"],
-                "total_tool_uses": sum(meta["tool_uses"].values()),
-                "skill_runs": sum(skill_counter.values()),
-                "skill_counter": dict(skill_counter),
-                "model": meta["model"],
-                "transcript": str(path),
-            })
+            session_rows.append(
+                {
+                    "session_id": session_id,
+                    "title": meta["title"],
+                    "surface": surface,
+                    "project": project,
+                    "last_ts": meta["last_ts"],
+                    "last_used": last_ts.strftime("%Y-%m-%d") if last_ts else None,
+                    "turns": meta["turns"],
+                    "tokens_total": meta["tokens_total"],
+                    "tool_uses": meta["tool_uses"],
+                    "total_tool_uses": sum(meta["tool_uses"].values()),
+                    "skill_runs": sum(skill_counter.values()),
+                    "skill_counter": dict(skill_counter),
+                    "model": meta["model"],
+                    "transcript": str(path),
+                }
+            )
 
     session_rows.sort(
         key=lambda r: _parse_ts(r["last_ts"]) or datetime.min.replace(tzinfo=timezone.utc),
@@ -789,7 +855,7 @@ def build_snapshot(window_days: int = 30) -> dict:
     unused_names = sorted(n for n in inventory if n not in used_skill_names)
     dormant_by_origin: dict[str, list[str]] = defaultdict(list)
     installed_by_origin: Counter[str] = Counter()
-    for name, meta in inventory.items():
+    for meta in inventory.values():
         installed_by_origin[_origin_bucket(meta["raw_scope"])] += 1
     for name in unused_names:
         meta = inventory.get(name, {})
@@ -805,15 +871,17 @@ def build_snapshot(window_days: int = 30) -> dict:
     for skill, runs in skill_counts.most_common():
         meta = inventory.get(skill) or inventory.get(skill.split(":")[-1], {})
         ts = _parse_ts(last_seen.get(skill))
-        top_skills.append({
-            "skill": skill,
-            "runs": runs,
-            "last_used": ts.strftime("%Y-%m-%d") if ts else None,
-            "summary": (meta.get("summary") or "").strip(),
-            "origin": meta.get("origin") or "",
-            "pack": meta.get("pack") or "",
-            "raw_scope": meta.get("raw_scope") or "",
-        })
+        top_skills.append(
+            {
+                "skill": skill,
+                "runs": runs,
+                "last_used": ts.strftime("%Y-%m-%d") if ts else None,
+                "summary": (meta.get("summary") or "").strip(),
+                "origin": meta.get("origin") or "",
+                "pack": meta.get("pack") or "",
+                "raw_scope": meta.get("raw_scope") or "",
+            }
+        )
 
     total_turns = sum(r["turns"] for r in session_rows)
     total_tokens = sum(r["tokens_total"] for r in session_rows)
