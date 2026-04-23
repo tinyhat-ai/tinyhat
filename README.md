@@ -1,29 +1,36 @@
 # Tinyhat
 
-**The improvement loop for your Claude Code skills.**
+**See which skills are part of your workflow — and which ones you may be missing.**
 
 [![CI](https://github.com/tinyhat-ai/tinyhat/actions/workflows/ci.yml/badge.svg)](https://github.com/tinyhat-ai/tinyhat/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 [![Version](https://img.shields.io/github/v/tag/tinyhat-ai/tinyhat?label=version&sort=semver)](https://github.com/tinyhat-ai/tinyhat/releases)
 [![Conventional Commits](https://img.shields.io/badge/Conventional%20Commits-1.0.0-blue.svg)](https://www.conventionalcommits.org)
 
-![Top of a Tinyhat audit report asking "Which skills are actually earning their keep?" with two summary cards: 11% skill utilization — 14 of 122 installed skills had at least one run — and 31% of sessions with skills, meaning 18 of 58 recent sessions fired at least one skill.](docs/images/audit-summary.png)
+Tinyhat is a small Claude Code plugin that looks at your recent usage and turns it into a report.
 
-*The top of a fresh Tinyhat audit — a local, read-only report on which of your Claude Code skills actually show up in the work you've been doing. Every run is written by the Claude agent from your own session history, not a canned template.*
+I built it because I wanted a more honest view of my setup: what I was actually using, what was just sitting there installed, and what kinds of work kept coming up without a fitting skill.
 
-Tinyhat is a Claude Code plugin that uses that report to close a simple loop: **create what you use, retire what you don't, share what works.**
+Instead of guessing what skills you need, you can start from your actual workflow.
 
-Other tools hand you a pre-built skill library.
-Tinyhat bets the opposite way — a skill shaped by your real work beats any starter skill copied from elsewhere.
-The first version of a skill isn't the product; the loop is.
-
-Team skill-sharing follows naturally once the individual loop is working.
+That usually leads to three useful actions:
+- improve the skills you already rely on
+- remove unused skills
+- create the skills you seem to be missing
 
 Everything runs locally. No hooks, no daemons, no network calls.
 
+![Top of a Tinyhat audit report asking "Which skills are actually earning their keep?" with two summary cards: 11% skill utilization — 14 of 122 installed skills had at least one run — and 31% of sessions with skills, meaning 18 of 58 recent sessions fired at least one skill.](docs/images/audit-summary.png)
+
+*A local report built from your recent Claude Code usage, showing which skills seem active, which look unused, and where you may be missing a skill.*
+
 ## Why "Tinyhat"?
 
-I keep coming back to the way humans swap roles: *"put on your marketing hat."* I wonder if AI agents will land there too — a role, a hat, the skills that come with it. Tinyhat is the observability for those skills, so a team can see what's used and what's worth keeping.
+I kept coming back to the way people switch roles: "put on your marketing hat," "put on your ops hat."
+
+This project started from wondering whether agents might work that way too: different hats, different skills, different ways of working.
+
+Tinyhat is just a small tool to help make those skills easier to see.
 
 ## Install
 
