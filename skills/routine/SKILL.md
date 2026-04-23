@@ -21,25 +21,16 @@ the dated-archive directory. State lives in
 | `where` | Print the full set of paths Tinyhat reads and writes. |
 | `clear` | Delete every dated dir under `archive/`. Keeps `latest/` and `routine.json`. |
 
-## Load-time: persist the plugin root
+## Skill-relative script path
 
-`${CLAUDE_PLUGIN_ROOT}` only expands inside `!`-prefixed blocks.
-Non-`!` Bash blocks (the ones you run via the `Bash` tool below) see it
-empty. Persist it to a known file at load time so those calls can find
-`routine.py` no matter which version the user has installed.
-
-```!
-mkdir -p ~/.claude/tinyhat && printf '%s' "${CLAUDE_PLUGIN_ROOT}" > ~/.claude/tinyhat/.plugin-root
-```
-
-Every sub-command below resolves the script with
-`"$(cat ~/.claude/tinyhat/.plugin-root)/scripts/routine.py"`. Don't
-hardcode the plugin path — it changes per user and per version.
+`${CLAUDE_SKILL_DIR}` is rendered into the skill content before Claude
+runs the Bash blocks below, so each sub-command keeps calling the
+matching bundled `routine.py` for this loaded skill.
 
 ### status (default)
 
 ```bash
-python3 "$(cat ~/.claude/tinyhat/.plugin-root)/scripts/routine.py" status
+python3 "${CLAUDE_SKILL_DIR}/../../scripts/routine.py" status
 ```
 
 Prints three lines: `routine: on|off`, `last run: YYYY-MM-DD | (never)`, `home: <path>`. Repeat the output to the user verbatim — no re-phrasing needed.
@@ -48,10 +39,10 @@ Prints three lines: `routine: on|off`, `last run: YYYY-MM-DD | (never)`, `home: 
 
 ```bash
 # turn on:
-python3 "$(cat ~/.claude/tinyhat/.plugin-root)/scripts/routine.py" on
+python3 "${CLAUDE_SKILL_DIR}/../../scripts/routine.py" on
 
 # turn off:
-python3 "$(cat ~/.claude/tinyhat/.plugin-root)/scripts/routine.py" off
+python3 "${CLAUDE_SKILL_DIR}/../../scripts/routine.py" off
 ```
 
 Both subcommands write `routine.json` atomically and print the new
@@ -61,7 +52,7 @@ the background auto-run is suppressed.
 ### where
 
 ```bash
-python3 "$(cat ~/.claude/tinyhat/.plugin-root)/scripts/routine.py" where
+python3 "${CLAUDE_SKILL_DIR}/../../scripts/routine.py" where
 ```
 
 Prints the list of sources Tinyhat reads (transcripts, inventory,
@@ -72,7 +63,7 @@ or wants to tail a file.
 ### clear
 
 ```bash
-python3 "$(cat ~/.claude/tinyhat/.plugin-root)/scripts/routine.py" clear-archive
+python3 "${CLAUDE_SKILL_DIR}/../../scripts/routine.py" clear-archive
 ```
 
 Removes every dated `archive/YYYY-MM-DD/` directory. Does not touch

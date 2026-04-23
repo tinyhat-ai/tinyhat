@@ -130,9 +130,6 @@ def cmd_where(root: Path) -> int:
     print("  ~/.gstack/analytics/skill-usage.jsonl          (optional local telemetry)")
     print("Tinyhat writes:")
     print(f"  {root}/routine.json")
-    print(
-        f"  {root}/.plugin-root                            (plugin install path; refreshed on every skill load)"
-    )
     print(f"  {root}/latest/report.md")
     print(f"  {root}/latest/report.html")
     print(f"  {root}/latest/run-stamp.txt")
