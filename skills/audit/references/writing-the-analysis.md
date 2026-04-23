@@ -55,6 +55,15 @@ Only open this file when a specific observation requires a row the
 compact file doesn't carry — e.g. to quote a session `title` or the
 `path` of a project-local skill. Reading it consumes a lot of tokens.
 
+## Tool note: how to write `tinyhat-analysis.json`
+
+Use Bash (a `python3` heredoc, or `cat > … <<'EOF'`) to write the
+analysis JSON. **Do not use the `Write` tool.** Claude Code blocks
+`Write` on a path that hasn't been `Read` in the current session, and a
+brand-new temp file can never satisfy that check — you'll hit "File has
+not been read yet" every time. `SKILL.md` step 2 shows the exact
+heredoc to copy.
+
 ## Field-by-field rules
 
 ### `headline`
