@@ -2,37 +2,42 @@
 
 All notable changes to Tinyhat are documented here. This file is
 maintained by [release-please](https://github.com/googleapis/release-please)
-— it reads Conventional Commit messages on `main` and produces a release
-PR with the next version bump + changelog entry.
+— it reads Conventional Commit messages on `main` and produces a
+release PR with the next version bump + changelog entry.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/)
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
-Pre-1.0, breaking changes bump the **minor** version, not major.
 
-## 1.0.0 (2026-04-23)
-
-
-### Features
-
-* v0 local scanner plugin + open-source scaffolding ([#2](https://github.com/tinyhat-ai/tinyhat/issues/2)) ([855ea2a](https://github.com/tinyhat-ai/tinyhat/commit/855ea2ad0aba048660c19d80ff02762bcd98d839))
+**Pre-1.0 policy:** we bump **minor** for new features and **patch**
+for fixes. Breaking changes stay in minor bumps until we explicitly
+ship `1.0.0`. Release-please is configured to honor this
+(`bump-minor-pre-major: true`, `bump-patch-for-minor-pre-major: true`).
 
 ## [Unreleased]
 
 ### Added
 
-- Initial v0 plugin scaffolding: `.claude-plugin/plugin.json`, three
-  skills under `skills/` (`skill-audit`, `open-latest-audit`,
-  `audit-history`), three scripts under `scripts/`
-  (`gather_snapshot.py`, `render_report.py`, `routine.py`),
-  self-contained HTML report with pie charts + dormant-surface +
-  activity patterns, client-side filters for sessions and tools.
-- Adaptive daily routine: at most one snapshot per local calendar date,
-  fired opportunistically on skill load (no launchd, no cron).
+- Initial v0 plugin scaffolding: `.claude-plugin/plugin.json`, four
+  skills under `skills/` (`audit`, `open`, `history`, `routine`),
+  three scripts under `scripts/` (`gather_snapshot.py`,
+  `render_report.py`, `routine.py`), self-contained HTML report with
+  pie charts, activity patterns, client-side filters for sessions
+  and tools, and a browsable archive index.
+- Adaptive daily refresh — at most one snapshot per local calendar
+  date, triggered opportunistically on skill load (no launchd, no
+  cron).
 - Archive retention (31 days) and an index page linking latest + every
   archived snapshot.
 - Open-source contribution scaffolding: `CONTRIBUTING.md`,
   `CODE_OF_CONDUCT.md`, `SECURITY.md`, PR template, issue templates,
-  CI workflow, release workflow, dependabot, `.editorconfig`,
-  `.gitattributes`, `pyproject.toml`, pre-commit config.
+  CI workflow, release workflow (pinned pre-1.0), dependabot,
+  `.editorconfig`, `.gitattributes`, `pyproject.toml`, pre-commit
+  config.
 - Docs: `docs/user-flows.md`, `docs/artifacts.md`,
   `docs/architecture.md`, `docs/local-development.md`.
+
+### Changed
+
+- Reset from accidental `v1.0.0` (auto-released by an unconfigured
+  release-please run) back to pre-1.0 versioning. First public
+  release will be `0.1.0`.
