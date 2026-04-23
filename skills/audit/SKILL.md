@@ -96,26 +96,37 @@ every aggregate field the analysis cites. If you need a specific
 session row or inventory entry, read the detail file — but prefer the
 compact file so you don't burn tokens on data you won't cite.
 
-Then write `<temp>/tinyhat-analysis.json` with these keys. Detailed
-field-by-field guidance is in
+Then write `<temp>/tinyhat-analysis.json` via the Bash heredoc below —
+**do not use the `Write` tool**, it requires a prior `Read` on the
+path and will fail for a brand-new temp file. Detailed field-by-field
+guidance is in
 [`references/writing-the-analysis.md`](references/writing-the-analysis.md) —
 read it the first time you run this skill.
 
-```json
-{
-  "headline": "You have N skills installed. You used M of them in the last 30 days.",
-  "headline_sub": "One short supporting sentence.",
-  "what_stands_out": ["3–5 specific observations citing real names, counts, dates"],
-  "dormant_commentary": "One or two sentences about the dormant surface.",
-  "skill_recommendations": [
-    {"name": "...", "confidence": "high|medium|low", "headline": "...", "why": "...", "triggers": ["..."]}
-  ],
-  "next_actions": [
-    {"verb": "draft-skill", "label": "Draft `implement-feature`", "context": "...", "impact": "high|medium|low|null"}
-  ],
-  "coverage_note": "One paragraph; honest about what was scanned and what's uncertain."
-}
+```bash
+python3 <<'PY'
+import json, tempfile, pathlib
+out = pathlib.Path(tempfile.gettempdir()) / "tinyhat-analysis.json"
+out.write_text(json.dumps({
+    "headline": "You have N skills installed. You used M of them in the last 30 days.",
+    "headline_sub": "One short supporting sentence.",
+    "what_stands_out": ["3–5 specific observations citing real names, counts, dates"],
+    "dormant_commentary": "One or two sentences about the dormant surface.",
+    "skill_recommendations": [
+        {"name": "...", "confidence": "high", "headline": "...", "why": "...", "triggers": ["..."]}
+    ],
+    "next_actions": [
+        {"verb": "draft-skill", "label": "Draft `implement-feature`", "context": "...", "impact": "high"}
+    ],
+    "coverage_note": "One paragraph; honest about what was scanned and what's uncertain.",
+}, indent=2))
+print(f"Wrote {out}")
+PY
 ```
+
+Fill the dict with your real analysis before running. Python resolves
+the correct temp directory on every OS and surfaces any JSON-shaped
+mistakes as a clean error.
 
 **Non-negotiables:**
 - Use literal numbers from `snapshot.stats` for the headline.
