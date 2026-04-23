@@ -108,14 +108,18 @@ If any step shows an error, jump to **Rollback** below.
 In a clean Claude Code session:
 
 ```text
-/plugin install tinyhat-ai/tinyhat
+/plugin marketplace update tinyloop
+/plugin install tinyhat@tinyloop
 /reload-plugins
 /tinyhat:audit
 ```
 
+If the marketplace isn't already added (first smoke test on a new
+machine), add it first: `/plugin marketplace add tinyhat-ai/tinyhat`.
+
 Watch for:
 
-- The three skills (`audit`, `open`, `history`) plus `routine`
+- The four skills (`audit`, `open`, `history`, `routine`)
   register under the `tinyhat:` namespace.
 - `gather_snapshot.py` and `render_report.py` run without import
   errors.

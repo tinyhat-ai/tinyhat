@@ -7,19 +7,21 @@ Exactly how to use Tinyhat once the plugin is installed. Each flow below covers 
 Inside any Claude Code session:
 
 ```text
-/plugin install tinyhat-ai/tinyhat
+/plugin marketplace add tinyhat-ai/tinyhat
+/plugin install tinyhat@tinyloop
 /reload-plugins
 ```
 
-That's it. Three skills are now available under the `tinyhat:` namespace:
+The first command registers the Tinyloop marketplace (this repo). The second installs the `tinyhat` plugin from it. After install, four skills register under the `tinyhat:` namespace:
 
 | Slash command | What it does | Regenerates? |
 |---|---|:---:|
 | `/tinyhat:audit` | Scan → agent writes analysis → render report → open HTML | ✓ |
 | `/tinyhat:open` | Open the latest existing report in your browser | — |
 | `/tinyhat:history` | Open the archive index listing every report on disk | — |
+| `/tinyhat:routine` | Manage the daily auto-run (status/on/off/where/clear) | — |
 
-After install, the three flows below are what you'll actually do day-to-day.
+After install, the flows below are what you'll actually do day-to-day.
 
 ---
 
