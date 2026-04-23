@@ -77,12 +77,27 @@ output. Skip the heads-up on the other `skip:` reasons (e.g.
 python3 "${CLAUDE_SKILL_DIR}/../../scripts/gather_snapshot.py"
 ```
 
-Writes `<temp>/tinyhat-snapshot.json`. The path is printed to stderr.
+Writes two files side by side:
+
+- `<temp>/tinyhat-snapshot.json` — **compact**, aggregate-only. This
+  is what you `Read` in step 2; it fits in a single Read call even on
+  100+ skill installations.
+- `<temp>/tinyhat-snapshot-detail.json` — **detail**, the full
+  snapshot with per-session rows, full inventory, and raw events. The
+  renderer consumes this; you only need to touch it if an observation
+  requires drilling into a specific session or event.
+
+Both paths are printed to stderr.
 
 ### 2. Read the snapshot and write your analysis
 
-Read the snapshot. Then write `<temp>/tinyhat-analysis.json` with
-these keys. Detailed field-by-field guidance is in
+Read the **compact** snapshot (`<temp>/tinyhat-snapshot.json`). It has
+every aggregate field the analysis cites. If you need a specific
+session row or inventory entry, read the detail file — but prefer the
+compact file so you don't burn tokens on data you won't cite.
+
+Then write `<temp>/tinyhat-analysis.json` with these keys. Detailed
+field-by-field guidance is in
 [`references/writing-the-analysis.md`](references/writing-the-analysis.md) —
 read it the first time you run this skill.
 
@@ -104,9 +119,13 @@ read it the first time you run this skill.
 
 **Non-negotiables:**
 - Use literal numbers from `snapshot.stats` for the headline.
-- Only reference skills that appear in `snapshot.inventory`.
+- Only reference skills that appear in the compact snapshot's
+  `top_skills` or `dormant_by_origin` (together these cover every
+  installed skill). Check there before naming a skill in a
+  recommendation so you don't suggest one the user already has.
 - Recommendations must be grounded in tool/session patterns you can
-  cite from the snapshot. No speculation.
+  cite from `tool_totals`, `aggregate_tools`, or
+  `session_tool_patterns`. No speculation.
 
 ### 3. Render
 
@@ -170,7 +189,7 @@ start "${CLAUDE_PLUGIN_DATA}/latest/report.html"       # Windows
 ## Paths
 
 - Scripts: bundled under `<plugin>/scripts/`, invoked here via `${CLAUDE_SKILL_DIR}/../../scripts/...`
-- Transient: `<tempdir>/tinyhat-snapshot.json`, `<tempdir>/tinyhat-analysis.json`
+- Transient: `<tempdir>/tinyhat-snapshot.json` (compact, agent-facing), `<tempdir>/tinyhat-snapshot-detail.json` (detail, renderer-facing), `<tempdir>/tinyhat-analysis.json`
 - Latest: `${CLAUDE_PLUGIN_DATA}/latest/report.{md,html}` + `snapshot.json` + `analysis.json` + `run-stamp.txt`
 - Archive: `${CLAUDE_PLUGIN_DATA}/archive/YYYY-MM-DD/report.{md,html}` + `snapshot.json` + `analysis.json` + `index.html`
 - Routine state: `${CLAUDE_PLUGIN_DATA}/routine.json`

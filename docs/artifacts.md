@@ -26,7 +26,8 @@ plugin-data path automatically.
 | `${CLAUDE_PLUGIN_DATA}/archive/YYYY-MM-DD/{snapshot,analysis}.json` | Dated JSONs alongside the HTML/MD | When `--archive` is passed or the adaptive daily fires |
 | `${CLAUDE_PLUGIN_DATA}/archive/index.html` | Browseable index of latest + all archives | Every render call |
 | `${CLAUDE_PLUGIN_DATA}/feedback.jsonl` | Optional local feedback log (reserved) | Never in v0 (feedback goes via `mailto:`) |
-| `<tempdir>/tinyhat-snapshot.json` | Transient mirror of latest/snapshot.json (pipeline hand-off) | Every `gather_snapshot.py` call |
+| `<tempdir>/tinyhat-snapshot.json` | Transient **compact** snapshot — agent-facing, single-`Read`-sized | Every `gather_snapshot.py` call |
+| `<tempdir>/tinyhat-snapshot-detail.json` | Transient **detail** snapshot — full data, renderer-facing | Every `gather_snapshot.py` call |
 | `<tempdir>/tinyhat-analysis.json` | Transient mirror of latest/analysis.json (pipeline hand-off) | Every `/tinyhat:audit` run |
 
 `<tempdir>` is whatever `python3 -c 'import tempfile; print(tempfile.gettempdir())'` returns on your OS:
@@ -108,7 +109,7 @@ cat "${CLAUDE_PLUGIN_DATA}/latest/snapshot.json"
 
 Top-level keys: `meta`, `stats`, `inventory`, `top_skills`, `skill_counts`, `last_seen`, `sessions`, `events`, `events_audit`, `tool_totals`, `aggregate_tools`, `daily_rollups`, `dormant_by_origin`, `installed_by_origin`, `surface_rollups`, `coverage`. See [development.md](local-development.md) for the shape.
 
-The transient mirror at `<tempdir>/tinyhat-snapshot.json` is the same data — it's the hand-off between `gather_snapshot.py` and `render_report.py`. The copy under `latest/` is the one you (or Claude, on a follow-up turn) should read.
+The renderer consumes the detail copy at `<tempdir>/tinyhat-snapshot-detail.json`; the alongside `<tempdir>/tinyhat-snapshot.json` is a compact, aggregate-only view written for the agent's analysis step (so it fits in a single `Read` call even on 100+ skill installations — see [#38](https://github.com/tinyhat-ai/tinyhat/issues/38)). Both are transient. The durable copy under `latest/snapshot.json` is the full data and is what you (or Claude, on a follow-up turn) should read when drilling in.
 
 ### The agent-authored analysis JSON (the editorial layer)
 

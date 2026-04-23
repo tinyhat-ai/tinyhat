@@ -58,7 +58,10 @@ Facts-only scanner. Reads:
 - `~/.claude/skills/`, `~/.claude/plugins/**/skills/*/SKILL.md`, project-local `.claude/skills/`, Cowork skill bundles (inventory)
 - `~/.gstack/analytics/skill-usage.jsonl` (optional cross-check)
 
-Emits a JSON snapshot with: `meta`, `stats`, `inventory`, `top_skills`, `skill_counts`, `last_seen`, `sessions`, `events`, `events_audit`, `tool_totals`, `aggregate_tools`, `daily_rollups`, `dormant_by_origin`, `installed_by_origin`, `surface_rollups`, `coverage`.
+Emits **two** JSON files alongside each other:
+
+- `<tempdir>/tinyhat-snapshot.json` — compact, aggregate-only view for the agent's analysis step. Top-level keys: `meta`, `stats`, `top_skills`, `skill_counts`, `last_seen`, `dormant_by_origin`, `installed_by_origin`, `tool_totals`, `aggregate_tools`, `daily_rollups`, `surface_rollups`, `session_tool_patterns`, `events_audit`, `coverage`. Sized to fit in a single `Read` tool call on 100+ skill installations (see [#38](https://github.com/tinyhat-ai/tinyhat/issues/38)).
+- `<tempdir>/tinyhat-snapshot-detail.json` — the full snapshot consumed by `render_report.py`. Superset of the compact view plus `inventory`, per-session `sessions`, raw `events`, and `events_audit.bare_read_skill_md`.
 
 **Attribution rules** (per [`roadmap/v0/skill-attribution-from-transcripts.md`](../../Tinyhat%20Docs/roadmap/v0/skill-attribution-from-transcripts.md) in the private spec):
 
@@ -73,7 +76,7 @@ Dedup: same session + same skill, ≤30s apart → one invocation. Unknown names
 ### `scripts/render_report.py`
 
 Pure templating. Takes:
-- `--snapshot` (default `<tempdir>/tinyhat-snapshot.json`)
+- `--snapshot` (default `<tempdir>/tinyhat-snapshot-detail.json` — the renderer needs the full inventory, per-session rows, and raw events)
 - `--analysis` (default `<tempdir>/tinyhat-analysis.json`)
 
 If `analysis.json` is missing, fills in sensible but generic defaults derived from the snapshot. **This is a fallback — it's safe to run but dull to read.** Real value comes from the agent-written analysis.

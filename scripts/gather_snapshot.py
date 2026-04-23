@@ -6,12 +6,23 @@ events, per-session metadata, daily rollups, coverage counts. Ranking and
 editorial framing are left to the agent, which reads this snapshot and
 writes its own analysis JSON before render_report.py runs.
 
+Two files are written side by side:
+
+- `tinyhat-snapshot.json` — compact. Aggregated fields only, no raw
+  sessions / inventory / events arrays. Intended for the agent's
+  analysis step (small enough for a single Read call).
+- `tinyhat-snapshot-detail.json` — full. Everything, including per-
+  session rows, full skill inventory, and raw events. Intended for
+  render_report.py and for the agent to drill into when needed.
+
 Usage:
     python3 gather_snapshot.py [--window-days 30] [--output path.json]
 
-Default output is /tmp/tinyhat-snapshot.json. Paths and the window are
-read from arguments; nothing is read from stdin and nothing is written
-outside the output path.
+`--output` sets the compact path; the detail file is written alongside
+it with `-detail` before the extension. Default output is
+/tmp/tinyhat-snapshot.json. Paths and the window are read from
+arguments; nothing is read from stdin and nothing is written outside
+the output directory.
 """
 
 from __future__ import annotations
@@ -949,23 +960,113 @@ def build_snapshot(window_days: int = 30) -> dict:
     return snapshot
 
 
+COMPACT_SESSION_CAP = 30
+
+
+def build_compact(snapshot: dict) -> dict:
+    """Derive a small, aggregate-only view of the snapshot.
+
+    The full snapshot can exceed the Read tool's per-call token limit
+    once an installation has ~100 skills and ~40 sessions (see #38). The
+    compact view drops the three big arrays — `inventory`, `sessions`,
+    and `events` — and replaces `sessions` with a trimmed per-session
+    tool-use list so the agent can still pattern-match for skill
+    recommendations.
+
+    Every field the analysis step cites
+    (see `skills/audit/references/writing-the-analysis.md`) is present
+    here; when the agent needs a full row it reads the detail file.
+    """
+    candidate_rows = [
+        {
+            "session_id": row["session_id"],
+            "project": row["project"],
+            "surface": row["surface"],
+            "last_used": row["last_used"],
+            "turns": row["turns"],
+            "skill_runs": row["skill_runs"],
+            "tool_uses": row["tool_uses"],
+        }
+        for row in snapshot.get("sessions", [])
+        if sum((row.get("tool_uses") or {}).values()) > 0
+    ]
+    candidate_rows.sort(
+        key=lambda r: sum(r["tool_uses"].values()),
+        reverse=True,
+    )
+    session_tool_patterns = candidate_rows[:COMPACT_SESSION_CAP]
+    session_patterns_dropped = max(
+        len(snapshot.get("sessions", [])) - len(session_tool_patterns),
+        0,
+    )
+
+    events_audit_src = snapshot.get("events_audit") or {}
+    events_audit = {
+        "unknown_names": events_audit_src.get("unknown_names", []),
+        "unknown_event_count": events_audit_src.get("unknown_event_count", 0),
+        "bare_read_skill_md_count": len(events_audit_src.get("bare_read_skill_md", [])),
+    }
+    return {
+        "meta": snapshot["meta"],
+        "stats": snapshot["stats"],
+        "top_skills": snapshot.get("top_skills", []),
+        "skill_counts": snapshot.get("skill_counts", {}),
+        "last_seen": snapshot.get("last_seen", {}),
+        "dormant_by_origin": snapshot.get("dormant_by_origin", {}),
+        "installed_by_origin": snapshot.get("installed_by_origin", {}),
+        "tool_totals": snapshot.get("tool_totals", {}),
+        "aggregate_tools": snapshot.get("aggregate_tools", []),
+        "daily_rollups": snapshot.get("daily_rollups", []),
+        "surface_rollups": snapshot.get("surface_rollups", {}),
+        "coverage": snapshot.get("coverage", {}),
+        "events_audit": events_audit,
+        "session_tool_patterns": session_tool_patterns,
+        "session_tool_patterns_meta": {
+            "kept": len(session_tool_patterns),
+            "dropped": session_patterns_dropped,
+            "ordering": "by descending total tool_uses",
+            "note": (
+                "Only the most-active sessions are kept to stay under the "
+                "Read tool's token budget. Dropped rows are low-activity "
+                "and not useful for pattern-matching; open the detail file "
+                "if you need them."
+            ),
+        },
+        "detail_path_hint": "Full inventory, sessions, and events are in "
+        "tinyhat-snapshot-detail.json alongside this file.",
+    }
+
+
+def _detail_path_for(compact_path: Path) -> Path:
+    return compact_path.with_name(compact_path.stem + "-detail" + compact_path.suffix)
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description="Emit a Tinyhat local snapshot as JSON.")
     parser.add_argument("--window-days", type=int, default=30)
     parser.add_argument(
         "--output",
         default=str(DEFAULT_SNAPSHOT_PATH),
-        help=f"Path to write the snapshot JSON (default: {DEFAULT_SNAPSHOT_PATH})",
+        help=(
+            f"Path to write the compact snapshot JSON (default: {DEFAULT_SNAPSHOT_PATH}). "
+            "The full snapshot is written alongside with '-detail' before the extension."
+        ),
     )
     args = parser.parse_args()
 
     snapshot = build_snapshot(window_days=args.window_days)
-    output_path = Path(args.output)
-    output_path.parent.mkdir(parents=True, exist_ok=True)
-    output_path.write_text(json.dumps(snapshot, indent=2, default=str), encoding="utf-8")
+    compact = build_compact(snapshot)
+
+    compact_path = Path(args.output)
+    detail_path = _detail_path_for(compact_path)
+    compact_path.parent.mkdir(parents=True, exist_ok=True)
+    compact_path.write_text(json.dumps(compact, indent=2, default=str), encoding="utf-8")
+    detail_path.write_text(json.dumps(snapshot, indent=2, default=str), encoding="utf-8")
+
     stats = snapshot["stats"]
     print(
-        f"Wrote {output_path} — {stats['installed_count']} installed skills, "
+        f"Wrote {compact_path} (compact) and {detail_path} (detail) — "
+        f"{stats['installed_count']} installed skills, "
         f"{stats['active_count']} active in last {args.window_days}d, "
         f"{stats['skill_runs_total']} runs, {stats['sessions_total']} sessions.",
         file=sys.stderr,

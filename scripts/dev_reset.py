@@ -13,7 +13,8 @@ Targets:
     ~/.claude/plugins/.install-manifests/tinyhat@*.json   install manifests
     ~/.claude/plugins/cache/<marketplace>/tinyhat/        per-marketplace cache
     ~/.claude/tinyhat/                                    legacy pre-#49 home
-    <tempdir>/tinyhat-snapshot.json, tinyhat-analysis.json  pipeline hand-off
+    <tempdir>/tinyhat-snapshot.json, tinyhat-snapshot-detail.json,   pipeline hand-off
+    <tempdir>/tinyhat-analysis.json
     ~/.claude/plugins/installed_plugins.json              entries keyed tinyhat@*
     ~/.claude/plugins/known_marketplaces.json             tinyloop entry (--full)
     ~/.claude/plugins/marketplaces/<ours>/                cloned market (--full)
@@ -96,7 +97,11 @@ def _enumerate_legacy_home() -> list[Target]:
 
 def _enumerate_temp_files() -> list[Target]:
     tmp = Path(tempfile.gettempdir())
-    names = ("tinyhat-snapshot.json", "tinyhat-analysis.json")
+    names = (
+        "tinyhat-snapshot.json",
+        "tinyhat-snapshot-detail.json",
+        "tinyhat-analysis.json",
+    )
     return [Target("temp-file", tmp / n) for n in names if (tmp / n).exists()]
 
 
