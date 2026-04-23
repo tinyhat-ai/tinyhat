@@ -108,18 +108,28 @@ This re-reads `SKILL.md` files and re-registers the skills. Python scripts are r
 
 ### Reset state between tests
 
-Tinyhat's state is two things: the output directory and the temp files.
+Tinyhat writes to several places across `~/.claude/plugins/` (data, cache, install manifest, installed-plugins registry), the legacy `~/.claude/tinyhat/` home, and two transient files in `<tempdir>/`. A missed path silently invalidates a first-run test, so the repo ships an internal skill that wipes every Tinyhat byte on the machine and nothing else:
 
-```bash
-# Wipe everything the plugin has written:
-rm -rf ~/.claude/plugins/data/tinyhat
-
-# Wipe the transient snapshot + analysis so the next run starts clean:
-rm -f "$(python3 -c 'import tempfile; print(tempfile.gettempdir())')/tinyhat-snapshot.json"
-rm -f "$(python3 -c 'import tempfile; print(tempfile.gettempdir())')/tinyhat-analysis.json"
+```text
+/tinyhat:dev:reset
 ```
 
-The plugin recreates `~/.claude/plugins/data/tinyhat/` on the next run. Nothing else on your system is touched.
+or in natural language: *"reset my tinyhat state so I can test a fresh first-run."*
+
+The skill lives at `.claude/skills/dev-reset/SKILL.md` — it's repo-scoped and never packaged with the plugin. You can also drive the helper script directly:
+
+```bash
+# Dry-run (prints what would be removed):
+python3 scripts/dev_reset.py
+
+# Actually remove:
+python3 scripts/dev_reset.py --commit
+
+# Full nuclear reset (also removes marketplace registration):
+python3 scripts/dev_reset.py --commit --full
+```
+
+The scoped reset leaves `~/.claude/plugins/known_marketplaces.json` alone so `/plugin install tinyhat@tinyloop` works on the next run without re-adding the marketplace. Use `--full` when you're testing the `/plugin marketplace add` step too. Either mode leaves `~/.claude/projects/` (session transcripts), `~/.claude/rc-dashboard/` (unrelated logs), and every other plugin's data untouched.
 
 ---
 
