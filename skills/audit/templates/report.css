@@ -66,6 +66,13 @@ body.mode-details .mode-btn[data-mode="details"] { background: linear-gradient(1
 .pie-copy h3 { margin: 0 0 6px; }
 .pie-copy p { margin: 0; color: var(--muted); font-size: 0.9rem; }
 
+.next-actions { padding: 20px 22px; border: 1px solid var(--border); border-radius: 18px; background: rgba(255, 255, 255, 0.72); box-shadow: var(--shadow); }
+.next-actions h2 { margin-bottom: 10px; }
+.next-action-list { margin: 0; padding-left: 1.35rem; display: grid; gap: 10px; }
+.next-action-list li { padding-left: 4px; line-height: 1.5; }
+.next-action-label { display: block; font-weight: 700; }
+.next-action-context { display: block; color: var(--muted); font-size: 0.92rem; }
+
 section { margin-top: 30px; }
 h2 { margin: 0 0 14px; font-size: 1.4rem; font-family: "Iowan Old Style", "Palatino Linotype", Georgia, serif; }
 h3 { margin: 0; font-size: 1.1rem; }

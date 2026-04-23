@@ -110,6 +110,45 @@ Each recommendation:
 If you can't ground a recommendation in evidence, **omit it**. A
 confident two-item list beats a speculative three-item list.
 
+### `next_actions` (3–5 items)
+
+These drive the terminal briefing, the top of `report.md`, and the
+simple-mode action list in `report.html`.
+
+Each action has:
+
+- `verb`: stable machine-ish label such as `draft-skill`, `cleanup`,
+  `routine`, `open-report`, or `defer`.
+- `label`: the imperative action the user sees.
+- `context`: one short evidence-backed sentence. Keep it to one line if
+  possible.
+- `impact`: `high`, `medium`, `low`, or `null`.
+
+Rules of thumb:
+
+- Include **exactly one** `open-report` item.
+- Include **exactly one** `defer` item.
+- Order by impact, not by category.
+- Prefer concrete verbs over topic buckets.
+- If the strongest recommendation is a new skill, that usually belongs
+  first.
+- If plugin-bundled skills dominate the dormant surface, a cleanup
+  action belongs near the top.
+- Ground the routine action in the current state on disk (on/off, last
+  run), not in assumptions.
+
+Example:
+
+- `Draft \`implement-feature\`` — 5 recent sessions leaned hard on Edit
+  + Bash, so the build-fix-verify loop is worth capturing.
+- `Review the 22 dormant plugin skills` — they are the cleanest cleanup
+  targets in this snapshot.
+- `Check the daily routine` — currently on; last run 2026-04-23.
+- `Open the full HTML report` — charts and session drill-downs live in
+  the sibling `report.html`.
+- `Do nothing — check back tomorrow` — useful if the user only wanted
+  the briefing.
+
 ### `coverage_note`
 
 One paragraph. Mention:
@@ -136,47 +175,63 @@ macOS-only."*
 - **Burying the lead.** The two pie charts and hero stats are already
   visible; your `what_stands_out` should add signal the charts can't.
 
-## Chat summary
+## Chat briefing
 
-After the renderer finishes, you write a short summary in chat. That's
-the **terminal-first** default: most users read the summary and stop
-there, so it has to earn the room it takes up.
+After the renderer finishes, you write a compact terminal briefing.
+That's the **terminal-first** default: most users read the briefing
+and stop there, so it has to earn the room it takes up.
 
 ### Shape
 
-Three short paragraphs. No headings, no bullet marathons.
-
-1. **Headline + top skills.** Literal installed/active numbers plus
-   the top 2–3 skills from `snapshot.top_skills`, backticked.
-2. **One standout.** Pick the single sharpest line from
-   `what_stands_out` — the one most likely to make the user lean in.
-   Not all of them, just one.
-3. **Full-report link.** A clickable `file://` URL to
-   `~/.claude/tinyhat/latest/report.html`, absolute path expanded.
+1. **Percentage strip** — fenced `text` block, ASCII only, two lines:
+   - `Skill utilization:    [=========---------]  12%   14 / 121`
+   - `Sessions with skills: [==================-]  26%   14 / 54`
+   Use `=` and `-` for bars (roughly 20 characters wide). No ANSI
+   colors, no Unicode blocks, no tables, no doughnuts.
+2. **One-sentence headline + standout.** Name the headline from
+   `analysis.headline` and pull one line from `what_stands_out`.
+3. **Numbered next-action menu** — 3–5 items straight from
+   `next_actions`. Prefix each with a number so the user can reply
+   with that number. Include the action's `context` as the trailing
+   explanation.
 
 ### Example
 
-> Scanned 121 installed skills, 14 active in the last 30 days. Top
-> skills: `plan-eng-review`, `plan-ceo-review`, `browse`.
+> ```text
+> Skill utilization:    [==----------------]  12%   14 / 121
+> Sessions with skills: [=====-------------]  26%   14 / 54
+> ```
 >
-> What stood out: planning-review skills made up 7 of 17 runs this
-> window — review prep is the strongest single pattern.
+> 121 installed, 14 active this window. What stood out: planning-review
+> skills (plan-eng-review, plan-ceo-review, plan-design-review) made
+> up 7 of 17 runs — review prep is the strongest single pattern.
 >
-> Full report: `file:///Users/you/.claude/tinyhat/latest/report.html`
+> Pick a next step:
+>   1. Draft `implement-feature` — 4,443 combined Edit+Bash calls across 54 sessions would have benefited.
+>   2. Review the 29 dormant plugin-bundled skills — cleanest cleanup targets in this snapshot.
+>   3. Check the daily routine — currently on; last run 2026-04-23.
+>   4. Open the full HTML report for charts and session drill-downs.
+>   5. Do nothing — check back tomorrow.
+>
+> Reply with a number or the natural-language form.
 
 ### Rules
 
-- **Never re-run `gather_snapshot.py` to write this summary.** Read
-  what you already produced — `stats`, `top_skills`, and
-  `what_stands_out` are all in the snapshot and analysis JSON you just
-  wrote.
-- **Expand the `~/` to an absolute path** in the `file://` URL so it's
-  clickable in the terminal. `echo $HOME` if you need to.
-- **Don't add a fourth paragraph.** No "want me to open it?" follow-up
-  — a link is enough. If the user wants to dig in they'll say so.
-- **Skip the chat summary only when `--archive` is set without user
-  interaction** (the adaptive daily run) — it's background work;
-  surfacing it would be noise.
+- **Never re-run `gather_snapshot.py` to write this briefing.** Read
+  what you already produced — `stats`, `top_skills`, `what_stands_out`,
+  and `next_actions` are all in the snapshot and analysis JSON.
+- **Use literal numbers from `snapshot.stats`.** Don't paraphrase
+  counts.
+- **Skip the briefing only when `--archive` fires non-interactively**
+  (the adaptive daily run) — it's background work; surfacing it would
+  be noise.
+- **When the user replies with a number**, map it back to the
+  corresponding `next_actions[i].verb` and act:
+  - `open-report` → open `${CLAUDE_PLUGIN_DATA}/latest/report.html`.
+  - `draft-skill` → hand off to the skill-drafting flow.
+  - `cleanup` → list the dormant skills and help the user pick.
+  - `routine` → invoke `/tinyhat:routine` sub-commands.
+  - `defer` → say "ok" and stop.
 
 ## How the rendering works
 
@@ -185,6 +240,11 @@ analysis strings. If a key in your analysis JSON is missing, the
 renderer falls back to a Python-derived default. That default is
 safe but generic — which is exactly what this skill is trying to avoid.
 Fill every field.
+
+The terminal briefing at the end of the skill mirrors the same
+`next_actions` and the same two-percentage strip as the top of
+`report.md`, but the chat-side strip is rendered by the skill (from
+`snapshot.stats`), not by `analysis.json`.
 
 The renderer also writes `snapshot.json` and `analysis.json` next to
 the HTML in both `latest/` and (when `--archive`) `archive/YYYY-MM-DD/`.

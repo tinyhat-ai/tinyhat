@@ -8,12 +8,20 @@ allowed-tools: Bash(open *) Bash(xdg-open *) Bash(start *) Bash(python3 *) Read
 Two jobs, decided by what the user actually asked for:
 
 1. **Answer a specific question about the last audit** — read the
-   persisted JSONs at `~/.claude/tinyhat/latest/{snapshot,analysis}.json`
+   persisted JSONs at `${CLAUDE_PLUGIN_DATA}/latest/{snapshot,analysis}.json`
    and reply in chat. No browser.
 2. **Open the HTML report as-is** — when the user just wants to see it.
 
 **Never regenerate.** That's `/tinyhat:audit`'s job. The agent analysis
 step is non-trivial and the user may not want to spend the turns.
+
+## Where the data lives
+
+Tinyhat writes under `${CLAUDE_PLUGIN_DATA}` (the Claude-Code-sanctioned
+per-plugin data directory). Older installs may still have artefacts
+under the legacy `~/.claude/tinyhat/` — fall back to it only if the new
+path is empty. The next write-capable Tinyhat command will migrate the
+legacy directory forward.
 
 ## Decide which job you're doing
 
@@ -32,15 +40,17 @@ moves it away.
 
 ## Job 1 — answer from JSON
 
-1. Check `~/.claude/tinyhat/latest/analysis.json` and
-   `~/.claude/tinyhat/latest/snapshot.json` both exist.
+1. Find the latest directory: prefer `${CLAUDE_PLUGIN_DATA}/latest/`,
+   fall back to `~/.claude/tinyhat/latest/` only if the first is empty.
+2. Check that `analysis.json` and `snapshot.json` both exist in that
+   directory.
    - If missing, say "I don't have a saved audit to read from — let me
      run a fresh one" and hand off to `/tinyhat:audit`. Stop.
-2. Read one or both JSONs with the Read tool. Prefer `analysis.json`
+3. Read one or both JSONs with the Read tool. Prefer `analysis.json`
    for editorial questions (*"what stood out?"*, *"what did you
    recommend?"*) and `snapshot.json` for factual questions (*"which
    skills did I use?"*, *"how many sessions?"*).
-3. Answer in chat. Cite specific numbers/skills from the JSON. Name
+4. Answer in chat. Cite specific numbers/skills from the JSON. Name
    the date the audit ran (`run-stamp.txt`). End with one line the
    user can act on — usually a `file://` link to the full HTML if
    they want more detail.
@@ -50,7 +60,7 @@ moves it away.
 > From your 2026-04-23 audit: 107 of 121 installed skills were dormant
 > — the bulk (82) are plugin-bundled skills that came with
 > marketplaces you installed. Open the full report at
-> `file:///Users/you/.claude/tinyhat/latest/report.html` to see them
+> `file://${CLAUDE_PLUGIN_DATA}/latest/report.html` to see them
 > grouped by origin.
 
 ### Rules
@@ -65,25 +75,27 @@ moves it away.
 
 ## Job 2 — open the HTML
 
-1. Check whether `~/.claude/tinyhat/latest/report.html` exists.
-   - If missing, tell the user "No skill-audit report yet — let me
+1. Check whether `${CLAUDE_PLUGIN_DATA}/latest/report.html` exists.
+   - If it does, use it.
+   - If it doesn't, check `~/.claude/tinyhat/latest/report.html`.
+   - If neither exists, tell the user "No skill-audit report yet — let me
      create your first one" and hand off to `/tinyhat:audit`.
      Stop here; don't try to open nothing.
 2. Open the file with the platform-appropriate command:
 
 ```bash
-open ~/.claude/tinyhat/latest/report.html        # macOS
-xdg-open ~/.claude/tinyhat/latest/report.html    # Linux
-start ~/.claude/tinyhat/latest/report.html       # Windows
+open "${CLAUDE_PLUGIN_DATA}/latest/report.html"        # macOS
+xdg-open "${CLAUDE_PLUGIN_DATA}/latest/report.html"    # Linux
+start "${CLAUDE_PLUGIN_DATA}/latest/report.html"       # Windows
 ```
 
 If unsure which OS, use Python's `webbrowser` module (cross-platform):
 
 ```bash
-python3 -c "import webbrowser, pathlib; webbrowser.open(pathlib.Path('~/.claude/tinyhat/latest/report.html').expanduser().as_uri())"
+python3 -c "import os, webbrowser, pathlib; webbrowser.open(pathlib.Path(os.environ['CLAUDE_PLUGIN_DATA'], 'latest', 'report.html').as_uri())"
 ```
 
 3. In one short sentence, tell the user what they're looking at — the
-   date from `~/.claude/tinyhat/latest/run-stamp.txt` is enough:
+   date from `${CLAUDE_PLUGIN_DATA}/latest/run-stamp.txt` is enough:
    *"Opened your most recent skill-audit report from 2026-04-23. Use
    `/tinyhat:audit` to refresh."*

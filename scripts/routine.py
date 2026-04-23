@@ -11,7 +11,8 @@ Subcommands:
     routine.py clear-archive  Delete everything under archive/, keep latest/.
     routine.py where          Print the paths Tinyhat reads and writes.
 
-Everything lives under ~/.claude/tinyhat/. No network calls, no daemons.
+Everything lives under Claude Code's plugin data directory. No network
+calls, no daemons.
 The adaptive daily trigger is implemented by having the skill invoke this
 script with `check` on every skill load and firing a background review
 when exit status is 0.
@@ -26,7 +27,7 @@ import sys
 from datetime import datetime, timezone
 from pathlib import Path
 
-DEFAULT_HOME_ROOT = Path.home() / ".claude" / "tinyhat"
+from tinyhat_paths import legacy_home_root, resolve_home_root
 
 
 def _load_routine(root: Path) -> dict:
@@ -135,6 +136,9 @@ def cmd_where(root: Path) -> int:
     print(f"  {root}/latest/run-stamp.txt")
     print(f"  {root}/archive/YYYY-MM-DD/report.{{md,html}}  (up to 31 dated dirs)")
     print(f"  {root}/feedback.jsonl                         (local-only feedback)")
+    legacy = legacy_home_root()
+    if root != legacy:
+        print(f"Legacy path (migrated on first write): {legacy}")
     return 0
 
 
@@ -142,15 +146,15 @@ def main() -> int:
     parser = argparse.ArgumentParser(description="Tinyhat routine state.")
     parser.add_argument(
         "--home-root",
-        default=str(DEFAULT_HOME_ROOT),
-        help="Root directory for Tinyhat state (default: ~/.claude/tinyhat)",
+        default=None,
+        help="Root directory for Tinyhat state (default: Claude plugin data directory)",
     )
     sub = parser.add_subparsers(dest="cmd", required=True)
     for name in ("status", "on", "off", "check", "clear-archive", "where"):
         sub.add_parser(name)
     args = parser.parse_args()
 
-    root = Path(args.home_root).expanduser()
+    root = resolve_home_root(args.home_root)
     commands = {
         "status": cmd_status,
         "on": cmd_on,

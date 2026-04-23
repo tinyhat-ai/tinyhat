@@ -47,6 +47,12 @@
     </div>
   </section>
 
+  <section class="main-only next-actions">
+    <div class="kicker">Pick a next step</div>
+    <h2>What to do next</h2>
+    <ol class="next-action-list">{{NEXT_ACTIONS_HTML}}</ol>
+  </section>
+
   <section class="details-only hero">
     <h2 class="hero-headline">{{HEADLINE}}</h2>
     <p class="small">{{HEADLINE_SUB}}</p>
@@ -71,22 +77,9 @@
   </section>
 
   <section>
-    <div class="kicker">Action · 2 of 2 · Recommended skills</div>
+    <div class="kicker">Recommended skills</div>
     <h2>What to create next</h2>
     <div class="recommend-grid">{{RECOMMENDATION_CARDS}}</div>
-  </section>
-
-  <!-- OVERVIEW-MODE-ONLY -->
-  <section class="main-only">
-    <div class="kicker">Action · 1 of 2 · Clean up</div>
-    <div class="action-card" onclick="setMode('details'); setTimeout(()=>document.getElementById('dormant-section').scrollIntoView({behavior:'smooth'}), 100);">
-      <div class="action-card-icon">🧹</div>
-      <div class="action-card-body">
-        <h3>{{UNUSED_COUNT}} of {{INSTALLED_COUNT}} installed skills look dormant</h3>
-        <p>Review the ones you installed, never used, and can retire.</p>
-      </div>
-      <div class="action-card-cta">Review dormant skills →</div>
-    </div>
   </section>
 
   <div class="main-only mode-cta">
