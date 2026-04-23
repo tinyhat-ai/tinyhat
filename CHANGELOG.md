@@ -23,7 +23,7 @@ ship `1.0.0`. Release-please is configured to honor this
 
 ### Bug Fixes
 
-* **skills:** Persist plugin root at load time (closes [#36](https://github.com/tinyhat-ai/tinyhat/issues/36)) ([#41](https://github.com/tinyhat-ai/tinyhat/issues/41)) ([79163cd](https://github.com/tinyhat-ai/tinyhat/commit/79163cd44b304bb63a251f03c426c3283a0a1d98))
+* **skills:** Resolve bundled script paths via `${CLAUDE_SKILL_DIR}` so `/tinyhat:audit`, `/tinyhat:routine`, and `/tinyhat:history` work on every install, not just the maintainer's. `${CLAUDE_PLUGIN_ROOT}` is only set inside `!`-prefixed load-time blocks and was silently empty in the non-`!` Bash calls the agent actually ran, which broke `gather_snapshot.py` and friends with `No such file or directory` (closes [#36](https://github.com/tinyhat-ai/tinyhat/issues/36)) ([#41](https://github.com/tinyhat-ai/tinyhat/issues/41)) ([79163cd](https://github.com/tinyhat-ai/tinyhat/commit/79163cd44b304bb63a251f03c426c3283a0a1d98))
 
 ## [0.1.2](https://github.com/tinyhat-ai/tinyhat/compare/v0.1.1...v0.1.2) (2026-04-23)
 
