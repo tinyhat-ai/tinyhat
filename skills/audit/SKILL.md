@@ -49,12 +49,25 @@ snapshot should fire. Do not ask the user.
 python3 "${CLAUDE_SKILL_DIR}/../../scripts/routine.py" check
 ```
 
-If the output starts with `skip:`, do nothing and proceed to the user's
-actual request. Do not mention the skipped check.
+If the output starts with `skip:`, do nothing adaptive and proceed to
+the user's actual request. Do not mention the skipped adaptive run.
 If the output starts with `fire:`, run the full audit flow with
 `--archive`, then continue to the user's request. Add one short line
 so the user knows today's snapshot refreshed. Never block the user's
 request on this.
+
+### Heads-up before regenerating a same-day report
+
+If the `skip:` line is specifically `skip: already ran today
+(YYYY-MM-DD)` **and** the user explicitly asked for an audit (slash
+command or a natural-language audit prompt), print one short line
+before running the audit flow:
+
+> Note: today's report (`YYYY-MM-DD`) already exists. Regenerating with a fresh analysis — this replaces the earlier snapshot.
+
+Use the date from the parenthesized `(YYYY-MM-DD)` in the `check`
+output. Skip the heads-up on the other `skip:` reasons (e.g.
+`routine disabled`) — those don't imply a same-day report exists.
 
 ## The audit flow
 
