@@ -52,8 +52,8 @@ Audit my skills.
 ```
 
 The agent will:
-1. Run `gather_snapshot.py` → writes `<tempdir>/tinyhat-snapshot.json`.
-2. Read the snapshot and write `<tempdir>/tinyhat-analysis.json` — this is the editorial layer. Watch its reasoning; that's where Tinyhat earns its keep.
+1. Run `gather_snapshot.py` → writes `<tempdir>/tinyhat-snapshot.json` (compact, agent-facing) and `<tempdir>/tinyhat-snapshot-detail.json` (full, renderer-facing).
+2. Read the compact snapshot and write `<tempdir>/tinyhat-analysis.json` — this is the editorial layer. Watch its reasoning; that's where Tinyhat earns its keep.
 3. Run `render_report.py --archive`.
 4. The report lands under Tinyhat's plugin-data root (script-only default: `~/.claude/plugins/data/tinyhat/latest/report.html`).
 
@@ -142,7 +142,9 @@ When you're fiddling with the report layout, skip Claude entirely. The agent ana
 ```bash
 # Gather facts from local transcripts:
 python3 scripts/gather_snapshot.py
-# → writes <tempdir>/tinyhat-snapshot.json, prints the path to stderr
+# → writes <tempdir>/tinyhat-snapshot.json (compact, agent-facing)
+# → writes <tempdir>/tinyhat-snapshot-detail.json (full, renderer-facing)
+# → prints both paths to stderr
 
 # Generate an analysis.json (the editorial layer).
 # For fast iteration, skip this step — render_report.py has Python fallbacks
@@ -164,7 +166,7 @@ If you've edited CSS or the template, keep the snapshot and just re-render:
 python3 scripts/render_report.py
 ```
 
-That reuses `<tempdir>/tinyhat-snapshot.json` from the previous gather run.
+That reuses `<tempdir>/tinyhat-snapshot-detail.json` from the previous gather run (the renderer reads the full detail file, not the compact agent view).
 
 ### Test the archive index in isolation
 

@@ -7,28 +7,53 @@ inside it.
 
 ## The snapshot you're reading
 
-`gather_snapshot.py` emits a JSON file with these top-level keys:
+`gather_snapshot.py` writes two files side by side. You read the
+**compact** file (`tinyhat-snapshot.json`) for the analysis; the
+**detail** file (`tinyhat-snapshot-detail.json`) is the renderer's
+input and is only worth opening when you need a specific row the
+compact file doesn't carry.
+
+### Compact snapshot — `tinyhat-snapshot.json` (read this)
+
+Aggregate-only view. Fits in a single `Read` call even on 100+ skill
+installations.
 
 | Key | What's in it |
 |---|---|
 | `meta` | `generated_at`, `window_days`, `window_start`, `window_end` |
 | `stats` | `installed_count`, `active_count`, `skill_runs_total`, `sessions_total`, `sessions_with_skills`, `turns_total`, `tokens_total`, `tokens_total_compact` |
-| `inventory` | `{skill-name: {path, origin, raw_scope, pack, summary, product}}` |
 | `top_skills` | ranked list — `{skill, runs, last_used, summary, origin, pack, raw_scope}` |
 | `skill_counts` | `{skill-name: run-count}` over the window |
 | `last_seen` | `{skill-name: ISO timestamp}` |
-| `sessions` | per-session rows — `session_id, title, surface, project, last_used, turns, tokens_total, tool_uses, total_tool_uses, skill_runs, skill_counter, model, transcript` |
-| `events` | attributed skill events (deduplicated, in window) |
-| `events_audit` | `bare_read_skill_md` (dropped), `unknown_names`, `unknown_event_count` |
+| `dormant_by_origin` | `{origin: [skill-names]}` — every installed skill that didn't run in the window |
+| `installed_by_origin` | `{origin: count}` |
 | `tool_totals` | total calls per tool across the window |
 | `aggregate_tools` | `[{tool, calls, sessions}]` ranked by calls |
 | `daily_rollups` | per-day `{date, sessions, skill_sessions, turns, tokens, skill_runs}` |
-| `dormant_by_origin` | `{origin: [skill-names]}` |
-| `installed_by_origin` | `{origin: count}` |
 | `surface_rollups` | `{surface: session-count}` |
+| `session_tool_patterns` | per-session `{session_id, project, surface, last_used, turns, skill_runs, tool_uses}` — use this to count sessions that match a tool-combo pattern when grounding recommendations |
+| `events_audit` | `unknown_names`, `unknown_event_count`, `bare_read_skill_md_count` |
 | `coverage` | scanner counts — what was read vs. dropped |
+| `detail_path_hint` | pointer to the detail file |
 
-Use this as a reference when drafting your observations.
+Between `top_skills` (used) and `dormant_by_origin` (unused), every
+installed skill name is reachable — that's enough to duplicate-check a
+recommendation without opening the detail file.
+
+### Detail snapshot — `tinyhat-snapshot-detail.json` (read only if needed)
+
+Superset of the compact file. Adds these fields:
+
+| Key | What's in it |
+|---|---|
+| `inventory` | `{skill-name: {path, origin, raw_scope, pack, summary, product}}` |
+| `sessions` | full per-session rows — `session_id, title, surface, project, last_used, turns, tokens_total, tool_uses, total_tool_uses, skill_runs, skill_counter, model, transcript` |
+| `events` | attributed skill events (deduplicated, in window) |
+| `events_audit.bare_read_skill_md` | the dropped bare-read rows (the compact file only carries the count) |
+
+Only open this file when a specific observation requires a row the
+compact file doesn't carry — e.g. to quote a session `title` or the
+`path` of a project-local skill. Reading it consumes a lot of tokens.
 
 ## Field-by-field rules
 
@@ -91,7 +116,8 @@ Each recommendation:
 - `confidence`: `high`, `medium`, or `low`. Be honest.
 - `headline`: one-line value prop.
 - `why`: 2–3 sentences, grounded in evidence you can point to in
-  `snapshot.sessions` or `snapshot.tool_totals`. Cite counts.
+  `snapshot.tool_totals`, `snapshot.aggregate_tools`, or
+  `snapshot.session_tool_patterns`. Cite counts.
 - `triggers`: 3–5 natural-language phrases that should activate the
   skill.
 
@@ -101,11 +127,15 @@ Each recommendation:
    together suggests an `implement-feature` pattern. High `Read + Grep`
    suggests `explore-codebase`. High `WebSearch + WebFetch` alongside
    `Write` suggests `research-and-write-brief`.
-2. Count sessions that match the pattern (`snapshot.sessions`). A
-   pattern across 2+ sessions is worth considering; 5+ is high-confidence.
-3. Check `snapshot.inventory` — if a similar skill already exists, note
-   that and pivot (e.g. "you have `plan-eng-review`; add `plan-sprint`
-   for the weekly cadence").
+2. Count sessions that match the pattern using
+   `session_tool_patterns` (each row has per-tool call counts). A
+   pattern across 2+ sessions is worth considering; 5+ is
+   high-confidence.
+3. Check `top_skills` and `dormant_by_origin` — if a similar skill
+   already exists, note that and pivot (e.g. "you have
+   `plan-eng-review`; add `plan-sprint` for the weekly cadence"). If
+   you need the skill's summary or path, read the detail file's
+   `inventory`.
 
 If you can't ground a recommendation in evidence, **omit it**. A
 confident two-item list beats a speculative three-item list.
@@ -170,8 +200,8 @@ macOS-only."*
   don't belong.
 - **Fabricated counts.** If you can't find the number in the snapshot,
   don't cite it.
-- **Recommending something the user already has.** Check `inventory`
-  first.
+- **Recommending something the user already has.** Check `top_skills`
+  and `dormant_by_origin` first (both are in the compact snapshot).
 - **Burying the lead.** The two pie charts and hero stats are already
   visible; your `what_stands_out` should add signal the charts can't.
 
