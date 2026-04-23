@@ -30,9 +30,10 @@ Requires Python 3.9+ on your `PATH` (pre-installed on macOS and most Linux).
 
 Ask in plain English or use a slash command:
 
-- **Produce a report:** *"Audit my skills."* · `/tinyhat:skill-audit`
-- **Re-open the last report:** *"Show my latest skill audit."* · `/tinyhat:open-latest-audit`
-- **Browse history:** *"Show my skill-audit history."* · `/tinyhat:audit-history`
+- **Produce a report:** *"Audit my skills."* · `/tinyhat:audit`
+- **Re-open the last report:** *"Show my latest skill audit."* · `/tinyhat:open`
+- **Browse history:** *"Show my skill-audit history."* · `/tinyhat:history`
+- **Manage the daily routine:** *"Turn off tinyhat's daily run."* · `/tinyhat:routine status|on|off|where|clear`
 
 Output lives at `~/.claude/tinyhat/latest/report.html`. For every flow, trigger, and sub-command, see [`docs/user-flows.md`](docs/user-flows.md).
 

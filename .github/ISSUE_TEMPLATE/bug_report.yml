@@ -15,7 +15,7 @@ body:
     attributes:
       label: Summary
       description: One or two sentences describing the bug.
-      placeholder: "`/tinyhat:skill-audit` crashes when …"
+      placeholder: "`/tinyhat:audit` crashes when …"
     validations:
       required: true
 
@@ -26,7 +26,7 @@ body:
       description: Exact commands or skill invocations.
       placeholder: |
         1. Install the plugin via `/plugin install tinyhat-ai/tinyhat`
-        2. Run `/tinyhat:skill-audit`
+        2. Run `/tinyhat:audit`
         3. …
     validations:
       required: true

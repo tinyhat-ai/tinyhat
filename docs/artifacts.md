@@ -6,15 +6,15 @@ Tinyhat is local-only and read-only against Claude's data. It writes files to **
 
 | Path | What's there | When it's written |
 |---|---|---|
-| `~/.claude/tinyhat/routine.json` | Adaptive-daily on/off + install timestamp | On first run; overwritten on `/tinyhat:skill-audit routine on|off` |
-| `~/.claude/tinyhat/latest/report.html` | Latest report, self-contained HTML | Every `/tinyhat:skill-audit` run |
-| `~/.claude/tinyhat/latest/report.md` | Latest report, markdown mirror | Every `/tinyhat:skill-audit` run |
-| `~/.claude/tinyhat/latest/run-stamp.txt` | ISO local-date of last successful run | Every `/tinyhat:skill-audit` run |
+| `~/.claude/tinyhat/routine.json` | Adaptive-daily on/off + install timestamp | On first run; overwritten on `/tinyhat:audit routine on|off` |
+| `~/.claude/tinyhat/latest/report.html` | Latest report, self-contained HTML | Every `/tinyhat:audit` run |
+| `~/.claude/tinyhat/latest/report.md` | Latest report, markdown mirror | Every `/tinyhat:audit` run |
+| `~/.claude/tinyhat/latest/run-stamp.txt` | ISO local-date of last successful run | Every `/tinyhat:audit` run |
 | `~/.claude/tinyhat/archive/YYYY-MM-DD/report.{html,md}` | Dated snapshot | When `--archive` is passed or the adaptive daily fires |
 | `~/.claude/tinyhat/archive/index.html` | Browseable index of latest + all archives | Every render call |
 | `~/.claude/tinyhat/feedback.jsonl` | Optional local feedback log (reserved) | Never in v0 (feedback goes via `mailto:`) |
 | `<tempdir>/tinyhat-snapshot.json` | Transient data snapshot | Every `gather_snapshot.py` call |
-| `<tempdir>/tinyhat-analysis.json` | Transient agent-authored analysis | Every `/tinyhat:skill-audit` run |
+| `<tempdir>/tinyhat-analysis.json` | Transient agent-authored analysis | Every `/tinyhat:audit` run |
 
 `<tempdir>` is whatever `python3 -c 'import tempfile; print(tempfile.gettempdir())'` returns on your OS:
 - macOS: `/var/folders/.../T/`
@@ -50,7 +50,7 @@ xdg-open ~/.claude/tinyhat/latest/report.html    # Linux
 start ~/.claude/tinyhat/latest/report.html       # Windows
 ```
 
-Or inside Claude Code: `/tinyhat:open-latest-audit`.
+Or inside Claude Code: `/tinyhat:open`.
 
 ### The archive index (browse history)
 
@@ -58,7 +58,7 @@ Or inside Claude Code: `/tinyhat:open-latest-audit`.
 open ~/.claude/tinyhat/archive/index.html
 ```
 
-Or inside Claude Code: `/tinyhat:audit-history`.
+Or inside Claude Code: `/tinyhat:history`.
 
 ### A specific dated snapshot
 
@@ -81,7 +81,7 @@ cat ~/.claude/tinyhat/routine.json
 cat ~/.claude/tinyhat/latest/run-stamp.txt
 ```
 
-Or inside Claude Code: `/tinyhat:skill-audit routine status`.
+Or inside Claude Code: `/tinyhat:audit routine status`.
 
 ### The raw snapshot JSON (for debugging attribution)
 
@@ -98,7 +98,7 @@ Top-level keys: `meta`, `stats`, `inventory`, `top_skills`, `skill_counts`, `las
 python3 -c 'import tempfile, pathlib; p = pathlib.Path(tempfile.gettempdir()) / "tinyhat-analysis.json"; print(p)'
 ```
 
-Shape: `headline`, `headline_sub`, `what_stands_out[]`, `dormant_commentary`, `skill_recommendations[]`, `coverage_note`. Schema details in [`skills/skill-audit/references/writing-the-analysis.md`](../skills/skill-audit/references/writing-the-analysis.md).
+Shape: `headline`, `headline_sub`, `what_stands_out[]`, `dormant_commentary`, `skill_recommendations[]`, `coverage_note`. Schema details in [`skills/audit/references/writing-the-analysis.md`](../skills/audit/references/writing-the-analysis.md).
 
 ## Retention
 
@@ -114,11 +114,11 @@ rm -rf ~/.claude/tinyhat
 rm -f "$(python3 -c 'import tempfile; print(tempfile.gettempdir())')"/tinyhat-*.json
 ```
 
-The plugin rebuilds everything on the next `/tinyhat:skill-audit`. Nothing else on your system is affected.
+The plugin rebuilds everything on the next `/tinyhat:audit`. Nothing else on your system is affected.
 
 Or, less destructive — just clear the dated archives:
 
-- `/tinyhat:skill-audit clear-archive`
+- `/tinyhat:audit clear-archive`
 
 That removes every dir under `archive/` but keeps `latest/` and `routine.json`.
 

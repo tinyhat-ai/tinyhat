@@ -1,10 +1,10 @@
 ---
-description: Audit which Claude Code skills you actually use, which look dormant, and what to create next. Produces an agent-authored local HTML+markdown report on the data already on disk. Triggers on "audit my skills", "run a skill audit", "review my skill usage", "clean up unused skills", "trim my skill set", "which skills should I remove", "how am I using Claude", "which skills am I actually using", "what skills should I create", "refresh my tinyhat report", or explicit /tinyhat:skill-audit invocations. Also handles sub-commands: routine on|off|status, where, clear-archive.
-argument-hint: [--archive] [--no-open] | routine on|off|status | where | clear-archive
+description: Audit which Claude Code skills you actually use, which look dormant, and what to create next. Produces an agent-authored local HTML+markdown report on the data already on disk. Triggers on "audit my skills", "run a skill audit", "review my skill usage", "clean up unused skills", "trim my skill set", "which skills should I remove", "how am I using Claude", "which skills am I actually using", "what skills should I create", "refresh my tinyhat report", or explicit /tinyhat:audit invocations.
+argument-hint: [--archive] [--no-open]
 allowed-tools: Bash(python3 *) Bash(open *) Bash(xdg-open *) Bash(start *) Read Write
 ---
 
-# tinyhat:skill-audit — local skill-usage audit, agent-authored
+# tinyhat:audit — local skill-usage audit, agent-authored
 
 Tinyhat is local and read-only. A Python helper scans the Claude data
 already on disk and emits a structured JSON snapshot. **You (the agent)
@@ -19,17 +19,17 @@ actually worth mentioning.
 
 ## Related skills
 
-- `/tinyhat:open-latest-audit` — open the most recent report without regenerating.
-- `/tinyhat:audit-history` — open the reports index (latest + all archives).
+- `/tinyhat:open` — open the most recent report without regenerating.
+- `/tinyhat:history` — open the archive index (latest + all dated snapshots).
+- `/tinyhat:routine` — manage the adaptive daily refresh + diagnostic helpers (status/on/off/where/clear).
 
-## Sub-commands (dispatch on `$ARGUMENTS`)
+## Flags
 
-| `$ARGUMENTS` matches | What to do |
+| `$ARGUMENTS` | What happens |
 |---|---|
-| (empty) or starts with `--archive` / `--no-open` / `--open` | Run the full audit flow below. Pass flags straight to `render_report.py`. |
-| starts with `routine` | Run `python3 "${CLAUDE_PLUGIN_ROOT}/scripts/routine.py" <rest>`. Print output verbatim. |
-| `where` | Run `python3 "${CLAUDE_PLUGIN_ROOT}/scripts/routine.py" where`. |
-| `clear-archive` | Run `python3 "${CLAUDE_PLUGIN_ROOT}/scripts/routine.py" clear-archive`. |
+| _(empty)_ | Run the audit, open the HTML. |
+| `--archive` | Also write today's dated archive snapshot. |
+| `--no-open` | Skip the browser. Used by the adaptive daily run. |
 
 ## Load-time daily check (before handling the user's request)
 
@@ -42,9 +42,8 @@ python3 "${CLAUDE_PLUGIN_ROOT}/scripts/routine.py" check
 
 If exit non-zero, skip — proceed to the user's actual request.
 If exit zero, run the full audit flow with `--archive --no-open`, then
-continue to the user's request. Add one short line to your reply so
-the user knows today's snapshot refreshed. Never block the user's
-request on this.
+continue to the user's request. Add one short line so the user knows
+today's snapshot refreshed. Never block the user's request on this.
 
 ## The audit flow
 
@@ -54,15 +53,14 @@ request on this.
 python3 "${CLAUDE_PLUGIN_ROOT}/scripts/gather_snapshot.py"
 ```
 
-Writes `<temp>/tinyhat-snapshot.json`. The exact path is printed to
-stderr.
+Writes `<temp>/tinyhat-snapshot.json`. The path is printed to stderr.
 
 ### 2. Read the snapshot and write your analysis
 
 Read the snapshot. Then write `<temp>/tinyhat-analysis.json` with
 these keys. Detailed field-by-field guidance is in
 [`references/writing-the-analysis.md`](references/writing-the-analysis.md) —
-read that the first time you run this skill.
+read it the first time you run this skill.
 
 ```json
 {
@@ -94,7 +92,7 @@ python3 "${CLAUDE_PLUGIN_ROOT}/scripts/render_report.py" --archive
 ```
 
 The renderer also rewrites `~/.claude/tinyhat/archive/index.html` so
-the reports index always reflects the latest run.
+the history page always reflects the latest run.
 
 ### 4. Open the HTML (if you didn't use `--open`)
 

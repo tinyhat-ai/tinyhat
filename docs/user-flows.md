@@ -15,9 +15,9 @@ That's it. Three skills are now available under the `tinyhat:` namespace:
 
 | Slash command | What it does | Regenerates? |
 |---|---|:---:|
-| `/tinyhat:skill-audit` | Scan → agent writes analysis → render report → open HTML | ✓ |
-| `/tinyhat:open-latest-audit` | Open the latest existing report in your browser | — |
-| `/tinyhat:audit-history` | Open the archive index listing every report on disk | — |
+| `/tinyhat:audit` | Scan → agent writes analysis → render report → open HTML | ✓ |
+| `/tinyhat:open` | Open the latest existing report in your browser | — |
+| `/tinyhat:history` | Open the archive index listing every report on disk | — |
 
 After install, the three flows below are what you'll actually do day-to-day.
 
@@ -29,7 +29,7 @@ After install, the three flows below are what you'll actually do day-to-day.
 
 Any of these work:
 
-- **Slash:** `/tinyhat:skill-audit`
+- **Slash:** `/tinyhat:audit`
 - **Natural language:** *"Audit my skills."* · *"Run a skill audit."* · *"Which skills am I actually using?"* · *"Clean up unused skills."* · *"Which skills should I remove?"* · *"What skills should I create?"*
 
 ### What happens
@@ -65,9 +65,9 @@ Data-junkie mode (click the toggle top-right):
 
 ### Storing this run as a dated archive
 
-By default, `/tinyhat:skill-audit` updates `~/.claude/tinyhat/latest/` and overwrites. If you want today's snapshot preserved for comparison later, pass `--archive`:
+By default, `/tinyhat:audit` updates `~/.claude/tinyhat/latest/` and overwrites. If you want today's snapshot preserved for comparison later, pass `--archive`:
 
-- `/tinyhat:skill-audit --archive`
+- `/tinyhat:audit --archive`
 
 That writes an additional `~/.claude/tinyhat/archive/YYYY-MM-DD/` directory (capped at 31 dated dirs — oldest is auto-pruned). The adaptive daily routine always archives.
 
@@ -79,7 +79,7 @@ You already ran an audit today (or yesterday). You want to look at it again with
 
 ### How to trigger
 
-- **Slash:** `/tinyhat:open-latest-audit`
+- **Slash:** `/tinyhat:open`
 - **Natural language:** *"Open my latest skill audit."* · *"Show me the last Tinyhat report."* · *"What did the skill audit say?"*
 
 ### What happens
@@ -90,7 +90,7 @@ You already ran an audit today (or yesterday). You want to look at it again with
 
 ### If there's no report yet
 
-The agent will tell you and hand off to `/tinyhat:skill-audit` to create the first one. You approve before it runs.
+The agent will tell you and hand off to `/tinyhat:audit` to create the first one. You approve before it runs.
 
 ---
 
@@ -100,7 +100,7 @@ You have several daily snapshots archived and want to compare weeks, or just nav
 
 ### How to trigger
 
-- **Slash:** `/tinyhat:audit-history`
+- **Slash:** `/tinyhat:history`
 - **Natural language:** *"Show my skill-audit history."* · *"Browse my Tinyhat audits over time."* · *"List all my skill audits."*
 
 ### What happens
@@ -117,33 +117,31 @@ Navigation between reports is entirely in-browser — no Claude involved once th
 
 Tinyhat refreshes at most once per local calendar date, triggered **opportunistically** the first time you use Claude Code each day. No cron, no launchd. Closing your laptop doesn't miss a day.
 
+All routine management lives under `/tinyhat:routine`, which takes one sub-command as its argument.
+
 ### Check whether it's on
 
-- **Slash:** `/tinyhat:skill-audit routine status`
+- **Slash:** `/tinyhat:routine` (or `/tinyhat:routine status`)
+- **Natural language:** *"Is Tinyhat's daily run on?"* · *"Check Tinyhat routine."*
 
 Prints `on` or `off` and the date of the last successful run.
 
-### Turn it off
+### Turn it off / on
 
-- `/tinyhat:skill-audit routine off`
-
-The skill becomes manual-only. No background runs fire.
-
-### Turn it back on
-
-- `/tinyhat:skill-audit routine on`
+- `/tinyhat:routine off` — skill becomes manual-only; no background runs fire.
+- `/tinyhat:routine on` — resumes adaptive daily run.
 
 ### Print the paths Tinyhat reads and writes
 
-- `/tinyhat:skill-audit where`
+- `/tinyhat:routine where`
 
 Useful when you're debugging or want to tail a file.
 
 ### Delete every dated archive
 
-- `/tinyhat:skill-audit clear-archive`
+- `/tinyhat:routine clear`
 
-Removes everything under `~/.claude/tinyhat/archive/`. `~/.claude/tinyhat/latest/` is preserved.
+Removes every dated dir under `~/.claude/tinyhat/archive/`. `~/.claude/tinyhat/latest/` and `routine.json` are preserved. Destructive — the agent will confirm first.
 
 ---
 

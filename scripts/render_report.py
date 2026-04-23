@@ -50,7 +50,7 @@ def _local_tz() -> ZoneInfo | timezone:
 
 
 PLUGIN_ROOT = Path(__file__).resolve().parent.parent
-TEMPLATE_DIR = PLUGIN_ROOT / "skills" / "skill-audit" / "templates"
+TEMPLATE_DIR = PLUGIN_ROOT / "skills" / "audit" / "templates"
 DEFAULT_HOME_ROOT = Path.home() / ".claude" / "tinyhat"
 DEFAULT_SNAPSHOT_PATH = Path(tempfile.gettempdir()) / "tinyhat-snapshot.json"
 DEFAULT_ANALYSIS_PATH = Path(tempfile.gettempdir()) / "tinyhat-analysis.json"
