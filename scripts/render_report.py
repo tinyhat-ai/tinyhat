@@ -627,9 +627,9 @@ def render_html(snapshot: dict, analysis: dict, *, archive_index_href: str) -> s
 
     installed = s["installed_count"]
     active = s["active_count"]
-    util_pct = (100 * active / installed) if installed else 0
+    util_pct = _pct_int(active, installed)
     sess_total = s["sessions_total"]
-    sess_skill_pct = (100 * s["sessions_with_skills"] / sess_total) if sess_total else 0
+    sess_skill_pct = _pct_int(s["sessions_with_skills"], sess_total)
 
     standouts_html = "\n".join(
         f"<li>{html.escape(item)}</li>" for item in analysis["what_stands_out"]
@@ -899,10 +899,8 @@ def render_html(snapshot: dict, analysis: dict, *, archive_index_href: str) -> s
         "SESSIONS_WITH_SKILLS": s["sessions_with_skills"],
         "TURNS_TOTAL_COMPACT": _format_compact(s["turns_total"]),
         "TOKENS_TOTAL_COMPACT": s["tokens_total_compact"],
-        "UTILIZATION_PCT": f"{util_pct:.1f}",
-        "UTILIZATION_PCT_INT": f"{util_pct:.0f}",
-        "SESSION_SKILL_PCT": f"{sess_skill_pct:.1f}",
-        "SESSION_SKILL_PCT_INT": f"{sess_skill_pct:.0f}",
+        "UTILIZATION_PCT": util_pct,
+        "SESSION_SKILL_PCT": sess_skill_pct,
         "UNUSED_COUNT": unused_count,
         "STANDOUTS_HTML": standouts_html,
         "DORMANT_COMMENTARY": analysis["dormant_commentary"],
