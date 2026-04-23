@@ -1,6 +1,6 @@
 ---
 description: Audit which Claude Code skills you actually use, which look dormant, and what to create next. Produces an agent-authored local HTML+markdown report on the data already on disk. Triggers on "audit my skills", "run a skill audit", "review my skill usage", "clean up unused skills", "trim my skill set", "which skills should I remove", "how am I using Claude", "which skills am I actually using", "what skills should I create", "refresh my tinyhat report", or explicit /tinyhat:audit invocations.
-argument-hint: [--archive] [--no-open]
+argument-hint: [--archive] [--open]
 allowed-tools: Bash(python3 *) Bash(open *) Bash(xdg-open *) Bash(start *) Read Write
 ---
 
@@ -27,9 +27,9 @@ actually worth mentioning.
 
 | `$ARGUMENTS` | What happens |
 |---|---|
-| _(empty)_ | Run the audit, open the HTML. |
-| `--archive` | Also write today's dated archive snapshot. |
-| `--no-open` | Skip the browser. Used by the adaptive daily run. |
+| _(empty)_ | Run the audit, summarise in chat with a link to the HTML. Do **not** auto-open the browser. |
+| `--open` | Also open the HTML in the default browser at the end. |
+| `--archive` | Also write today's dated archive snapshot. Implies no auto-open — used by the adaptive daily run. |
 
 ## Skill-relative script paths
 
@@ -48,9 +48,9 @@ python3 "${CLAUDE_SKILL_DIR}/../../scripts/routine.py" check
 ```
 
 If exit non-zero, skip — proceed to the user's actual request.
-If exit zero, run the full audit flow with `--archive --no-open`, then
-continue to the user's request. Add one short line so the user knows
-today's snapshot refreshed. Never block the user's request on this.
+If exit zero, run the full audit flow with `--archive`, then continue
+to the user's request. Add one short line so the user knows today's
+snapshot refreshed. Never block the user's request on this.
 
 ## The audit flow
 
@@ -91,17 +91,54 @@ read it the first time you run this skill.
 ### 3. Render
 
 ```bash
-# Manual, opens in browser:
+# Default — writes latest/ and archive index; no browser:
+python3 "${CLAUDE_SKILL_DIR}/../../scripts/render_report.py"
+
+# User passed --open — also open the HTML at the end:
 python3 "${CLAUDE_SKILL_DIR}/../../scripts/render_report.py" --open
 
-# Adaptive daily or explicit --archive:
+# User passed --archive (or the adaptive daily fired) — write the
+# dated archive copy too; do NOT open the browser:
 python3 "${CLAUDE_SKILL_DIR}/../../scripts/render_report.py" --archive
 ```
 
-The renderer also rewrites `~/.claude/tinyhat/archive/index.html` so
-the history page always reflects the latest run.
+Rendering always writes four files into `~/.claude/tinyhat/latest/`:
 
-### 4. Open the HTML (if you didn't use `--open`)
+- `report.html` · `report.md` — the view.
+- `snapshot.json` · `analysis.json` — the data you (or a follow-up
+  turn) can read without re-running `gather_snapshot.py`.
+
+The renderer also rewrites `~/.claude/tinyhat/archive/index.html` so
+the history page always reflects the latest run. When `--archive` is
+passed, the same four files land in `archive/YYYY-MM-DD/`.
+
+### 4. Summarise in chat (always)
+
+Write 2–3 sentences in chat, built directly from the analysis you just
+wrote. The default experience is **terminal-first** — most users won't
+open the HTML unless something in the summary pulls them in.
+
+Lead with the literal headline number, name the top 2–3 skills from
+`snapshot.top_skills`, and surface one observation from
+`what_stands_out`. End with a clickable file-URL to the full report:
+
+> Scanned `<INSTALLED_COUNT>` installed skills, `<ACTIVE_COUNT>` active
+> in the last `<WINDOW_DAYS>` days. Top skills: `<skill-a>`, `<skill-b>`,
+> `<skill-c>`.
+>
+> What stood out: `<one line from what_stands_out>`.
+>
+> Full report: `file:///Users/<you>/.claude/tinyhat/latest/report.html`
+
+See [`references/writing-the-analysis.md`](references/writing-the-analysis.md#chat-summary)
+for the exact shape and examples.
+
+### 5. Open the HTML (only if `--open` was passed)
+
+Default is **no auto-open**. The chat summary above already surfaces
+the headline; users who want the HTML click the link in the summary.
+
+When the user passed `--open`, and only then:
 
 ```bash
 open ~/.claude/tinyhat/latest/report.html        # macOS
@@ -109,17 +146,12 @@ xdg-open ~/.claude/tinyhat/latest/report.html    # Linux
 start ~/.claude/tinyhat/latest/report.html       # Windows
 ```
 
-### 5. Tell the user
-
-One or two sentences max. Reference one specific observation from
-`what_stands_out`. Point them at the report.
-
 ## Paths
 
 - Scripts: bundled under `<plugin>/scripts/`, invoked here via `${CLAUDE_SKILL_DIR}/../../scripts/...`
 - Transient: `<tempdir>/tinyhat-snapshot.json`, `<tempdir>/tinyhat-analysis.json`
-- Latest: `~/.claude/tinyhat/latest/report.{md,html}` + `run-stamp.txt`
-- Archive: `~/.claude/tinyhat/archive/YYYY-MM-DD/report.{md,html}` + `index.html`
+- Latest: `~/.claude/tinyhat/latest/report.{md,html}` + `snapshot.json` + `analysis.json` + `run-stamp.txt`
+- Archive: `~/.claude/tinyhat/archive/YYYY-MM-DD/report.{md,html}` + `snapshot.json` + `analysis.json` + `index.html`
 - Routine state: `~/.claude/tinyhat/routine.json`
 
 ## Gotchas
