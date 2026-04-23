@@ -13,6 +13,18 @@ for fixes. Breaking changes stay in minor bumps until we explicitly
 ship `1.0.0`. Release-please is configured to honor this
 (`bump-minor-pre-major: true`, `bump-patch-for-minor-pre-major: true`).
 
+## [0.1.3](https://github.com/tinyhat-ai/tinyhat/compare/v0.1.2...v0.1.3) (2026-04-23)
+
+
+### Features
+
+* **roadmap:** Add public roadmap + propose-roadmap skill (closes [#32](https://github.com/tinyhat-ai/tinyhat/issues/32)) ([#33](https://github.com/tinyhat-ai/tinyhat/issues/33)) ([d7bd122](https://github.com/tinyhat-ai/tinyhat/commit/d7bd1222bf64913a452c5061fc0e52d40d5cf5a3))
+
+
+### Bug Fixes
+
+* **skills:** Persist plugin root at load time (closes [#36](https://github.com/tinyhat-ai/tinyhat/issues/36)) ([#41](https://github.com/tinyhat-ai/tinyhat/issues/41)) ([79163cd](https://github.com/tinyhat-ai/tinyhat/commit/79163cd44b304bb63a251f03c426c3283a0a1d98))
+
 ## [0.1.2](https://github.com/tinyhat-ai/tinyhat/compare/v0.1.1...v0.1.2) (2026-04-23)
 
 
