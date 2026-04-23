@@ -21,10 +21,16 @@ the dated-archive directory. State lives in
 | `where` | Print the full set of paths Tinyhat reads and writes. |
 | `clear` | Delete every dated dir under `archive/`. Keeps `latest/` and `routine.json`. |
 
+## Skill-relative script path
+
+`${CLAUDE_SKILL_DIR}` is rendered into the skill content before Claude
+runs the Bash blocks below, so each sub-command keeps calling the
+matching bundled `routine.py` for this loaded skill.
+
 ### status (default)
 
 ```bash
-python3 "${CLAUDE_PLUGIN_ROOT}/scripts/routine.py" status
+python3 "${CLAUDE_SKILL_DIR}/../../scripts/routine.py" status
 ```
 
 Prints three lines: `routine: on|off`, `last run: YYYY-MM-DD | (never)`, `home: <path>`. Repeat the output to the user verbatim — no re-phrasing needed.
@@ -33,10 +39,10 @@ Prints three lines: `routine: on|off`, `last run: YYYY-MM-DD | (never)`, `home: 
 
 ```bash
 # turn on:
-python3 "${CLAUDE_PLUGIN_ROOT}/scripts/routine.py" on
+python3 "${CLAUDE_SKILL_DIR}/../../scripts/routine.py" on
 
 # turn off:
-python3 "${CLAUDE_PLUGIN_ROOT}/scripts/routine.py" off
+python3 "${CLAUDE_SKILL_DIR}/../../scripts/routine.py" off
 ```
 
 Both subcommands write `routine.json` atomically and print the new
@@ -46,7 +52,7 @@ the background auto-run is suppressed.
 ### where
 
 ```bash
-python3 "${CLAUDE_PLUGIN_ROOT}/scripts/routine.py" where
+python3 "${CLAUDE_SKILL_DIR}/../../scripts/routine.py" where
 ```
 
 Prints the list of sources Tinyhat reads (transcripts, inventory,
@@ -57,7 +63,7 @@ or wants to tail a file.
 ### clear
 
 ```bash
-python3 "${CLAUDE_PLUGIN_ROOT}/scripts/routine.py" clear-archive
+python3 "${CLAUDE_SKILL_DIR}/../../scripts/routine.py" clear-archive
 ```
 
 Removes every dated `archive/YYYY-MM-DD/` directory. Does not touch

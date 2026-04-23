@@ -16,7 +16,7 @@ How to hack on Tinyhat without publishing anything. Everything below runs agains
 
 Pick the one that matches what you're doing:
 
-1. **Full plugin test** — `--plugin-dir` loads this folder as a real plugin, with the `tinyhat:` namespace and `${CLAUDE_PLUGIN_ROOT}` resolved. Restart required. This is what you do before pushing to verify the install flow.
+1. **Full plugin test** — `--plugin-dir` loads this folder as a real plugin, with the `tinyhat:` namespace and the plugin/skill path substitutions resolved. Restart required. This is what you do before pushing to verify the install flow.
 2. **Script-only iteration** — run `gather_snapshot.py` / `render_report.py` directly from the shell. No Claude involved. Fastest for UI/template/CSS changes.
 
 There's also a **project-local test harness** that lives in `.claude/skills/`. It shadows the plugin skills so you can exercise `/skill-audit`, `/open-latest-audit`, and `/audit-history` in the current Claude Code session *without restart* — but it uses hardcoded absolute paths and only works on the maintainer's machine. It is deleted before the plugin ships. Don't rely on it for your own development.
@@ -230,7 +230,7 @@ tinyhat/
 └── README.md                        ← user-facing install + usage
 ```
 
-**Plugin paths in SKILL.md** use `${CLAUDE_PLUGIN_ROOT}`. That variable is only set when the skill runs as a plugin (loaded via `--plugin-dir` or `/plugin install`). If you try to run the plugin's `SKILL.md` bash snippets from a regular shell, that variable is empty — use the real path or run the script directly.
+**Plugin paths in SKILL.md** should usually use `${CLAUDE_SKILL_DIR}` for bundled script calls that need to keep working after the skill loads. Claude renders that variable into the absolute path of the current skill directory before the skill content is handed to the model, so a command like `python3 "${CLAUDE_SKILL_DIR}/../../scripts/gather_snapshot.py"` keeps pointing at the same installed Tinyhat version in later Bash blocks. `${CLAUDE_PLUGIN_ROOT}` is still useful inside `!`-prefixed fenced blocks when you truly need the plugin root during load-time shell execution. If you're running a `SKILL.md` snippet from a regular shell outside the plugin harness, substitute the real path directly.
 
 **Temp file location** is the platform temp dir (`/var/folders/...` on macOS, `/tmp` on Linux, `%TEMP%` on Windows). Find it with:
 

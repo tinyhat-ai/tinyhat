@@ -9,13 +9,19 @@ Open `~/.claude/tinyhat/archive/index.html`. That page lists the
 latest report plus every dated archive snapshot (up to 31) with
 one-click links. Each entry opens its own `report.html`.
 
+## Skill-relative script path
+
+`${CLAUDE_SKILL_DIR}` is rendered into the skill content before Claude
+runs the Bash block below, so the command keeps pointing at the version
+of Tinyhat that loaded this skill.
+
 ## Flow
 
 1. Check whether `~/.claude/tinyhat/archive/index.html` exists.
    - If missing but `~/.claude/tinyhat/latest/report.html` exists,
      regenerate the index without running a new audit:
      ```bash
-     python3 "${CLAUDE_PLUGIN_ROOT}/scripts/render_report.py" --index-only
+     python3 "${CLAUDE_SKILL_DIR}/../../scripts/render_report.py" --index-only
      ```
    - If no reports exist at all, tell the user and hand off to
      `/tinyhat:audit` to create the first snapshot.

@@ -31,13 +31,20 @@ actually worth mentioning.
 | `--archive` | Also write today's dated archive snapshot. |
 | `--no-open` | Skip the browser. Used by the adaptive daily run. |
 
+## Skill-relative script paths
+
+`${CLAUDE_SKILL_DIR}` is rendered into the skill content before Claude
+runs any Bash blocks. It points at this skill's directory, so reach the
+bundled scripts with `"${CLAUDE_SKILL_DIR}/../../scripts/..."` instead
+of caching shared plugin state under `~/.claude/tinyhat/`.
+
 ## Load-time daily check (before handling the user's request)
 
 Every time this skill loads, silently check whether today's adaptive
 snapshot should fire. Do not ask the user.
 
 ```!
-python3 "${CLAUDE_PLUGIN_ROOT}/scripts/routine.py" check
+python3 "${CLAUDE_SKILL_DIR}/../../scripts/routine.py" check
 ```
 
 If exit non-zero, skip — proceed to the user's actual request.
@@ -50,7 +57,7 @@ today's snapshot refreshed. Never block the user's request on this.
 ### 1. Gather the snapshot
 
 ```bash
-python3 "${CLAUDE_PLUGIN_ROOT}/scripts/gather_snapshot.py"
+python3 "${CLAUDE_SKILL_DIR}/../../scripts/gather_snapshot.py"
 ```
 
 Writes `<temp>/tinyhat-snapshot.json`. The path is printed to stderr.
@@ -85,10 +92,10 @@ read it the first time you run this skill.
 
 ```bash
 # Manual, opens in browser:
-python3 "${CLAUDE_PLUGIN_ROOT}/scripts/render_report.py" --open
+python3 "${CLAUDE_SKILL_DIR}/../../scripts/render_report.py" --open
 
 # Adaptive daily or explicit --archive:
-python3 "${CLAUDE_PLUGIN_ROOT}/scripts/render_report.py" --archive
+python3 "${CLAUDE_SKILL_DIR}/../../scripts/render_report.py" --archive
 ```
 
 The renderer also rewrites `~/.claude/tinyhat/archive/index.html` so
@@ -109,7 +116,7 @@ One or two sentences max. Reference one specific observation from
 
 ## Paths
 
-- Scripts: `${CLAUDE_PLUGIN_ROOT}/scripts/` (`gather_snapshot.py`, `render_report.py`, `routine.py`)
+- Scripts: bundled under `<plugin>/scripts/`, invoked here via `${CLAUDE_SKILL_DIR}/../../scripts/...`
 - Transient: `<tempdir>/tinyhat-snapshot.json`, `<tempdir>/tinyhat-analysis.json`
 - Latest: `~/.claude/tinyhat/latest/report.{md,html}` + `run-stamp.txt`
 - Archive: `~/.claude/tinyhat/archive/YYYY-MM-DD/report.{md,html}` + `index.html`
