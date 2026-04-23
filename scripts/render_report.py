@@ -606,7 +606,11 @@ def _html_inline_code(text: str) -> str:
     return "".join(out)
 
 
-def render_html(snapshot: dict, analysis: dict) -> str:
+LATEST_ARCHIVE_INDEX_HREF = "../archive/index.html"
+DATED_ARCHIVE_INDEX_HREF = "../index.html"
+
+
+def render_html(snapshot: dict, analysis: dict, *, archive_index_href: str) -> str:
     tpl = (TEMPLATE_DIR / "report.html.tmpl").read_text(encoding="utf-8")
     # Inline CSS from sibling file so edits don't require touching a
     # quoted string inside the template. Template references {{CSS}}.
@@ -879,6 +883,7 @@ def render_html(snapshot: dict, analysis: dict) -> str:
 
     subs = {
         "CSS": css,
+        "ARCHIVE_INDEX_HREF": archive_index_href,
         "GENERATED_AT": generated_local.strftime(f"%Y-%m-%d %H:%M {tz_abbr}".strip()),
         "GENERATED_AT_UTC": generated_utc.strftime("%Y-%m-%d %H:%M UTC"),
         "WINDOW_LABEL": window_label,
@@ -1078,12 +1083,12 @@ def main() -> int:
     latest_dir.mkdir(parents=True, exist_ok=True)
 
     md = render_markdown(snapshot, analysis)
-    htmlout = render_html(snapshot, analysis)
+    html_latest = render_html(snapshot, analysis, archive_index_href=LATEST_ARCHIVE_INDEX_HREF)
     snapshot_json = json.dumps(snapshot, indent=2, ensure_ascii=False) + "\n"
     analysis_json = json.dumps(analysis, indent=2, ensure_ascii=False) + "\n"
 
     (latest_dir / "report.md").write_text(md, encoding="utf-8")
-    (latest_dir / "report.html").write_text(htmlout, encoding="utf-8")
+    (latest_dir / "report.html").write_text(html_latest, encoding="utf-8")
     (latest_dir / "snapshot.json").write_text(snapshot_json, encoding="utf-8")
     (latest_dir / "analysis.json").write_text(analysis_json, encoding="utf-8")
 
@@ -1093,8 +1098,9 @@ def main() -> int:
     if args.archive:
         archive_dir = home_root / "archive" / today
         archive_dir.mkdir(parents=True, exist_ok=True)
+        html_archive = render_html(snapshot, analysis, archive_index_href=DATED_ARCHIVE_INDEX_HREF)
         (archive_dir / "report.md").write_text(md, encoding="utf-8")
-        (archive_dir / "report.html").write_text(htmlout, encoding="utf-8")
+        (archive_dir / "report.html").write_text(html_archive, encoding="utf-8")
         (archive_dir / "snapshot.json").write_text(snapshot_json, encoding="utf-8")
         (archive_dir / "analysis.json").write_text(analysis_json, encoding="utf-8")
         enforce_retention(home_root / "archive", keep=31)

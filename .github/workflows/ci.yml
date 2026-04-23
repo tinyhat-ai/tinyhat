@@ -83,6 +83,15 @@ jobs:
             --archive
           ls "$RUNNER_TEMP/tinyhat-ci/home/archive/"
 
+      - name: All-reports backlink points to the right path per target
+        shell: bash
+        run: |
+          latest_html="$RUNNER_TEMP/tinyhat-ci/home/latest/report.html"
+          dated_html=$(ls "$RUNNER_TEMP/tinyhat-ci/home/archive/"*/report.html | head -n1)
+          grep -q 'href="../archive/index.html"[^>]*>all reports' "$latest_html"
+          grep -q 'href="../index.html"[^>]*>all reports' "$dated_html"
+          ! grep -q 'href="../archive/index.html"[^>]*>all reports' "$dated_html"
+
       - name: Routine CLI smoke test
         run: |
           python3 scripts/routine.py --home-root "$RUNNER_TEMP/tinyhat-ci/home" status
