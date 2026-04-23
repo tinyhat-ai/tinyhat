@@ -34,10 +34,22 @@ import webbrowser
 from collections import Counter
 from datetime import datetime, timezone
 from pathlib import Path
+from urllib.parse import quote
+from zoneinfo import ZoneInfo
+
+
+def _local_tz() -> ZoneInfo | timezone:
+    """Return the user's local timezone; fall back to system UTC offset."""
+    try:
+        # Python 3.9+ stdlib: reads TZ / /etc/localtime
+        from time import tzname as _tzname  # noqa: F401
+        return datetime.now().astimezone().tzinfo or timezone.utc
+    except Exception:
+        return timezone.utc
 
 
 PLUGIN_ROOT = Path(__file__).resolve().parent.parent
-TEMPLATE_DIR = PLUGIN_ROOT / "skills" / "review" / "templates"
+TEMPLATE_DIR = PLUGIN_ROOT / "skills" / "skill-audit" / "templates"
 DEFAULT_HOME_ROOT = Path.home() / ".claude" / "tinyhat"
 DEFAULT_SNAPSHOT_PATH = Path(tempfile.gettempdir()) / "tinyhat-snapshot.json"
 DEFAULT_ANALYSIS_PATH = Path(tempfile.gettempdir()) / "tinyhat-analysis.json"
@@ -201,7 +213,7 @@ def render_markdown(snapshot: dict, analysis: dict) -> str:
     s = snapshot["stats"]
     meta = snapshot["meta"]
 
-    generated = datetime.fromisoformat(meta["generated_at"])
+    generated = datetime.fromisoformat(meta["generated_at"].replace("Z", "+00:00"))
     window_label = f"last {meta['window_days']} days"
 
     standouts = "\n".join(f"- {line}" for line in analysis["what_stands_out"]) or "- (no observations)"
@@ -347,7 +359,10 @@ def render_html(snapshot: dict, analysis: dict) -> str:
     s = snapshot["stats"]
     meta = snapshot["meta"]
 
-    generated = datetime.fromisoformat(meta["generated_at"])
+    local_tz = _local_tz()
+    generated_utc = datetime.fromisoformat(meta["generated_at"].replace("Z", "+00:00"))
+    generated_local = generated_utc.astimezone(local_tz)
+    tz_abbr = generated_local.strftime("%Z") or "local"
     window_label = f"last {meta['window_days']} days"
 
     installed = s["installed_count"]
@@ -376,7 +391,7 @@ def render_html(snapshot: dict, analysis: dict) -> str:
             f'<div><span class="recommend-section-label">Trigger phrases</span><div class="chips">{triggers_html}</div></div>'
             f'<div class="recommend-action-row">'
             f'<button class="action-btn" type="button" disabled>Create this skill →</button>'
-            f'<span class="small">Prototype — v0 does not auto-create skills.</span>'
+            f'<span class="small">Coming soon</span>'
             f'</div></article>'
         )
     if not rec_cards:
@@ -438,7 +453,15 @@ def render_html(snapshot: dict, analysis: dict) -> str:
     sessions = snapshot.get("sessions", [])
     session_cards = []
     for row in sessions:
-        last_ts = row.get("last_ts") or ""
+        last_ts_raw = row.get("last_ts") or ""
+        local_dt_str = "—"
+        if last_ts_raw:
+            try:
+                iso = last_ts_raw.replace("Z", "+00:00")
+                last_ts_dt = datetime.fromisoformat(iso).astimezone(local_tz)
+                local_dt_str = last_ts_dt.strftime("%Y-%m-%d %H:%M")
+            except (ValueError, TypeError):
+                local_dt_str = last_ts_raw[:16].replace("T", " ")
         title = row.get("title") or row.get("project") or "Untitled session"
         skill_chips = " ".join(
             f'<span class="chip">{html.escape(k)} · {v}</span>'
@@ -451,10 +474,10 @@ def render_html(snapshot: dict, analysis: dict) -> str:
         session_cards.append(
             f'<details class="session-item" data-skill-runs="{row["skill_runs"]}" '
             f'data-surface="{html.escape(row["surface"])}" data-project="{html.escape(row["project"])}" '
-            f'data-last-ts="{html.escape(last_ts)}">'
+            f'data-last-ts="{html.escape(last_ts_raw)}">'
             f'<summary><div><div class="session-title">{html.escape(title)}</div>'
             f'<div class="session-sub">{html.escape(_surface_label(row["surface"]))} · {html.escape(row["project"])}</div></div>'
-            f'<div class="session-meta"><span class="meta-chip">{html.escape(row.get("last_used") or "—")}</span>'
+            f'<div class="session-meta"><span class="meta-chip">{html.escape(local_dt_str)}</span>'
             f'<span class="meta-chip">{row["skill_runs"]} runs</span></div></summary>'
             f'<div class="session-body">'
             f'<div class="mini-grid">'
@@ -487,30 +510,36 @@ def render_html(snapshot: dict, analysis: dict) -> str:
         for p in projects_seen
     )
 
-    # Tools rows
+    # Tools — ship per-session payload so JS can recompute on filter change.
     aggregate_tools = snapshot.get("aggregate_tools", [])
-    max_tool = aggregate_tools[0]["calls"] if aggregate_tools else 1
-    tools_rows = []
-    for idx, t in enumerate(aggregate_tools):
-        pct = int(100 * t["calls"] / max_tool) if max_tool else 0
-        tools_rows.append(
-            f'<div class="tools-row">'
-            f'<span class="small">{idx + 1}</span>'
-            f'<span><code>{html.escape(t["tool"])}</code></span>'
-            f'<div class="tools-bar"><span style="width:{pct}%"></span></div>'
-            f'<span class="small">{t["calls"]} / {t["sessions"]}s</span>'
-            f'</div>'
-        )
-    if not tools_rows:
-        tools_rows.append('<p class="small">No tool activity in the window.</p>')
+    tools_session_payload = [
+        {
+            "session_id": r["session_id"],
+            "project": r["project"],
+            "surface": r["surface"],
+            "tools": r.get("tool_uses", {}),
+        }
+        for r in sessions
+    ]
+    tools_payload_json = json.dumps(tools_session_payload)
 
-    # Charts
+    tools_surface_chips = '<button type="button" class="chip-btn active" data-surface="all">All</button>' + "".join(
+        f'<button type="button" class="chip-btn" data-surface="{html.escape(s)}">{html.escape(_surface_label(s))}</button>'
+        for s in surfaces_seen
+    )
+    tools_project_chips = '<button type="button" class="chip-btn active" data-project="all">All</button>' + "".join(
+        f'<button type="button" class="chip-btn" data-project="{html.escape(p)}">{html.escape(p)}</button>'
+        for p in projects_seen
+    )
+
+    # Charts — bigger (wider + taller) for the details mode.
     daily = snapshot.get("daily_rollups", [])
-    chart_sessions = _svg_bar_chart(daily, "sessions", "#0f5c63", "sessions", y_axis_title="Sessions", x_axis_title="Day")
-    chart_turns = _svg_bar_chart(daily, "turns", "#3f8c8d", "turns", y_axis_title="Turns", x_axis_title="Day")
-    chart_tokens = _svg_bar_chart(daily, "tokens", "#b56b45", "tokens", y_axis_title="Tokens", x_axis_title="Day")
+    chart_kw = {"width": 820, "height": 320}
+    chart_sessions = _svg_bar_chart(daily, "sessions", "#0f5c63", "sessions", y_axis_title="Sessions", x_axis_title="Day", **chart_kw)
+    chart_turns = _svg_bar_chart(daily, "turns", "#3f8c8d", "turns", y_axis_title="Turns", x_axis_title="Day", **chart_kw)
+    chart_tokens = _svg_bar_chart(daily, "tokens", "#b56b45", "tokens", y_axis_title="Tokens", x_axis_title="Day", **chart_kw)
     surface_points = [{"date": _surface_label(k), "value": v} for k, v in snapshot.get("surface_rollups", {}).items()]
-    chart_surfaces = _svg_bar_chart(surface_points, "value", "#7d8f52", "sessions", y_axis_title="Sessions", x_axis_title="Surface")
+    chart_surfaces = _svg_bar_chart(surface_points, "value", "#7d8f52", "sessions", y_axis_title="Sessions", x_axis_title="Surface", **chart_kw)
 
     # Coverage items
     c = snapshot["coverage"]
@@ -526,11 +555,16 @@ def render_html(snapshot: dict, analysis: dict) -> str:
     show_all_sessions_label = f"Show all {len(sessions)} sessions"
     show_all_tools_label = f"Show all {len(aggregate_tools)} tools"
 
+    # Mailto feedback subject — URL-encoded so special chars survive.
+    feedback_subject_base = quote(f"Tinyhat feedback — report {generated_local.strftime('%Y-%m-%d %H:%M')}")
+
     subs = {
         "CSS": css,
-        "GENERATED_AT": generated.strftime("%Y-%m-%d %H:%M UTC"),
+        "GENERATED_AT": generated_local.strftime(f"%Y-%m-%d %H:%M {tz_abbr}".strip()),
+        "GENERATED_AT_UTC": generated_utc.strftime("%Y-%m-%d %H:%M UTC"),
         "WINDOW_LABEL": window_label,
         "WINDOW_DAYS": meta["window_days"],
+        "FEEDBACK_SUBJECT": feedback_subject_base,
         "HEADLINE": analysis["headline"],
         "HEADLINE_SUB": analysis.get("headline_sub", ""),
         "INSTALLED_COUNT": installed,
@@ -556,7 +590,9 @@ def render_html(snapshot: dict, analysis: dict) -> str:
         "PROJECT_CHIPS": project_chips,
         "SHOW_ALL_SESSIONS_LABEL": show_all_sessions_label,
         "SHOW_ALL_TOOLS_LABEL": show_all_tools_label,
-        "TOOLS_ROWS": "\n".join(tools_rows),
+        "TOOLS_PAYLOAD_JSON": tools_payload_json,
+        "TOOLS_SURFACE_CHIPS": tools_surface_chips,
+        "TOOLS_PROJECT_CHIPS": tools_project_chips,
         "TOOLS_TOTAL": sum(t["calls"] for t in aggregate_tools),
         "TOOLS_COUNT": len(aggregate_tools),
         "CHART_SESSIONS": chart_sessions,
@@ -588,6 +624,70 @@ def enforce_retention(archive_dir: Path, keep: int = 31) -> None:
             print(f"retention: failed to remove {oldest}: {exc}", file=sys.stderr)
 
 
+def render_index(home_root: Path) -> str:
+    """Render the reports index page listing every snapshot.
+
+    Lists latest/ first, then every archive/YYYY-MM-DD/ in reverse-
+    chronological order. Each entry links to its report.html.
+    """
+    css = (TEMPLATE_DIR / "report.css").read_text(encoding="utf-8") if (TEMPLATE_DIR / "report.css").is_file() else ""
+    archive_dir = home_root / "archive"
+    archives = []
+    if archive_dir.is_dir():
+        for entry in sorted(archive_dir.iterdir(), reverse=True):
+            if entry.is_dir() and (entry / "report.html").is_file():
+                archives.append(entry.name)
+
+    local_tz = _local_tz()
+    tz_abbr = datetime.now(local_tz).strftime("%Z") or "local"
+
+    latest_stamp_path = home_root / "latest" / "run-stamp.txt"
+    latest_date = latest_stamp_path.read_text(encoding="utf-8").strip() if latest_stamp_path.is_file() else ""
+
+    rows = []
+    if (home_root / "latest" / "report.html").is_file():
+        rows.append(
+            f'<a class="index-row index-latest" href="../latest/report.html">'
+            f'<div class="index-row-main"><div class="kicker">Latest</div>'
+            f'<div class="index-row-title">Most recent report</div>'
+            f'<div class="small">Last refreshed {html.escape(latest_date or "—")}</div></div>'
+            f'<div class="index-row-arrow">→</div></a>'
+        )
+    for date in archives:
+        rows.append(
+            f'<a class="index-row" href="{html.escape(date)}/report.html">'
+            f'<div class="index-row-main"><div class="kicker">Archived</div>'
+            f'<div class="index-row-title">{html.escape(date)}</div>'
+            f'<div class="small">Dated snapshot</div></div>'
+            f'<div class="index-row-arrow">→</div></a>'
+        )
+    if not rows:
+        rows.append('<p class="small">No reports yet. Run Tinyhat once to produce the first snapshot.</p>')
+
+    return f"""<!doctype html>
+<html lang="en"><head><meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1"/>
+<title>Tinyhat · Reports</title>
+<style>
+{css}
+.index-list {{ display: flex; flex-direction: column; gap: 10px; margin-top: 22px; }}
+.index-row {{ display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 18px 22px; border: 1px solid var(--border); border-radius: 16px; background: var(--card); box-shadow: var(--shadow); text-decoration: none; color: var(--ink); transition: transform 0.15s, box-shadow 0.15s; }}
+.index-row:hover {{ transform: translateY(-2px); box-shadow: 0 18px 42px rgba(15,92,99,0.14); }}
+.index-latest {{ background: linear-gradient(160deg, rgba(255,248,240,0.96), rgba(249,232,215,0.82)); }}
+.index-row-title {{ font-family: "Iowan Old Style", Georgia, serif; font-size: 1.2rem; font-weight: 700; margin: 4px 0; }}
+.index-row-arrow {{ font-size: 1.4rem; color: var(--accent); }}
+</style></head><body class="mode-main"><div class="wrap">
+<header class="report-header"><div class="report-header-top"><div>
+<div class="kicker">Tinyhat · Reports</div>
+<h1 class="report-title">Your Tinyhat snapshots</h1>
+<p class="report-sub">Latest, plus every dated archive on this machine. Up to 31 dated copies.</p>
+<p class="report-meta">All times shown in {html.escape(tz_abbr)}.</p>
+</div></div></header>
+<div class="index-list">{''.join(rows)}</div>
+</div></body></html>
+"""
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description="Render the Tinyhat report.")
     parser.add_argument("--snapshot", default=str(DEFAULT_SNAPSHOT_PATH))
@@ -599,7 +699,15 @@ def main() -> int:
     )
     parser.add_argument("--archive", action="store_true", help="Also write archive/YYYY-MM-DD/ snapshot and enforce retention.")
     parser.add_argument("--open", action="store_true", help="Open the rendered HTML in the default browser.")
+    parser.add_argument("--index-only", action="store_true", help="Regenerate archive/index.html only (no report).")
     args = parser.parse_args()
+
+    if args.index_only:
+        home_root = Path(args.home_root).expanduser()
+        (home_root / "archive").mkdir(parents=True, exist_ok=True)
+        (home_root / "archive" / "index.html").write_text(render_index(home_root), encoding="utf-8")
+        print(f"Wrote {home_root / 'archive' / 'index.html'}", file=sys.stderr)
+        return 0
 
     snapshot_path = Path(args.snapshot)
     if not snapshot_path.is_file():
@@ -635,6 +743,11 @@ def main() -> int:
         (archive_dir / "report.md").write_text(md, encoding="utf-8")
         (archive_dir / "report.html").write_text(htmlout, encoding="utf-8")
         enforce_retention(home_root / "archive", keep=31)
+
+    # Always regenerate the index so it reflects latest + archives.
+    (home_root / "archive").mkdir(parents=True, exist_ok=True)
+    index_html = render_index(home_root)
+    (home_root / "archive" / "index.html").write_text(index_html, encoding="utf-8")
 
     print(f"Wrote {latest_dir / 'report.md'} and {latest_dir / 'report.html'}", file=sys.stderr)
 

@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8"/>
 <meta name="viewport" content="width=device-width, initial-scale=1"/>
-<title>Skill Value Review</title>
+<title>Skill Audit · Tinyhat</title>
 <style>
 {{CSS}}
 </style>
@@ -14,10 +14,10 @@
   <header class="report-header">
     <div class="report-header-top">
       <div>
-        <div class="kicker">Tinyhat · Skill Value Review</div>
+        <div class="kicker">Tinyhat · Skill Audit</div>
         <h1 class="report-title">Which skills are actually earning their keep?</h1>
         <p class="report-sub">A local, read-only look at how your Claude skills show up in the work you've actually been doing.</p>
-        <p class="report-meta">Generated {{GENERATED_AT}} · window: {{WINDOW_LABEL}}</p>
+        <p class="report-meta">Generated {{GENERATED_AT}} · window: {{WINDOW_LABEL}} · <a href="../archive/index.html" class="report-meta-link">all reports →</a></p>
       </div>
       <div class="mode-switch" role="tablist" aria-label="Report detail mode">
         <button class="mode-btn" data-mode="main" type="button" onclick="setMode('main')"><span>✨</span><span>Keep it simple</span></button>
@@ -50,13 +50,23 @@
   <section class="hero">
     <h2 class="hero-headline">{{HEADLINE}}</h2>
     <p class="small">{{HEADLINE_SUB}}</p>
-    <div class="stats">
-      <div class="stat"><span class="n">{{INSTALLED_COUNT}}</span><span class="label">Installed</span></div>
-      <div class="stat"><span class="n">{{ACTIVE_COUNT}}</span><span class="label">Active</span></div>
-      <div class="stat"><span class="n">{{SKILL_RUNS_TOTAL}}</span><span class="label">Skill runs</span></div>
-      <div class="stat"><span class="n">{{SESSIONS_TOTAL}}</span><span class="label">Sessions</span></div>
-      <div class="stat"><span class="n">{{TURNS_TOTAL_COMPACT}}</span><span class="label">Turns</span></div>
-      <div class="stat"><span class="n">{{TOKENS_TOTAL_COMPACT}}</span><span class="label">Token activity</span></div>
+
+    <div class="stat-group">
+      <div class="stat-group-label">Skills</div>
+      <div class="stats">
+        <div class="stat"><span class="n">{{INSTALLED_COUNT}}</span><span class="label">Installed</span></div>
+        <div class="stat"><span class="n">{{ACTIVE_COUNT}}</span><span class="label">Active this window</span></div>
+        <div class="stat"><span class="n">{{SKILL_RUNS_TOTAL}}</span><span class="label">Skill runs detected</span></div>
+      </div>
+    </div>
+
+    <div class="stat-group">
+      <div class="stat-group-label">Overall Claude Code usage</div>
+      <div class="stats">
+        <div class="stat"><span class="n">{{SESSIONS_TOTAL}}</span><span class="label">Sessions</span></div>
+        <div class="stat"><span class="n">{{TURNS_TOTAL_COMPACT}}</span><span class="label">Turns</span></div>
+        <div class="stat"><span class="n">{{TOKENS_TOTAL_COMPACT}}</span><span class="label">Token activity</span></div>
+      </div>
     </div>
   </section>
 
@@ -109,7 +119,7 @@
       <span class="small" id="cleanup-count" style="margin-left:auto;">0 selected</span>
       <button class="action-btn" type="button" id="cleanup-remove" disabled>Remove selected</button>
     </div>
-    <p class="small">Prototype — the real flow would confirm and then delete the selected skill directories.</p>
+    <p class="small">Coming soon — the real flow will confirm and then delete the selected skill directories.</p>
   </section>
 
   <section class="details-only">
@@ -130,14 +140,18 @@
 
   <section class="details-only">
     <h2>All tools used this period</h2>
-    <p class="small">{{TOOLS_TOTAL}} calls across {{TOOLS_COUNT}} distinct tools.</p>
-    <div id="tools-list">{{TOOLS_ROWS}}</div>
+    <p class="small" id="tools-summary">{{TOOLS_TOTAL}} calls across {{TOOLS_COUNT}} distinct tools.</p>
+    <div class="filter-block">
+      <div class="filter-row"><span class="filter-label">Surface</span><div class="chip-group" id="tools-surface-chips">{{TOOLS_SURFACE_CHIPS}}</div></div>
+      <div class="filter-row"><span class="filter-label">Project</span><div class="chip-group" id="tools-project-chips">{{TOOLS_PROJECT_CHIPS}}</div></div>
+    </div>
+    <div id="tools-list"></div>
     <button class="action-btn ghost" type="button" id="show-all-tools" onclick="showAllTools()" style="margin-top:12px;">{{SHOW_ALL_TOOLS_LABEL}}</button>
   </section>
 
   <section class="details-only">
     <h2>Activity patterns</h2>
-    <div class="chart-grid">
+    <div class="chart-grid chart-grid-single">
       <div class="chart-card"><h3>Sessions per day</h3>{{CHART_SESSIONS}}</div>
       <div class="chart-card"><h3>Turns per day</h3>{{CHART_TURNS}}</div>
       <div class="chart-card"><h3>Token activity per day</h3>{{CHART_TOKENS}}</div>
@@ -159,24 +173,27 @@
   <section class="feedback">
     <strong>Does this ranking feel right?</strong>
     <div class="feedback-row">
-      <button class="action-btn ghost" type="button" onclick="submitFeedback('up')">👍 Yes</button>
-      <button class="action-btn ghost" type="button" onclick="submitFeedback('down')">👎 Something's off</button>
+      <a class="action-btn ghost" href="mailto:tinyhat@tinyloop.co?subject={{FEEDBACK_SUBJECT}}%20%F0%9F%91%8D&body=The%20Tinyhat%20ranking%20felt%20right%20for%20me.%0A%0A(Optional)%20What%20was%20especially%20good%3A%0A">👍 Yes</a>
+      <a class="action-btn ghost" href="mailto:tinyhat@tinyloop.co?subject={{FEEDBACK_SUBJECT}}%20%F0%9F%91%8E&body=The%20Tinyhat%20ranking%20felt%20off%20for%20me.%0A%0AWhat%20was%20wrong%3A%0A">👎 Something's off</a>
     </div>
-    <textarea id="feedback-text" placeholder="If no, what's wrong?" rows="2"></textarea>
+    <textarea id="feedback-text" placeholder="(Optional) Anything specific? Goes into the email body." rows="2"></textarea>
     <div>
-      <button class="action-btn" type="button" onclick="submitFeedback(null)" style="margin-top:10px;">Send feedback</button>
+      <button class="action-btn" type="button" onclick="sendFeedbackEmail()" style="margin-top:10px;">Send feedback</button>
     </div>
-    <div class="feedback-saved" id="feedback-saved">Thanks — saved locally to ~/.claude/tinyhat/feedback.jsonl.</div>
-    <p class="small" style="margin-top: 10px;">Feedback is written locally only. No network call.</p>
+    <p class="small" style="margin-top: 10px;">Feedback opens your email app pre-filled to <code>tinyhat@tinyloop.co</code>. No network call from this page.</p>
   </section>
 
 </div>
 
 <script>
+  window.TINYHAT_TOOLS_PAYLOAD = {{TOOLS_PAYLOAD_JSON}};
+  window.TINYHAT_FEEDBACK_SUBJECT = "{{FEEDBACK_SUBJECT}}";
+
   function setMode(mode) {
     document.body.classList.remove('mode-main', 'mode-details');
     document.body.classList.add('mode-' + mode);
   }
+
   function cleanupSelectAll(state) {
     document.querySelectorAll('.cleanup-check').forEach(cb => cb.checked = state);
     updateCleanupCount();
@@ -192,7 +209,7 @@
     if (e.target && e.target.classList && e.target.classList.contains('cleanup-check')) updateCleanupCount();
   });
 
-  // Sessions - sort + filter + show-all
+  // Sessions
   const SESSION_SHOW_INITIAL = 10;
   let sessionState = { sort: 'skill-desc', surface: 'all', project: 'all', showAll: false };
   function applySessionFilters() {
@@ -212,51 +229,95 @@
     const visible = sessionState.showAll ? filtered : filtered.slice(0, SESSION_SHOW_INITIAL);
     visible.forEach(el => { el.style.display = ''; list.appendChild(el); });
     const toggle = document.getElementById('show-all-sessions');
-    if (filtered.length <= SESSION_SHOW_INITIAL) toggle.style.display = 'none';
-    else toggle.style.display = '';
+    if (toggle) toggle.style.display = (filtered.length <= SESSION_SHOW_INITIAL) ? 'none' : '';
   }
-  function showAllSessions() { sessionState.showAll = !sessionState.showAll; applySessionFilters(); document.getElementById('show-all-sessions').textContent = sessionState.showAll ? 'Show fewer' : '{{SHOW_ALL_SESSIONS_LABEL}}'; }
-  function handleChipGroup(groupId, attr, stateKey) {
+  function showAllSessions() {
+    sessionState.showAll = !sessionState.showAll;
+    applySessionFilters();
+    const btn = document.getElementById('show-all-sessions');
+    if (btn) btn.textContent = sessionState.showAll ? 'Show fewer' : '{{SHOW_ALL_SESSIONS_LABEL}}';
+  }
+  function bindSessionChips(groupId, key, attr) {
     const group = document.getElementById(groupId);
     if (!group) return;
     group.addEventListener('click', (e) => {
-      const btn = e.target.closest('.chip-btn');
-      if (!btn) return;
+      const btn = e.target.closest('.chip-btn'); if (!btn) return;
       group.querySelectorAll('.chip-btn').forEach(b => b.classList.remove('active'));
       btn.classList.add('active');
-      sessionState[stateKey] = btn.dataset[attr];
+      sessionState[key] = btn.dataset[attr];
       applySessionFilters();
     });
   }
-  handleChipGroup('sort-chips', 'sort', 'sort');
-  handleChipGroup('surface-chips', 'surface', 'surface');
-  handleChipGroup('project-chips', 'project', 'project');
+  bindSessionChips('sort-chips', 'sort', 'sort');
+  bindSessionChips('surface-chips', 'surface', 'surface');
+  bindSessionChips('project-chips', 'project', 'project');
   applySessionFilters();
 
-  // Tools show-all
-  let toolsShowAll = false;
+  // Tools
   const TOOLS_SHOW_INITIAL = 20;
-  function showAllTools() {
-    toolsShowAll = !toolsShowAll;
-    document.querySelectorAll('.tools-row').forEach((el, idx) => {
-      el.style.display = (toolsShowAll || idx < TOOLS_SHOW_INITIAL) ? '' : 'none';
-    });
-    document.getElementById('show-all-tools').textContent = toolsShowAll ? 'Show fewer' : '{{SHOW_ALL_TOOLS_LABEL}}';
+  let toolsState = { surface: 'all', project: 'all', showAll: false };
+  function renderTools() {
+    const payload = window.TINYHAT_TOOLS_PAYLOAD || [];
+    const totals = new Map();
+    const reach = new Map();
+    let totalCalls = 0;
+    for (const row of payload) {
+      if (toolsState.surface !== 'all' && row.surface !== toolsState.surface) continue;
+      if (toolsState.project !== 'all' && row.project !== toolsState.project) continue;
+      for (const [tool, n] of Object.entries(row.tools || {})) {
+        totals.set(tool, (totals.get(tool) || 0) + n);
+        if (!reach.has(tool)) reach.set(tool, new Set());
+        reach.get(tool).add(row.session_id);
+        totalCalls += n;
+      }
+    }
+    const ranked = Array.from(totals.entries()).sort((a, b) => b[1] - a[1]);
+    const max = ranked[0] ? ranked[0][1] : 1;
+    const visible = toolsState.showAll ? ranked : ranked.slice(0, TOOLS_SHOW_INITIAL);
+    const list = document.getElementById('tools-list');
+    if (!list) return;
+    list.innerHTML = visible.map(([tool, calls], idx) => {
+      const r = reach.get(tool).size;
+      const pct = Math.max(2, Math.floor(100 * calls / max));
+      return `<div class="tools-row">
+        <span class="tools-rank">${idx + 1}</span>
+        <span class="tools-name"><code>${esc(tool)}</code></span>
+        <div class="tools-bar"><span style="width:${pct}%"></span></div>
+        <span class="tools-meta">${calls} calls · ${r} session${r === 1 ? '' : 's'}</span>
+      </div>`;
+    }).join('') || '<p class="small">No tool activity matches the current filters.</p>';
+    const summary = document.getElementById('tools-summary');
+    if (summary) summary.textContent = `${totalCalls} calls across ${ranked.length} distinct tools.`;
+    const toggle = document.getElementById('show-all-tools');
+    if (toggle) toggle.style.display = (ranked.length <= TOOLS_SHOW_INITIAL) ? 'none' : '';
   }
-  document.querySelectorAll('.tools-row').forEach((el, idx) => {
-    if (idx >= TOOLS_SHOW_INITIAL) el.style.display = 'none';
-  });
+  function showAllTools() {
+    toolsState.showAll = !toolsState.showAll;
+    renderTools();
+    const btn = document.getElementById('show-all-tools');
+    if (btn) btn.textContent = toolsState.showAll ? 'Show fewer' : '{{SHOW_ALL_TOOLS_LABEL}}';
+  }
+  function esc(s) { return String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
+  function bindToolsChips(groupId, key, attr) {
+    const group = document.getElementById(groupId);
+    if (!group) return;
+    group.addEventListener('click', (e) => {
+      const btn = e.target.closest('.chip-btn'); if (!btn) return;
+      group.querySelectorAll('.chip-btn').forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+      toolsState[key] = btn.dataset[attr];
+      renderTools();
+    });
+  }
+  bindToolsChips('tools-surface-chips', 'surface', 'surface');
+  bindToolsChips('tools-project-chips', 'project', 'project');
+  renderTools();
 
-  // Feedback
-  function submitFeedback(verdict) {
-    const text = document.getElementById('feedback-text').value;
-    const payload = { ts: new Date().toISOString(), verdict: verdict, note: text };
-    fetch('', { method: 'HEAD' }).catch(()=>{}); // no-op; kept for future extension
-    // Local-only write is not possible from a file:// page; instead expose payload via a data URI
-    // so the skill can reliably pick it up. The recommended flow is the user copies the payload.
-    try { window.name = JSON.stringify(payload); } catch(e) {}
-    const saved = document.getElementById('feedback-saved');
-    if (saved) { saved.style.display = 'block'; }
+  function sendFeedbackEmail() {
+    const text = document.getElementById('feedback-text').value || '';
+    const body = encodeURIComponent(text ? `${text}\n\n— Sent from the Tinyhat report.` : 'Sent from the Tinyhat report.');
+    const subject = (window.TINYHAT_FEEDBACK_SUBJECT || 'Tinyhat%20feedback');
+    window.location.href = `mailto:tinyhat@tinyloop.co?subject=${subject}&body=${body}`;
   }
 </script>
 </body>

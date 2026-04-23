@@ -1,7 +1,7 @@
 {
   "name": "tinyhat",
   "version": "0.1.0",
-  "description": "Skill lifecycle observability for Claude Code — a local, read-only scanner that produces an agent-authored skill-usage report on demand and refreshes it once per day.",
+  "description": "Telemetry, usage analytics, and cost intelligence for Claude Code skills — ask Claude which skills you use most, what they cost per invocation, and which ones are dead code. Replay any captured invocation against a cheaper model (Haiku, GPT, Gemini, or local Ollama) and see the cost delta before you commit to a routing change. Reads the session transcripts Claude Code already writes to disk; no backend, no proxy, no hooks required.",
   "author": {
     "name": "Tinyloop",
     "url": "https://github.com/tinyhat-ai/tinyhat"
@@ -9,5 +9,21 @@
   "homepage": "https://github.com/tinyhat-ai/tinyhat",
   "repository": "https://github.com/tinyhat-ai/tinyhat",
   "license": "MIT",
-  "keywords": ["observability", "skills", "lifecycle", "local", "read-only"]
+  "keywords": [
+    "observability",
+    "telemetry",
+    "skills",
+    "lifecycle",
+    "usage-analytics",
+    "cost",
+    "cost-attribution",
+    "replay",
+    "model-comparison",
+    "dead-code",
+    "ai-skills",
+    "claude-code",
+    "transcript",
+    "local",
+    "plugin"
+  ]
 }

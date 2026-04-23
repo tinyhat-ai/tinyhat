@@ -1,6 +1,6 @@
 # Writing the analysis JSON — field-by-field
 
-Detailed guidance for step 2 of the `tinyhat:review` flow. Read this
+Detailed guidance for step 2 of the `tinyhat:skill-audit` flow. Read this
 the first time you run the skill in a session. The main `SKILL.md`
 summarises the contract; this file tells you how to write good content
 inside it.
