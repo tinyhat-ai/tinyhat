@@ -25,7 +25,7 @@ There's also a **project-local test harness** that lives in `.claude/skills/`. I
 
 ## 1. Full plugin test (what you'd do before a PR)
 
-This exercises the plugin exactly the way a user would, namespaced as `/tinyhat:skill-audit` etc.
+This exercises the plugin exactly the way a user would, namespaced as `/tinyhat:audit` etc.
 
 ### Start a fresh Claude Code session with the plugin loaded
 
@@ -42,7 +42,7 @@ Type these in Claude Code. Pick slash commands or natural language — both shou
 **Produce a fresh report (the primary flow):**
 
 ```text
-/tinyhat:skill-audit
+/tinyhat:audit
 ```
 
 or
@@ -69,7 +69,7 @@ The agent will:
 **Open the latest report without regenerating:**
 
 ```text
-/tinyhat:open-latest-audit
+/tinyhat:open
 ```
 
 Should open the existing `~/.claude/tinyhat/latest/report.html` in your browser — no Python run.
@@ -77,7 +77,7 @@ Should open the existing `~/.claude/tinyhat/latest/report.html` in your browser 
 **Browse the archive:**
 
 ```text
-/tinyhat:audit-history
+/tinyhat:history
 ```
 
 Should open `~/.claude/tinyhat/archive/index.html`. One entry per day you've run the audit, up to 31. The header inside each report has an `all reports →` link that returns to this index.
@@ -85,15 +85,15 @@ Should open `~/.claude/tinyhat/archive/index.html`. One entry per day you've run
 **Check / toggle the adaptive daily routine:**
 
 ```text
-/tinyhat:skill-audit routine status
-/tinyhat:skill-audit routine off
-/tinyhat:skill-audit routine on
+/tinyhat:audit routine status
+/tinyhat:audit routine off
+/tinyhat:audit routine on
 ```
 
 **Print the paths Tinyhat reads and writes:**
 
 ```text
-/tinyhat:skill-audit where
+/tinyhat:audit where
 ```
 
 ### Iterate on changes
@@ -104,7 +104,7 @@ Edit files in the cloned repo, then inside Claude Code run:
 /reload-plugins
 ```
 
-This re-reads `SKILL.md` files and re-registers the skills. Python scripts are re-executed on every invocation, so changes to `scripts/*.py` take effect on the next `/tinyhat:skill-audit`. Template and CSS changes take effect on the next `render_report.py` run.
+This re-reads `SKILL.md` files and re-registers the skills. Python scripts are re-executed on every invocation, so changes to `scripts/*.py` take effect on the next `/tinyhat:audit`. Template and CSS changes take effect on the next `render_report.py` run.
 
 ### Reset state between tests
 
@@ -183,7 +183,7 @@ JSON
 python3 scripts/render_report.py --open
 ```
 
-Read `skills/skill-audit/references/writing-the-analysis.md` for the full schema.
+Read `skills/audit/references/writing-the-analysis.md` for the full schema.
 
 ### Routine state
 
@@ -252,9 +252,9 @@ python3 -c 'import tempfile; print(tempfile.gettempdir())'
 
 ## 5. Before opening a PR
 
-1. Run `/tinyhat:skill-audit` and confirm the report opens without template errors.
-2. Run `/tinyhat:open-latest-audit` and confirm no regeneration happens.
-3. Run `/tinyhat:audit-history` and confirm the index lists today's snapshot.
+1. Run `/tinyhat:audit` and confirm the report opens without template errors.
+2. Run `/tinyhat:open` and confirm no regeneration happens.
+3. Run `/tinyhat:history` and confirm the index lists today's snapshot.
 4. Confirm the report-header `all reports →` link takes you back to the index, and each index entry re-opens its report.
 5. Spot-check at least one session timestamp is your local time (e.g. `2026-04-22 21:04`, not `2026-04-23T02:04`).
 6. If you touched attribution in `gather_snapshot.py`, spot-check `snapshot["events_audit"]` for unexpected unknowns.

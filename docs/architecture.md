@@ -10,7 +10,7 @@ A Claude Code plugin where a Python script gathers facts, the Claude agent write
 
 ```
 ┌────────────────────────┐   ┌──────────────────────┐   ┌─────────────────────────┐
-│  gather_snapshot.py    │   │  tinyhat:skill-audit │   │  render_report.py       │
+│  gather_snapshot.py    │   │  tinyhat:audit │   │  render_report.py       │
 │  local transcripts +   ├──▶│  agent writes the    ├──▶│  merges snapshot +      │
 │  skill inventory       │   │  editorial layer     │   │  analysis → html + md   │
 │  → snapshot.json       │   │  → analysis.json     │   │  → opens HTML           │
@@ -31,9 +31,9 @@ The strict split is the point: a generic Python heuristic would always say the s
 
 Plugin manifest per Anthropic's convention. Name, version, description, author, homepage, repository, license, keywords. Skills are auto-discovered from `skills/*/SKILL.md` — they don't need to be listed here.
 
-### `skills/skill-audit/`
+### `skills/audit/`
 
-The primary skill (`tinyhat:skill-audit`). Its `SKILL.md` is the agent entry point — frontmatter with natural-language triggers and `allowed-tools`, body with the step-by-step flow. Heavy detail for step 2 (writing `analysis.json`) lives in `references/writing-the-analysis.md` so the main `SKILL.md` stays under ~200 lines.
+The primary skill (`tinyhat:audit`). Its `SKILL.md` is the agent entry point — frontmatter with natural-language triggers and `allowed-tools`, body with the step-by-step flow. Heavy detail for step 2 (writing `analysis.json`) lives in `references/writing-the-analysis.md` so the main `SKILL.md` stays under ~200 lines.
 
 Templates live at `templates/`:
 
@@ -41,13 +41,13 @@ Templates live at `templates/`:
 - `report.md.tmpl` — the same report as markdown.
 - `report.css` — extracted stylesheet, inlined at render time.
 
-### `skills/open-latest-audit/`
+### `skills/open/`
 
-Thin skill (`tinyhat:open-latest-audit`) — opens `~/.claude/tinyhat/latest/report.html`. No regeneration, no Python run. The point is to let the user revisit a report cheaply.
+Thin skill (`tinyhat:open`) — opens `~/.claude/tinyhat/latest/report.html`. No regeneration, no Python run. The point is to let the user revisit a report cheaply.
 
-### `skills/audit-history/`
+### `skills/history/`
 
-Thin skill (`tinyhat:audit-history`) — opens `~/.claude/tinyhat/archive/index.html`. Also cheap, also no regeneration. Regenerates just the index page if it's stale or missing.
+Thin skill (`tinyhat:history`) — opens `~/.claude/tinyhat/archive/index.html`. Also cheap, also no regeneration. Regenerates just the index page if it's stale or missing.
 
 ### `scripts/gather_snapshot.py`
 
@@ -135,4 +135,4 @@ Skill dispatch across installed plugins is description-matched. Generic names li
 - [user-flows.md](user-flows.md) — what the user actually does
 - [artifacts.md](artifacts.md) — every file Tinyhat writes, and where
 - [local-development.md](local-development.md) — the dev loop
-- `skills/skill-audit/references/writing-the-analysis.md` — how the agent writes the analysis
+- `skills/audit/references/writing-the-analysis.md` — how the agent writes the analysis

@@ -1,9 +1,9 @@
 ---
-description: Open the skill-audit history page — a local index of the latest report plus every dated archive snapshot (up to 31), with links to each. Triggers on "show my skill audit history", "browse my tinyhat audits over time", "list all my skill audits", "see previous skill audits", "open the audit archive", "show the tinyhat archive", or explicit /tinyhat:audit-history invocations.
+description: Open the skill-audit history page — a local index of the latest report plus every dated archive snapshot (up to 31), with links to each. Triggers on "show my skill audit history", "browse my tinyhat audits over time", "list all my skill audits", "see previous skill audits", "open the audit archive", "show the tinyhat archive", or explicit /tinyhat:history invocations.
 allowed-tools: Bash(open *) Bash(xdg-open *) Bash(start *) Bash(python3 *) Read
 ---
 
-# tinyhat:audit-history — browse all skill-audit reports
+# tinyhat:history — browse all skill-audit reports
 
 Open `~/.claude/tinyhat/archive/index.html`. That page lists the
 latest report plus every dated archive snapshot (up to 31) with
@@ -18,7 +18,7 @@ one-click links. Each entry opens its own `report.html`.
      python3 "${CLAUDE_PLUGIN_ROOT}/scripts/render_report.py" --index-only
      ```
    - If no reports exist at all, tell the user and hand off to
-     `/tinyhat:skill-audit` to create the first snapshot.
+     `/tinyhat:audit` to create the first snapshot.
 2. Open the index:
 
 ```bash
@@ -37,5 +37,5 @@ returns the user here. From this page, each entry opens its own
 
 ## When the user wants a fresh report
 
-Direct them to `/tinyhat:skill-audit`. This skill only browses; it
+Direct them to `/tinyhat:audit`. This skill only browses; it
 doesn't regenerate.
