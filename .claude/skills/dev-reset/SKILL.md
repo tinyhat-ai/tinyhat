@@ -90,7 +90,9 @@ at the repo root, which is where `scripts/dev_reset.py` lives.
 
 ## After the reset
 
-To actually test the first-run flow once state is clean:
+Two paths — pick the one that matches what the contributor is doing:
+
+**A. Test the published install flow** — the real new-user experience, against whatever is on the marketplace today:
 
 ```
 /plugin marketplace add tinyhat-ai/tinyhat   # only needed after --full
@@ -98,3 +100,11 @@ To actually test the first-run flow once state is clean:
 /reload-plugins
 /tinyhat:audit
 ```
+
+**B. Iterate on local edits** — the faster contributor loop. Start a fresh Claude Code session with the local checkout mounted as the plugin:
+
+```bash
+claude --plugin-dir "$(pwd)"
+```
+
+Inside that session, `/tinyhat:audit` exercises the code currently on disk. `/reload-plugins` re-reads `SKILL.md` files in place; `scripts/*.py` changes take effect on the next invocation with no reload needed. Use this path for every iteration that's not specifically testing the `/plugin install` UX.
