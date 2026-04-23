@@ -1,0 +1,65 @@
+[project]
+name = "tinyhat"
+version = "0.1.0"
+description = "Skill lifecycle observability for Claude Code — a local, read-only scanner plugin."
+readme = "README.md"
+requires-python = ">=3.9"
+license = { text = "MIT" }
+authors = [{ name = "Tinyloop", email = "tinyhat@tinyloop.co" }]
+keywords = ["claude-code", "plugin", "skills", "observability", "local"]
+classifiers = [
+  "Development Status :: 3 - Alpha",
+  "Environment :: Plugins",
+  "Intended Audience :: Developers",
+  "License :: OSI Approved :: MIT License",
+  "Operating System :: OS Independent",
+  "Programming Language :: Python :: 3",
+  "Programming Language :: Python :: 3.9",
+  "Programming Language :: Python :: 3.11",
+  "Programming Language :: Python :: 3.12",
+  "Topic :: Software Development :: Libraries :: Python Modules",
+]
+# Tinyhat intentionally ships no runtime dependencies — stdlib only.
+dependencies = []
+
+[project.urls]
+Homepage = "https://github.com/tinyhat-ai/tinyhat"
+Repository = "https://github.com/tinyhat-ai/tinyhat"
+Issues = "https://github.com/tinyhat-ai/tinyhat/issues"
+Changelog = "https://github.com/tinyhat-ai/tinyhat/blob/main/CHANGELOG.md"
+
+# ---------------------------------------------------------------------------
+# Ruff — lint + format. Single source of truth for code style.
+# ---------------------------------------------------------------------------
+[tool.ruff]
+line-length = 100
+target-version = "py39"
+extend-exclude = [
+  ".claude",
+  "skills/*/templates",
+]
+
+[tool.ruff.lint]
+select = [
+  "E",     # pycodestyle errors
+  "F",     # pyflakes
+  "W",     # pycodestyle warnings
+  "I",     # isort
+  "UP",    # pyupgrade
+  "B",     # flake8-bugbear
+  "SIM",   # flake8-simplify
+  "PL",    # pylint (subset)
+  "RUF",   # ruff-specific
+]
+ignore = [
+  "PLR0913",  # too-many-arguments — fine for rendering helpers
+  "PLR0915",  # too-many-statements — same
+  "PLR0912",  # too-many-branches — same
+  "PLR2004",  # magic-value-comparison — noisy for chart code
+  "E501",    # line-too-long — ruff format already handles wrapping
+]
+
+[tool.ruff.format]
+quote-style = "double"
+indent-style = "space"
+line-ending = "lf"

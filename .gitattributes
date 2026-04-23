@@ -1,0 +1,23 @@
+# Normalize line endings on check-in.
+* text=auto eol=lf
+
+# Explicit types — override auto-detection for safety.
+*.py       text diff=python
+*.md       text
+*.yml      text
+*.yaml     text
+*.json     text
+*.html     text
+*.css      text
+*.tmpl     text
+
+# Binary.
+*.png      binary
+*.jpg      binary
+*.jpeg     binary
+*.gif      binary
+*.ico      binary
+*.pdf      binary
+
+# Language detection for GitHub's Linguist (hide generated stuff from stats).
+CHANGELOG.md  linguist-generated

@@ -1,0 +1,108 @@
+name: Bug report
+description: Report something that isn't working as expected.
+title: "bug: "
+labels: ["bug", "triage"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for taking the time to file a report.
+        If this is a security issue, **do not file it here** — see
+        [SECURITY.md](../SECURITY.md) for the private reporting channel.
+
+  - type: textarea
+    id: summary
+    attributes:
+      label: Summary
+      description: One or two sentences describing the bug.
+      placeholder: "`/tinyhat:skill-audit` crashes when …"
+    validations:
+      required: true
+
+  - type: textarea
+    id: repro
+    attributes:
+      label: Steps to reproduce
+      description: Exact commands or skill invocations.
+      placeholder: |
+        1. Install the plugin via `/plugin install tinyhat-ai/tinyhat`
+        2. Run `/tinyhat:skill-audit`
+        3. …
+    validations:
+      required: true
+
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected behavior
+    validations:
+      required: true
+
+  - type: textarea
+    id: actual
+    attributes:
+      label: Actual behavior
+      description: Include any traceback or error message.
+    validations:
+      required: true
+
+  - type: input
+    id: version
+    attributes:
+      label: Tinyhat version / commit
+      description: Output of `grep version .claude-plugin/plugin.json` or the commit SHA.
+      placeholder: "0.1.0 (commit abc123)"
+    validations:
+      required: true
+
+  - type: dropdown
+    id: os
+    attributes:
+      label: Operating system
+      options:
+        - macOS
+        - Linux
+        - Windows
+    validations:
+      required: true
+
+  - type: input
+    id: python
+    attributes:
+      label: Python version
+      description: Output of `python3 --version`.
+      placeholder: "3.11.8"
+    validations:
+      required: true
+
+  - type: dropdown
+    id: surface
+    attributes:
+      label: Claude Code surface
+      options:
+        - CLI
+        - Desktop app (Code tab)
+        - Cowork
+        - Mixed / unsure
+    validations:
+      required: true
+
+  - type: textarea
+    id: logs
+    attributes:
+      label: Logs or snapshot
+      description: |
+        If you can, paste the stderr from `gather_snapshot.py` /
+        `render_report.py`. If the problem is in the report content,
+        attach the snapshot JSON from `<tempdir>/tinyhat-snapshot.json`.
+      render: shell
+
+  - type: checkboxes
+    id: checks
+    attributes:
+      label: Pre-flight
+      options:
+        - label: I searched existing issues and didn't find a duplicate.
+          required: true
+        - label: This is not a security issue (if it is, I'll use SECURITY.md instead).
+          required: true
