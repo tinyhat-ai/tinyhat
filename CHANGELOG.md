@@ -13,6 +13,13 @@ for fixes. Breaking changes stay in minor bumps until we explicitly
 ship `1.0.0`. Release-please is configured to honor this
 (`bump-minor-pre-major: true`, `bump-patch-for-minor-pre-major: true`).
 
+## [0.1.2](https://github.com/tinyhat-ai/tinyhat/compare/v0.1.1...v0.1.2) (2026-04-23)
+
+
+### Bug Fixes
+
+* Add marketplace manifest so the plugin can be installed (closes [#11](https://github.com/tinyhat-ai/tinyhat/issues/11)) ([#12](https://github.com/tinyhat-ai/tinyhat/issues/12)) ([c0da383](https://github.com/tinyhat-ai/tinyhat/commit/c0da383f95bf50848d2b588f736647dd7d160ca0))
+
 ## [0.1.1](https://github.com/tinyhat-ai/tinyhat/compare/v0.1.0...v0.1.1) (2026-04-23)
 
 
