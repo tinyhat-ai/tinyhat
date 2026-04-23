@@ -67,10 +67,9 @@ Check:
   patch. If release-please suggests a major bump but we're pre-1.0,
   something's misconfigured — stop and fix
   `.release-please-config.json`.
-- **CHANGELOG entry reads well.** Release-please pulls commit
-  subjects verbatim. If a subject is cryptic, amend it by editing
-  `CHANGELOG.md` *in the release PR itself* — release-please won't
-  overwrite manual edits.
+- **CHANGELOG entries match what shipped.** Release-please pulls
+  commit subjects verbatim, so an entry can advertise an approach
+  that review replaced. Step 3 covers the check and rewrite.
 - **`version.txt`, `.release-please-manifest.json`, and
   `.claude-plugin/plugin.json` all move to the new version.** All
   three get touched by the bot — `plugin.json` is wired in via
@@ -80,7 +79,16 @@ Check:
   `CHANGELOG.md`, `version.txt`, `.release-please-manifest.json`,
   `.claude-plugin/plugin.json`.
 
-### 3. Merge the release PR (squash)
+### 3. Check CHANGELOG accuracy against what shipped
+
+Before merging, run the
+[`review-changelog`](../review-changelog/SKILL.md) skill against the
+open release PR. It compares each new bullet's subject to the source
+PR's merged diff and review discussion, flags divergences, and lands
+approved rewrites on the release-please branch under the bot identity.
+Silent no-op when nothing diverges — safe to run every time.
+
+### 4. Merge the release PR (squash)
 
 Squash-merge from the GitHub UI. Linear history is required.
 
@@ -92,7 +100,7 @@ On merge, release-please runs the release step:
   `chore(main): release <next>` but empty until the next `feat:`/
   `fix:` lands).
 
-### 4. Verify the release landed
+### 5. Verify the release landed
 
 ```bash
 # Tag exists and is annotated:
@@ -107,7 +115,7 @@ gh run list --repo tinyhat-ai/tinyhat --workflow Release --limit 3
 
 If any step shows an error, jump to **Rollback** below.
 
-### 5. Smoke-test the published plugin
+### 6. Smoke-test the published plugin
 
 In a clean Claude Code session:
 
@@ -156,7 +164,7 @@ Steps:
 7. Create the GitHub release:
    `gh release create v<version> --repo tinyhat-ai/tinyhat --notes-file
    <(awk '/^## /{if(found)exit; found=1}found' CHANGELOG.md | tail -n +2)`.
-8. Smoke-test per the Normal-flow step 5.
+8. Smoke-test per the Normal-flow step 6.
 
 ## Rollback (a release is broken)
 
