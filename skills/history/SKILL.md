@@ -26,7 +26,7 @@ of Tinyhat that loaded this skill.
    - If the new path is missing but `${CLAUDE_PLUGIN_DATA}/latest/report.html` exists,
      regenerate the index without running a new audit:
      ```bash
-     python3 "${CLAUDE_SKILL_DIR}/../../scripts/render_report.py" --index-only
+     CLAUDE_PLUGIN_DATA="${CLAUDE_PLUGIN_DATA}" python3 "${CLAUDE_SKILL_DIR}/../../scripts/render_report.py" --index-only
      ```
    - If no reports exist at all, tell the user and hand off to
      `/tinyhat:audit` to create the first snapshot.

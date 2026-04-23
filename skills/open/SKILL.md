@@ -92,7 +92,7 @@ start "${CLAUDE_PLUGIN_DATA}/latest/report.html"       # Windows
 If unsure which OS, use Python's `webbrowser` module (cross-platform):
 
 ```bash
-python3 -c "import os, webbrowser, pathlib; webbrowser.open(pathlib.Path(os.environ['CLAUDE_PLUGIN_DATA'], 'latest', 'report.html').as_uri())"
+CLAUDE_PLUGIN_DATA="${CLAUDE_PLUGIN_DATA}" python3 -c "import os, webbrowser, pathlib; webbrowser.open(pathlib.Path(os.environ['CLAUDE_PLUGIN_DATA'], 'latest', 'report.html').as_uri())"
 ```
 
 3. In one short sentence, tell the user what they're looking at — the
