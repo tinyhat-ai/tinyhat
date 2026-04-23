@@ -9,6 +9,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/)
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 Pre-1.0, breaking changes bump the **minor** version, not major.
 
+## 1.0.0 (2026-04-23)
+
+
+### Features
+
+* v0 local scanner plugin + open-source scaffolding ([#2](https://github.com/tinyhat-ai/tinyhat/issues/2)) ([855ea2a](https://github.com/tinyhat-ai/tinyhat/commit/855ea2ad0aba048660c19d80ff02762bcd98d839))
+
 ## [Unreleased]
 
 ### Added
