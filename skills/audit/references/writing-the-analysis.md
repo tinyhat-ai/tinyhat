@@ -136,6 +136,48 @@ macOS-only."*
 - **Burying the lead.** The two pie charts and hero stats are already
   visible; your `what_stands_out` should add signal the charts can't.
 
+## Chat summary
+
+After the renderer finishes, you write a short summary in chat. That's
+the **terminal-first** default: most users read the summary and stop
+there, so it has to earn the room it takes up.
+
+### Shape
+
+Three short paragraphs. No headings, no bullet marathons.
+
+1. **Headline + top skills.** Literal installed/active numbers plus
+   the top 2–3 skills from `snapshot.top_skills`, backticked.
+2. **One standout.** Pick the single sharpest line from
+   `what_stands_out` — the one most likely to make the user lean in.
+   Not all of them, just one.
+3. **Full-report link.** A clickable `file://` URL to
+   `~/.claude/tinyhat/latest/report.html`, absolute path expanded.
+
+### Example
+
+> Scanned 121 installed skills, 14 active in the last 30 days. Top
+> skills: `plan-eng-review`, `plan-ceo-review`, `browse`.
+>
+> What stood out: planning-review skills made up 7 of 17 runs this
+> window — review prep is the strongest single pattern.
+>
+> Full report: `file:///Users/you/.claude/tinyhat/latest/report.html`
+
+### Rules
+
+- **Never re-run `gather_snapshot.py` to write this summary.** Read
+  what you already produced — `stats`, `top_skills`, and
+  `what_stands_out` are all in the snapshot and analysis JSON you just
+  wrote.
+- **Expand the `~/` to an absolute path** in the `file://` URL so it's
+  clickable in the terminal. `echo $HOME` if you need to.
+- **Don't add a fourth paragraph.** No "want me to open it?" follow-up
+  — a link is enough. If the user wants to dig in they'll say so.
+- **Skip the chat summary only when `--archive` is set without user
+  interaction** (the adaptive daily run) — it's background work;
+  surfacing it would be noise.
+
 ## How the rendering works
 
 `render_report.py` replaces template slots with snapshot facts and your
@@ -143,3 +185,9 @@ analysis strings. If a key in your analysis JSON is missing, the
 renderer falls back to a Python-derived default. That default is
 safe but generic — which is exactly what this skill is trying to avoid.
 Fill every field.
+
+The renderer also writes `snapshot.json` and `analysis.json` next to
+the HTML in both `latest/` and (when `--archive`) `archive/YYYY-MM-DD/`.
+Those two files are the durable view of everything you produced on
+this run — a follow-up turn (or `/tinyhat:open`) can answer questions
+about this audit by reading them instead of re-scanning.

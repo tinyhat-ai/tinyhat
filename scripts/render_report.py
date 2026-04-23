@@ -851,9 +851,13 @@ def main() -> int:
 
     md = render_markdown(snapshot, analysis)
     htmlout = render_html(snapshot, analysis)
+    snapshot_json = json.dumps(snapshot, indent=2, ensure_ascii=False) + "\n"
+    analysis_json = json.dumps(analysis, indent=2, ensure_ascii=False) + "\n"
 
     (latest_dir / "report.md").write_text(md, encoding="utf-8")
     (latest_dir / "report.html").write_text(htmlout, encoding="utf-8")
+    (latest_dir / "snapshot.json").write_text(snapshot_json, encoding="utf-8")
+    (latest_dir / "analysis.json").write_text(analysis_json, encoding="utf-8")
 
     today = datetime.now(timezone.utc).date().isoformat()
     (latest_dir / "run-stamp.txt").write_text(today + "\n", encoding="utf-8")
@@ -863,6 +867,8 @@ def main() -> int:
         archive_dir.mkdir(parents=True, exist_ok=True)
         (archive_dir / "report.md").write_text(md, encoding="utf-8")
         (archive_dir / "report.html").write_text(htmlout, encoding="utf-8")
+        (archive_dir / "snapshot.json").write_text(snapshot_json, encoding="utf-8")
+        (archive_dir / "analysis.json").write_text(analysis_json, encoding="utf-8")
         enforce_retention(home_root / "archive", keep=31)
 
     # Always regenerate the index so it reflects latest + archives.

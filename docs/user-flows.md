@@ -16,8 +16,8 @@ The first command registers the Tinyloop marketplace (this repo). The second ins
 
 | Slash command | What it does | Regenerates? |
 |---|---|:---:|
-| `/tinyhat:audit` | Scan → agent writes analysis → render report → open HTML | ✓ |
-| `/tinyhat:open` | Open the latest existing report in your browser | — |
+| `/tinyhat:audit` | Scan → agent writes analysis → render report → summarise in chat with a link | ✓ |
+| `/tinyhat:open` | Answer a question about the last audit from JSON, or open the HTML | — |
 | `/tinyhat:history` | Open the archive index listing every report on disk | — |
 | `/tinyhat:routine` | Manage the daily auto-run (status/on/off/where/clear) | — |
 
@@ -38,10 +38,16 @@ Any of these work:
 
 1. The agent runs `gather_snapshot.py`, which reads your local Claude transcripts and skill inventory and writes a structured JSON snapshot to the system temp directory.
 2. The agent reads that snapshot and writes its own editorial analysis — headline, what stands out, dormant commentary, recommendations, coverage caveats — into a second temp file.
-3. The agent runs `render_report.py`, which merges snapshot + analysis into `~/.claude/tinyhat/latest/report.html` and `report.md`.
-4. Your browser opens the HTML. The agent replies in chat with one sentence referencing one observation from the report.
+3. The agent runs `render_report.py`, which merges snapshot + analysis into `~/.claude/tinyhat/latest/report.{html,md}` and persists both `snapshot.json` and `analysis.json` next to them.
+4. The agent summarises the run in chat — two or three sentences with the headline numbers, top skills, one standout observation, and a clickable `file://` link to the full HTML. **Your browser does not open by default.** Pass `--open` (see below) if you prefer the HTML-first experience.
 
 **Typical run time:** 10–30 seconds. Most of it is the agent reasoning over your data, not Python.
+
+### Flags
+
+- **`/tinyhat:audit`** — default. Summarise in chat with a link; no browser.
+- **`/tinyhat:audit --open`** — also auto-open `report.html` at the end.
+- **`/tinyhat:audit --archive`** — also write a dated copy under `archive/YYYY-MM-DD/`. Implies no auto-open. The adaptive daily run uses this mode.
 
 ### The report layout
 
@@ -75,20 +81,25 @@ That writes an additional `~/.claude/tinyhat/archive/YYYY-MM-DD/` directory (cap
 
 ---
 
-## Flow 2 — Re-open the last report without regenerating
+## Flow 2 — Re-open the last report, or ask a question about it
 
-You already ran an audit today (or yesterday). You want to look at it again without paying the cost of another run.
+You already ran an audit today (or yesterday). You either want to see it again, or you have a specific question about what it said.
 
 ### How to trigger
 
 - **Slash:** `/tinyhat:open`
-- **Natural language:** *"Open my latest skill audit."* · *"Show me the last Tinyhat report."* · *"What did the skill audit say?"*
+- **Natural language:**
+  - To open the HTML: *"Open my latest skill audit."* · *"Show me the last Tinyhat report."*
+  - To ask a question: *"What did the skill audit say?"* · *"Remind me which skills are dormant."* · *"What did you recommend last time?"*
 
 ### What happens
 
-1. The agent checks `~/.claude/tinyhat/latest/report.html` exists.
-2. Opens it in your default browser — no Python runs, no agent reasoning.
-3. Replies with one sentence: which date the report is from.
+The agent reads your message and decides:
+
+- **Specific question** → reads `~/.claude/tinyhat/latest/analysis.json` and `snapshot.json` and answers in chat, citing real numbers and skill names from the saved audit. No browser, no regeneration.
+- **Vague / "open it"** → opens `~/.claude/tinyhat/latest/report.html` in your default browser and says one line about when it was generated.
+
+Neither path reruns `gather_snapshot.py`. The persisted JSONs are the source of truth until the next `/tinyhat:audit`.
 
 ### If there's no report yet
 
