@@ -17,7 +17,7 @@ A Claude Code plugin where a Python script gathers facts, the Claude agent write
 └────────────────────────┘   └──────────────────────┘   └─────────────────────────┘
                                                                      │
                                                                      ▼
-                                                         ~/.claude/tinyhat/
+                                                         ${CLAUDE_PLUGIN_DATA}/
                                                          ├── latest/
                                                          └── archive/YYYY-MM-DD/
                                                              └── index.html
@@ -38,16 +38,16 @@ The primary skill (`tinyhat:audit`). Its `SKILL.md` is the agent entry point —
 Templates live at `templates/`:
 
 - `report.html.tmpl` — the HTML layout with `{{SLOT}}` placeholders.
-- `report.md.tmpl` — the same report as markdown.
+- `report.md.tmpl` — the same report as markdown, optimized for terminal reading.
 - `report.css` — extracted stylesheet, inlined at render time.
 
 ### `skills/open/`
 
-Thin skill (`tinyhat:open`) — opens `~/.claude/tinyhat/latest/report.html`. No regeneration, no Python run. The point is to let the user revisit a report cheaply.
+Thin skill (`tinyhat:open`) — opens `${CLAUDE_PLUGIN_DATA}/latest/report.html`. No regeneration, no Python run. The point is to let the user revisit a report cheaply.
 
 ### `skills/history/`
 
-Thin skill (`tinyhat:history`) — opens `~/.claude/tinyhat/archive/index.html`. Also cheap, also no regeneration. Regenerates just the index page if it's stale or missing.
+Thin skill (`tinyhat:history`) — opens `${CLAUDE_PLUGIN_DATA}/archive/index.html`. Also cheap, also no regeneration. Regenerates just the index page if it's stale or missing.
 
 ### `scripts/gather_snapshot.py`
 
@@ -80,9 +80,10 @@ If `analysis.json` is missing, fills in sensible but generic defaults derived fr
 
 Responsibilities:
 - Renders `report.md` + `report.html`.
-- Writes `~/.claude/tinyhat/latest/{report.md, report.html, run-stamp.txt}`.
-- With `--archive`: also writes `~/.claude/tinyhat/archive/YYYY-MM-DD/` and prunes archive to ≤31 dirs.
-- Always regenerates `~/.claude/tinyhat/archive/index.html` so the history page stays consistent.
+- Writes `${CLAUDE_PLUGIN_DATA}/latest/{report.md, report.html, run-stamp.txt}`.
+- With `--archive`: also writes `${CLAUDE_PLUGIN_DATA}/archive/YYYY-MM-DD/` and prunes archive to ≤31 dirs.
+- Always regenerates `${CLAUDE_PLUGIN_DATA}/archive/index.html` so the history page stays consistent.
+- Builds the fallback `next_actions` list and the terminal-safe percentage strip used by `report.md`.
 - With `--open`: uses `webbrowser.open()` (cross-platform).
 - With `--index-only`: regenerates the index without re-rendering the report.
 
@@ -94,7 +95,7 @@ Responsibilities:
 
 State for the adaptive daily refresh:
 
-- `routine status` / `on` / `off` — reads/writes `~/.claude/tinyhat/routine.json`.
+- `routine status` / `on` / `off` — reads/writes `${CLAUDE_PLUGIN_DATA}/routine.json`.
 - `routine check` — exits 0 if a daily run **should** fire (enabled AND no run today). Exits non-zero otherwise. This is the trigger the main skill calls on every load.
 - `where` — prints the full set of paths.
 - `clear-archive` — removes every dated directory, keeps `latest/`.

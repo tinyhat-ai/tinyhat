@@ -37,6 +37,8 @@ from pathlib import Path
 from urllib.parse import quote
 from zoneinfo import ZoneInfo
 
+from tinyhat_paths import resolve_home_root
+
 
 def _local_tz() -> ZoneInfo | timezone:
     """Return the user's local timezone; fall back to system UTC offset."""
@@ -51,7 +53,6 @@ def _local_tz() -> ZoneInfo | timezone:
 
 PLUGIN_ROOT = Path(__file__).resolve().parent.parent
 TEMPLATE_DIR = PLUGIN_ROOT / "skills" / "audit" / "templates"
-DEFAULT_HOME_ROOT = Path.home() / ".claude" / "tinyhat"
 DEFAULT_SNAPSHOT_PATH = Path(tempfile.gettempdir()) / "tinyhat-snapshot.json"
 DEFAULT_ANALYSIS_PATH = Path(tempfile.gettempdir()) / "tinyhat-analysis.json"
 
@@ -73,6 +74,71 @@ def _format_compact(value: float) -> str:
     else:
         return f"{v:.0f}"
     return out.replace(".0B", "B").replace(".0M", "M").replace(".0k", "k")
+
+
+def _pct_int(part: int, total: int) -> int:
+    if total <= 0:
+        return 0
+    return int(round((100 * part) / total))
+
+
+def _ascii_bar(part: int, total: int, *, width: int = 28) -> str:
+    filled = 0 if total <= 0 else int(round(part / total * width))
+    filled = max(0, min(width, filled))
+    return "[" + ("#" * filled) + ("-" * (width - filled)) + "]"
+
+
+def _briefing_strip(snapshot: dict) -> str:
+    stats = snapshot["stats"]
+    skill_pct = _pct_int(stats["active_count"], stats["installed_count"])
+    session_pct = _pct_int(stats["sessions_with_skills"], stats["sessions_total"])
+    lines = [
+        "Skill utilization:    "
+        f"{_ascii_bar(stats['active_count'], stats['installed_count'])} "
+        f"{skill_pct:>3}%  {stats['active_count']} / {stats['installed_count']}",
+        "Sessions with skills: "
+        f"{_ascii_bar(stats['sessions_with_skills'], stats['sessions_total'])} "
+        f"{session_pct:>3}%  {stats['sessions_with_skills']} / {stats['sessions_total']}",
+    ]
+    return "\n".join(lines)
+
+
+def _load_routine_state(home_root: Path) -> dict:
+    routine_path = home_root / "routine.json"
+    state = {"enabled": True}
+    if routine_path.is_file():
+        try:
+            data = json.loads(routine_path.read_text(encoding="utf-8"))
+            if isinstance(data, dict):
+                state.update(data)
+        except (OSError, json.JSONDecodeError):
+            pass
+
+    run_stamp = home_root / "latest" / "run-stamp.txt"
+    last_run = ""
+    if run_stamp.is_file():
+        try:
+            last_run = run_stamp.read_text(encoding="utf-8").strip()
+        except OSError:
+            last_run = ""
+    return {"enabled": bool(state.get("enabled", True)), "last_run": last_run}
+
+
+def _confidence_rank(value: str | None) -> int:
+    return {"high": 3, "medium": 2, "low": 1}.get((value or "").lower(), 0)
+
+
+def _first_sentence(text: str, *, limit: int = 140) -> str:
+    clean = " ".join((text or "").split())
+    if not clean:
+        return ""
+    if clean.endswith((".", "!", "?")):
+        return clean
+    match = re.search(r"(?<=[.!?])\s", clean)
+    head = clean if not match else clean[: match.start()].strip()
+    if match or len(head) <= limit:
+        return head
+    return head[: limit - 3].rstrip() + "..."
 
 
 def _fallback_headline(snapshot: dict) -> str:
@@ -171,6 +237,103 @@ def _fallback_recommendations(snapshot: dict) -> list[dict]:
     return recs[:3]
 
 
+def _cleanup_action(snapshot: dict) -> dict | None:
+    dormant_by_origin = snapshot.get("dormant_by_origin", {})
+    if not dormant_by_origin:
+        return None
+
+    origin = (
+        "Plugin"
+        if dormant_by_origin.get("Plugin")
+        else max(dormant_by_origin.items(), key=lambda kv: len(kv[1]))[0]
+    )
+    names = dormant_by_origin.get(origin, [])
+    if not names:
+        return None
+
+    noun = "skill" if len(names) == 1 else "skills"
+    origin_label = origin.lower()
+    return {
+        "verb": "cleanup",
+        "label": f"Review the {len(names)} dormant {origin_label} {noun}",
+        "context": "They are the cleanest cleanup targets in this snapshot.",
+        "impact": "medium",
+    }
+
+
+def _draft_action(analysis: dict) -> dict | None:
+    recs = analysis.get("skill_recommendations") or []
+    if not recs:
+        return None
+
+    top = max(recs, key=lambda rec: _confidence_rank(rec.get("confidence")))
+    label = f"Draft `{top['name']}`"
+    context = _first_sentence(top.get("why") or top.get("headline") or "")
+    return {
+        "verb": "draft-skill",
+        "label": label,
+        "context": context or "It is the strongest candidate from this audit.",
+        "impact": top.get("confidence") or "medium",
+    }
+
+
+def _routine_action(home_root: Path, *, report_date: str) -> dict:
+    routine = _load_routine_state(home_root)
+    last_run = routine["last_run"] or report_date
+    if routine["enabled"]:
+        context = f"Currently on; last run {last_run}."
+    else:
+        context = f"Currently off; last successful run {last_run}. Turn it on if you want a daily snapshot."
+    return {
+        "verb": "routine",
+        "label": "Check the daily routine",
+        "context": context,
+        "impact": "medium",
+    }
+
+
+def _fallback_next_actions(
+    snapshot: dict, analysis: dict, *, home_root: Path, report_date: str
+) -> list[dict]:
+    actions: list[dict] = []
+
+    draft = _draft_action(analysis)
+    if draft:
+        actions.append(draft)
+
+    cleanup = _cleanup_action(snapshot)
+    if cleanup:
+        actions.append(cleanup)
+
+    actions.append(_routine_action(home_root, report_date=report_date))
+    actions.append(
+        {
+            "verb": "open-report",
+            "label": "Open the full HTML report",
+            "context": "The richer charts and session drill-downs live in the sibling `report.html`.",
+            "impact": None,
+        }
+    )
+    actions.append(
+        {
+            "verb": "defer",
+            "label": "Do nothing — check back tomorrow",
+            "context": "Useful if you only wanted the briefing.",
+            "impact": None,
+        }
+    )
+
+    deduped: list[dict] = []
+    seen_verbs: set[str] = set()
+    for action in actions:
+        verb = action.get("verb")
+        if not verb or verb in seen_verbs:
+            continue
+        seen_verbs.add(verb)
+        deduped.append(action)
+    return deduped[:5]
+
+
 def _fallback_dormant_commentary(snapshot: dict) -> str:
     s = snapshot["stats"]
     dormant = s["installed_count"] - s["active_count"]
@@ -210,7 +373,9 @@ def _fallback_coverage_note(snapshot: dict) -> str:
     return " ".join(parts)
 
 
-def analysis_with_fallbacks(snapshot: dict, analysis: dict | None) -> dict:
+def analysis_with_fallbacks(
+    snapshot: dict, analysis: dict | None, *, home_root: Path, report_date: str
+) -> dict:
     analysis = dict(analysis or {})
     analysis.setdefault("headline", _fallback_headline(snapshot))
     analysis.setdefault(
@@ -219,6 +384,15 @@ def analysis_with_fallbacks(snapshot: dict, analysis: dict | None) -> dict:
     analysis.setdefault("what_stands_out", _fallback_standouts(snapshot))
     analysis.setdefault("dormant_commentary", _fallback_dormant_commentary(snapshot))
     analysis.setdefault("skill_recommendations", _fallback_recommendations(snapshot))
+    analysis.setdefault(
+        "next_actions",
+        _fallback_next_actions(
+            snapshot,
+            analysis,
+            home_root=home_root,
+            report_date=report_date,
+        ),
+    )
     analysis.setdefault("coverage_note", _fallback_coverage_note(snapshot))
     return analysis
 
@@ -228,43 +402,60 @@ def analysis_with_fallbacks(snapshot: dict, analysis: dict | None) -> dict:
 # ---------------------------------------------------------------------------
 
 
-def _md_table_rows(rows: list[list[str]]) -> str:
-    return "\n".join("| " + " | ".join(r) + " |" for r in rows)
+def _markdown_action_lines(actions: list[dict]) -> str:
+    lines = []
+    for idx, action in enumerate(actions, 1):
+        context = action.get("context")
+        line = f"{idx}. {action['label']}"
+        if context:
+            line += f": {context}"
+        lines.append(line)
+    return "\n".join(lines)
 
 
 def render_markdown(snapshot: dict, analysis: dict) -> str:
     tpl = (TEMPLATE_DIR / "report.md.tmpl").read_text(encoding="utf-8")
-    s = snapshot["stats"]
+    stats = snapshot["stats"]
     meta = snapshot["meta"]
 
     generated = datetime.fromisoformat(meta["generated_at"].replace("Z", "+00:00"))
     window_label = f"last {meta['window_days']} days"
+    briefing_strip = _briefing_strip(snapshot)
 
     standouts = (
         "\n".join(f"- {line}" for line in analysis["what_stands_out"]) or "- (no observations)"
     )
 
-    top_rows: list[list[str]] = []
-    for s_row in snapshot.get("top_skills", [])[:6]:
-        summary = s_row["summary"] or "No short description found in the local skill file."
-        top_rows.append(
-            [
-                f"`{s_row['skill']}`",
-                summary.replace("|", "\\|"),
-                str(s_row["runs"]),
-                s_row["last_used"] or "—",
-            ]
-        )
-    top_skills_table = _md_table_rows(top_rows) if top_rows else "| (no active skills) |  |  |  |"
+    next_actions_md = _markdown_action_lines(analysis["next_actions"])
 
-    unused_count = s["installed_count"] - s["active_count"]
-    unused_pct = int(100 * unused_count / s["installed_count"]) if s["installed_count"] else 0
-    dormant_rows: list[list[str]] = []
+    snapshot_md = "\n".join(
+        [
+            f"- Installed skills: {stats['installed_count']}",
+            f"- Active skills: {stats['active_count']}",
+            f"- Skill runs detected: {stats['skill_runs_total']}",
+            f"- Recent sessions scanned: {stats['sessions_total']}",
+            f"- Sessions with skills: {stats['sessions_with_skills']}",
+            f"- Turns scanned: {stats['turns_total']:,}",
+            f"- Token activity (incl. cache): {stats['tokens_total_compact']}",
+        ]
+    )
+
+    top_skill_lines = []
+    for idx, row in enumerate(snapshot.get("top_skills", [])[:6], 1):
+        summary = row["summary"] or "No short description found in the local skill file."
+        top_skill_lines.append(
+            f"{idx}. `{row['skill']}` — {row['runs']} runs, last used {row['last_used'] or '—'}. {summary}"
+        )
+    top_skills_md = "\n".join(top_skill_lines) or "- No active skills in this window."
+
+    unused_count = stats["installed_count"] - stats["active_count"]
+    unused_pct = _pct_int(unused_count, stats["installed_count"])
+    dormant_origin_lines = []
     for origin, names in sorted(
         snapshot.get("dormant_by_origin", {}).items(), key=lambda kv: -len(kv[1])
     ):
-        dormant_rows.append([origin, str(len(names))])
-    dormant_table = _md_table_rows(dormant_rows) if dormant_rows else "| (none) | 0 |"
+        dormant_origin_lines.append(f"- {origin}: {len(names)}")
+    dormant_origins_md = "\n".join(dormant_origin_lines) or "- (none)"
 
     rec_lines = []
     for rec in analysis["skill_recommendations"]:
@@ -277,22 +468,20 @@ def render_markdown(snapshot: dict, analysis: dict) -> str:
 
     out = tpl
     substitutions = {
+        "BRIEFING_STRIP": briefing_strip,
         "WINDOW_LABEL": window_label,
         "GENERATED_AT": generated.strftime("%Y-%m-%d %H:%M UTC"),
         "HEADLINE": analysis["headline"],
-        "INSTALLED_COUNT": s["installed_count"],
-        "ACTIVE_COUNT": s["active_count"],
-        "SKILL_RUNS_TOTAL": s["skill_runs_total"],
-        "SESSIONS_TOTAL": s["sessions_total"],
-        "SESSIONS_WITH_SKILLS": s["sessions_with_skills"],
-        "TURNS_TOTAL": f"{s['turns_total']:,}",
-        "TOKENS_TOTAL_COMPACT": s["tokens_total_compact"],
+        "HEADLINE_SUB": analysis.get("headline_sub", ""),
+        "NEXT_ACTIONS_MD": next_actions_md,
+        "SNAPSHOT_MD": snapshot_md,
         "STANDOUTS_MD": standouts,
-        "TOP_SKILLS_TABLE": top_skills_table,
+        "TOP_SKILLS_MD": top_skills_md,
+        "INSTALLED_COUNT": stats["installed_count"],
         "UNUSED_COUNT": unused_count,
         "UNUSED_PCT": unused_pct,
         "DORMANT_COMMENTARY": analysis["dormant_commentary"],
-        "DORMANT_TABLE": dormant_table,
+        "DORMANT_ORIGINS_MD": dormant_origins_md,
         "RECOMMENDATIONS_MD": recommendations_md,
         "COVERAGE_MD": coverage_md,
     }
@@ -394,6 +583,29 @@ def _origin_slug(origin: str) -> str:
     return re.sub(r"[^a-z0-9]+", "-", origin.lower()).strip("-") or "group"
 
 
+def _html_next_action_label(action: dict) -> str:
+    if action.get("verb") == "open-report":
+        return "Switch to data-junkie mode"
+    return action["label"]
+
+
+def _html_next_action_context(action: dict) -> str:
+    if action.get("verb") == "open-report":
+        return "Charts, filters, and session drill-downs are below."
+    return action.get("context") or ""
+
+
+def _html_inline_code(text: str) -> str:
+    parts = re.split(r"`([^`]+)`", text or "")
+    out = []
+    for idx, part in enumerate(parts):
+        if idx % 2 == 1:
+            out.append(f"<code>{html.escape(part)}</code>")
+        else:
+            out.append(html.escape(part))
+    return "".join(out)
+
+
 def render_html(snapshot: dict, analysis: dict) -> str:
     tpl = (TEMPLATE_DIR / "report.html.tmpl").read_text(encoding="utf-8")
     # Inline CSS from sibling file so edits don't require touching a
@@ -418,6 +630,15 @@ def render_html(snapshot: dict, analysis: dict) -> str:
     standouts_html = "\n".join(
         f"<li>{html.escape(item)}</li>" for item in analysis["what_stands_out"]
     )
+
+    next_actions_html = []
+    for action in analysis["next_actions"]:
+        label = _html_next_action_label(action)
+        context = _html_next_action_context(action)
+        body = f'<span class="next-action-label">{_html_inline_code(label)}</span>'
+        if context:
+            body += f'<span class="next-action-context">{_html_inline_code(context)}</span>'
+        next_actions_html.append(f"<li>{body}</li>")
 
     # Recommendation cards
     rec_cards = []
@@ -665,6 +886,7 @@ def render_html(snapshot: dict, analysis: dict) -> str:
         "FEEDBACK_SUBJECT": feedback_subject_base,
         "HEADLINE": analysis["headline"],
         "HEADLINE_SUB": analysis.get("headline_sub", ""),
+        "NEXT_ACTIONS_HTML": "\n".join(next_actions_html),
         "INSTALLED_COUNT": installed,
         "ACTIVE_COUNT": active,
         "SKILL_RUNS_TOTAL": s["skill_runs_total"],
@@ -801,8 +1023,8 @@ def main() -> int:
     parser.add_argument("--analysis", default=str(DEFAULT_ANALYSIS_PATH))
     parser.add_argument(
         "--home-root",
-        default=str(DEFAULT_HOME_ROOT),
-        help="Root directory for Tinyhat output (default: ~/.claude/tinyhat)",
+        default=None,
+        help="Root directory for Tinyhat output (default: Claude plugin data directory)",
     )
     parser.add_argument(
         "--archive",
@@ -817,8 +1039,10 @@ def main() -> int:
     )
     args = parser.parse_args()
 
+    home_root = resolve_home_root(args.home_root)
+    report_date = datetime.now(_local_tz()).date().isoformat()
+
     if args.index_only:
-        home_root = Path(args.home_root).expanduser()
         (home_root / "archive").mkdir(parents=True, exist_ok=True)
         (home_root / "archive" / "index.html").write_text(render_index(home_root), encoding="utf-8")
         print(f"Wrote {home_root / 'archive' / 'index.html'}", file=sys.stderr)
@@ -843,9 +1067,13 @@ def main() -> int:
                 f"warn: analysis JSON at {analysis_path} is invalid ({exc}); using fallbacks.",
                 file=sys.stderr,
             )
-    analysis = analysis_with_fallbacks(snapshot, analysis_raw)
+    analysis = analysis_with_fallbacks(
+        snapshot,
+        analysis_raw,
+        home_root=home_root,
+        report_date=report_date,
+    )
 
-    home_root = Path(args.home_root).expanduser()
     latest_dir = home_root / "latest"
     latest_dir.mkdir(parents=True, exist_ok=True)
 
@@ -859,7 +1087,7 @@ def main() -> int:
     (latest_dir / "snapshot.json").write_text(snapshot_json, encoding="utf-8")
     (latest_dir / "analysis.json").write_text(analysis_json, encoding="utf-8")
 
-    today = datetime.now(timezone.utc).date().isoformat()
+    today = report_date
     (latest_dir / "run-stamp.txt").write_text(today + "\n", encoding="utf-8")
 
     if args.archive:

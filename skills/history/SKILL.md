@@ -5,9 +5,13 @@ allowed-tools: Bash(open *) Bash(xdg-open *) Bash(start *) Bash(python3 *) Read
 
 # tinyhat:history — browse all skill-audit reports
 
-Open `~/.claude/tinyhat/archive/index.html`. That page lists the
+Open `${CLAUDE_PLUGIN_DATA}/archive/index.html`. That page lists the
 latest report plus every dated archive snapshot (up to 31) with
 one-click links. Each entry opens its own `report.html`.
+
+If the new plugin-data path is empty but the legacy path
+`~/.claude/tinyhat/archive/index.html` exists, use the legacy path for
+this browse. The next write-capable Tinyhat command will migrate it.
 
 ## Skill-relative script path
 
@@ -17,8 +21,9 @@ of Tinyhat that loaded this skill.
 
 ## Flow
 
-1. Check whether `~/.claude/tinyhat/archive/index.html` exists.
-   - If missing but `~/.claude/tinyhat/latest/report.html` exists,
+1. Check whether `${CLAUDE_PLUGIN_DATA}/archive/index.html` exists.
+   - If it doesn't, check `~/.claude/tinyhat/archive/index.html`.
+   - If the new path is missing but `${CLAUDE_PLUGIN_DATA}/latest/report.html` exists,
      regenerate the index without running a new audit:
      ```bash
      python3 "${CLAUDE_SKILL_DIR}/../../scripts/render_report.py" --index-only
@@ -28,9 +33,9 @@ of Tinyhat that loaded this skill.
 2. Open the index:
 
 ```bash
-open ~/.claude/tinyhat/archive/index.html        # macOS
-xdg-open ~/.claude/tinyhat/archive/index.html    # Linux
-start ~/.claude/tinyhat/archive/index.html       # Windows
+open "${CLAUDE_PLUGIN_DATA}/archive/index.html"        # macOS
+xdg-open "${CLAUDE_PLUGIN_DATA}/archive/index.html"    # Linux
+start "${CLAUDE_PLUGIN_DATA}/archive/index.html"       # Windows
 ```
 
 3. In one sentence, note how many dated snapshots are listed.

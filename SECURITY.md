@@ -61,7 +61,7 @@ In scope for this policy:
   example).
 - Attribution logic that could mis-credit skills.
 - Any path-traversal or file-overwrite concern with the artifacts Tinyhat
-  writes under `~/.claude/tinyhat/`.
+  writes under Claude Code's plugin-data directory (`${CLAUDE_PLUGIN_DATA}` when invoked inside Claude Code).
 
 Out of scope:
 

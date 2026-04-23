@@ -27,6 +27,15 @@ Inside Claude Code, add the Tinyloop marketplace and install the plugin from it:
 
 The first line registers Tinyloop's marketplace (this repo doubles as its own marketplace). The second installs the `tinyhat` plugin from it. After this, `/plugin marketplace update tinyloop` pulls newer versions.
 
+If `/plugin update tinyhat@tinyloop` appears to leave Tinyhat on old
+code, reinstall cleanly:
+
+```text
+/plugin remove tinyhat@tinyloop
+/plugin install tinyhat@tinyloop
+/reload-plugins
+```
+
 Requires Python 3.9+ on your `PATH` (pre-installed on macOS and most Linux).
 
 ## Usage
@@ -38,7 +47,14 @@ Ask in plain English or use a slash command:
 - **Browse history:** *"Show my skill-audit history."* · `/tinyhat:history`
 - **Manage the daily routine:** *"Turn off tinyhat's daily run."* · `/tinyhat:routine status|on|off|where|clear`
 
-Output lives at `~/.claude/tinyhat/latest/report.html`. For every flow, trigger, and sub-command, see [`docs/user-flows.md`](docs/user-flows.md).
+Tinyhat writes under Claude Code's per-plugin data directory. For a
+marketplace install of `tinyhat@tinyloop`, the latest HTML typically
+lands at `~/.claude/plugins/data/tinyhat-tinyloop/latest/report.html`.
+If you're upgrading from an older Tinyhat, the next write-capable run
+automatically migrates data from the legacy `~/.claude/tinyhat/`
+directory.
+For every flow, trigger, and sub-command, see
+[`docs/user-flows.md`](docs/user-flows.md).
 
 ## Documentation
 

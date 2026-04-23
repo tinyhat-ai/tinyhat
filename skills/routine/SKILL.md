@@ -9,7 +9,7 @@ allowed-tools: Bash(python3 *) Read
 All routine-related admin: check whether the adaptive daily auto-run
 is on, toggle it, print the paths Tinyhat reads and writes, or wipe
 the dated-archive directory. State lives in
-`~/.claude/tinyhat/routine.json`.
+`${CLAUDE_PLUGIN_DATA}/routine.json`.
 
 ## Sub-commands (dispatch on `$ARGUMENTS`)
 
@@ -57,7 +57,7 @@ python3 "${CLAUDE_SKILL_DIR}/../../scripts/routine.py" where
 
 Prints the list of sources Tinyhat reads (transcripts, inventory,
 optional telemetry) and the paths it writes (under
-`~/.claude/tinyhat/`). Use this when a user asks where their data is
+`${CLAUDE_PLUGIN_DATA}/`). Use this when a user asks where their data is
 or wants to tail a file.
 
 ### clear

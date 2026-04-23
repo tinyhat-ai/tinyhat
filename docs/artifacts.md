@@ -1,21 +1,31 @@
 # Artifacts — everything Tinyhat writes to your machine
 
-Tinyhat is local-only and read-only against Claude's data. It writes files to **exactly one directory** plus transient temp files. Everything under these paths is safe to delete — the plugin recreates it on next run.
+Tinyhat is local-only and read-only against Claude's data. It writes
+files to **exactly one directory** plus transient temp files.
+Inside Claude Code, that directory is `${CLAUDE_PLUGIN_DATA}`. For a
+marketplace install of `tinyhat@tinyloop`, that usually resolves to
+`~/.claude/plugins/data/tinyhat-tinyloop/`. Everything under these
+paths is safe to delete — the plugin recreates it on next run.
+In plain-shell examples below, replace `${CLAUDE_PLUGIN_DATA}` with the
+resolved path if your shell does not already have that variable set.
+Older Tinyhat builds wrote to `~/.claude/tinyhat/`; the next
+write-capable command now migrates that legacy directory into the
+plugin-data path automatically.
 
 ## Quick reference
 
 | Path | What's there | When it's written |
 |---|---|---|
-| `~/.claude/tinyhat/routine.json` | Adaptive-daily on/off + install timestamp | On first run; overwritten on `/tinyhat:audit routine on|off` |
-| `~/.claude/tinyhat/latest/report.html` | Latest report, self-contained HTML | Every `/tinyhat:audit` run |
-| `~/.claude/tinyhat/latest/report.md` | Latest report, markdown mirror | Every `/tinyhat:audit` run |
-| `~/.claude/tinyhat/latest/snapshot.json` | Durable data snapshot — the facts | Every `/tinyhat:audit` run |
-| `~/.claude/tinyhat/latest/analysis.json` | Durable agent analysis — the editorial layer | Every `/tinyhat:audit` run |
-| `~/.claude/tinyhat/latest/run-stamp.txt` | ISO local-date of last successful run | Every `/tinyhat:audit` run |
-| `~/.claude/tinyhat/archive/YYYY-MM-DD/report.{html,md}` | Dated snapshot | When `--archive` is passed or the adaptive daily fires |
-| `~/.claude/tinyhat/archive/YYYY-MM-DD/{snapshot,analysis}.json` | Dated JSONs alongside the HTML/MD | When `--archive` is passed or the adaptive daily fires |
-| `~/.claude/tinyhat/archive/index.html` | Browseable index of latest + all archives | Every render call |
-| `~/.claude/tinyhat/feedback.jsonl` | Optional local feedback log (reserved) | Never in v0 (feedback goes via `mailto:`) |
+| `${CLAUDE_PLUGIN_DATA}/routine.json` | Adaptive-daily on/off + install timestamp | On first run; overwritten on `/tinyhat:audit routine on|off` |
+| `${CLAUDE_PLUGIN_DATA}/latest/report.html` | Latest report, self-contained HTML | Every `/tinyhat:audit` run |
+| `${CLAUDE_PLUGIN_DATA}/latest/report.md` | Latest report, markdown mirror | Every `/tinyhat:audit` run |
+| `${CLAUDE_PLUGIN_DATA}/latest/snapshot.json` | Durable data snapshot — the facts | Every `/tinyhat:audit` run |
+| `${CLAUDE_PLUGIN_DATA}/latest/analysis.json` | Durable agent analysis — the editorial layer | Every `/tinyhat:audit` run |
+| `${CLAUDE_PLUGIN_DATA}/latest/run-stamp.txt` | ISO local-date of last successful run | Every `/tinyhat:audit` run |
+| `${CLAUDE_PLUGIN_DATA}/archive/YYYY-MM-DD/report.{html,md}` | Dated snapshot | When `--archive` is passed or the adaptive daily fires |
+| `${CLAUDE_PLUGIN_DATA}/archive/YYYY-MM-DD/{snapshot,analysis}.json` | Dated JSONs alongside the HTML/MD | When `--archive` is passed or the adaptive daily fires |
+| `${CLAUDE_PLUGIN_DATA}/archive/index.html` | Browseable index of latest + all archives | Every render call |
+| `${CLAUDE_PLUGIN_DATA}/feedback.jsonl` | Optional local feedback log (reserved) | Never in v0 (feedback goes via `mailto:`) |
 | `<tempdir>/tinyhat-snapshot.json` | Transient mirror of latest/snapshot.json (pipeline hand-off) | Every `gather_snapshot.py` call |
 | `<tempdir>/tinyhat-analysis.json` | Transient mirror of latest/analysis.json (pipeline hand-off) | Every `/tinyhat:audit` run |
 
@@ -27,7 +37,7 @@ Tinyhat is local-only and read-only against Claude's data. It writes files to **
 ## Directory layout
 
 ```
-~/.claude/tinyhat/
+${CLAUDE_PLUGIN_DATA}/            (e.g. ~/.claude/plugins/data/tinyhat-tinyloop/)
 ├── routine.json
 ├── latest/
 │   ├── report.html         ← open this to see the most recent report
@@ -52,9 +62,9 @@ Tinyhat is local-only and read-only against Claude's data. It writes files to **
 ### The latest report
 
 ```bash
-open ~/.claude/tinyhat/latest/report.html        # macOS
-xdg-open ~/.claude/tinyhat/latest/report.html    # Linux
-start ~/.claude/tinyhat/latest/report.html       # Windows
+open "${CLAUDE_PLUGIN_DATA}/latest/report.html"        # macOS
+xdg-open "${CLAUDE_PLUGIN_DATA}/latest/report.html"    # Linux
+start "${CLAUDE_PLUGIN_DATA}/latest/report.html"       # Windows
 ```
 
 Or inside Claude Code: `/tinyhat:open`.
@@ -62,7 +72,7 @@ Or inside Claude Code: `/tinyhat:open`.
 ### The archive index (browse history)
 
 ```bash
-open ~/.claude/tinyhat/archive/index.html
+open "${CLAUDE_PLUGIN_DATA}/archive/index.html"
 ```
 
 Or inside Claude Code: `/tinyhat:history`.
@@ -70,7 +80,7 @@ Or inside Claude Code: `/tinyhat:history`.
 ### A specific dated snapshot
 
 ```bash
-open ~/.claude/tinyhat/archive/2026-04-23/report.html
+open "${CLAUDE_PLUGIN_DATA}/archive/2026-04-23/report.html"
 ```
 
 The index page links to every dated snapshot — easier than typing.
@@ -78,14 +88,14 @@ The index page links to every dated snapshot — easier than typing.
 ### The markdown mirror (if you want to paste into a doc)
 
 ```bash
-cat ~/.claude/tinyhat/latest/report.md
+cat "${CLAUDE_PLUGIN_DATA}/latest/report.md"
 ```
 
 ### The routine state
 
 ```bash
-cat ~/.claude/tinyhat/routine.json
-cat ~/.claude/tinyhat/latest/run-stamp.txt
+cat "${CLAUDE_PLUGIN_DATA}/routine.json"
+cat "${CLAUDE_PLUGIN_DATA}/latest/run-stamp.txt"
 ```
 
 Or inside Claude Code: `/tinyhat:audit routine status`.
@@ -93,7 +103,7 @@ Or inside Claude Code: `/tinyhat:audit routine status`.
 ### The durable snapshot JSON (the facts)
 
 ```bash
-cat ~/.claude/tinyhat/latest/snapshot.json
+cat "${CLAUDE_PLUGIN_DATA}/latest/snapshot.json"
 ```
 
 Top-level keys: `meta`, `stats`, `inventory`, `top_skills`, `skill_counts`, `last_seen`, `sessions`, `events`, `events_audit`, `tool_totals`, `aggregate_tools`, `daily_rollups`, `dormant_by_origin`, `installed_by_origin`, `surface_rollups`, `coverage`. See [development.md](local-development.md) for the shape.
@@ -103,24 +113,24 @@ The transient mirror at `<tempdir>/tinyhat-snapshot.json` is the same data — i
 ### The agent-authored analysis JSON (the editorial layer)
 
 ```bash
-cat ~/.claude/tinyhat/latest/analysis.json
+cat "${CLAUDE_PLUGIN_DATA}/latest/analysis.json"
 ```
 
-Shape: `headline`, `headline_sub`, `what_stands_out[]`, `dormant_commentary`, `skill_recommendations[]`, `coverage_note`. Schema details in [`skills/audit/references/writing-the-analysis.md`](../skills/audit/references/writing-the-analysis.md).
+Shape: `headline`, `headline_sub`, `what_stands_out[]`, `dormant_commentary`, `skill_recommendations[]`, `next_actions[]`, `coverage_note`. Schema details in [`skills/audit/references/writing-the-analysis.md`](../skills/audit/references/writing-the-analysis.md).
 
 Same story as snapshot.json — there's a transient mirror under `<tempdir>/tinyhat-analysis.json`, but `latest/analysis.json` is the durable copy a follow-up question will read from.
 
 ## Retention
 
-- `~/.claude/tinyhat/latest/` — always overwritten by the most recent run.
-- `~/.claude/tinyhat/archive/` — keeps at most **31** dated directories. On every archive write, oldest directories are pruned. The index page always reflects what's currently on disk.
+- `${CLAUDE_PLUGIN_DATA}/latest/` — always overwritten by the most recent run.
+- `${CLAUDE_PLUGIN_DATA}/archive/` — keeps at most **31** dated directories. On every archive write, oldest directories are pruned. The index page always reflects what's currently on disk.
 
 ## Reset everything
 
 If you want a clean slate:
 
 ```bash
-rm -rf ~/.claude/tinyhat
+rm -rf ~/.claude/plugins/data/tinyhat-tinyloop
 rm -f "$(python3 -c 'import tempfile; print(tempfile.gettempdir())')"/tinyhat-*.json
 ```
 
@@ -130,7 +140,7 @@ Or, less destructive — just clear the dated archives:
 
 - `/tinyhat:audit clear-archive`
 
-That removes every dir under `archive/` but keeps `latest/` and `routine.json`.
+That removes every dir under `${CLAUDE_PLUGIN_DATA}/archive/` but keeps `latest/` and `routine.json`.
 
 ## What Tinyhat **reads** (never writes)
 

@@ -54,8 +54,8 @@ Audit my skills.
 The agent will:
 1. Run `gather_snapshot.py` → writes `<tempdir>/tinyhat-snapshot.json`.
 2. Read the snapshot and write `<tempdir>/tinyhat-analysis.json` — this is the editorial layer. Watch its reasoning; that's where Tinyhat earns its keep.
-3. Run `render_report.py --archive --open`.
-4. Your browser should open `~/.claude/tinyhat/latest/report.html`.
+3. Run `render_report.py --archive`.
+4. The report lands under Tinyhat's plugin-data root (script-only default: `~/.claude/plugins/data/tinyhat/latest/report.html`).
 
 **What to judge on the report:**
 - Headline: *"You have N skills installed. You used M of them in the last 30 days."* — are N and M correct to your gut?
@@ -72,7 +72,7 @@ The agent will:
 /tinyhat:open
 ```
 
-Should open the existing `~/.claude/tinyhat/latest/report.html` in your browser — no Python run.
+Should open the existing `~/.claude/plugins/data/tinyhat/latest/report.html` in your browser — no Python run.
 
 **Browse the archive:**
 
@@ -80,7 +80,7 @@ Should open the existing `~/.claude/tinyhat/latest/report.html` in your browser 
 /tinyhat:history
 ```
 
-Should open `~/.claude/tinyhat/archive/index.html`. One entry per day you've run the audit, up to 31. The header inside each report has an `all reports →` link that returns to this index.
+Should open `~/.claude/plugins/data/tinyhat/archive/index.html`. One entry per day you've run the audit, up to 31. The header inside each report has an `all reports →` link that returns to this index.
 
 **Check / toggle the adaptive daily routine:**
 
@@ -112,14 +112,14 @@ Tinyhat's state is two things: the output directory and the temp files.
 
 ```bash
 # Wipe everything the plugin has written:
-rm -rf ~/.claude/tinyhat
+rm -rf ~/.claude/plugins/data/tinyhat
 
 # Wipe the transient snapshot + analysis so the next run starts clean:
 rm -f "$(python3 -c 'import tempfile; print(tempfile.gettempdir())')/tinyhat-snapshot.json"
 rm -f "$(python3 -c 'import tempfile; print(tempfile.gettempdir())')/tinyhat-analysis.json"
 ```
 
-The plugin recreates `~/.claude/tinyhat/` on the next run. Nothing else on your system is touched.
+The plugin recreates `~/.claude/plugins/data/tinyhat/` on the next run. Nothing else on your system is touched.
 
 ---
 
@@ -139,12 +139,11 @@ python3 scripts/gather_snapshot.py
 # that produce a generic-but-useful analysis. Only the agent should write
 # non-generic analysis.
 
-# Render the report and open the HTML:
-python3 scripts/render_report.py --archive --open
-# → writes ~/.claude/tinyhat/latest/report.{md,html}
-# → writes ~/.claude/tinyhat/archive/YYYY-MM-DD/
-# → regenerates ~/.claude/tinyhat/archive/index.html
-# → opens the HTML in your default browser
+# Render the report:
+python3 scripts/render_report.py --archive
+# → writes ~/.claude/plugins/data/tinyhat/latest/report.{md,html}
+# → writes ~/.claude/plugins/data/tinyhat/archive/YYYY-MM-DD/
+# → regenerates ~/.claude/plugins/data/tinyhat/archive/index.html
 ```
 
 ### Just re-render without re-gathering
@@ -152,7 +151,7 @@ python3 scripts/render_report.py --archive --open
 If you've edited CSS or the template, keep the snapshot and just re-render:
 
 ```bash
-python3 scripts/render_report.py --open
+python3 scripts/render_report.py
 ```
 
 That reuses `<tempdir>/tinyhat-snapshot.json` from the previous gather run.
@@ -161,7 +160,7 @@ That reuses `<tempdir>/tinyhat-snapshot.json` from the previous gather run.
 
 ```bash
 python3 scripts/render_report.py --index-only
-open ~/.claude/tinyhat/archive/index.html
+open ~/.claude/plugins/data/tinyhat/archive/index.html
 ```
 
 ### Test a custom analysis JSON
@@ -196,7 +195,7 @@ python3 scripts/routine.py where
 python3 scripts/routine.py clear-archive
 ```
 
-All of these accept `--home-root /some/path` if you want to test against a throwaway location instead of `~/.claude/tinyhat/`:
+All of these accept `--home-root /some/path` if you want to test against a throwaway location instead of `~/.claude/plugins/data/tinyhat/`:
 
 ```bash
 python3 scripts/routine.py --home-root /tmp/tinyhat-test status
@@ -252,7 +251,7 @@ python3 -c 'import tempfile; print(tempfile.gettempdir())'
 
 ## 5. Before opening a PR
 
-1. Run `/tinyhat:audit` and confirm the report opens without template errors.
+1. Run `/tinyhat:audit` and confirm the report renders without template errors and the terminal briefing looks sane.
 2. Run `/tinyhat:open` and confirm no regeneration happens.
 3. Run `/tinyhat:history` and confirm the index lists today's snapshot.
 4. Confirm the report-header `all reports →` link takes you back to the index, and each index entry re-opens its report.

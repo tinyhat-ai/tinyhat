@@ -14,6 +14,9 @@ Inside any Claude Code session:
 
 The first command registers the Tinyloop marketplace (this repo). The second installs the `tinyhat` plugin from it. After install, four skills register under the `tinyhat:` namespace:
 
+If a later `/plugin update tinyhat@tinyloop` looks stale, remove and
+reinstall the plugin, then run `/reload-plugins`.
+
 | Slash command | What it does | Regenerates? |
 |---|---|:---:|
 | `/tinyhat:audit` | Scan → agent writes analysis → render report → summarise in chat with a link | ✓ |
@@ -37,9 +40,10 @@ Any of these work:
 ### What happens
 
 1. The agent runs `gather_snapshot.py`, which reads your local Claude transcripts and skill inventory and writes a structured JSON snapshot to the system temp directory.
-2. The agent reads that snapshot and writes its own editorial analysis — headline, what stands out, dormant commentary, recommendations, coverage caveats — into a second temp file.
-3. The agent runs `render_report.py`, which merges snapshot + analysis into `~/.claude/tinyhat/latest/report.{html,md}` and persists both `snapshot.json` and `analysis.json` next to them.
-4. The agent summarises the run in chat — two or three sentences with the headline numbers, top skills, one standout observation, and a clickable `file://` link to the full HTML. **Your browser does not open by default.** Pass `--open` (see below) if you prefer the HTML-first experience.
+2. The agent reads that snapshot and writes its own editorial analysis — headline, what stands out, dormant commentary, recommendations, next-actions, coverage caveats — into a second temp file.
+3. The agent runs `render_report.py`, which merges snapshot + analysis into Tinyhat's plugin-data directory (for example `~/.claude/plugins/data/tinyhat-tinyloop/latest/report.{html,md}`) and persists both `snapshot.json` and `analysis.json` next to them.
+4. The agent replies in chat with a compact two-line percentage strip, one short headline sentence, and a numbered "pick a next step" menu. **Your browser does not open by default.** Pass `--open` (see below) if you prefer the HTML-first experience, or pick the open-report item from the menu.
+5. If you want the richer charts and drill-downs, choose the "open the full HTML report" action or ask for `/tinyhat:open`.
 
 **Typical run time:** 10–30 seconds. Most of it is the agent reasoning over your data, not Python.
 
@@ -54,6 +58,7 @@ Any of these work:
 Above-the-fold (Keep-it-simple mode, default):
 
 - **Two doughnut charts** — skill utilization %, sessions-with-skills %.
+- **Next-step menu** — compact numbered actions grounded in this run.
 - **Headline** — *"You have N skills installed. You used M of them in the last 30 days."*
 - **Stat grid, two groups:**
   - *Skills*: Installed / Active this window / Skill runs detected.
@@ -73,11 +78,11 @@ Data-junkie mode (click the toggle top-right):
 
 ### Storing this run as a dated archive
 
-By default, `/tinyhat:audit` updates `~/.claude/tinyhat/latest/` and overwrites. If you want today's snapshot preserved for comparison later, pass `--archive`:
+By default, `/tinyhat:audit` updates Tinyhat's `latest/` directory under the plugin-data root and overwrites. If you want today's snapshot preserved for comparison later, pass `--archive`:
 
 - `/tinyhat:audit --archive`
 
-That writes an additional `~/.claude/tinyhat/archive/YYYY-MM-DD/` directory (capped at 31 dated dirs — oldest is auto-pruned). The adaptive daily routine always archives.
+That writes an additional `archive/YYYY-MM-DD/` directory under the same plugin-data root (capped at 31 dated dirs — oldest is auto-pruned). The adaptive daily routine always archives.
 
 ---
 
@@ -96,8 +101,8 @@ You already ran an audit today (or yesterday). You either want to see it again, 
 
 The agent reads your message and decides:
 
-- **Specific question** → reads `~/.claude/tinyhat/latest/analysis.json` and `snapshot.json` and answers in chat, citing real numbers and skill names from the saved audit. No browser, no regeneration.
-- **Vague / "open it"** → opens `~/.claude/tinyhat/latest/report.html` in your default browser and says one line about when it was generated.
+- **Specific question** → reads `latest/analysis.json` and `snapshot.json` from Tinyhat's plugin-data directory and answers in chat, citing real numbers and skill names from the saved audit. No browser, no regeneration.
+- **Vague / "open it"** → opens `latest/report.html` in your default browser and says one line about when it was generated.
 
 Neither path reruns `gather_snapshot.py`. The persisted JSONs are the source of truth until the next `/tinyhat:audit`.
 
@@ -118,7 +123,7 @@ You have several daily snapshots archived and want to compare weeks, or just nav
 
 ### What happens
 
-1. The agent opens `~/.claude/tinyhat/archive/index.html` in your browser.
+1. The agent opens Tinyhat's plugin-data `archive/index.html` in your browser.
 2. The index page lists the **latest** report at the top, then every dated archive snapshot in reverse chronological order. Each entry links to its own `report.html`.
 3. Every report has an **all reports →** link in its header that takes you back to this index.
 
@@ -154,7 +159,7 @@ Useful when you're debugging or want to tail a file.
 
 - `/tinyhat:routine clear`
 
-Removes every dated dir under `~/.claude/tinyhat/archive/`. `~/.claude/tinyhat/latest/` and `routine.json` are preserved. Destructive — the agent will confirm first.
+Removes every dated dir under Tinyhat's plugin-data `archive/`. `latest/` and `routine.json` are preserved. Destructive — the agent will confirm first.
 
 ---
 
