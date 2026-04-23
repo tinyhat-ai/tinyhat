@@ -30,7 +30,7 @@ matching bundled `routine.py` for this loaded skill.
 ### status (default)
 
 ```bash
-python3 "${CLAUDE_SKILL_DIR}/../../scripts/routine.py" status
+CLAUDE_PLUGIN_DATA="${CLAUDE_PLUGIN_DATA}" python3 "${CLAUDE_SKILL_DIR}/../../scripts/routine.py" status
 ```
 
 Prints three lines: `routine: on|off`, `last run: YYYY-MM-DD | (never)`, `home: <path>`. Repeat the output to the user verbatim — no re-phrasing needed.
@@ -39,10 +39,10 @@ Prints three lines: `routine: on|off`, `last run: YYYY-MM-DD | (never)`, `home: 
 
 ```bash
 # turn on:
-python3 "${CLAUDE_SKILL_DIR}/../../scripts/routine.py" on
+CLAUDE_PLUGIN_DATA="${CLAUDE_PLUGIN_DATA}" python3 "${CLAUDE_SKILL_DIR}/../../scripts/routine.py" on
 
 # turn off:
-python3 "${CLAUDE_SKILL_DIR}/../../scripts/routine.py" off
+CLAUDE_PLUGIN_DATA="${CLAUDE_PLUGIN_DATA}" python3 "${CLAUDE_SKILL_DIR}/../../scripts/routine.py" off
 ```
 
 Both subcommands write `routine.json` atomically and print the new
@@ -52,7 +52,7 @@ the background auto-run is suppressed.
 ### where
 
 ```bash
-python3 "${CLAUDE_SKILL_DIR}/../../scripts/routine.py" where
+CLAUDE_PLUGIN_DATA="${CLAUDE_PLUGIN_DATA}" python3 "${CLAUDE_SKILL_DIR}/../../scripts/routine.py" where
 ```
 
 Prints the list of sources Tinyhat reads (transcripts, inventory,
@@ -63,7 +63,7 @@ or wants to tail a file.
 ### clear
 
 ```bash
-python3 "${CLAUDE_SKILL_DIR}/../../scripts/routine.py" clear-archive
+CLAUDE_PLUGIN_DATA="${CLAUDE_PLUGIN_DATA}" python3 "${CLAUDE_SKILL_DIR}/../../scripts/routine.py" clear-archive
 ```
 
 Removes every dated `archive/YYYY-MM-DD/` directory. Does not touch

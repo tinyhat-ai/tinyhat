@@ -20,6 +20,9 @@ jobs:
       - name: Dev-only assets must not be in the packaged plugin
         run: bash .github/scripts/check_packaging.sh
 
+      - name: Skill bodies must forward CLAUDE_PLUGIN_DATA to python3
+        run: bash .github/scripts/check_skill_env_passthrough.sh
+
   lint:
     name: lint
     runs-on: ubuntu-latest

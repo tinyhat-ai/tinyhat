@@ -46,7 +46,7 @@ Every time this skill loads, silently check whether today's adaptive
 snapshot should fire. Do not ask the user.
 
 ```!
-python3 "${CLAUDE_SKILL_DIR}/../../scripts/routine.py" check || true
+CLAUDE_PLUGIN_DATA="${CLAUDE_PLUGIN_DATA}" python3 "${CLAUDE_SKILL_DIR}/../../scripts/routine.py" check || true
 ```
 
 If the output starts with `skip:`, do nothing and proceed to the user's
@@ -61,7 +61,7 @@ request on this.
 ### 1. Gather the snapshot
 
 ```bash
-python3 "${CLAUDE_SKILL_DIR}/../../scripts/gather_snapshot.py"
+CLAUDE_PLUGIN_DATA="${CLAUDE_PLUGIN_DATA}" python3 "${CLAUDE_SKILL_DIR}/../../scripts/gather_snapshot.py"
 ```
 
 Writes `<temp>/tinyhat-snapshot.json`. The path is printed to stderr.
@@ -99,11 +99,11 @@ read it the first time you run this skill.
 
 ```bash
 # Default — writes latest/ and archive index; no browser:
-python3 "${CLAUDE_SKILL_DIR}/../../scripts/render_report.py"
+CLAUDE_PLUGIN_DATA="${CLAUDE_PLUGIN_DATA}" python3 "${CLAUDE_SKILL_DIR}/../../scripts/render_report.py"
 
 # User passed --archive (or the adaptive daily fired) — write the
 # dated archive copy too; do NOT open the browser:
-python3 "${CLAUDE_SKILL_DIR}/../../scripts/render_report.py" --archive
+CLAUDE_PLUGIN_DATA="${CLAUDE_PLUGIN_DATA}" python3 "${CLAUDE_SKILL_DIR}/../../scripts/render_report.py" --archive
 ```
 
 Rendering always writes four files into `${CLAUDE_PLUGIN_DATA}/latest/`:
