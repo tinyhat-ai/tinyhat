@@ -1,0 +1,71 @@
+name: Skill proposal
+description: Propose a new agent skill, sharpen an existing one, or change how skills are governed.
+title: "feat(skills): "
+labels: ["enhancement", "skill", "triage"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Use this for any work that touches `.claude/skills/`. Before
+        filing, skim the [`create-issue`](../.claude/skills/create-issue/SKILL.md)
+        skill — especially the **INVEST** rubric and the
+        **Small + Testable** gate.
+
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem
+      description: One paragraph in user / agent terms. Who feels the pain?
+    validations:
+      required: true
+
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposal
+      description: |
+        New skill, edit, or governance change. If proposing a new
+        skill, suggest the directory name (`.claude/skills/<name>/`)
+        and a one-line `description:` for its frontmatter.
+    validations:
+      required: true
+
+  - type: textarea
+    id: acceptance
+    attributes:
+      label: Acceptance criteria
+      description: |
+        Concrete checks the reviewer can run — file paths, line-count
+        budgets, registration in `AGENTS.md`, etc. See section 6 of
+        the `create-issue` skill.
+      placeholder: |
+        - `.claude/skills/<name>/SKILL.md` exists, under 150 lines.
+        - Listed in `AGENTS.md`'s skills index.
+        - …
+    validations:
+      required: true
+
+  - type: textarea
+    id: out_of_scope
+    attributes:
+      label: Out of scope
+      description: What this issue intentionally won't cover.
+
+  - type: textarea
+    id: links
+    attributes:
+      label: Dependencies / links
+      description: |
+        `Blocked by #N`, `Related to #M`, prior art, upstream docs.
+
+  - type: checkboxes
+    id: checks
+    attributes:
+      label: Pre-flight
+      options:
+        - label: I searched existing issues (including the `skill` label) and didn't find a duplicate.
+          required: true
+        - label: This issue passes the **Small + Testable** gate from the `create-issue` skill.
+          required: true
+        - label: No private maintainer context (no `CLAUDE.local.md` content, internal paths, or hostnames).
+          required: true

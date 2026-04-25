@@ -39,6 +39,7 @@ and open the relevant `SKILL.md` before executing the operation.
 
 | Operation | Skill | When to invoke |
 |---|---|---|
+| File a new issue | [`create-issue`](.claude/skills/create-issue/SKILL.md) | Before opening any issue on the tinyhat repo (or another tracker). Covers duplicate search, type taxonomy with `skill` first-class, the INVEST rubric, and tracker mappings. |
 | Make a commit | [`commit`](.claude/skills/commit/SKILL.md) | Before every commit, especially the first on a fresh clone. Covers bot-identity preflight, signing, Conventional Commits. |
 | Open a pull request | [`open-pr`](.claude/skills/open-pr/SKILL.md) | After commits are on a branch, before `gh pr create`. Covers branch naming, PR template, review routing, no-self-merge. |
 | Cut a release | [`release`](.claude/skills/release/SKILL.md) | Reviewing or merging a release-please PR, smoke-testing a published release, or rolling one back. Covers the pre-1.0 versioning policy and the manual-release escape hatch. |
