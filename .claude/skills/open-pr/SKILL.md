@@ -13,18 +13,54 @@ description: Use when opening a pull request on the tinyhat repo. If a maintaine
 - One concern per branch. Rebase onto `main`; do not merge `main` into
   your branch.
 
-## 2. Which identity to push and open under?
+## 2. Scope check before PR creation
+
+Before pushing or running `gh pr create`, list the logical changes:
+
+```bash
+git log --oneline --decorate main..HEAD
+git diff --stat main...HEAD
+git diff --name-only main...HEAD
+```
+
+Then write a short scope note:
+
+```text
+Logical changes:
+1. ...
+2. ...
+```
+
+If the count is more than one, stop. Keep a multi-commit PR only when
+every commit is part of one related thread and the PR can be summarized
+in one sentence. Otherwise split before review.
+
+To split an already bundled branch without losing signed commits:
+
+1. Create new branches from `main`, one per logical change.
+2. Use `git cherry-pick -n <commit>` plus `git add -p`, or restore
+   specific paths from the bundled branch, to stage only one change.
+3. Commit each branch through the [`commit`](../commit/SKILL.md) skill
+   so the new commits are signed under the correct identity.
+4. Push the replacement branches and close or supersede the grab-bag
+   PR. If the original branch was already pushed and reviewed, prefer
+   forward replacement PRs over force-rewriting shared signed history.
+
+Stack dependent changes when they must land in order; each PR in the
+stack still needs to be independently reviewable.
+
+## 3. Which identity to push and open under?
 
 Check whether a **bot identity table** exists in `CLAUDE.local.md`
 (gitignored, maintainer-only).
 
 - **Table present** → use the bot's SSH key on push and switch `gh` to
-  the bot's GitHub user for PR creation. Follow sections 3–4.
+  the bot's GitHub user for PR creation. Follow sections 4–5.
 - **Table absent** → push and open the PR as whoever owns the local
-  git / `gh` config. Skip sections 3–4 and read only section 5
+  git / `gh` config. Skip sections 4–5 and read only section 6
   (non-negotiables).
 
-## 3. Push with the agent's SSH key (inline-override path)
+## 4. Push with the agent's SSH key (inline-override path)
 
 The repo's `remote.origin.url` is the plain
 `git@github.com:tinyhat-ai/tinyhat.git`, so whoever owns the local SSH
@@ -47,7 +83,7 @@ git push git@<ssh-host-alias>:tinyhat-ai/tinyhat.git \
 Either way, do **not** set `remote.origin.url` to an alias — that would
 trap the working-tree owner into always pushing through a bot's key.
 
-## 4. Open the PR as the bot (inline-override path)
+## 5. Open the PR as the bot (inline-override path)
 
 `gh` uses whichever account is marked active. Switch to the bot's
 GitHub user for the PR-creation call, then switch back to the
@@ -67,12 +103,15 @@ gh auth switch --user <maintainer-github-user>
 - Title mirrors the primary commit (Conventional-Commits-shaped).
 - Fill
   [`.github/pull_request_template.md`](../../../.github/pull_request_template.md).
+- Include the scope note from section 2. For research-backed guidance
+  changes, include the sources read, top 3 takeaways, and top 2
+  surprises in the PR body.
 - Don't paste content from `CLAUDE.local.md` or any other
   maintainer-private source into the PR body.
 - Agents never self-merge. Only `CODEOWNERS` merges an agent-authored
   PR.
 
-## 5. Non-negotiables
+## 6. Non-negotiables
 
 - Never push to `main` directly.
 - Never self-merge an agent PR.
@@ -81,7 +120,7 @@ gh auth switch --user <maintainer-github-user>
   docs, Slack threads, internal services) in a PR visible on the
   public repo.
 
-## 6. When a PR is blocked
+## 7. When a PR is blocked
 
 - **Hook / CI failure**: investigate the underlying cause. Never use
   `--no-verify` to bypass.

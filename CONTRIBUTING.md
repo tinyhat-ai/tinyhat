@@ -51,6 +51,8 @@ docs: clarify the plugin vs script-only testing paths
 
 The PR title must also be a Conventional Commit — it becomes the squash
 commit message on `main`, and release tooling reads it to bump the version.
+Keep commits and PRs focused on one logical change; agents follow the
+stricter atomicity rules in [AGENTS.md](AGENTS.md#atomic-commits-and-prs).
 
 ### 4. Sign your commits (DCO — optional)
 
