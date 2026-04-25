@@ -1,0 +1,18 @@
+---
+description: Use when editing any contribution-guidance file in the tinyhat repo — AGENTS.md, CLAUDE.md, CLAUDE.local.md(.example), or a SKILL.md under .claude/skills/. Covers where each piece of content belongs, anchor-link hygiene, the line-count budget per file, and the thin-harness-fat-skills rule that keeps eagerly-loaded files small.
+globs:
+alwaysApply: false
+---
+
+# update-guidance (Cursor adapter)
+
+Tinyhat's authoritative procedure for this operation lives at
+[`.claude/skills/update-guidance/SKILL.md`](../../.claude/skills/update-guidance/SKILL.md).
+Open and follow that file verbatim before editing `AGENTS.md`,
+`CLAUDE.md`, any `SKILL.md`, or `CLAUDE.local.md*`. Do not improvise
+from this adapter — `SKILL.md` has the placement matrix, the line
+budget, and the cross-agent fan-out rule.
+
+Why this adapter exists: see
+[`docs/cross-agent-skills.md`](../../docs/cross-agent-skills.md). The
+canonical file is the single source of truth.

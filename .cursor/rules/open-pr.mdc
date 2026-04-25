@@ -1,0 +1,18 @@
+---
+description: Use when opening a pull request on the tinyhat repo. If a maintainer-private bot identity table is present in CLAUDE.local.md, push with the bot's SSH key and open the PR under the bot's GitHub user. Otherwise just push and open normally. Also covers branch naming and the no-self-merge rule. Invoke after commits land on a branch.
+globs:
+alwaysApply: false
+---
+
+# open-pr (Cursor adapter)
+
+Tinyhat's authoritative procedure for this operation lives at
+[`.claude/skills/open-pr/SKILL.md`](../../.claude/skills/open-pr/SKILL.md).
+Open and follow that file verbatim before pushing or running
+`gh pr create`. Do not improvise from this adapter — `SKILL.md` has
+the full procedure, the inline-override pattern, and the
+non-negotiables.
+
+Why this adapter exists: see
+[`docs/cross-agent-skills.md`](../../docs/cross-agent-skills.md). The
+canonical file is the single source of truth.

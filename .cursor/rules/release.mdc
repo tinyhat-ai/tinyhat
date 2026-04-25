@@ -1,0 +1,18 @@
+---
+description: Use when cutting a Tinyhat release — reviewing the release-please PR, merging it, verifying the tag + GitHub release, smoke-testing the published plugin, or rolling back a bad release. Covers the automatic release-please flow, when to go off-script with a manual release, and the pre-1.0 versioning policy (bump-minor-pre-major). Invoke whenever you're about to land or review a release.
+globs:
+alwaysApply: false
+---
+
+# release (Cursor adapter)
+
+Tinyhat's authoritative procedure for this operation lives at
+[`.claude/skills/release/SKILL.md`](../../.claude/skills/release/SKILL.md).
+Open and follow that file verbatim before reviewing, merging, or
+rolling back a release. Do not improvise from this adapter — `SKILL.md`
+has the full procedure, the manual-release escape hatch, and the
+versioning policy.
+
+Why this adapter exists: see
+[`docs/cross-agent-skills.md`](../../docs/cross-agent-skills.md). The
+canonical file is the single source of truth.

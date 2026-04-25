@@ -19,6 +19,7 @@ where the change actually belongs.
 | Claude-Code-specific tone, framing, scope guards | `CLAUDE.md` | Loaded per-turn by Claude Code. Keep tight. |
 | Maintainer-private context | `CLAUDE.local.md` (gitignored) | Must not ship in the public repo. |
 | Public-safe example of a local override | `CLAUDE.local.md.example` | Committed; no private URLs, no internal names. |
+| Cross-agent skill discovery layout | `docs/cross-agent-skills.md` | Compatibility matrix + drift-prevention rule. Cite from `AGENTS.md` rather than inlining. |
 
 **Test:** if the content is *procedure* (a sequence of steps, a
 checklist, an error-handling recipe), it's almost always a skill. If
@@ -68,7 +69,34 @@ public repo learn something I only know from `CLAUDE.local.md` or
 other internal material?* If yes, rewrite or move it to
 `CLAUDE.local.md`.
 
-## 6. The meta-rule
+## 6. Cross-agent fan-out (when adding or editing a dev skill)
+
+`.claude/skills/<name>/SKILL.md` is canonical. Codex discovers it
+through the `.agents/skills` symlink (zero-drift). Cursor cannot read
+`SKILL.md` at all and needs a `.cursor/rules/<name>.mdc` adapter whose
+`description:` mirrors the canonical frontmatter description. Whenever
+you add, rename, or change the `description:` of a dev skill:
+
+- **New skill.** Drop a matching `.cursor/rules/<name>.mdc` adapter in
+  the same PR. Use an existing adapter as the template — frontmatter
+  is `description` (verbatim copy), `globs:` (empty), `alwaysApply:
+  false`, body is a 6–10 line pointer at the canonical `SKILL.md`.
+  Add the skill's row to the index in `AGENTS.md`.
+- **Renamed skill.** Rename the `.cursor/rules/<name>.mdc` adapter and
+  update the link target in its body. The `.agents/skills` symlink
+  follows the canonical directory rename automatically.
+- **Edited `description:`.** Copy the new value into the matching
+  `.cursor/rules/<name>.mdc` in the same commit. Run the drift check
+  in [`docs/cross-agent-skills.md`](../../../docs/cross-agent-skills.md)
+  to confirm.
+- **Deleted skill.** Delete the matching `.cursor/rules/<name>.mdc`
+  adapter and remove the row from the `AGENTS.md` index.
+
+The `.agents/skills` symlink and the matrix live in
+[`docs/cross-agent-skills.md`](../../../docs/cross-agent-skills.md).
+Don't inline the matrix into `AGENTS.md` or `CLAUDE.md` — link to it.
+
+## 7. The meta-rule
 
 This file you're reading is itself a skill. If a procedure in
 `AGENTS.md` or `CLAUDE.md` is longer than a paragraph, the right move
@@ -77,10 +105,14 @@ is almost always to extract it into a new skill under
 file. That's dogfooding Tinyhat's thesis — skills are the unit of
 work — on the repo's own plumbing.
 
-## 7. Non-negotiables
+## 8. Non-negotiables
 
 - Never edit a guidance file directly on `main` — every change goes
   through a PR.
 - Never paste internal-only content into a committed file.
 - Never leave a broken anchor link after renaming a section.
 - Never let `CLAUDE.md` or `CLAUDE.local.md` drift past its ceiling.
+- Never add a dev skill under `.claude/skills/` without the matching
+  `.cursor/rules/<name>.mdc` adapter and `AGENTS.md` index row in the
+  same PR. Codex picks it up automatically via the symlink, but Cursor
+  is invisible to it without an adapter.

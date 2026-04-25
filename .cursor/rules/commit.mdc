@@ -1,0 +1,17 @@
+---
+description: Use when making a commit to the tinyhat repo. If a maintainer-private bot identity table is present in CLAUDE.local.md, use the inline-override pattern described here so agent commits are SSH-signed under a bot identity. Otherwise commit as whoever owns the local git config. Also covers Conventional Commits. Invoke before every commit.
+globs:
+alwaysApply: false
+---
+
+# commit (Cursor adapter)
+
+Tinyhat's authoritative procedure for this operation lives at
+[`.claude/skills/commit/SKILL.md`](../../.claude/skills/commit/SKILL.md).
+Open and follow that file verbatim before staging or running
+`git commit`. Do not improvise from this adapter — `SKILL.md` has the
+full procedure, the preflight checks, and the non-negotiables.
+
+Why this adapter exists: see
+[`docs/cross-agent-skills.md`](../../docs/cross-agent-skills.md). The
+canonical file is the single source of truth.
