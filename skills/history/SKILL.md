@@ -1,4 +1,5 @@
 ---
+name: history
 description: Open the skill-audit history page — a local index of the latest report plus every dated archive snapshot (up to 31), with links to each. Triggers on "show my skill audit history", "browse my tinyhat audits over time", "list all my skill audits", "see previous skill audits", "open the audit archive", "show the tinyhat archive", or explicit /tinyhat:history invocations.
 allowed-tools: Bash(open *) Bash(xdg-open *) Bash(start *) Bash(python3 *) Bash(CLAUDE_PLUGIN_DATA=* python3 *) Read
 ---

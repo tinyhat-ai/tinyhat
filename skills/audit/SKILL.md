@@ -1,4 +1,5 @@
 ---
+name: audit
 description: Audit which Claude Code skills you actually use, which look dormant, and what to create next. Produces an agent-authored local HTML+markdown report on the data already on disk. Triggers on "audit my skills", "run a skill audit", "review my skill usage", "clean up unused skills", "trim my skill set", "which skills should I remove", "how am I using Claude", "which skills am I actually using", "what skills should I create", "refresh my tinyhat report", or explicit /tinyhat:audit invocations.
 argument-hint: [--archive] [--open]
 allowed-tools: Bash(python3 *) Bash(CLAUDE_PLUGIN_DATA=* python3 *) Bash(open *) Bash(xdg-open *) Bash(start *) Read Write

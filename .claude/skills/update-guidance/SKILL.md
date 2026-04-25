@@ -1,6 +1,6 @@
 ---
 name: update-guidance
-description: Use when editing any contribution-guidance file in the tinyhat repo — AGENTS.md, CLAUDE.md, CLAUDE.local.md(.example), or a SKILL.md under .claude/skills/. Covers where each piece of content belongs, anchor-link hygiene, the line-count budget per file, and the thin-harness-fat-skills rule that keeps eagerly-loaded files small.
+description: Use when editing any contribution-guidance file in the tinyhat repo — AGENTS.md, CLAUDE.md, CLAUDE.local.md(.example), or a SKILL.md under .claude/skills/ or skills/. Covers where each piece of content belongs, anchor-link hygiene, the line-count budget per file, the thin-harness-fat-skills rule that keeps eagerly-loaded files small, and the SKILL.md frontmatter policy (which YAML keys to set, which to reject, how surfaces differ).
 ---
 
 # update-guidance — edit policy files without breaking the pattern
@@ -19,6 +19,7 @@ where the change actually belongs.
 | Claude-Code-specific tone, framing, scope guards | `CLAUDE.md` | Loaded per-turn by Claude Code. Keep tight. |
 | Maintainer-private context | `CLAUDE.local.md` (gitignored) | Must not ship in the public repo. |
 | Public-safe example of a local override | `CLAUDE.local.md.example` | Committed; no private URLs, no internal names. |
+| New / changed `SKILL.md` frontmatter | `SKILL.md` header + [§ 8](#8-skillmd-frontmatter-policy) | Policy decides which YAML keys are required, optional, or rejected. |
 
 **Test:** if the content is *procedure* (a sequence of steps, a
 checklist, an error-handling recipe), it's almost always a skill. If
@@ -84,3 +85,43 @@ work — on the repo's own plumbing.
 - Never paste internal-only content into a committed file.
 - Never leave a broken anchor link after renaming a section.
 - Never let `CLAUDE.md` or `CLAUDE.local.md` drift past its ceiling.
+
+## 8. SKILL.md frontmatter policy
+
+The headline rules — full reasoning and the gbrain reconciliation
+live in [`references/skill-frontmatter.md`](references/skill-frontmatter.md).
+Read the reference the first time you author or audit a SKILL.md.
+
+- **Required, both surfaces:** `name`, `description`. Set `name`
+  even on packaged `skills/` files — Claude Code falls back to the
+  directory name silently, but strict Agent Skills validators reject
+  the omission.
+- **Constraints:** `name` must match the directory and the regex
+  `^[a-z0-9]+(-[a-z0-9]+)*$`, max 64 chars, no `anthropic`/`claude`
+  substring. `description` is third-person, ≤1024 chars, and bakes
+  routing phrases inline.
+- **Optional, when warranted:** `argument-hint` for skills that take
+  args; `allowed-tools` for skills that invoke scripts;
+  `disable-model-invocation` for user-only commands. All
+  Claude-Code-specific.
+- **Rejected as top-level keys:** `triggers`, `tools`, `mutating`,
+  `version`, `writes_pages`, `writes_to`. These are gbrain
+  conventions Claude Code does not parse — `description`,
+  `allowed-tools`, an ALL-CAPS gate prefix, and git history cover the
+  same ground without dead frontmatter.
+- **Tinyhat extensions go under `metadata.*`** per the Agent Skills
+  spec's extension namespace recommendation. Do not invent new
+  top-level keys.
+- **Surface gating:** repo-scoped `.claude/skills/` keep frontmatter
+  minimal (`name` + `description` unless a script forces more);
+  packaged `skills/` add `argument-hint` + `allowed-tools` whenever
+  the skill ships a runnable script.
+
+Validate before pushing:
+
+```bash
+python3 scripts/validate_skill_frontmatter.py
+```
+
+CI's `lint` job runs the same script, so a header that drifts past
+the policy fails the build.
