@@ -1,0 +1,17 @@
+---
+description: Use when the maintainer onboards a new AI coding agent (Aider, Gemini CLI, Windsurf, Cline, a new Claude/Cursor/Codex instance on a new machine, etc.) to contribute to the tinyhat repo under a bot identity. Covers machine-user provisioning, SSH key + host alias setup, adding the agent row to the private bot identity table in CLAUDE.local.md, and the `.gitignore` pattern for the agent's machine-local state.
+globs:
+alwaysApply: false
+---
+
+# add-agent (Cursor adapter)
+
+Tinyhat's authoritative procedure for this operation lives at
+[`.claude/skills/add-agent/SKILL.md`](../../.claude/skills/add-agent/SKILL.md).
+Open and follow that file verbatim before provisioning a new bot
+identity. Do not improvise from this adapter — `SKILL.md` has the
+full procedure, the SSH alias setup, and the non-negotiables.
+
+Why this adapter exists: see
+[`docs/cross-agent-skills.md`](../../docs/cross-agent-skills.md). The
+canonical file is the single source of truth.

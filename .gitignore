@@ -51,12 +51,20 @@ build/
 .claude/shell-snapshots/
 .claude/worktrees/
 
-# Cursor — ignore all machine-local state
-.cursor/
+# Cursor — keep .cursor/rules/ (cross-agent skill adapters; see
+# docs/cross-agent-skills.md). Ignore everything else machine-local.
+.cursor/*
+!.cursor/rules/
 
 # Codex — AGENTS.md is the entry point; .codex is usually ~/.codex but
 # ignore project-local variants defensively.
 .codex/
+
+# Codex skills — keep .agents/skills (symlink to .claude/skills for
+# repo-local Codex discovery; see docs/cross-agent-skills.md). Ignore
+# everything else under .agents/ defensively.
+.agents/*
+!.agents/skills
 
 # Aider — keep .aider.conf.yml, .aiderignore if used
 .aider*

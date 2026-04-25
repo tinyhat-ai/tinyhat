@@ -5,7 +5,9 @@ Agent-specific files (`CLAUDE.md`) defer here and do not duplicate.
 
 **Agents currently provisioned on the maintainer's machine:** Claude
 Code, Codex. The maintainer onboards new agents via the
-[`add-agent`](.claude/skills/add-agent/SKILL.md) skill.
+[`add-agent`](.claude/skills/add-agent/SKILL.md) skill. Cross-agent
+discovery (Codex via `.agents/skills/`, Cursor via `.cursor/rules/`) is
+documented in [`docs/cross-agent-skills.md`](docs/cross-agent-skills.md).
 
 ## External contributors — the short version
 
@@ -31,9 +33,14 @@ invoked. That keeps the files in every turn's context tight
 (`AGENTS.md`, `CLAUDE.md`) and the procedural detail
 rich where it actually needs to be.
 
-Agents without native skill resolution (Cursor, Codex, anything reading
-`AGENTS.md` directly) should treat the skills index below as a directory
-and open the relevant `SKILL.md` before executing the operation.
+Agents without native skill resolution (anything reading `AGENTS.md`
+directly) should treat the skills index below as a directory and open
+the relevant `SKILL.md` before executing the operation. Codex finds the
+same skills natively under `.agents/skills/` (a symlink to
+`.claude/skills/`); Cursor finds them via `.cursor/rules/<name>.mdc`
+adapters that point at the canonical `SKILL.md`. See
+[`docs/cross-agent-skills.md`](docs/cross-agent-skills.md) for the
+compatibility matrix and the rule that keeps the adapters in sync.
 
 ## Skills index — contribution operations
 
@@ -42,6 +49,7 @@ and open the relevant `SKILL.md` before executing the operation.
 | Make a commit | [`commit`](.claude/skills/commit/SKILL.md) | Before every commit, especially the first on a fresh clone. Covers bot-identity preflight, signing, Conventional Commits. |
 | Open a pull request | [`open-pr`](.claude/skills/open-pr/SKILL.md) | After commits are on a branch, before `gh pr create`. Covers branch naming, PR template, review routing, no-self-merge. |
 | Cut a release | [`release`](.claude/skills/release/SKILL.md) | Reviewing or merging a release-please PR, smoke-testing a published release, or rolling one back. Covers the pre-1.0 versioning policy and the manual-release escape hatch. |
+| Review a release CHANGELOG | [`review-changelog`](.claude/skills/review-changelog/SKILL.md) | Before merging a release-please PR. Compares each new bullet to the source PR's diff and review discussion, lands rewrites under the bot identity. Invoked from the `release` skill. |
 | Onboard a new agent | [`add-agent`](.claude/skills/add-agent/SKILL.md) | Before a new coding agent touches this repo. Covers machine-user provisioning, SSH alias, identity-table row, `.gitignore` rules. |
 | Edit a guidance file | [`update-guidance`](.claude/skills/update-guidance/SKILL.md) | When changing `AGENTS.md`, `CLAUDE.md`, any `SKILL.md`, or `CLAUDE.local.md*`. Covers where each piece belongs, line budgets, anchor hygiene. |
 | Propose a roadmap change | [`propose-roadmap`](.claude/skills/propose-roadmap/SKILL.md) | When moving an item between `roadmap/` files, adding a new candidate, or flagging something for rejection. Covers PR format and the one-move-per-PR rule. |

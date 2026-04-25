@@ -1,0 +1,16 @@
+---
+description: Use before merging a release-please PR on tinyhat to check that each CHANGELOG entry matches what actually shipped. Release-please cribs every bullet from the source PR's squashed-merge commit subject; if review replaced the mechanism that subject described, the bullet advertises an abandoned approach. This skill surfaces divergences and lands a rewrite on the release-please branch under the bot identity. Invoke from the `release` skill's pre-merge step, or standalone.
+globs:
+alwaysApply: false
+---
+
+# review-changelog (Cursor adapter)
+
+Tinyhat's authoritative procedure for this operation lives at
+[`.claude/skills/review-changelog/SKILL.md`](../../.claude/skills/review-changelog/SKILL.md).
+Open and follow that file verbatim before merging a release-please PR.
+Do not improvise from this adapter.
+
+Why this adapter exists: see
+[`docs/cross-agent-skills.md`](../../docs/cross-agent-skills.md). The
+canonical file is the single source of truth.

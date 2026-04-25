@@ -1,0 +1,16 @@
+---
+description: Use when a contributor (human or agent) wants to propose a change to the Tinyhat roadmap — moving an item between now/next/later/considering, adding a new candidate, or flagging something for rejection. Covers the required PR format and what makes a proposal reviewable. Invoke instead of editing roadmap files directly.
+globs:
+alwaysApply: false
+---
+
+# propose-roadmap (Cursor adapter)
+
+Tinyhat's authoritative procedure for this operation lives at
+[`.claude/skills/propose-roadmap/SKILL.md`](../../.claude/skills/propose-roadmap/SKILL.md).
+Open and follow that file verbatim before editing any roadmap file or
+opening a roadmap-change PR. Do not improvise from this adapter.
+
+Why this adapter exists: see
+[`docs/cross-agent-skills.md`](../../docs/cross-agent-skills.md). The
+canonical file is the single source of truth.

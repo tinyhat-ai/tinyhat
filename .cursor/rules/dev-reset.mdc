@@ -1,0 +1,16 @@
+---
+description: INTERNAL DEV ONLY — wipe every byte Tinyhat wrote on this machine so the maintainer can smoke-test a clean first-run install. Repo-scoped, never shipped to end users. Triggers on "reset tinyhat state", "reset my tinyhat for a fresh test", "wipe tinyhat", "pretend I've never installed tinyhat", or explicit `/tinyhat:dev:reset` / `/dev-reset` invocations. Do NOT invoke this on intent like "clean up my skills" (that's `/tinyhat:audit`).
+globs:
+alwaysApply: false
+---
+
+# dev-reset (Cursor adapter)
+
+Tinyhat's authoritative procedure for this operation lives at
+[`.claude/skills/dev-reset/SKILL.md`](../../.claude/skills/dev-reset/SKILL.md).
+Open and follow that file verbatim. This is INTERNAL DEV ONLY —
+contributor-facing, never shipped. Do not improvise from this adapter.
+
+Why this adapter exists: see
+[`docs/cross-agent-skills.md`](../../docs/cross-agent-skills.md). The
+canonical file is the single source of truth.

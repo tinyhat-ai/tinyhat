@@ -85,6 +85,17 @@ If the agent reads a dedicated instruction file (like `CLAUDE.md`,
 `.clinerules`, `.windsurfrules`), add a **thin** file that defers to
 `AGENTS.md`. Do not duplicate policy.
 
+If the agent **reads `AGENTS.md` natively** (Codex), no extra
+instruction file is needed — `AGENTS.md` is the entry point and the
+`.agents/skills` symlink already exposes every dev skill via the
+agent's progressive disclosure. If the agent **does not read
+`SKILL.md`** (Cursor), it needs a `.cursor/rules/<name>.mdc` adapter
+per dev skill that points at the canonical `SKILL.md`. The fan-out
+rule lives in
+[`update-guidance`](../update-guidance/SKILL.md#6-cross-agent-fan-out-when-adding-or-editing-a-dev-skill);
+the layout rationale and matrix live in
+[`docs/cross-agent-skills.md`](../../../docs/cross-agent-skills.md).
+
 Add the agent's bot PAT to `gh` so the onboarding PR can be opened
 under the new agent's identity:
 
