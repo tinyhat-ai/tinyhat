@@ -15,8 +15,11 @@ Thanks for wanting to contribute. Here's all you actually need:
 2. Use [Conventional Commits](https://www.conventionalcommits.org) for the
    commit subject if you can — e.g. `fix: typo in README`. Not a hard
    requirement for first-time contributors.
-3. Keep the PR focused on one thing. Describe what and why in a sentence
-   or two.
+3. Keep changes atomic:
+   1. One logical change per commit.
+   2. One related thread per PR.
+   3. Explain the why, not just the what.
+   4. Split unrelated work before asking for review.
 
 That's it. The dense policy below is plumbing for the AI agents the
 maintainer runs under dedicated bot identities. You can skip it.
@@ -68,12 +71,38 @@ contributors can ignore this section.
   explicit OK. Never commit keys, tokens, or credentials. Never reuse
   one agent's signing key on another agent.
 
+## Atomic commits and PRs
+
+Atomic commits are the default expectation for agent work. A commit is
+atomic when a future reviewer can answer "what does this do?" in one
+sentence, the diff builds or documents one coherent state, and the
+message body explains the constraint, failure mode, or tradeoff that
+made the change necessary.
+
+- **One logical change per commit.** Code plus its tests can be one
+  commit; a refactor plus a feature plus a CI bump cannot.
+- **One related thread per PR.** Multiple commits may ship together
+  only when they are all needed to tell one reviewable story. If two
+  commits could be reviewed, reverted, or released independently, split
+  them into separate PRs or a stack of PRs.
+- **Messages explain why.** The subject summarizes what changed. The
+  body explains why now, what alternative was rejected, or what bad
+  future state the commit prevents.
+- **When in doubt, split.** Agents pay little cost for small branches;
+  reviewers pay real cost for grab-bag diffs. Use stacked PRs when
+  small dependent changes must land in order.
+
+Anti-patterns: `misc fixes`, `bulk update docs`, `address review
+feedback` as a landed commit subject, and any PR mixing unrelated
+feature, refactor, release, documentation, or CI work.
+
 ## Commit and versioning conventions
 
 - **Conventional Commits** for commit subjects: `<type>(<scope>): <subject>`,
   imperative, <72 chars. Types: `feat`, `fix`, `docs`, `refactor`, `test`,
   `chore`, `ci`, `build`. Breaking: `!` or `BREAKING CHANGE:` footer.
   Strongly encouraged for everyone; strictly required for agent commits.
+- **Atomicity:** see [Atomic commits and PRs](#atomic-commits-and-prs).
 - **Versioning:** [SemVer 2.0](https://semver.org), tags `vX.Y.Z`.
   Maintainer creates tags on merged `main`. Pre-1.0, breaking changes
   bump **minor**, not major.

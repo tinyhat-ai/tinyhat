@@ -20,8 +20,8 @@ defined in the repo's `CLAUDE.local.md` (gitignored, maintainer-only).
 
 The rest of this skill describes the inline-override pattern for the
 first case. If you're in the second case, skip to section 5
-(Conventional Commits) and section 6 (non-negotiables that apply to
-everyone).
+(atomicity), section 6 (Conventional Commits), and section 7
+(non-negotiables that apply to everyone).
 
 ## 2. Preflight (once per machine, not per repo)
 
@@ -70,7 +70,6 @@ bot_git() {
     -c gpg.ssh.allowedSignersFile="$HOME/.ssh/<allowed-signers-file>" \
     "$@"
 }
-# then: bot_git commit -m "..." ; bot_git tag ... ; etc.
 ```
 
 ## 4. After the commit (inline-override path)
@@ -95,7 +94,31 @@ correct inline overrides, amending with
 pushed and shared, leave it and open a new commit noting the mistake —
 never rewrite shared history.
 
-## 5. Conventional Commits (everyone)
+## 5. What atomic means
+
+Before committing, inspect `git diff --cached --stat` and `--name-only`.
+The staged diff must tell one story:
+
+- One logical change per commit. Code plus direct tests/docs is fine;
+  unrelated feature, refactor, release, or CI work is not.
+- The commit should build, pass relevant tests, or be documentation-only
+  on its own. Do not create tiny checkpoint commits that need a later
+  commit to become meaningful.
+- The subject says what changed; the body explains why the change was
+  needed, what constraint shaped it, or what failure mode it prevents.
+- If the body needs a bullet list of unrelated outcomes, split the diff
+  with `git add -p`, separate branches, or a stacked-PR workflow.
+
+Anti-patterns include:
+- `misc fixes`, `bulk update docs`, or `address review feedback` as a
+  landed subject. Follow-up commits during review are fine; final
+  history must say what and why.
+- A grab-bag PR like tinyhat PR #8: skill renames, a new `routine`
+  skill, version reset, release-please config, workflow bumps, and a
+  changelog rewrite landed together. Split into separate skill,
+  release, and CI commits or PRs.
+
+## 6. Conventional Commits (everyone)
 
 Format: `<type>(<optional scope>): <subject>`, imperative, **under 72
 characters**. Body optional, explains *why*, wrap at ~72.
@@ -104,10 +127,10 @@ Types: `feat`, `fix`, `docs`, `refactor`, `test`, `chore`, `ci`,
 `build`. Breaking change: append `!` to the type or add a
 `BREAKING CHANGE:` footer.
 
-Separate commits for separate concerns. Don't bundle a refactor with a
-feature.
+Atomicity is required in addition to Conventional Commits; see
+[AGENTS.md](../../../AGENTS.md#atomic-commits-and-prs).
 
-## 6. Non-negotiables
+## 7. Non-negotiables
 
 - Never push directly to `main`. Commits travel through PRs — see
   [`open-pr`](../open-pr/SKILL.md).
