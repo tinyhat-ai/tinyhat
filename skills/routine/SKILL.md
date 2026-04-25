@@ -1,4 +1,5 @@
 ---
+name: routine
 description: Manage the Tinyhat adaptive daily refresh and related housekeeping — show routine status, turn the daily auto-run on or off, print the paths Tinyhat reads and writes, or clear the dated-archive directory. Triggers on "is tinyhat's daily run on", "check tinyhat routine", "turn off tinyhat daily", "disable tinyhat auto-refresh", "enable tinyhat daily", "where does tinyhat save files", "clear tinyhat archive", "delete my tinyhat history", or explicit /tinyhat:routine invocations with an arg.
 argument-hint: status | on | off | where | clear
 allowed-tools: Bash(python3 *) Bash(CLAUDE_PLUGIN_DATA=* python3 *) Read

@@ -41,6 +41,9 @@ jobs:
       - name: ruff format --check
         run: ruff format --check .
 
+      - name: Validate every SKILL.md frontmatter
+        run: python3 scripts/validate_skill_frontmatter.py
+
   smoke:
     name: smoke
     runs-on: ${{ matrix.os }}
