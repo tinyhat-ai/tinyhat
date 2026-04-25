@@ -46,6 +46,7 @@ and open the relevant `SKILL.md` before executing the operation.
 | Edit a guidance file | [`update-guidance`](.claude/skills/update-guidance/SKILL.md) | When changing `AGENTS.md`, `CLAUDE.md`, any `SKILL.md`, or `CLAUDE.local.md*`. Covers where each piece belongs, line budgets, anchor hygiene. |
 | Propose a roadmap change | [`propose-roadmap`](.claude/skills/propose-roadmap/SKILL.md) | When moving an item between `roadmap/` files, adding a new candidate, or flagging something for rejection. Covers PR format and the one-move-per-PR rule. |
 | Reset local plugin state for a fresh install test | [`dev-reset`](.claude/skills/dev-reset/SKILL.md) | Before a contributor smoke-tests the first-run flow or `claude --plugin-dir "$(pwd)"` iteration. Wipes every Tinyhat byte + plugin registration the local machine holds; dry-run by default. Contributor-only — never packaged. |
+| Capture a skill gap noticed mid-ticket | [`file-skill-gap`](.claude/skills/file-skill-gap/SKILL.md) | When you catch yourself thinking "this should be a skill" while working unrelated work. Files a `skill`-labeled follow-up issue with the required evidence and sends you back to the original task. |
 
 When a skill's `description` matches what you're about to do, invoke it
 instead of improvising. When in doubt, start with `update-guidance`.
