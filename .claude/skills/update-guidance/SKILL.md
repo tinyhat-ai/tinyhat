@@ -1,6 +1,6 @@
 ---
 name: update-guidance
-description: Use when editing any contribution-guidance file in the tinyhat repo — AGENTS.md, CLAUDE.md, CLAUDE.local.md(.example), or a SKILL.md under .claude/skills/. Covers where each piece of content belongs, anchor-link hygiene, the line-count budget per file, and the thin-harness-fat-skills rule that keeps eagerly-loaded files small.
+description: Use when editing any contribution-guidance file in the tinyhat repo — AGENTS.md, CLAUDE.md, CLAUDE.local.md(.example), or a SKILL.md under .claude/skills/ or skills/. Covers where each piece of content belongs, anchor-link hygiene, the line-count budget per file, and the thin-harness-fat-skills rule that keeps eagerly-loaded files small. For SKILL.md edits specifically, defers to the skill-authoring guide.
 ---
 
 # update-guidance — edit policy files without breaking the pattern
@@ -9,6 +9,17 @@ Tinyhat's contribution docs follow the **thin harness, fat skills**
 model: files loaded into every agent turn stay small; deep procedural
 content lives in skills that load on demand. Before editing, figure out
 where the change actually belongs.
+
+**If you're editing a `SKILL.md`** (under `skills/` or
+`.claude/skills/`) — stop reading this skill and switch to the
+canonical authoring guide:
+[`docs/skill-authoring.md`](../../../docs/skill-authoring.md).
+Its [§17 Checklist](../../../docs/skill-authoring.md#17-checklist) is
+the source of truth for what every SKILL.md edit must clear before
+merge.
+The rest of this skill covers the *other* guidance files — `AGENTS.md`,
+`CLAUDE.md`, `CLAUDE.local.md*` — and the cross-cutting
+"where-does-this-content-live" question that applies to all of them.
 
 ## 1. Where does this change belong?
 

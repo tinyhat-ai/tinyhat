@@ -80,6 +80,7 @@ Deeper docs live in [`docs/`](docs/):
 - [`docs/user-flows.md`](docs/user-flows.md) — each skill, step by step
 - [`docs/artifacts.md`](docs/artifacts.md) — every file Tinyhat writes, and how to open or reset it
 - [`docs/architecture.md`](docs/architecture.md) — how the code is laid out
+- [`docs/skill-authoring.md`](docs/skill-authoring.md) — the canonical style guide for writing or editing a `SKILL.md` in this repo; read before adding a tenth skill
 - [`docs/local-development.md`](docs/local-development.md) — how to hack on it
 - [`roadmap/`](roadmap/) — what's being built now, next, and later; open a PR to propose a priority change
 

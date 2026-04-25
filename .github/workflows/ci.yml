@@ -20,6 +20,20 @@ jobs:
       - name: Dev-only assets must not be in the packaged plugin
         run: bash .github/scripts/check_packaging.sh
 
+  skills-lint:
+    name: skills-lint
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Set up Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.11"
+
+      - name: Lint every SKILL.md against docs/skill-authoring.md
+        run: python3 .github/scripts/lint_skills.py
+
   lint:
     name: lint
     runs-on: ubuntu-latest
