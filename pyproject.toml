@@ -1,12 +1,12 @@
 [project]
 name = "tinyhat"
-version = "0.1.0"
-description = "Skill lifecycle observability for Claude Code — a local, read-only scanner plugin."
+version = "0.1.8"
+description = "Tinyhat platform capabilities for managed OpenClaw Computers."
 readme = "README.md"
 requires-python = ">=3.9"
 license = { text = "MIT" }
 authors = [{ name = "Tinyloop", email = "tinyhat@tinyloop.co" }]
-keywords = ["claude-code", "plugin", "skills", "observability", "local"]
+keywords = ["tinyhat", "openclaw", "plugin", "skills", "telegram-mini-app"]
 classifiers = [
   "Development Status :: 3 - Alpha",
   "Environment :: Plugins",
@@ -17,9 +17,9 @@ classifiers = [
   "Programming Language :: Python :: 3.9",
   "Programming Language :: Python :: 3.11",
   "Programming Language :: Python :: 3.12",
-  "Topic :: Software Development :: Libraries :: Python Modules",
+  "Topic :: Software Development :: Libraries",
 ]
-# Tinyhat intentionally ships no runtime dependencies — stdlib only.
+# Python helpers intentionally ship with no runtime dependencies.
 dependencies = []
 
 [project.urls]
@@ -36,7 +36,7 @@ line-length = 100
 target-version = "py39"
 extend-exclude = [
   ".claude",
-  "skills/*/templates",
+  "node_modules",
 ]
 
 [tool.ruff.lint]

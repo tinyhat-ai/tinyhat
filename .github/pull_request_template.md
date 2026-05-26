@@ -2,53 +2,49 @@
 
 <!-- What changed and why. One or two sentences. -->
 
-## Linked issue
+## Linked Issue
 
 Closes #
 
-## Type of change
+## Type Of Change
 
-<!-- Check one or more. -->
+- [ ] `feat` - new feature
+- [ ] `fix` - bug fix
+- [ ] `docs` - documentation only
+- [ ] `refactor` - no behavior change
+- [ ] `test` - tests only
+- [ ] `chore` / `ci` / `build` - tooling
+- [ ] Breaking change
 
-- [ ] `feat` — new feature
-- [ ] `fix` — bug fix
-- [ ] `docs` — documentation only
-- [ ] `refactor` — no behavior change
-- [ ] `test` — tests only
-- [ ] `chore` / `ci` / `build` — tooling
-- [ ] Breaking change (requires `!` in the type or a `BREAKING CHANGE:` footer)
+## Testing Performed
 
-## Testing performed
+- [ ] `git diff --check`
+- [ ] `python3 scripts/check_dev_skills.py`
+- [ ] `bash .github/scripts/check_packaging.sh`
+- [ ] `python3 scripts/validate_openclaw_package.py`
+- [ ] `python3 -m compileall -q scripts`
+- [ ] `node --check src/index.js`
+- [ ] `ruff check .` and `ruff format --check .`
+- [ ] Manual OpenClaw plugin smoke test, if applicable
 
-<!-- Commands you ran, manual steps, what you verified. -->
+## Screenshots Or Logs
 
-- [ ] Ran `python3 scripts/gather_snapshot.py` successfully
-- [ ] Ran `python3 scripts/render_report.py --open` successfully
-- [ ] Exercised the plugin via `claude --plugin-dir "$(pwd)"`
-- [ ] `ruff check .` and `ruff format --check .` pass
-- [ ] Added / updated tests where applicable
-
-## Screenshots (if UI)
-
-<!-- For changes to report.html, the index page, or anything the user sees. -->
+<!-- For visible Telegram/OpenClaw behavior, paste redacted output or screenshots. -->
 
 ## Checklist
 
-- [ ] PR title is a Conventional Commit (e.g. `feat(skills): …`, `fix: …`)
-- [ ] Linked to an issue (`Closes #…`) or this PR is the canonical spec
-- [ ] Tests added or updated (or this PR is docs/chore only)
-- [ ] Docs updated where behavior changed
-- [ ] CI is green
-- [ ] No references to private maintainer resources (see [AGENTS.md](../AGENTS.md#local-override-files))
-- [ ] I will not self-merge
-
----
+- [ ] PR title is a Conventional Commit.
+- [ ] Linked to an issue or this PR is the canonical spec.
+- [ ] Docs updated where behavior changed.
+- [ ] CI is green.
+- [ ] No tenant secrets, signed Mini App URLs, private backend URLs, local-only
+      paths, or internal docs are included.
+- [ ] I will not self-merge.
 
 <details>
-<summary>Agent checklist (only if a bot opened this PR)</summary>
+<summary>Agent checklist</summary>
 
-- [ ] Commits signed with the bot's SSH key and identity — see
-      [`commit` skill](../.agents/skills/commit/SKILL.md).
-- [ ] Branch named `<agent>/<short-topic>`.
+- [ ] Commits follow the repo bot-identity/signing rules in `AGENTS.md`.
+- [ ] Branch named with an agent or contributor prefix.
 
 </details>

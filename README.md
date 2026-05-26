@@ -1,99 +1,97 @@
-# Tinyhat
-
-**See which skills are part of your workflow — and which ones you may be missing.**
+# Tinyhat OpenClaw Platform Plugin
 
 [![CI](https://github.com/tinyhat-ai/tinyhat/actions/workflows/ci.yml/badge.svg)](https://github.com/tinyhat-ai/tinyhat/actions/workflows/ci.yml)
-[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 [![Version](https://img.shields.io/github/v/tag/tinyhat-ai/tinyhat?label=version&sort=semver)](https://github.com/tinyhat-ai/tinyhat/releases)
-[![Conventional Commits](https://img.shields.io/badge/Conventional%20Commits-1.0.0-blue.svg)](https://www.conventionalcommits.org)
 
-Tinyhat is a small Claude Code plugin that looks at your recent usage and turns it into a report.
+Tinyhat is the public platform plugin package for Tinyhat-managed
+OpenClaw Computers.
 
-I built it because I wanted a more honest view of my setup: what I was actually using, what was just sitting there installed, and what kinds of work kept coming up without a fitting skill.
+Tinyhat installs this repository into each managed OpenClaw runtime so
+the agent can discover the Tinyhat capabilities around it: credential
+entry, Manage Computer, terminal entry, safe status, installed package
+inventory, and redacted support context.
 
-Instead of guessing what skills you need, you can start from your actual workflow.
+This repository is intentionally separate from the OpenClaw runtime
+package.
+The runtime boots OpenClaw, supervises it, applies config, and pins this
+plugin repo/ref.
+This plugin owns the agent-facing Tinyhat capability tools, the public
+manifest, and the default skills that teach the agent which capability
+to use.
 
-That usually leads to three useful actions:
-- improve the skills you already rely on
-- remove unused skills
-- create the skills you seem to be missing
+## What Ships Here
 
-Everything runs locally. No hooks, no daemons, no network calls.
+| Surface | Purpose |
+| --- | --- |
+| [`openclaw.plugin.json`](openclaw.plugin.json) | OpenClaw plugin manifest and capability contract metadata. |
+| [`src/index.js`](src/index.js) | Tinyhat tool plugin implementation. |
+| [`skills/tinyhat-platform/SKILL.md`](skills/tinyhat-platform/SKILL.md) | Compact first skill that teaches the agent the named platform operations. |
+| [`docs/capabilities.md`](docs/capabilities.md) | Public operation list, safety rules, and response boundaries. |
+| [`docs/architecture.md`](docs/architecture.md) | Runtime-vs-plugin ownership boundary. |
 
-![Top of a Tinyhat audit report asking "Which skills are actually earning their keep?" with two summary cards: 11% skill utilization — 14 of 122 installed skills had at least one run — and 31% of sessions with skills, meaning 18 of 58 recent sessions fired at least one skill.](docs/images/audit-summary.png)
+The focused router/default-skills expansion is tracked in
+[tinyhat-ai/tinyhat#94](https://github.com/tinyhat-ai/tinyhat/issues/94).
+The skill-authoring standard that governs those skills is tracked in
+[tinyhat-ai/tinyhat#95](https://github.com/tinyhat-ai/tinyhat/issues/95).
 
-*A local report built from your recent Claude Code usage, showing which skills seem active, which look unused, and where you may be missing a skill.*
+## Capabilities
 
-## Why "Tinyhat"?
+The first package exposes these named Tinyhat operations:
 
-I kept coming back to the way people switch roles: "put on your marketing hat," "put on your ops hat."
+| Operation | Tool | User surface |
+| --- | --- | --- |
+| `credentials.open_add_secret` | `tinyhat_request_runtime_secret` | Telegram Mini App button. |
+| `credentials.list_metadata` | `tinyhat_list_runtime_secrets` | Metadata-only tool result. |
+| `computer.open_manage` | `tinyhat_open_manage_computer_link` | Telegram Mini App button. |
+| `computer.open_terminal` | `tinyhat_open_terminal_link` | Telegram Mini App button with optional admin-reviewed command. |
+| `computer.status` | `tinyhat_get_platform_status` | Secret-free runtime/platform status. |
+| `packages.list_installed` | `tinyhat_list_installed_packages` | Public refs/SHAs and Tinyhat-vs-user package split when available. |
+| `support.report_problem` | `tinyhat_report_problem` | Redacted support context. |
 
-This project started from wondering whether agents might work that way too: different hats, different skills, different ways of working.
+Secret values, signed Mini App intent tokens, raw backend URLs, and
+private Computer URLs are not agent-facing output.
+Privileged user actions should render as Telegram buttons.
+If a channel cannot render a button, the agent should explain the
+limitation instead of pasting a Mini App URL into chat.
 
-Tinyhat is just a small tool to help make those skills easier to see.
+## Installation
 
-## Install
+Tinyhat-managed Computers install this package during runtime startup.
+The platform passes the public repo and ref through the Computer
+provisioning manifest:
 
-Inside Claude Code, add the Tinyloop marketplace and install the plugin from it:
-
-```text
-/plugin marketplace add tinyhat-ai/tinyhat
-/plugin install tinyhat@tinyloop
-/reload-plugins
+```bash
+TINYHAT_PLATFORM_PLUGIN_REPO_URL=https://github.com/tinyhat-ai/tinyhat.git
+TINYHAT_PLATFORM_PLUGIN_REPO_REF=main
 ```
 
-The first line registers Tinyloop's marketplace (this repo doubles as its own marketplace). The second installs the `tinyhat` plugin from it. After this, `/plugin marketplace update tinyloop` pulls newer versions.
+The OpenClaw runtime clones that ref and runs:
 
-If `/plugin update tinyhat@tinyloop` appears to leave Tinyhat on old
-code, reinstall cleanly:
-
-```text
-/plugin remove tinyhat@tinyloop
-/plugin install tinyhat@tinyloop
-/reload-plugins
+```bash
+openclaw plugins install /path/to/tinyhat --force
 ```
 
-Requires Python 3.9+ on your `PATH` (pre-installed on macOS and most Linux).
+For local package validation from this checkout:
 
-## Usage
+```bash
+python3 scripts/validate_openclaw_package.py
+node --check src/index.js
+```
 
-Ask in plain English or use a slash command:
+## Repository Boundaries
 
-- **Produce a report:** *"Audit my skills."* · `/tinyhat:audit`
-- **Re-open the last report:** *"Show my latest skill audit."* · `/tinyhat:open`
-- **Browse history:** *"Show my skill-audit history."* · `/tinyhat:history`
-- **Manage the daily routine:** *"Turn off tinyhat's daily run."* · `/tinyhat:routine status|on|off|where|clear`
+- `tinyhat-ai/tinyhat` owns Tinyhat's OpenClaw plugin, capability
+  tools, default skills, references, and public release metadata.
+- `tinyloophub/tinyhat--runtimes--openclaw` owns OpenClaw boot,
+  supervisor, config/apply, health, and pinning this plugin source.
+- `tinyloophub/tinyloop` owns platform APIs, provisioning,
+  Computer metadata, inventory, canary, hold/pin, rollback, and the
+  gitlink/ref Tinyhat deploys.
 
-Tinyhat writes under Claude Code's per-plugin data directory. For a
-marketplace install of `tinyhat@tinyloop`, the latest HTML typically
-lands at `~/.claude/plugins/data/tinyhat-tinyloop/latest/report.html`.
-If you're upgrading from an older Tinyhat, the next write-capable run
-automatically migrates data from the legacy `~/.claude/tinyhat/`
-directory.
-For every flow, trigger, and sub-command, see
-[`docs/user-flows.md`](docs/user-flows.md).
+Do not move platform backend code, runtime boot scripts, tenant
+secrets, internal URLs, or private docs into this repository.
 
-## Documentation
+## Development
 
-Deeper docs live in [`docs/`](docs/):
-
-- [`docs/user-flows.md`](docs/user-flows.md) — each skill, step by step
-- [`docs/artifacts.md`](docs/artifacts.md) — every file Tinyhat writes, and how to open or reset it
-- [`docs/architecture.md`](docs/architecture.md) — how the code is laid out
-- [`docs/local-development.md`](docs/local-development.md) — how to hack on it
-- [`roadmap/`](roadmap/) — what's being built now, next, and later; open a PR to propose a priority change
-
-## Contributing
-
-Fork, branch (`feat/...`, `fix/...`, `docs/...`, `chore/...`), open a PR. Use [Conventional Commits](https://www.conventionalcommits.org) for the subject. We squash-merge onto a linear `main`.
-
-Full workflow: [CONTRIBUTING.md](CONTRIBUTING.md).
-
-## Community
-
-- [Code of Conduct](CODE_OF_CONDUCT.md) · [Security policy](SECURITY.md)
-- Questions or ideas: open an issue. Private security reports: use GitHub's advisory flow or `security@tinyloop.co`.
-
-## License
-
-MIT. See [LICENSE](LICENSE).
+See [docs/local-development.md](docs/local-development.md) for local
+checks and [AGENTS.md](AGENTS.md) for contribution rules.

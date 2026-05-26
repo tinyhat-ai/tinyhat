@@ -12,7 +12,12 @@
       "extra-files": [
         {
           "type": "json",
-          "path": ".claude-plugin/plugin.json",
+          "path": "package.json",
+          "jsonpath": "$.version"
+        },
+        {
+          "type": "json",
+          "path": "openclaw.plugin.json",
           "jsonpath": "$.version"
         }
       ]

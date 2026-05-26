@@ -13,7 +13,6 @@ REQUIRED_SKILLS = (
     "codex",
     "commit",
     "define-tests",
-    "dev-reset",
     "open-pr",
     "propose-roadmap",
     "release",
@@ -92,9 +91,6 @@ def main() -> None:
             and not (parent_root / skill / "SKILL.md").is_file()
         ):
             fail(f"parent skill is missing: {parent_root / skill / 'SKILL.md'}")
-
-    if (root / "skills" / "dev-reset").exists():
-        fail("dev-reset must stay repo-local under .agents/skills, not packaged skills/")
 
     if parent_root:
         print(f"dev-skills: ok (parent={parent_root})")
