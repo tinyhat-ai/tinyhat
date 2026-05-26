@@ -1,0 +1,90 @@
+{
+  "id": "tinyhat",
+  "name": "Tinyhat",
+  "description": "Tinyhat platform capabilities for managed OpenClaw Computers.",
+  "version": "0.1.8",
+  "configSchema": {
+    "type": "object",
+    "properties": {
+      "platformBaseUrl": {
+        "type": "string",
+        "description": "Tinyhat platform API base URL. Usually discovered from Computer metadata."
+      },
+      "backendAudience": {
+        "type": "string",
+        "description": "Audience used when minting the Computer identity token. Usually discovered from Computer metadata."
+      },
+      "devMode": {
+        "type": "boolean",
+        "description": "Use local development bearer-token auth instead of metadata identity tokens."
+      },
+      "devBearer": {
+        "type": "string",
+        "description": "Local development bearer token. Never set this in production package metadata."
+      }
+    },
+    "additionalProperties": false
+  },
+  "activation": {
+    "onStartup": true
+  },
+  "skills": [
+    "skills"
+  ],
+  "contracts": {
+    "capabilityContract": "tinyhat.openclaw.platform.v0.5",
+    "tools": [
+      "tinyhat_get_platform_status",
+      "tinyhat_list_installed_packages",
+      "tinyhat_list_runtime_secrets",
+      "tinyhat_request_runtime_secret",
+      "tinyhat_open_manage_computer_link",
+      "tinyhat_open_terminal_link",
+      "tinyhat_report_problem",
+      "tinyhat_secret_command"
+    ],
+    "operations": [
+      {
+        "name": "credentials.open_add_secret",
+        "tool": "tinyhat_request_runtime_secret",
+        "userSurface": "telegram_web_app_button"
+      },
+      {
+        "name": "credentials.list_metadata",
+        "tool": "tinyhat_list_runtime_secrets",
+        "userSurface": "metadata_only_tool_result"
+      },
+      {
+        "name": "computer.open_manage",
+        "tool": "tinyhat_open_manage_computer_link",
+        "userSurface": "telegram_web_app_button"
+      },
+      {
+        "name": "computer.open_terminal",
+        "tool": "tinyhat_open_terminal_link",
+        "userSurface": "telegram_web_app_button"
+      },
+      {
+        "name": "computer.status",
+        "tool": "tinyhat_get_platform_status",
+        "userSurface": "secret_free_tool_result"
+      },
+      {
+        "name": "packages.list_installed",
+        "tool": "tinyhat_list_installed_packages",
+        "userSurface": "secret_free_tool_result"
+      },
+      {
+        "name": "support.report_problem",
+        "tool": "tinyhat_report_problem",
+        "userSurface": "redacted_tool_result"
+      }
+    ],
+    "security": {
+      "secretValues": "never_returned_to_agent",
+      "miniAppUrls": "telegram_web_app_buttons_only",
+      "rawBackendUrls": "not_part_of_agent_instructions",
+      "auth": "computer_identity_token_or_telegram_init_data"
+    }
+  }
+}

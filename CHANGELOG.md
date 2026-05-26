@@ -13,6 +13,15 @@ for fixes. Breaking changes stay in minor bumps until we explicitly
 ship `1.0.0`. Release-please is configured to honor this
 (`bump-minor-pre-major: true`, `bump-patch-for-minor-pre-major: true`).
 
+## Unreleased
+
+### Changed
+
+- Reset the package from the retired Claude Code skill-audit plugin into
+  the public Tinyhat OpenClaw platform plugin, with manifest, tools,
+  default skill, docs, roadmap, validation, and release metadata tracked
+  by [#93](https://github.com/tinyhat-ai/tinyhat/issues/93).
+
 ## [0.1.8](https://github.com/tinyhat-ai/tinyhat/compare/v0.1.7...v0.1.8) (2026-04-23)
 
 

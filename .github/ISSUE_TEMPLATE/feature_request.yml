@@ -1,5 +1,5 @@
 name: Feature request
-description: Suggest a new skill, new report section, new attribution signal, or other improvement.
+description: Suggest a Tinyhat OpenClaw plugin capability, skill, package, or docs improvement.
 title: "feat: "
 labels: ["enhancement", "triage"]
 body:
@@ -7,7 +7,7 @@ body:
     id: problem
     attributes:
       label: The problem
-      description: What can't you do today? What does the current behavior miss?
+      description: What should a Tinyhat-managed OpenClaw agent be able to do?
     validations:
       required: true
 
@@ -15,28 +15,24 @@ body:
     id: proposal
     attributes:
       label: Proposed solution
-      description: What should Tinyhat do instead?
+      description: What capability, skill, manifest field, or docs change should Tinyhat add?
     validations:
       required: true
-
-  - type: textarea
-    id: alternatives
-    attributes:
-      label: Alternatives considered
-      description: Other approaches you thought about and why they're weaker.
 
   - type: dropdown
     id: area
     attributes:
-      label: Area of Tinyhat
+      label: Area
       multiple: true
       options:
-        - Data gathering (gather_snapshot.py)
-        - Report rendering (render_report.py / templates)
-        - Skills (skill-audit, open-latest-audit, audit-history)
-        - Routine / daily refresh
+        - OpenClaw plugin manifest
+        - Tool plugin implementation
+        - Packaged skills
+        - Telegram Mini App button behavior
+        - Secret metadata / credential flow
+        - Runtime/package inventory
         - Docs
-        - Install / distribution
+        - CI / validation
         - Other
     validations:
       required: true
@@ -45,7 +41,7 @@ body:
     id: context
     attributes:
       label: Additional context
-      description: Links, screenshots, example snapshots, prior art.
+      description: Links, screenshots, expected tool calls, or prior art.
 
   - type: checkboxes
     id: checks
@@ -54,5 +50,5 @@ body:
       options:
         - label: I searched existing issues and discussions.
           required: true
-        - label: This fits Tinyhat's scope (local-only, read-only, no backend).
+        - label: This request fits the public plugin package scope.
           required: true

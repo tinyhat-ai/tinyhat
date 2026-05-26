@@ -1,21 +1,6 @@
 #!/usr/bin/env bash
-# Fails CI if dev-only assets (the dev-reset skill, its helper script) leak
-# into the paths a `/plugin install` would expose to end users. See #55.
-#
-# The rules we enforce:
-#
-#   1. `skills/dev-reset/` must not exist — plugin-scoped skills live under
-#      `skills/`; the dev-reset skill is repo-scoped and belongs under
-#      `.agents/skills/dev-reset/`.
-#   2. No file under `skills/` or `.claude-plugin/` may reference the
-#      dev-reset helper script by name.
-#   3. The repo-scoped SKILL.md must exist and its description must start
-#      with "INTERNAL DEV ONLY" so any skill listing makes the intent
-#      obvious.
-#   4. The helper script must exist (otherwise the skill is broken).
-#
-# Keep this script dependency-free so it runs identically on any Ubuntu or
-# macOS GitHub runner without extra setup.
+# Fails CI if repo-local development assets leak into the packaged
+# OpenClaw plugin surface.
 
 set -euo pipefail
 
@@ -24,27 +9,26 @@ fail() {
   exit 1
 }
 
-# 1. Plugin-scoped path must not hold the dev-reset skill.
-if [[ -e skills/dev-reset ]]; then
-  fail "skills/dev-reset/ must not exist — move it to .agents/skills/dev-reset/"
+[[ -f openclaw.plugin.json ]] || fail "openclaw.plugin.json is missing"
+[[ -f package.json ]] || fail "package.json is missing"
+[[ -f src/index.js ]] || fail "src/index.js is missing"
+[[ -d skills ]] || fail "skills/ is missing"
+
+if [[ -e .claude-plugin ]]; then
+  fail ".claude-plugin/ must not exist in the OpenClaw plugin package"
 fi
 
-# 2. Packaged plugin files must not mention the dev-reset helper.
-if grep -r -l -E 'dev[-_]reset' skills/ .claude-plugin/ 2>/dev/null; then
-  fail "packaged plugin files above reference dev-reset — must be repo-scoped only"
+if find skills -maxdepth 2 -type f -name 'SKILL.md' | grep -q '.agents'; then
+  fail "packaged skills must live under skills/, not .agents/"
 fi
 
-# 3. Repo-scoped SKILL.md exists and advertises its intent.
-skill_md=".agents/skills/dev-reset/SKILL.md"
-[[ -f "$skill_md" ]] || fail "$skill_md is missing"
-if ! grep -qE '^description: INTERNAL DEV ONLY' "$skill_md"; then
-  fail "$skill_md frontmatter description must start with 'INTERNAL DEV ONLY'"
-fi
-if [[ ! -L .claude/skills/dev-reset ]]; then
-  fail ".claude/skills/dev-reset must be a symlink adapter to .agents/skills/dev-reset"
+if find skills -path '*/dev-reset/*' -o -name 'dev_reset.py' | grep -q .; then
+  fail "dev-reset assets must not be packaged"
 fi
 
-# 4. Helper script exists.
-[[ -f scripts/dev_reset.py ]] || fail "scripts/dev_reset.py is missing"
+if grep -r -l -E 'gather_snapshot|render_report|tinyhat-snapshot|CLAUDE_PLUGIN_DATA|skill-audit' \
+  README.md openclaw.plugin.json package.json docs skills src 2>/dev/null; then
+  fail "packaged/public surfaces reference the retired audit plugin"
+fi
 
 echo "packaging-guard: ok"

@@ -1,273 +1,84 @@
-# Local development
+# Local Development
 
-How to hack on Tinyhat without publishing anything. Everything below runs against your real local Claude data — there's no separate fixture or sandbox in v0 yet.
+This repository is an OpenClaw plugin package. Local checks focus on
+package shape, manifest/tool consistency, public-safety boundaries, and
+syntax.
 
 ## Prerequisites
 
-- Python 3.9+ on your `PATH`.
-- A clone of this repo:
-  ```bash
-  git clone https://github.com/tinyhat-ai/tinyhat.git
-  cd tinyhat
-  ```
-- Some Claude Code usage in the last 30 days, or the report will be empty-but-correct.
+- Python 3.9+.
+- Node.js 18+.
+- Optional: `ruff` via `pipx` or a local virtual environment.
 
-## Two ways to test
-
-Pick the one that matches what you're doing:
-
-1. **Full plugin test** — `--plugin-dir` loads this folder as a real plugin, with the `tinyhat:` namespace and the plugin/skill path substitutions resolved. Restart required. This is what you do before pushing to verify the install flow.
-2. **Script-only iteration** — run `gather_snapshot.py` / `render_report.py` directly from the shell. No Claude involved. Fastest for UI/template/CSS changes.
-
-There's also a **project-local test harness** that lives in `.claude/skills/`. It shadows the plugin skills so you can exercise `/skill-audit`, `/open-latest-audit`, and `/audit-history` in the current Claude Code session *without restart* — but it uses hardcoded absolute paths and only works on the maintainer's machine. It is deleted before the plugin ships. Don't rely on it for your own development.
-
----
-
-## 1. Full plugin test (what you'd do before a PR)
-
-This exercises the plugin exactly the way a user would, namespaced as `/tinyhat:audit` etc.
-
-### Start a fresh Claude Code session with the plugin loaded
+## Fast Check Loop
 
 ```bash
-claude --plugin-dir /absolute/path/to/tinyhat
+git diff --check
+python3 scripts/check_dev_skills.py
+bash .github/scripts/check_packaging.sh
+python3 scripts/validate_openclaw_package.py
+python3 -m compileall -q scripts
+node --check src/index.js
+node --test
 ```
 
-You can pass `--plugin-dir` multiple times if you're testing against other plugins in parallel.
-
-### Exercise the three skills
-
-Type these in Claude Code. Pick slash commands or natural language — both should work.
-
-**Produce a fresh report (the primary flow):**
-
-```text
-/tinyhat:audit
-```
-
-or
-
-```text
-Audit my skills.
-```
-
-The agent will:
-1. Run `gather_snapshot.py` → writes `<tempdir>/tinyhat-snapshot.json` (compact, agent-facing) and `<tempdir>/tinyhat-snapshot-detail.json` (full, renderer-facing).
-2. Read the compact snapshot and write `<tempdir>/tinyhat-analysis.json` — this is the editorial layer. Watch its reasoning; that's where Tinyhat earns its keep.
-3. Run `render_report.py --archive`.
-4. The report lands under Tinyhat's plugin-data root (script-only default: `~/.claude/plugins/data/tinyhat/latest/report.html`).
-
-**What to judge on the report:**
-- Headline: *"You have N skills installed. You used M of them in the last 30 days."* — are N and M correct to your gut?
-- Top skills list — anything you know you used missing? Anything sneaking in that you didn't use?
-- `What stands out` bullets — do they feel specific to *this* week, or generic?
-- Dormant section (click "Keep it simple" → "Data junkie mode" first) — origin breakdown reasonable?
-- Mode switch (top-right): Keep it simple ↔ Data junkie
-- Tools filter chips (Data junkie → "All tools used this period")
-- Session timestamps: local time with time of day, not UTC
-
-**Open the latest report without regenerating:**
-
-```text
-/tinyhat:open
-```
-
-Should open the existing `~/.claude/plugins/data/tinyhat/latest/report.html` in your browser — no Python run.
-
-**Browse the archive:**
-
-```text
-/tinyhat:history
-```
-
-Should open `~/.claude/plugins/data/tinyhat/archive/index.html`. One entry per day you've run the audit, up to 31. The header inside each report has an `all reports →` link that returns to this index.
-
-**Check / toggle the adaptive daily routine:**
-
-```text
-/tinyhat:audit routine status
-/tinyhat:audit routine off
-/tinyhat:audit routine on
-```
-
-**Print the paths Tinyhat reads and writes:**
-
-```text
-/tinyhat:audit where
-```
-
-### Iterate on changes
-
-Edit files in the cloned repo, then inside Claude Code run:
-
-```text
-/reload-plugins
-```
-
-This re-reads `SKILL.md` files and re-registers the skills. Python scripts are re-executed on every invocation, so changes to `scripts/*.py` take effect on the next `/tinyhat:audit`. Template and CSS changes take effect on the next `render_report.py` run.
-
-### Reset state between tests
-
-Tinyhat writes to several places across `~/.claude/plugins/` (data, cache, install manifest, installed-plugins registry), the legacy `~/.claude/tinyhat/` home, and two transient files in `<tempdir>/`. A missed path silently invalidates a first-run test, so the repo ships an internal skill that wipes every Tinyhat byte on the machine and nothing else:
-
-```text
-/tinyhat:dev:reset
-```
-
-or in natural language: *"reset my tinyhat state so I can test a fresh first-run."*
-
-The skill lives at `.agents/skills/dev-reset/SKILL.md` — it's repo-scoped and never packaged with the plugin. You can also drive the helper script directly:
+If `ruff` is available:
 
 ```bash
-# Dry-run (prints what would be removed):
-python3 scripts/dev_reset.py
-
-# Actually remove:
-python3 scripts/dev_reset.py --commit
-
-# Full nuclear reset (also removes marketplace registration):
-python3 scripts/dev_reset.py --commit --full
+ruff check .
+ruff format --check .
 ```
 
-The scoped reset leaves `~/.claude/plugins/known_marketplaces.json` alone so `/plugin install tinyhat@tinyloop` works on the next run without re-adding the marketplace. Use `--full` when you're testing the `/plugin marketplace add` step too. Either mode leaves `~/.claude/projects/` (session transcripts), `~/.claude/rc-dashboard/` (unrelated logs), and every other plugin's data untouched.
-
----
-
-## 2. Script-only iteration (fastest loop for HTML/CSS)
-
-When you're fiddling with the report layout, skip Claude entirely. The agent analysis isn't the feedback loop you care about; the renderer is.
-
-### Run the full pipeline against your real data
+or:
 
 ```bash
-# Gather facts from local transcripts:
-python3 scripts/gather_snapshot.py
-# → writes <tempdir>/tinyhat-snapshot.json (compact, agent-facing)
-# → writes <tempdir>/tinyhat-snapshot-detail.json (full, renderer-facing)
-# → prints both paths to stderr
-
-# Generate an analysis.json (the editorial layer).
-# For fast iteration, skip this step — render_report.py has Python fallbacks
-# that produce a generic-but-useful analysis. Only the agent should write
-# non-generic analysis.
-
-# Render the report:
-python3 scripts/render_report.py --archive
-# → writes ~/.claude/plugins/data/tinyhat/latest/report.{md,html}
-# → writes ~/.claude/plugins/data/tinyhat/archive/YYYY-MM-DD/
-# → regenerates ~/.claude/plugins/data/tinyhat/archive/index.html
+pipx run ruff check .
+pipx run ruff format --check .
 ```
 
-### Just re-render without re-gathering
+## What The Checks Cover
 
-If you've edited CSS or the template, keep the snapshot and just re-render:
+| Check | Purpose |
+| --- | --- |
+| `scripts/check_dev_skills.py` | Ensures repo-local development skills and Claude adapters are wired. |
+| `.github/scripts/check_packaging.sh` | Ensures dev-only skills stay out of packaged plugin surfaces. |
+| `scripts/validate_openclaw_package.py` | Validates manifest/package/tool/skill consistency and guards against old reset artifacts. |
+| `node --check src/index.js` | Catches JavaScript syntax errors without needing OpenClaw installed. |
+| `node --test` | Runs pure JavaScript safety tests for redaction and command parsing. |
+| `ruff` | Lints and format-checks Python helper scripts. |
+
+## Manual OpenClaw Smoke Test
+
+Use an OpenClaw development instance when available:
 
 ```bash
-python3 scripts/render_report.py
+openclaw plugins install "$(pwd)" --force
 ```
 
-That reuses `<tempdir>/tinyhat-snapshot-detail.json` from the previous gather run (the renderer reads the full detail file, not the compact agent view).
+Then verify that OpenClaw sees:
 
-### Test the archive index in isolation
+- plugin id `tinyhat`;
+- extension `./src/index.js`;
+- packaged skills under `skills/`;
+- tools listed in `openclaw.plugin.json` and `src/index.js`.
+
+When testing against a local Tinyhat backend, pass development config
+through the plugin/runtime environment rather than hard-coding private
+URLs into this repo:
 
 ```bash
-python3 scripts/render_report.py --index-only
-open ~/.claude/plugins/data/tinyhat/archive/index.html
+TINYHAT_PLATFORM_BASE_URL=http://127.0.0.1:8000
+TINYHAT_DEV_RUNTIME=1
+TINYHAT_DEV_BEARER=dev-runtime
 ```
 
-### Test a custom analysis JSON
+Do not commit local endpoint values.
 
-If you want to test a specific piece of editorial content (a particular headline, a dormant-commentary edge case), write it by hand:
+## Before Opening A PR
 
-```bash
-cat > "$(python3 -c 'import tempfile; print(tempfile.gettempdir())')/tinyhat-analysis.json" <<'JSON'
-{
-  "headline": "You have 42 skills installed. You used 3 of them this week.",
-  "headline_sub": "Testing edge-case copy.",
-  "what_stands_out": ["Bullet A.", "Bullet B."],
-  "dormant_commentary": "Most of your surface is dormant.",
-  "skill_recommendations": [],
-  "coverage_note": "Synthetic test run."
-}
-JSON
-
-python3 scripts/render_report.py --open
-```
-
-Read `skills/audit/references/writing-the-analysis.md` for the full schema.
-
-### Routine state
-
-```bash
-python3 scripts/routine.py status
-python3 scripts/routine.py check   # exits 0 if a daily run should fire, non-zero otherwise
-python3 scripts/routine.py on
-python3 scripts/routine.py off
-python3 scripts/routine.py where
-python3 scripts/routine.py clear-archive
-```
-
-All of these accept `--home-root /some/path` if you want to test against a throwaway location instead of `~/.claude/plugins/data/tinyhat/`:
-
-```bash
-python3 scripts/routine.py --home-root /tmp/tinyhat-test status
-python3 scripts/render_report.py --home-root /tmp/tinyhat-test --open
-```
-
----
-
-## 3. Where things live
-
-```
-tinyhat/
-├── .claude-plugin/
-│   └── plugin.json                  ← plugin manifest
-├── skills/
-│   ├── skill-audit/
-│   │   ├── SKILL.md                 ← primary skill: produce the audit
-│   │   ├── references/
-│   │   │   └── writing-the-analysis.md   ← detailed agent guidance
-│   │   └── templates/
-│   │       ├── report.html.tmpl     ← HTML layout with {{SLOT}} placeholders
-│   │       ├── report.md.tmpl       ← Markdown equivalent
-│   │       └── report.css           ← extracted stylesheet (inlined at render)
-│   ├── open-latest-audit/SKILL.md   ← opens latest without regenerating
-│   └── audit-history/SKILL.md       ← opens the archive index
-├── scripts/
-│   ├── gather_snapshot.py           ← the data layer (no judgement)
-│   ├── render_report.py             ← templating + retention + archive index
-│   └── routine.py                   ← routine.json + run-stamp + clear-archive
-├── docs/local-development.md        ← this file
-└── README.md                        ← user-facing install + usage
-```
-
-**Plugin paths in SKILL.md** should usually use `${CLAUDE_SKILL_DIR}` for bundled script calls that need to keep working after the skill loads. Claude renders that variable into the absolute path of the current skill directory before the skill content is handed to the model, so a command like `python3 "${CLAUDE_SKILL_DIR}/../../scripts/gather_snapshot.py"` keeps pointing at the same installed Tinyhat version in later Bash blocks. `${CLAUDE_PLUGIN_ROOT}` is still useful inside `!`-prefixed fenced blocks when you truly need the plugin root during load-time shell execution. If you're running a `SKILL.md` snippet from a regular shell outside the plugin harness, substitute the real path directly.
-
-**Temp file location** is the platform temp dir (`/var/folders/...` on macOS, `/tmp` on Linux, `%TEMP%` on Windows). Find it with:
-
-```bash
-python3 -c 'import tempfile; print(tempfile.gettempdir())'
-```
-
----
-
-## 4. Gotchas
-
-- **No transcripts means an empty report.** If you haven't used Claude Code in the last 30 days, every section will read "0 of 0". That's correct behavior, not a bug.
-- **Cowork paths are macOS-only.** On Linux/Windows the scanner silently skips them, and the coverage note should say so. If you're on a non-Mac dev box, don't panic if "Cowork transcripts: 0" is all you see.
-- **`Read` on a `SKILL.md` is a heuristic.** The scanner drops bare reads (reads not followed by another tool call in the same turn) as likely false positives. You can see them in the snapshot under `events_audit.bare_read_skill_md` if you're debugging attribution.
-- **The Python fallback analysis is on purpose generic.** Running `render_report.py` without an analysis JSON will produce a valid report with stub content — useful for UI iteration, not for production. The whole point of the plugin is that the agent writes the analysis.
-- **Editing CSS during a `--plugin-dir` session:** `/reload-plugins` picks up `SKILL.md` changes but the template/CSS files are read at `render_report.py` execution time, so changes take effect on the next audit run with no reload needed.
-
----
-
-## 5. Before opening a PR
-
-1. Run `/tinyhat:audit` and confirm the report renders without template errors and the terminal briefing looks sane.
-2. Run `/tinyhat:open` and confirm no regeneration happens.
-3. Run `/tinyhat:history` and confirm the index lists today's snapshot.
-4. Confirm the report-header `all reports →` link takes you back to the index, and each index entry re-opens its report.
-5. Spot-check at least one session timestamp is your local time (e.g. `2026-04-22 21:04`, not `2026-04-23T02:04`).
-6. If you touched attribution in `gather_snapshot.py`, spot-check `snapshot["events_audit"]` for unexpected unknowns.
-
-Then follow [AGENTS.md](../AGENTS.md) for commit + PR conventions.
+1. Fetch and branch from latest `origin/main`.
+2. Run the fast check loop above.
+3. Add docs when the capability contract changes.
+4. Keep the PR focused on one concern.
+5. Confirm no public file includes tenant secrets, signed URLs, private
+   backend URLs, or local-only machine paths.

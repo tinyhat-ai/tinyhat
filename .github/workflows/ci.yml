@@ -17,7 +17,7 @@ jobs:
     steps:
       - uses: actions/checkout@v6
 
-      - name: Dev-only assets must not be in the packaged plugin
+      - name: Dev-only assets stay out of packaged plugin surfaces
         run: bash .github/scripts/check_packaging.sh
 
       - name: Repo-local dev skills are wired for Codex and Claude
@@ -63,41 +63,11 @@ jobs:
       - name: Byte-compile scripts
         run: python -m compileall -q scripts
 
-      - name: Gather snapshot against an empty machine
-        run: |
-          mkdir -p "$RUNNER_TEMP/tinyhat-ci/home"
-          python3 scripts/gather_snapshot.py --output "$RUNNER_TEMP/tinyhat-ci/snapshot.json"
-          test -s "$RUNNER_TEMP/tinyhat-ci/snapshot.json"
+      - name: Validate OpenClaw package metadata
+        run: python3 scripts/validate_openclaw_package.py
 
-      - name: Render report with fallback analysis
-        run: |
-          python3 scripts/render_report.py \
-            --snapshot "$RUNNER_TEMP/tinyhat-ci/snapshot.json" \
-            --home-root "$RUNNER_TEMP/tinyhat-ci/home"
-          test -s "$RUNNER_TEMP/tinyhat-ci/home/latest/report.html"
-          test -s "$RUNNER_TEMP/tinyhat-ci/home/latest/report.md"
-          test -s "$RUNNER_TEMP/tinyhat-ci/home/archive/index.html"
+      - name: JavaScript syntax check
+        run: node --check src/index.js
 
-      - name: Archive + retention smoke test
-        run: |
-          python3 scripts/render_report.py \
-            --snapshot "$RUNNER_TEMP/tinyhat-ci/snapshot.json" \
-            --home-root "$RUNNER_TEMP/tinyhat-ci/home" \
-            --archive
-          ls "$RUNNER_TEMP/tinyhat-ci/home/archive/"
-
-      - name: All-reports backlink points to the right path per target
-        shell: bash
-        run: |
-          latest_html="$RUNNER_TEMP/tinyhat-ci/home/latest/report.html"
-          dated_html=$(ls "$RUNNER_TEMP/tinyhat-ci/home/archive/"*/report.html | head -n1)
-          grep -q 'href="../archive/index.html"[^>]*>all reports' "$latest_html"
-          grep -q 'href="../index.html"[^>]*>all reports' "$dated_html"
-          ! grep -q 'href="../archive/index.html"[^>]*>all reports' "$dated_html"
-
-      - name: Routine CLI smoke test
-        run: |
-          python3 scripts/routine.py --home-root "$RUNNER_TEMP/tinyhat-ci/home" status
-          python3 scripts/routine.py --home-root "$RUNNER_TEMP/tinyhat-ci/home" off
-          python3 scripts/routine.py --home-root "$RUNNER_TEMP/tinyhat-ci/home" on
-          python3 scripts/routine.py --home-root "$RUNNER_TEMP/tinyhat-ci/home" where
+      - name: JavaScript unit tests
+        run: node --test
