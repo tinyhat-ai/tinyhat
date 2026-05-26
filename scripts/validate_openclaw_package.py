@@ -30,6 +30,15 @@ REQUIRED_OPERATIONS = {
     "support.report_problem": "tinyhat_report_problem",
 }
 
+REQUIRED_SKILLS = {
+    "tinyhat-platform",
+    "tinyhat-secrets",
+    "tinyhat-computer-access",
+    "tinyhat-runtime-status",
+    "tinyhat-package-inventory",
+    "tinyhat-support-report",
+}
+
 SKILL_MD_MAX_LINES = 200
 SKILL_DESCRIPTION_MAX_CHARS = 1024
 ALLOWED_SKILL_SUBDIRS = {"assets", "references", "scripts"}
@@ -195,6 +204,9 @@ def validate_manifest(manifest: dict[str, Any]) -> None:
 def validate_skills(root: Path) -> None:
     skill_files = sorted((root / "skills").glob("*/SKILL.md"))
     require(skill_files, "skills/ must contain at least one SKILL.md")
+    skill_names = {skill_file.parent.name for skill_file in skill_files}
+    missing_skills = REQUIRED_SKILLS.difference(skill_names)
+    require(not missing_skills, f"skills/ missing default skills: {sorted(missing_skills)}")
     for skill_file in skill_files:
         text = skill_file.read_text(encoding="utf-8")
         relative_path = skill_file.relative_to(root)
@@ -277,6 +289,10 @@ def validate_source(root: Path) -> None:
     source = (root / "src" / "index.js").read_text(encoding="utf-8")
     for tool_name in REQUIRED_TOOLS:
         require(f'name: "{tool_name}"' in source, f"src/index.js missing tool {tool_name}")
+    for skill_name in REQUIRED_SKILLS:
+        require(
+            f'name: "{skill_name}"' in source, f"src/index.js missing default skill {skill_name}"
+        )
     for command in (
         "tinyhat_secrets",
         "tinyhat_secrets_manage",

@@ -25,15 +25,32 @@ to use.
 | --- | --- |
 | [`openclaw.plugin.json`](openclaw.plugin.json) | OpenClaw plugin manifest and capability contract metadata. |
 | [`src/index.js`](src/index.js) | Tinyhat tool plugin implementation. |
-| [`skills/tinyhat-platform/SKILL.md`](skills/tinyhat-platform/SKILL.md) | Compact first skill that teaches the agent the named platform operations. |
+| [`skills/tinyhat-platform/SKILL.md`](skills/tinyhat-platform/SKILL.md) | Router skill that maps broad Tinyhat/OpenClaw platform intent to focused default skills. |
+| [`skills/`](skills) | Focused default skills for secrets, Computer access, runtime status, package inventory, and support reports. |
 | [`docs/capabilities.md`](docs/capabilities.md) | Public operation list, safety rules, and response boundaries. |
 | [`docs/architecture.md`](docs/architecture.md) | Runtime-vs-plugin ownership boundary. |
 | [`docs/skill-authoring.md`](docs/skill-authoring.md) | Standard for authoring packaged Tinyhat skills. |
 
-The focused router/default-skills expansion is tracked in
-[tinyhat-ai/tinyhat#94](https://github.com/tinyhat-ai/tinyhat/issues/94).
-The skill-authoring standard that governs those skills is tracked in
-[tinyhat-ai/tinyhat#95](https://github.com/tinyhat-ai/tinyhat/issues/95).
+The skill-authoring standard that governs those skills lives in
+[`docs/skill-authoring.md`](docs/skill-authoring.md).
+
+## Default Skill Architecture
+
+The default skill layer is intentionally split into a thin router plus
+focused skills:
+
+| Skill | Owns |
+| --- | --- |
+| [`tinyhat-platform`](skills/tinyhat-platform/SKILL.md) | Routes broad platform requests to the right focused skill and named operation. |
+| [`tinyhat-secrets`](skills/tinyhat-secrets/SKILL.md) | Secret-entry buttons and secret metadata listing. |
+| [`tinyhat-computer-access`](skills/tinyhat-computer-access/SKILL.md) | Manage Computer and terminal button flows. |
+| [`tinyhat-runtime-status`](skills/tinyhat-runtime-status/SKILL.md) | Runtime/environment explanation and restart/reload boundaries. |
+| [`tinyhat-package-inventory`](skills/tinyhat-package-inventory/SKILL.md) | Tinyhat-installed defaults versus user-installed package inventory. |
+| [`tinyhat-support-report`](skills/tinyhat-support-report/SKILL.md) | Redacted support reports for platform problems. |
+
+The plugin layer exposes tools, button payloads, environment facts, and
+redacted diagnostics.
+The skills decide when to call those tools and how to respond safely.
 
 ## Capabilities
 
