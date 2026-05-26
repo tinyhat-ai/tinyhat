@@ -28,9 +28,13 @@ receive a runtime secret without exposing the secret value to the agent.
    non-secret detail only, such as provider or target system. Do not ask
    for the value.
 5. Call `tinyhat_request_runtime_secret` with `name` and `description`.
-6. Render the returned Telegram button payload exactly as structured
-   button transport when the channel supports buttons.
-7. Tell the user that the value must be entered in Telegram, not chat.
+6. If the tool reports `delivered: true`, the Telegram Mini App button
+   has already been sent directly. Do not call another message-sending
+   tool for the button.
+7. If direct delivery is unavailable and the tool returns
+   `channelData.telegram.buttons`, render that structured button
+   transport when the channel supports buttons.
+8. Tell the user that the value must be entered in Telegram, not chat.
 
 ## Plain-English Name Inference
 
@@ -54,6 +58,9 @@ provider or when one goal clearly needs several independent secrets.
 ## Secret Button Contract
 
 - Treat `text` as the user-facing copy.
+- If `delivered: true` is present, the plugin has already sent the
+  native Telegram button. Acknowledge briefly only if needed; do not
+  send a duplicate button.
 - Treat `channelData.telegram.buttons` as transport-only button data.
   Preserve it for Telegram rendering, but never quote or summarize any
   transport URL.

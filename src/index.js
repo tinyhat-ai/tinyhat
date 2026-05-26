@@ -6,6 +6,10 @@ import {
   formatSecretListReply,
   formatSecretRequestReply,
 } from "./presentation_helpers.js";
+import {
+  markTelegramDelivered,
+  sendTelegramMiniAppButton,
+} from "./telegram_delivery.js";
 
 const METADATA_BASE_URL_KEY = "tinyhat-platform-base-url";
 const METADATA_AUDIENCE_KEY = "tinyhat-backend-audience";
@@ -145,28 +149,44 @@ const plugin = defineToolPlugin({
     tool({
       name: "tinyhat_request_runtime_secret",
       description:
-        "Create a Telegram Mini App button payload so the owner can add or " +
-        "replace one runtime secret value outside chat.",
+        "Create and, on Telegram, directly send a Mini App button so the " +
+        "owner can add or replace one runtime secret value outside chat.",
       parameters: requestSecretParameters,
-      execute: async ({ name, description, hint }, config, context) => {
-        const runtime = resolveExecutionRuntime(config, context);
-        runtime.signal?.throwIfAborted?.();
-        return formatSecretRequestReply(
-          await callTinyhat(
-            runtime.config,
-            "/hapi/v1/computers/me/runtime-secrets/add-link",
-            {
-              method: "POST",
-              body: JSON.stringify({
-                name,
-                description: description || hint,
-                hint,
-              }),
-            },
-            runtime.signal,
-          ),
-        );
-      },
+      factory: ({ api, config, toolContext }) => ({
+        name: "tinyhat_request_runtime_secret",
+        label: "tinyhat_request_runtime_secret",
+        description:
+          "Create and, on Telegram, directly send a Mini App button so the " +
+          "owner can add or replace one runtime secret value outside chat.",
+        parameters: requestSecretParameters,
+        execute: async (_toolCallId, { name, description, hint }, signal) => {
+          const runtime = resolveExecutionRuntime(config, { signal });
+          runtime.signal?.throwIfAborted?.();
+          const reply = formatSecretRequestReply(
+            await callTinyhat(
+              runtime.config,
+              "/hapi/v1/computers/me/runtime-secrets/add-link",
+              {
+                method: "POST",
+                body: JSON.stringify({
+                  name,
+                  description: description || hint,
+                  hint,
+                }),
+              },
+              runtime.signal,
+            ),
+          );
+          const delivery = await sendTelegramMiniAppButton({
+            api,
+            toolContext,
+            reply,
+            text: reply.text,
+            signal: runtime.signal,
+          });
+          return jsonToolResult(markTelegramDelivered(reply, delivery));
+        },
+      }),
     }),
     tool({
       name: "tinyhat_open_manage_computer_link",
@@ -342,6 +362,13 @@ function resolveExecutionRuntime(configArg, contextArg) {
   return {
     config: configCandidate,
     signal: contextArg?.signal ?? configArg?.signal,
+  };
+}
+
+function jsonToolResult(payload) {
+  return {
+    content: [{ type: "text", text: JSON.stringify(payload, null, 2) }],
+    details: payload,
   };
 }
 
