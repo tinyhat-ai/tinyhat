@@ -24,9 +24,23 @@ receive a runtime secret without exposing the secret value to the agent.
 3. If the name is ambiguous, ask for the name only. Do not ask for the
    value.
 4. Call `tinyhat_request_runtime_secret` with `name` and `description`.
-5. Render the returned Telegram button payload when the channel supports
-   buttons.
+5. Render the returned Telegram button payload exactly as structured
+   button transport when the channel supports buttons.
 6. Tell the user that the value must be entered in Telegram, not chat.
+
+## Secret Button Contract
+
+- Treat `text` as the user-facing copy.
+- Treat `channelData.telegram.buttons` as transport-only button data.
+  Preserve it for Telegram rendering, but never quote or summarize the
+  URL inside it.
+- Treat `presentation` as fallback presentation only. If it does not
+  include a button, do not invent one from raw URL fields.
+- If the tool returns `unsupported_channel_text`, use that copy when
+  the current channel cannot render the Telegram Mini App button.
+- Never copy Mini App link fields, button URL fields, signed link
+  fields, private link fields, intent values, or tokens into
+  user-facing text.
 
 ## List Secret Metadata
 

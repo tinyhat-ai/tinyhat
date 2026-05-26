@@ -9,10 +9,10 @@ call raw Tinyhat backend URLs.
 
 | Operation | Tool | Input | Output policy |
 | --- | --- | --- | --- |
-| `credentials.open_add_secret` | `tinyhat_request_runtime_secret` | `name`, optional `description` | Telegram button payload; no secret values. |
-| `credentials.list_metadata` | `tinyhat_list_runtime_secrets` | none | Secret names/descriptions/status only. |
-| `computer.open_manage` | `tinyhat_open_manage_computer_link` | none | Telegram button payload. |
-| `computer.open_terminal` | `tinyhat_open_terminal_link` | optional admin-reviewed `command` | Telegram button payload. |
+| `credentials.open_add_secret` | `tinyhat_request_runtime_secret` | `name`, optional `description` | Safe copy plus Telegram button transport; no secret values or raw URL prose. |
+| `credentials.list_metadata` | `tinyhat_list_runtime_secrets` | none | Secret names/descriptions/status only; Manage Secrets button transport when available. |
+| `computer.open_manage` | `tinyhat_open_manage_computer_link` | none | Safe copy plus Telegram button transport. |
+| `computer.open_terminal` | `tinyhat_open_terminal_link` | optional admin-reviewed `command` | Safe copy plus Telegram button transport. |
 | `computer.status` | `tinyhat_get_platform_status` | none | Secret-free status and platform contract. |
 | `packages.list_installed` | `tinyhat_list_installed_packages` | none | Public package refs/SHAs and Tinyhat/user split when available. |
 | `support.report_problem` | `tinyhat_report_problem` | optional summary | Redacted support context. |
@@ -42,9 +42,11 @@ Tinyhat returns a Telegram Mini App button payload.
 The user enters the value inside Telegram, and the agent never receives
 the value.
 
-If a tool response contains a raw Mini App URL for transport reasons,
-skills must not paste that URL into chat.
-The only user-facing representation is the structured button payload.
+If a tool response contains a raw Mini App URL inside Telegram
+`channelData` for transport reasons, skills must not paste that URL
+into chat.
+The only user-facing representation is the safe `text` copy and the
+structured Telegram button.
 
 ## Runtime Boundary
 
