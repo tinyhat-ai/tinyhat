@@ -30,6 +30,33 @@ REQUIRED_OPERATIONS = {
     "support.report_problem": "tinyhat_report_problem",
 }
 
+SKILL_MD_MAX_LINES = 200
+SKILL_DESCRIPTION_MAX_CHARS = 1024
+ALLOWED_SKILL_SUBDIRS = {"assets", "references", "scripts"}
+TRIGGER_PHRASES = (
+    "use when",
+    "trigger when",
+    "when the user",
+    "when asked",
+)
+FORBIDDEN_SKILL_PATTERNS = {
+    "raw URL": re.compile(r"https?://", re.IGNORECASE),
+    "raw HAPI path": re.compile(r"/hapi/", re.IGNORECASE),
+    "Mini App URL field": re.compile(r"\bmini_app_url\b", re.IGNORECASE),
+    "signed URL field": re.compile(r"\bsigned_url\b", re.IGNORECASE),
+    "private URL field": re.compile(r"\bprivate_url\b", re.IGNORECASE),
+    "local user path": re.compile(r"/Users/|~/", re.IGNORECASE),
+    "Google Drive path": re.compile(r"GoogleDrive|Shared drives", re.IGNORECASE),
+}
+SECRET_PASTE_REQUEST = re.compile(
+    r"\b(ask|tell|have)\s+the\s+user\s+to\s+paste\b.*\b(secret|token|key)\b",
+    re.IGNORECASE,
+)
+SECRET_PASTE_NEGATION = re.compile(
+    r"\b(never|do not|don't|must not)\b.*\b(ask|tell|have)\b.*\buser\b.*\bpaste\b",
+    re.IGNORECASE,
+)
+
 RETIRED_PUBLIC_TERMS = (
     "gather_snapshot",
     "render_report",
@@ -72,6 +99,28 @@ def read_json(path: Path) -> dict[str, Any]:
 def require(condition: bool, message: str) -> None:
     if not condition:
         fail(message)
+
+
+def parse_skill_frontmatter(
+    display_path: Path,
+    text: str,
+) -> tuple[dict[str, str], str]:
+    if not text.startswith("---\n"):
+        fail(f"{display_path} must start with frontmatter")
+    end = text.find("\n---\n", 4)
+    if end == -1:
+        fail(f"{display_path} frontmatter must close with ---")
+    raw = text[4:end]
+    body = text[end + len("\n---\n") :]
+    metadata: dict[str, str] = {}
+    for line in raw.splitlines():
+        if not line.strip():
+            continue
+        key, separator, value = line.partition(":")
+        if not separator:
+            fail(f"{display_path} frontmatter line is not key: value: {line!r}")
+        metadata[key.strip()] = value.strip().strip('"').strip("'")
+    return metadata, body
 
 
 def validate_versions(root: Path, manifest: dict[str, Any], package: dict[str, Any]) -> None:
@@ -148,18 +197,79 @@ def validate_skills(root: Path) -> None:
     require(skill_files, "skills/ must contain at least one SKILL.md")
     for skill_file in skill_files:
         text = skill_file.read_text(encoding="utf-8")
-        require(text.startswith("---\n"), f"{skill_file} must start with frontmatter")
+        relative_path = skill_file.relative_to(root)
+        metadata, body = parse_skill_frontmatter(relative_path, text)
+        name = metadata.get("name", "")
+        description = metadata.get("description", "")
         require(
-            re.search(r"^name:\s*[A-Za-z0-9_-]+\s*$", text, re.MULTILINE) is not None,
-            f"{skill_file} is missing frontmatter name",
+            re.fullmatch(r"[a-z0-9]+(?:-[a-z0-9]+)*", name) is not None,
+            f"{relative_path} frontmatter name must be lowercase kebab-case",
         )
         require(
-            re.search(r"^description:\s*\S", text, re.MULTILINE) is not None,
-            f"{skill_file} is missing frontmatter description",
+            skill_file.parent.name == name,
+            f"{relative_path} frontmatter name must match its directory",
+        )
+        require(description, f"{relative_path} is missing frontmatter description")
+        require(
+            len(description) <= SKILL_DESCRIPTION_MAX_CHARS,
+            f"{relative_path} description must be <= {SKILL_DESCRIPTION_MAX_CHARS} characters",
+        )
+        description_lower = description.lower()
+        require(
+            any(phrase in description_lower for phrase in TRIGGER_PHRASES),
+            f"{relative_path} description must say when to use or trigger the skill",
+        )
+        line_count = len(text.splitlines())
+        require(
+            line_count <= SKILL_MD_MAX_LINES,
+            f"{relative_path} has {line_count} lines; limit is {SKILL_MD_MAX_LINES}",
         )
         require(
             "Never ask the user to paste a secret value in chat." in text,
-            f"{skill_file} must include the secret-entry safety rule",
+            f"{relative_path} must include the secret-entry safety rule",
+        )
+        require(
+            "raw Mini App URL" in text,
+            f"{relative_path} must explicitly forbid raw Mini App URLs",
+        )
+
+        for child in skill_file.parent.iterdir():
+            if child.name == "SKILL.md":
+                continue
+            if child.is_dir() and child.name in ALLOWED_SKILL_SUBDIRS:
+                continue
+            fail(
+                f"{child.relative_to(root)} is not allowed in a packaged skill directory; "
+                f"use only SKILL.md or {sorted(ALLOWED_SKILL_SUBDIRS)}"
+            )
+
+        for label, pattern in FORBIDDEN_SKILL_PATTERNS.items():
+            if pattern.search(body):
+                fail(f"{relative_path} contains forbidden {label}")
+        for line_number, line in enumerate(body.splitlines(), start=1):
+            if SECRET_PASTE_REQUEST.search(line) and not SECRET_PASTE_NEGATION.search(line):
+                fail(f"{relative_path}:{line_number} contains a forbidden secret paste request")
+
+
+def validate_authoring_standard(root: Path) -> None:
+    authoring = root / "docs" / "skill-authoring.md"
+    require(authoring.is_file(), "docs/skill-authoring.md is missing")
+    text = authoring.read_text(encoding="utf-8")
+    required_phrases = (
+        "trigger-led",
+        "What Belongs Where",
+        "Thin Harness, Focused Skills, Router Model",
+        "Safety Rules",
+        "Reviewer Checklist",
+        "Good And Bad Examples",
+    )
+    for phrase in required_phrases:
+        require(phrase in text, f"docs/skill-authoring.md must include {phrase!r}")
+
+    for path in (root / "README.md", root / "CONTRIBUTING.md"):
+        require(
+            "docs/skill-authoring.md" in path.read_text(encoding="utf-8"),
+            f"{path.name} must link to docs/skill-authoring.md",
         )
 
 
@@ -212,6 +322,7 @@ def main() -> int:
     validate_versions(root, manifest, package)
     validate_package_metadata(package)
     validate_manifest(manifest)
+    validate_authoring_standard(root)
     validate_skills(root)
     validate_source(root)
     validate_retired_terms_absent(root)

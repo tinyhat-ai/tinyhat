@@ -54,12 +54,20 @@ bash .github/scripts/check_packaging.sh
 python3 scripts/validate_openclaw_package.py
 python3 -m compileall -q scripts
 node --check src/index.js
+node --test
 pipx run ruff check .
 pipx run ruff format --check .
 ```
 
 See [docs/local-development.md](docs/local-development.md) for the
 short development loop and manual OpenClaw smoke-test guidance.
+
+## Skill Authoring
+
+Packaged skills under [`skills/`](skills) must follow
+[`docs/skill-authoring.md`](docs/skill-authoring.md). In short: keep
+skills trigger-led, focused, compact, public-safe, and routed through
+named Tinyhat tools rather than raw platform URLs.
 
 ## Scope
 
