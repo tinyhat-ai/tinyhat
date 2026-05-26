@@ -37,6 +37,7 @@ Closes #
 - [ ] PR title is a Conventional Commit.
 - [ ] Linked to an issue or this PR is the canonical spec.
 - [ ] Docs updated where behavior changed.
+- [ ] Packaged skill changes follow `docs/skill-authoring.md`.
 - [ ] CI is green.
 - [ ] No tenant secrets, signed Mini App URLs, private backend URLs, local-only
       paths, or internal docs are included.

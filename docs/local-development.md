@@ -42,7 +42,7 @@ pipx run ruff format --check .
 | --- | --- |
 | `scripts/check_dev_skills.py` | Ensures repo-local development skills and Claude adapters are wired. |
 | `.github/scripts/check_packaging.sh` | Ensures dev-only skills stay out of packaged plugin surfaces. |
-| `scripts/validate_openclaw_package.py` | Validates manifest/package/tool/skill consistency and guards against old reset artifacts. |
+| `scripts/validate_openclaw_package.py` | Validates manifest/package/tool/skill consistency, packaged-skill authoring checks, and retired-artifact guards. |
 | `node --check src/index.js` | Catches JavaScript syntax errors without needing OpenClaw installed. |
 | `node --test` | Runs pure JavaScript safety tests for redaction and command parsing. |
 | `ruff` | Lints and format-checks Python helper scripts. |

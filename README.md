@@ -28,6 +28,7 @@ to use.
 | [`skills/tinyhat-platform/SKILL.md`](skills/tinyhat-platform/SKILL.md) | Compact first skill that teaches the agent the named platform operations. |
 | [`docs/capabilities.md`](docs/capabilities.md) | Public operation list, safety rules, and response boundaries. |
 | [`docs/architecture.md`](docs/architecture.md) | Runtime-vs-plugin ownership boundary. |
+| [`docs/skill-authoring.md`](docs/skill-authoring.md) | Standard for authoring packaged Tinyhat skills. |
 
 The focused router/default-skills expansion is tracked in
 [tinyhat-ai/tinyhat#94](https://github.com/tinyhat-ai/tinyhat/issues/94).
@@ -94,4 +95,6 @@ secrets, internal URLs, or private docs into this repository.
 ## Development
 
 See [docs/local-development.md](docs/local-development.md) for local
-checks and [AGENTS.md](AGENTS.md) for contribution rules.
+checks, [docs/skill-authoring.md](docs/skill-authoring.md) for
+packaged-skill standards, and [AGENTS.md](AGENTS.md) for contribution
+rules.
