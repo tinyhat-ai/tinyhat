@@ -57,6 +57,7 @@ test("formatSecretRequestReply returns safe text plus Telegram transport button"
     kind: "telegram_web_app",
     transport_only: true,
   });
+  assert(!("unsupported_channel_text" in reply));
   assert.equal(reply.channelData.telegram.buttons[0][0].web_app.url, MINI_APP_URL);
   assertNoRawSecretTransportInVisibleReply(reply);
 });
@@ -106,7 +107,31 @@ test("formatSecretListReply lists metadata without exposing raw link fields", ()
   });
 
   assert.match(reply.text, /OPENAI_API_KEY: saved, available/);
+  assert(!("unsupported_channel_text" in reply));
   assert.equal(reply.channelData.telegram.buttons[0][0].web_app.url, MINI_APP_URL);
+  assertNoRawSecretTransportInVisibleReply(reply);
+});
+
+test("formatSecretListReply degrades without raw URL when no button exists", () => {
+  const reply = formatSecretListReply({
+    mini_app_url: MINI_APP_URL,
+    secrets: [
+      {
+        name: "OPENAI_API_KEY",
+        description: "Used for model access",
+        has_value: false,
+        vps_status: "missing",
+        secret_value: "sk-never-visible",
+      },
+    ],
+  });
+
+  assert.equal(reply.ok, true);
+  assert.equal(reply.action, "credentials.list_metadata");
+  assert.match(reply.text, /OPENAI_API_KEY: not saved, not available/);
+  assert(!reply.channelData);
+  assert(!reply.presentation);
+  assert.match(reply.unsupported_channel_text, /Telegram Mini App button/);
   assertNoRawSecretTransportInVisibleReply(reply);
 });
 
@@ -126,6 +151,7 @@ test("formatButtonReply keeps Manage Computer URLs transport-only", () => {
 
   assert.equal(reply.action, "computer.open_manage");
   assert.equal(reply.text, "Manage Computer is ready.");
+  assert(!("unsupported_channel_text" in reply));
   assert.equal(reply.channelData.telegram.buttons[0][0].web_app.url, MINI_APP_URL);
   assertNoRawSecretTransportInVisibleReply(reply);
 });

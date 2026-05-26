@@ -42,9 +42,9 @@ Tinyhat returns a Telegram Mini App button payload.
 The user enters the value inside Telegram, and the agent never receives
 the value.
 
-If a tool response contains a raw Mini App URL inside Telegram
-`channelData` for transport reasons, skills must not paste that URL
-into chat.
+If a tool response contains Telegram transport metadata, only the
+renderer should use it.
+Skills must not paste any Mini App URL into chat.
 The only user-facing representation is the safe `text` copy and the
 structured Telegram button.
 

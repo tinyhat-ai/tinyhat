@@ -32,8 +32,8 @@ receive a runtime secret without exposing the secret value to the agent.
 
 - Treat `text` as the user-facing copy.
 - Treat `channelData.telegram.buttons` as transport-only button data.
-  Preserve it for Telegram rendering, but never quote or summarize the
-  URL inside it.
+  Preserve it for Telegram rendering, but never quote or summarize any
+  transport URL.
 - Treat `presentation` as fallback presentation only. If it does not
   include a button, do not invent one from raw URL fields.
 - If the tool returns `unsupported_channel_text`, use that copy when

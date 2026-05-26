@@ -1,9 +1,11 @@
 const SECRET_BUTTON_UNAVAILABLE_TEXT =
   "Retry from Telegram or open Manage Computer. Do not paste the value in chat.";
+const TELEGRAM_BUTTON_UNAVAILABLE_TEXT =
+  "This action needs a Telegram Mini App button. Retry from Telegram or Manage Computer.";
 
 const TRANSPORT_ONLY_INSTRUCTIONS = [
   "Render the Telegram button payload when the channel supports buttons.",
-  "Do not print, summarize, or fallback to any Mini App URL from channelData.",
+  "Do not print, summarize, or fallback to any Mini App URL.",
   "If buttons are unavailable, tell the user to retry from Telegram or Manage Computer.",
 ];
 
@@ -63,7 +65,7 @@ export function formatSecretRequestReply(payload) {
   });
 }
 
-export function formatButtonReply(payload, fallbackLabel, action = "computer.open") {
+export function formatButtonReply(payload, fallbackLabel, action) {
   const button = payload?.telegram_button;
   const message = normalizeString(payload?.message);
   if (!hasTelegramWebAppButton(button)) {
@@ -121,12 +123,13 @@ function withSafeButtonTransport({ action, text, secret, secrets, button, fallba
     text,
     ...(secret ? { secret } : {}),
     ...(secrets ? { secrets } : {}),
-    unsupported_channel_text:
-      "This action needs a Telegram Mini App button. Retry from Telegram or Manage Computer.",
     agent_instructions: TRANSPORT_ONLY_INSTRUCTIONS,
   };
   if (!hasTelegramWebAppButton(button)) {
-    return base;
+    return {
+      ...base,
+      unsupported_channel_text: TELEGRAM_BUTTON_UNAVAILABLE_TEXT,
+    };
   }
   return {
     ...base,
