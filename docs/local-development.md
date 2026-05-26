@@ -19,6 +19,7 @@ bash .github/scripts/check_packaging.sh
 python3 scripts/validate_openclaw_package.py
 python3 -m compileall -q scripts
 node --check src/index.js
+node --test
 ```
 
 If `ruff` is available:
@@ -43,6 +44,7 @@ pipx run ruff format --check .
 | `.github/scripts/check_packaging.sh` | Ensures dev-only skills stay out of packaged plugin surfaces. |
 | `scripts/validate_openclaw_package.py` | Validates manifest/package/tool/skill consistency and guards against old reset artifacts. |
 | `node --check src/index.js` | Catches JavaScript syntax errors without needing OpenClaw installed. |
+| `node --test` | Runs pure JavaScript safety tests for redaction and command parsing. |
 | `ruff` | Lints and format-checks Python helper scripts. |
 
 ## Manual OpenClaw Smoke Test

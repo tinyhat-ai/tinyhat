@@ -13,7 +13,7 @@ Use this repo-specific matrix for actual commands.
 | Change | Minimum checks |
 | --- | --- |
 | Dev skills / guidance only | `git diff --check`; `python3 scripts/check_dev_skills.py`; `bash .github/scripts/check_packaging.sh` |
-| Packaged plugin skills or manifests | Above plus `python3 scripts/validate_openclaw_package.py`; `node --check src/index.js`; relevant manual OpenClaw smoke when available |
+| Packaged plugin skills or manifests | Above plus `python3 scripts/validate_openclaw_package.py`; `node --check src/index.js`; `node --test`; relevant manual OpenClaw smoke when available |
 | Python scripts | Above plus `python3 -m compileall -q scripts`; `ruff check .`; `ruff format --check .` when ruff is available |
 | Release files | Relevant checks above plus review `CHANGELOG.md` and release-please metadata |
 | Roadmap docs | `git diff --check` and confirm every moved item references an issue |

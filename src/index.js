@@ -1,5 +1,7 @@
 import { defineToolPlugin } from "openclaw/plugin-sdk/tool-plugin";
 
+import { parseSecretCommand, redactObject } from "./platform_helpers.js";
+
 const METADATA_BASE_URL_KEY = "tinyhat-platform-base-url";
 const METADATA_AUDIENCE_KEY = "tinyhat-backend-audience";
 const DEV_RUNTIME_BEARER = "dev-runtime";
@@ -339,29 +341,6 @@ function looksLikePlatformConfig(value) {
   );
 }
 
-function parseSecretCommand(raw) {
-  const text = normalizeString(raw);
-  if (!text || /^(help|-h|--help)$/i.test(text)) {
-    return { action: "help" };
-  }
-  const parts = text.split(/\s+/);
-  const verb = (parts.shift() || "").toLowerCase();
-  if (["list", "ls", "status", "show", "manage"].includes(verb)) {
-    return { action: "list" };
-  }
-  if (["add", "set", "request", "need"].includes(verb)) {
-    const name = parts.shift();
-    if (!name) {
-      return { action: "help" };
-    }
-    return { action: "request", name, description: parts.join(" ") || undefined };
-  }
-  if (/^[A-Za-z_][A-Za-z0-9_]*$/.test(text)) {
-    return { action: "request", name: text };
-  }
-  return { action: "help" };
-}
-
 function secretCommandUsage() {
   return {
     ok: false,
@@ -529,34 +508,6 @@ function supportReportFromStatus(status, summary) {
         }))
       : [],
   };
-}
-
-function redactObject(value) {
-  if (!value || typeof value !== "object") {
-    return value ?? null;
-  }
-  const blocked = new Set([
-    "token",
-    "secret",
-    "secret_value",
-    "mini_app_url",
-    "url",
-    "private_url",
-    "signed_url",
-    "authorization",
-  ]);
-  const out = {};
-  for (const [key, nested] of Object.entries(value)) {
-    const normalized = key.toLowerCase();
-    if ([...blocked].some((term) => normalized.includes(term))) {
-      out[key] = "[redacted]";
-    } else if (nested && typeof nested === "object" && !Array.isArray(nested)) {
-      out[key] = redactObject(nested);
-    } else {
-      out[key] = nested;
-    }
-  }
-  return out;
 }
 
 async function callTinyhat(config, path, init, signal) {

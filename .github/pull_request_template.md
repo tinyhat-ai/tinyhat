@@ -24,6 +24,7 @@ Closes #
 - [ ] `python3 scripts/validate_openclaw_package.py`
 - [ ] `python3 -m compileall -q scripts`
 - [ ] `node --check src/index.js`
+- [ ] `node --test`
 - [ ] `ruff check .` and `ruff format --check .`
 - [ ] Manual OpenClaw plugin smoke test, if applicable
 
