@@ -5,6 +5,15 @@ description: Use when making a commit to the tinyhat repo. If a maintainer-priva
 
 # commit — how to land a commit on tinyhat
 
+## Parent alignment
+
+When this repo is checked out under Tinyloop at
+`platform_repos/plugins/tinyhat`, first skim
+`../../../.agents/skills/commit/SKILL.md` for the current atomicity
+and commit-message discipline. This file owns the public
+`tinyhat-ai/tinyhat` repo-specific identity, signing, and validation
+details.
+
 ## 1. Decide which identity to use
 
 Before you run `git commit`, check whether a **bot identity table** is

@@ -20,6 +20,9 @@ jobs:
       - name: Dev-only assets must not be in the packaged plugin
         run: bash .github/scripts/check_packaging.sh
 
+      - name: Repo-local dev skills are wired for Codex and Claude
+        run: python3 scripts/check_dev_skills.py
+
   lint:
     name: lint
     runs-on: ubuntu-latest

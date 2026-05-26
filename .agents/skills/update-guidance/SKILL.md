@@ -1,9 +1,18 @@
 ---
 name: update-guidance
-description: Use when editing any contribution-guidance file in the tinyhat repo — AGENTS.md, CLAUDE.md, CLAUDE.local.md(.example), or a SKILL.md under .claude/skills/. Covers where each piece of content belongs, anchor-link hygiene, the line-count budget per file, and the thin-harness-fat-skills rule that keeps eagerly-loaded files small.
+description: Use when editing any contribution-guidance file in the tinyhat repo — AGENTS.md, CLAUDE.md, CLAUDE.local.md(.example), or a SKILL.md under .agents/skills/. Covers where each piece of content belongs, anchor-link hygiene, the line-count budget per file, and the thin-harness-fat-skills rule that keeps eagerly-loaded files small.
 ---
 
 # update-guidance — edit policy files without breaking the pattern
+
+## Parent alignment
+
+When this repo is checked out under Tinyloop at
+`platform_repos/plugins/tinyhat`, skim
+`../../../.agents/skills/sharpen-skill/SKILL.md` before changing skill
+shape. Keep this repo's public skill adapters aligned with the parent
+pattern: `.agents/skills` is canonical and `.claude/skills` contains
+symlinks only.
 
 Tinyhat's contribution docs follow the **thin harness, fat skills**
 model: files loaded into every agent turn stay small; deep procedural
@@ -15,7 +24,7 @@ where the change actually belongs.
 | What you're adding | Goes in | Why |
 |---|---|---|
 | Cross-agent policy (identity, commits, branches, PRs, versioning) | `AGENTS.md` | Canonical source of truth for every agent. |
-| A step-by-step procedure for an operation | `.claude/skills/<op>/SKILL.md` | Fat skill; frontmatter loads eagerly, body on demand. |
+| A step-by-step procedure for an operation | `.agents/skills/<op>/SKILL.md` | Fat skill; frontmatter loads eagerly, body on demand. |
 | Claude-Code-specific tone, framing, scope guards | `CLAUDE.md` | Loaded per-turn by Claude Code. Keep tight. |
 | Maintainer-private context | `CLAUDE.local.md` (gitignored) | Must not ship in the public repo. |
 | Public-safe example of a local override | `CLAUDE.local.md.example` | Committed; no private URLs, no internal names. |
@@ -46,7 +55,7 @@ Cross-file links use markdown anchors (e.g.
 `AGENTS.md#non-negotiables`). When you rename or remove a section:
 
 ```bash
-grep -rn "AGENTS\.md#" CLAUDE.md CLAUDE.local.md* .github/ .claude/skills/
+grep -rn "AGENTS\.md#" CLAUDE.md CLAUDE.local.md* .github/ .agents/skills/
 ```
 
 Fix every hit before merging. Broken anchors are silent on GitHub but
@@ -73,7 +82,7 @@ other internal material?* If yes, rewrite or move it to
 This file you're reading is itself a skill. If a procedure in
 `AGENTS.md` or `CLAUDE.md` is longer than a paragraph, the right move
 is almost always to extract it into a new skill under
-`.claude/skills/<name>/` and leave a one-line pointer in the original
+`.agents/skills/<name>/` and leave a one-line pointer in the original
 file. That's dogfooding Tinyhat's thesis — skills are the unit of
 work — on the repo's own plumbing.
 
