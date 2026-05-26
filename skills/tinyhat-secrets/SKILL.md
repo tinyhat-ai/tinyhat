@@ -21,12 +21,35 @@ receive a runtime secret without exposing the secret value to the agent.
 1. Infer a non-secret env-style name from the conversation, such as
    `OPENAI_API_KEY`, `ANTHROPIC_API_KEY`, or `DATABASE_URL`.
 2. Infer a short non-secret description of why this Computer needs it.
-3. If the name is ambiguous, ask for the name only. Do not ask for the
-   value.
-4. Call `tinyhat_request_runtime_secret` with `name` and `description`.
-5. Render the returned Telegram button payload exactly as structured
+3. Do not require the user to know the exact env var name. If the
+   service/tool/purpose is clear, choose the conventional key name and
+   prefill a useful description.
+4. If multiple credentials are equally plausible, ask for the missing
+   non-secret detail only, such as provider or target system. Do not ask
+   for the value.
+5. Call `tinyhat_request_runtime_secret` with `name` and `description`.
+6. Render the returned Telegram button payload exactly as structured
    button transport when the channel supports buttons.
-6. Tell the user that the value must be entered in Telegram, not chat.
+7. Tell the user that the value must be entered in Telegram, not chat.
+
+## Plain-English Name Inference
+
+When the user describes the goal in plain English, translate it into the
+most conventional non-secret environment variable name. Use concise,
+purpose-shaped descriptions that help the user confirm the right secret
+inside the Mini App.
+
+| User ask | Name | Description |
+| --- | --- | --- |
+| "Use OpenRouter for models" | `OPENROUTER_API_KEY` | Used by this Computer to call OpenRouter models. |
+| "Connect to OpenAI" | `OPENAI_API_KEY` | Used by this Computer to call OpenAI APIs. |
+| "Use Anthropic/Claude" | `ANTHROPIC_API_KEY` | Used by this Computer to call Anthropic models. |
+| "Send Slack messages" | `SLACK_BOT_TOKEN` | Used by this Computer to call the Slack API. |
+| "Connect to Postgres" | `DATABASE_URL` | Used by this Computer to connect to the application database. |
+| "Use Stripe" | `STRIPE_SECRET_KEY` | Used by this Computer to call Stripe server-side APIs. |
+
+Ask a clarification only when the user's wording does not identify a
+provider or when one goal clearly needs several independent secrets.
 
 ## Secret Button Contract
 
