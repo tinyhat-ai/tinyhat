@@ -17,6 +17,22 @@ call raw Tinyhat backend URLs.
 | `packages.list_installed` | `tinyhat_list_installed_packages` | none | Public package refs/SHAs and Tinyhat/user split when available. |
 | `support.report_problem` | `tinyhat_report_problem` | optional summary | Redacted support context. |
 
+## Default Skill Layer
+
+The default skill layer uses one router plus focused skills:
+
+| Skill | Primary operations |
+| --- | --- |
+| `tinyhat-platform` | Routes broad user intent to the focused skills below. |
+| `tinyhat-secrets` | `credentials.open_add_secret`, `credentials.list_metadata`. |
+| `tinyhat-computer-access` | `computer.open_manage`, `computer.open_terminal`. |
+| `tinyhat-runtime-status` | `computer.status` and the no-generic-restart boundary. |
+| `tinyhat-package-inventory` | `packages.list_installed`. |
+| `tinyhat-support-report` | `support.report_problem`. |
+
+Skills call named tools or documented operation identifiers.
+They must not call raw Tinyhat backend paths.
+
 ## Secret Entry
 
 Secret entry is a user action, not an agent-readable value.

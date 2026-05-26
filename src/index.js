@@ -5,6 +5,14 @@ import { parseSecretCommand, redactObject } from "./platform_helpers.js";
 const METADATA_BASE_URL_KEY = "tinyhat-platform-base-url";
 const METADATA_AUDIENCE_KEY = "tinyhat-backend-audience";
 const DEV_RUNTIME_BEARER = "dev-runtime";
+const DEFAULT_SKILLS = [
+  { name: "tinyhat-platform", role: "router" },
+  { name: "tinyhat-secrets", role: "secrets" },
+  { name: "tinyhat-computer-access", role: "computer_access" },
+  { name: "tinyhat-runtime-status", role: "runtime_status" },
+  { name: "tinyhat-package-inventory", role: "package_inventory" },
+  { name: "tinyhat-support-report", role: "support_report" },
+];
 
 const configSchema = {
   type: "object",
@@ -484,6 +492,7 @@ function packageInventoryFromStatus(status) {
     ok: true,
     installed_by_tinyhat: {
       plugin,
+      default_skills: DEFAULT_SKILLS,
       capabilities,
     },
     user_installed: status?.user_installed ?? [],
