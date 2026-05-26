@@ -82,7 +82,7 @@ covers both.
 
 ## Why the path is `${CLAUDE_PROJECT_DIR}`, not `${CLAUDE_PLUGIN_ROOT}`
 
-This skill is repo-scoped (`.claude/skills/`), not plugin-scoped
+This skill is repo-scoped (`.agents/skills/`), not plugin-scoped
 (`skills/`). `${CLAUDE_PLUGIN_ROOT}` is empty here because the skill
 is not loaded as part of a plugin — it's loaded because Claude Code
 reads `.claude/` in the current project. `${CLAUDE_PROJECT_DIR}` points

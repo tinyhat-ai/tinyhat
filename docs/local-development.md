@@ -116,7 +116,7 @@ Tinyhat writes to several places across `~/.claude/plugins/` (data, cache, insta
 
 or in natural language: *"reset my tinyhat state so I can test a fresh first-run."*
 
-The skill lives at `.claude/skills/dev-reset/SKILL.md` — it's repo-scoped and never packaged with the plugin. You can also drive the helper script directly:
+The skill lives at `.agents/skills/dev-reset/SKILL.md` — it's repo-scoped and never packaged with the plugin. You can also drive the helper script directly:
 
 ```bash
 # Dry-run (prints what would be removed):

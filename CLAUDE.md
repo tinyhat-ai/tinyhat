@@ -11,7 +11,7 @@ it. It is gitignored and internal-only — see
 
 Procedural detail for contribution operations (commit, open a PR,
 onboard a new agent, edit guidance files) lives in
-[`.claude/skills/`](.claude/skills). Each skill's `SKILL.md`
+[`.agents/skills/`](.agents/skills). Each skill's `SKILL.md`
 frontmatter loads eagerly, the body only when invoked. **When a skill's
 description matches what you're doing, invoke it** instead of
 improvising — that's the pattern we're dogfooding and the reason this

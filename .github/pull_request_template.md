@@ -48,7 +48,7 @@ Closes #
 <summary>Agent checklist (only if a bot opened this PR)</summary>
 
 - [ ] Commits signed with the bot's SSH key and identity — see
-      [`commit` skill](../.claude/skills/commit/SKILL.md).
+      [`commit` skill](../.agents/skills/commit/SKILL.md).
 - [ ] Branch named `<agent>/<short-topic>`.
 
 </details>

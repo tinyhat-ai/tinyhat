@@ -5,6 +5,15 @@ description: Use when opening a pull request on the tinyhat repo. If a maintaine
 
 # open-pr — how to open a PR on tinyhat
 
+## Parent alignment
+
+When this repo is checked out under Tinyloop at
+`platform_repos/plugins/tinyhat`, first skim
+`../../../.agents/skills/open-pr/SKILL.md` for the current PR
+scope-check and evidence discipline. This file owns the public
+`tinyhat-ai/tinyhat` repo-specific branch, push, PR, and no-self-merge
+rules.
+
 ## 1. Branch naming
 
 - Agents: `<agent>/<short-topic>` — e.g.

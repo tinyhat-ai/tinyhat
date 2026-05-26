@@ -57,7 +57,7 @@ commit message on `main`, and release tooling reads it to bump the version.
 We don't require a signed-off-by line, but `git commit -s` (Developer
 Certificate of Origin) is welcome. AI agents commit with SSH-signed
 commits under their own bot identity — see the `commit` skill under
-`.claude/skills/commit/SKILL.md`.
+`.agents/skills/commit/SKILL.md`.
 
 ### 5. Run things locally before pushing
 
@@ -126,7 +126,7 @@ Our `.pre-commit-config.yaml` runs the same checks as CI.
 
 Want something moved up the queue?
 Open a PR against [`roadmap/`](roadmap/) — the ordering is public and editable.
-The [`propose-roadmap`](.claude/skills/propose-roadmap/SKILL.md) skill (or `/propose-roadmap` inside Claude Code) walks you through the right PR format.
+The [`propose-roadmap`](.agents/skills/propose-roadmap/SKILL.md) skill (or `/propose-roadmap` inside Claude Code) walks you through the right PR format.
 One move per PR; every move links to an issue.
 
 ## Questions / discussion

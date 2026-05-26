@@ -5,6 +5,14 @@ description: Use when cutting a Tinyhat release — reviewing the release-please
 
 # release — cutting a Tinyhat release
 
+## Parent alignment
+
+When this repo is checked out under Tinyloop at
+`platform_repos/plugins/tinyhat`, skim
+`../../../.agents/skills/release/SKILL.md` for the current Tinyloop
+release discipline before using this repo's release-please-specific
+flow.
+
 Tinyhat uses [release-please](https://github.com/googleapis/release-please)
 to automate the version bump, CHANGELOG entry, git tag, and GitHub
 release. The normal path is: you merge a change to `main`, a release-

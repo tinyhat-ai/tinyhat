@@ -6,7 +6,7 @@
 #
 #   1. `skills/dev-reset/` must not exist — plugin-scoped skills live under
 #      `skills/`; the dev-reset skill is repo-scoped and belongs under
-#      `.claude/skills/dev-reset/`.
+#      `.agents/skills/dev-reset/`.
 #   2. No file under `skills/` or `.claude-plugin/` may reference the
 #      dev-reset helper script by name.
 #   3. The repo-scoped SKILL.md must exist and its description must start
@@ -26,7 +26,7 @@ fail() {
 
 # 1. Plugin-scoped path must not hold the dev-reset skill.
 if [[ -e skills/dev-reset ]]; then
-  fail "skills/dev-reset/ must not exist — move it to .claude/skills/dev-reset/"
+  fail "skills/dev-reset/ must not exist — move it to .agents/skills/dev-reset/"
 fi
 
 # 2. Packaged plugin files must not mention the dev-reset helper.
@@ -35,10 +35,13 @@ if grep -r -l -E 'dev[-_]reset' skills/ .claude-plugin/ 2>/dev/null; then
 fi
 
 # 3. Repo-scoped SKILL.md exists and advertises its intent.
-skill_md=".claude/skills/dev-reset/SKILL.md"
+skill_md=".agents/skills/dev-reset/SKILL.md"
 [[ -f "$skill_md" ]] || fail "$skill_md is missing"
 if ! grep -qE '^description: INTERNAL DEV ONLY' "$skill_md"; then
   fail "$skill_md frontmatter description must start with 'INTERNAL DEV ONLY'"
+fi
+if [[ ! -L .claude/skills/dev-reset ]]; then
+  fail ".claude/skills/dev-reset must be a symlink adapter to .agents/skills/dev-reset"
 fi
 
 # 4. Helper script exists.
