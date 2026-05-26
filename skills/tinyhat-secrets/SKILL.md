@@ -34,8 +34,10 @@ receive a runtime secret without exposing the secret value to the agent.
 - Treat `channelData.telegram.buttons` as transport-only button data.
   Preserve it for Telegram rendering, but never quote or summarize any
   transport URL.
-- Treat `presentation` as fallback presentation only. If it does not
-  include a button, do not invent one from raw URL fields.
+- Button-capable Telegram replies may intentionally omit `presentation`
+  so the Telegram renderer can send native buttons without exposing
+  transport URLs. If a fallback presentation exists, never invent a
+  button from raw URL fields.
 - If the tool returns `unsupported_channel_text`, use that copy when
   the current channel cannot render the Telegram Mini App button.
 - Never copy Mini App link fields, button URL fields, signed link

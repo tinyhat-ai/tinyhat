@@ -94,14 +94,6 @@ export function buttonTransport(button, fallbackLabel) {
       transport_only: true,
     },
     channelData: { telegram: { buttons: [[button]] } },
-    presentation: {
-      blocks: [
-        {
-          type: "text",
-          text: `${label} is attached as a Telegram Mini App button.`,
-        },
-      ],
-    },
   };
 }
 

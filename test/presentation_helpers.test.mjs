@@ -62,17 +62,10 @@ test("formatSecretRequestReply returns safe text plus Telegram transport button"
   assertNoRawSecretTransportInVisibleReply(reply);
 });
 
-test("formatSecretRequestReply does not put URLs in presentation fallback", () => {
+test("formatSecretRequestReply keeps button replies on the Telegram-native path", () => {
   const reply = formatSecretRequestReply(sampleSecretPayload());
 
-  assert.deepEqual(reply.presentation, {
-    blocks: [
-      {
-        type: "text",
-        text: "Add OPENAI_API_KEY is attached as a Telegram Mini App button.",
-      },
-    ],
-  });
+  assert(!reply.presentation);
   assertNoRawSecretTransportInVisibleReply(reply);
 });
 
