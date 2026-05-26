@@ -47,7 +47,8 @@ def parent_skill_root(root: Path) -> Path | None:
     candidates = []
     if env_parent:
         candidates.append(Path(env_parent).expanduser())
-    candidates.append(root.parents[2])
+    if len(root.parents) > 2:
+        candidates.append(root.parents[2])
     for candidate in candidates:
         skill_root = candidate / ".agents" / "skills"
         if skill_root.is_dir():
