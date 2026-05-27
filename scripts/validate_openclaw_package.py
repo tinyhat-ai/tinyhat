@@ -244,6 +244,12 @@ def validate_skills(root: Path) -> None:
             "raw Mini App URL" in text,
             f"{relative_path} must explicitly forbid raw Mini App URLs",
         )
+        if name == "tinyhat-secrets":
+            require(
+                "Plain-English Name Inference" in text
+                and "Do not require the user to know the exact env var name." in text,
+                f"{relative_path} must teach agents to infer secret names from plain English",
+            )
 
         for child in skill_file.parent.iterdir():
             if child.name == "SKILL.md":

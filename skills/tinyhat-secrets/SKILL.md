@@ -21,12 +21,58 @@ receive a runtime secret without exposing the secret value to the agent.
 1. Infer a non-secret env-style name from the conversation, such as
    `OPENAI_API_KEY`, `ANTHROPIC_API_KEY`, or `DATABASE_URL`.
 2. Infer a short non-secret description of why this Computer needs it.
-3. If the name is ambiguous, ask for the name only. Do not ask for the
-   value.
-4. Call `tinyhat_request_runtime_secret` with `name` and `description`.
-5. Render the returned Telegram button payload when the channel supports
-   buttons.
-6. Tell the user that the value must be entered in Telegram, not chat.
+3. Do not require the user to know the exact env var name. If the
+   service/tool/purpose is clear, choose the conventional key name and
+   prefill a useful description.
+4. If multiple credentials are equally plausible, ask for the missing
+   non-secret detail only, such as provider or target system. Do not ask
+   for the value.
+5. Call `tinyhat_request_runtime_secret` with `name` and `description`.
+6. If the tool reports `delivered: true`, the Telegram Mini App button
+   has already been sent directly. Do not call another message-sending
+   tool for the button.
+7. If direct delivery is unavailable and the tool returns
+   `channelData.telegram.buttons`, render that structured button
+   transport when the channel supports buttons.
+8. Tell the user that the value must be entered in Telegram, not chat.
+
+## Plain-English Name Inference
+
+When the user describes the goal in plain English, translate it into the
+most conventional non-secret environment variable name. Use concise,
+purpose-shaped descriptions that help the user confirm the right secret
+inside the Mini App.
+
+| User ask | Name | Description |
+| --- | --- | --- |
+| "Use OpenRouter for models" | `OPENROUTER_API_KEY` | Used by this Computer to call OpenRouter models. |
+| "Connect to OpenAI" | `OPENAI_API_KEY` | Used by this Computer to call OpenAI APIs. |
+| "Use Anthropic/Claude" | `ANTHROPIC_API_KEY` | Used by this Computer to call Anthropic models. |
+| "Send Slack messages" | `SLACK_BOT_TOKEN` | Used by this Computer to call the Slack API. |
+| "Connect to Postgres" | `DATABASE_URL` | Used by this Computer to connect to the application database. |
+| "Use Stripe" | `STRIPE_SECRET_KEY` | Used by this Computer to call Stripe server-side APIs. |
+
+Ask a clarification only when the user's wording does not identify a
+provider or when one goal clearly needs several independent secrets.
+
+## Secret Button Contract
+
+- Treat `text` as the user-facing copy.
+- If `delivered: true` is present, the plugin has already sent the
+  native Telegram button. Acknowledge briefly only if needed; do not
+  send a duplicate button.
+- Treat `channelData.telegram.buttons` as transport-only button data.
+  Preserve it for Telegram rendering, but never quote or summarize any
+  transport URL.
+- Button-capable Telegram replies may intentionally omit `presentation`
+  so the Telegram renderer can send native buttons without exposing
+  transport URLs. If a fallback presentation exists, never invent a
+  button from raw URL fields.
+- If the tool returns `unsupported_channel_text`, use that copy when
+  the current channel cannot render the Telegram Mini App button.
+- Never copy Mini App link fields, button URL fields, signed link
+  fields, private link fields, intent values, or tokens into
+  user-facing text.
 
 ## List Secret Metadata
 

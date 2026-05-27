@@ -30,6 +30,9 @@ skill's instructions for the capability call and user-facing response.
   say that Tinyhat has not exposed that action to the agent yet.
 - If the action needs user authentication, render the returned Telegram
   button payload when the channel supports buttons.
+- Preserve structured button payloads for Telegram rendering, but do
+  not print any button URL, Mini App link field, signed token, or raw
+  URL field from the tool result.
 - If buttons are unavailable, say the action must be retried from
   Telegram or Manage Computer.
 

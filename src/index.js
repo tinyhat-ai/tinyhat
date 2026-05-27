@@ -1,10 +1,20 @@
 import { defineToolPlugin } from "openclaw/plugin-sdk/tool-plugin";
 
 import { parseSecretCommand, redactObject } from "./platform_helpers.js";
+import {
+  formatButtonReply,
+  formatSecretListReply,
+  formatSecretRequestReply,
+} from "./presentation_helpers.js";
+import {
+  markTelegramDelivered,
+  sendTelegramMiniAppButton,
+} from "./telegram_delivery.js";
 
 const METADATA_BASE_URL_KEY = "tinyhat-platform-base-url";
 const METADATA_AUDIENCE_KEY = "tinyhat-backend-audience";
 const DEV_RUNTIME_BEARER = "dev-runtime";
+const SECRET_REPLY_SAFETY = "Do not paste the value in chat.";
 const DEFAULT_SKILLS = [
   { name: "tinyhat-platform", role: "router" },
   { name: "tinyhat-secrets", role: "secrets" },
@@ -131,32 +141,52 @@ const plugin = defineToolPlugin({
       execute: async (_params, config, context) => {
         const runtime = resolveExecutionRuntime(config, context);
         runtime.signal?.throwIfAborted?.();
-        return fetchSecretStatuses(runtime.config, runtime.signal);
+        return formatSecretListReply(
+          await fetchSecretStatuses(runtime.config, runtime.signal),
+        );
       },
     }),
     tool({
       name: "tinyhat_request_runtime_secret",
       description:
-        "Create a Telegram Mini App button payload so the owner can add or " +
-        "replace one runtime secret value outside chat.",
+        "Create and, on Telegram, directly send a Mini App button so the " +
+        "owner can add or replace one runtime secret value outside chat.",
       parameters: requestSecretParameters,
-      execute: async ({ name, description, hint }, config, context) => {
-        const runtime = resolveExecutionRuntime(config, context);
-        runtime.signal?.throwIfAborted?.();
-        return callTinyhat(
-          runtime.config,
-          "/hapi/v1/computers/me/runtime-secrets/add-link",
-          {
-            method: "POST",
-            body: JSON.stringify({
-              name,
-              description: description || hint,
-              hint,
-            }),
-          },
-          runtime.signal,
-        );
-      },
+      factory: ({ api, config, toolContext }) => ({
+        name: "tinyhat_request_runtime_secret",
+        label: "tinyhat_request_runtime_secret",
+        description:
+          "Create and, on Telegram, directly send a Mini App button so the " +
+          "owner can add or replace one runtime secret value outside chat.",
+        parameters: requestSecretParameters,
+        execute: async (_toolCallId, { name, description, hint }, signal) => {
+          const runtime = resolveExecutionRuntime(config, { signal });
+          runtime.signal?.throwIfAborted?.();
+          const reply = formatSecretRequestReply(
+            await callTinyhat(
+              runtime.config,
+              "/hapi/v1/computers/me/runtime-secrets/add-link",
+              {
+                method: "POST",
+                body: JSON.stringify({
+                  name,
+                  description: description || hint,
+                  hint,
+                }),
+              },
+              runtime.signal,
+            ),
+          );
+          const delivery = await sendTelegramMiniAppButton({
+            api,
+            toolContext,
+            reply,
+            text: reply.text,
+            signal: runtime.signal,
+          });
+          return jsonToolResult(markTelegramDelivered(reply, delivery));
+        },
+      }),
     }),
     tool({
       name: "tinyhat_open_manage_computer_link",
@@ -166,7 +196,11 @@ const plugin = defineToolPlugin({
       execute: async (_params, config, context) => {
         const runtime = resolveExecutionRuntime(config, context);
         runtime.signal?.throwIfAborted?.();
-        return fetchManageComputerLink(runtime.config, runtime.signal);
+        return formatButtonReply(
+          await fetchManageComputerLink(runtime.config, runtime.signal),
+          "Manage computer",
+          "computer.open_manage",
+        );
       },
     }),
     tool({
@@ -178,7 +212,11 @@ const plugin = defineToolPlugin({
       execute: async ({ command } = {}, config, context) => {
         const runtime = resolveExecutionRuntime(config, context);
         runtime.signal?.throwIfAborted?.();
-        return fetchTerminalLink(runtime.config, runtime.signal, command);
+        return formatButtonReply(
+          await fetchTerminalLink(runtime.config, runtime.signal, command),
+          "Open secure terminal",
+          "computer.open_terminal",
+        );
       },
     }),
     tool({
@@ -206,20 +244,24 @@ const plugin = defineToolPlugin({
           return secretCommandUsage();
         }
         if (parsed.action === "list") {
-          return fetchSecretStatuses(runtime.config, runtime.signal);
+          return formatSecretListReply(
+            await fetchSecretStatuses(runtime.config, runtime.signal),
+          );
         }
-        return callTinyhat(
-          runtime.config,
-          "/hapi/v1/computers/me/runtime-secrets/add-link",
-          {
-            method: "POST",
-            body: JSON.stringify({
-              name: parsed.name,
-              description: parsed.description,
-              hint: parsed.description,
-            }),
-          },
-          runtime.signal,
+        return formatSecretRequestReply(
+          await callTinyhat(
+            runtime.config,
+            "/hapi/v1/computers/me/runtime-secrets/add-link",
+            {
+              method: "POST",
+              body: JSON.stringify({
+                name: parsed.name,
+                description: parsed.description,
+                hint: parsed.description,
+              }),
+            },
+            runtime.signal,
+          ),
         );
       },
     }),
@@ -239,7 +281,7 @@ plugin.register = (api) => {
     channels: ["telegram"],
     acceptsArgs: true,
     agentPromptGuidance: [
-      "Use /tinyhat_secrets list to show runtime secret metadata and /tinyhat_secrets add NAME to request a Telegram Mini App secret-entry button. Never ask for secret values in chat.",
+      `Use /tinyhat_secrets list to show runtime secret metadata and /tinyhat_secrets add NAME to request a Telegram Mini App secret-entry button. Never ask for secret values in chat. ${SECRET_REPLY_SAFETY}`,
     ],
     handler: async (ctx) => {
       const parsed = parseSecretCommand(ctx.args || "");
@@ -292,7 +334,7 @@ plugin.register = (api) => {
     ],
     handler: async () => {
       const payload = await fetchManageComputerLink(platformConfig);
-      return formatButtonReply(payload, "Manage computer");
+      return formatButtonReply(payload, "Manage computer", "computer.open_manage");
     },
   });
 
@@ -307,7 +349,7 @@ plugin.register = (api) => {
     ],
     handler: async (ctx) => {
       const payload = await fetchTerminalLink(platformConfig, undefined, ctx.args);
-      return formatButtonReply(payload, "Open secure terminal");
+      return formatButtonReply(payload, "Open secure terminal", "computer.open_terminal");
     },
   });
 };
@@ -320,6 +362,13 @@ function resolveExecutionRuntime(configArg, contextArg) {
   return {
     config: configCandidate,
     signal: contextArg?.signal ?? configArg?.signal,
+  };
+}
+
+function jsonToolResult(payload) {
+  return {
+    content: [{ type: "text", text: JSON.stringify(payload, null, 2) }],
+    details: payload,
   };
 }
 
@@ -360,81 +409,6 @@ function secretCommandUsage() {
       "",
       "Secret values are added in the Tinyhat Mini App, not in chat.",
     ],
-  };
-}
-
-function formatSecretListReply(payload) {
-  const secrets = Array.isArray(payload?.secrets) ? payload.secrets : [];
-  const button = payload?.telegram_button;
-  const lines =
-    secrets.length === 0
-      ? ["No Tinyhat runtime secrets are configured for this Computer yet."]
-      : [
-          "Tinyhat runtime secrets:",
-          ...secrets.map((secret) => {
-            const name = normalizeString(secret?.name) || "(unnamed)";
-            const saved = secret?.in_platform || secret?.has_value ? "saved" : "not saved";
-            const available =
-              normalizeString(secret?.vps_status) === "available"
-                ? "available"
-                : "not available";
-            const description = normalizeString(secret?.description);
-            return `- ${name}: ${saved}, ${available}${description ? ` - ${description}` : ""}`;
-          }),
-        ];
-  return {
-    text: lines.join("\n"),
-    ...(button?.web_app?.url ? buttonPresentation(button, "Manage secrets") : {}),
-  };
-}
-
-function formatSecretRequestReply(payload) {
-  const secretName = normalizeString(payload?.secret?.name) || "this secret";
-  const button = payload?.telegram_button;
-  if (!button?.web_app?.url) {
-    return {
-      text:
-        `I could not render a Telegram button for ${secretName}. ` +
-        "Retry from Telegram or open Manage Computer. Do not paste the value in chat.",
-    };
-  }
-  return {
-    text: `Open the Telegram Mini App button to add ${secretName}. Do not paste the value in chat.`,
-    ...buttonPresentation(button, `Add ${secretName}`),
-  };
-}
-
-function formatButtonReply(payload, fallbackLabel) {
-  const button = payload?.telegram_button;
-  const message = normalizeString(payload?.message);
-  if (!button?.web_app?.url) {
-    return {
-      text: message || `${fallbackLabel} is not available from this channel.`,
-    };
-  }
-  return {
-    text: message || `${fallbackLabel} is available from the Telegram button.`,
-    ...buttonPresentation(button, fallbackLabel),
-  };
-}
-
-function buttonPresentation(button, fallbackLabel) {
-  const label = normalizeString(button.text) || fallbackLabel;
-  return {
-    channelData: { telegram: { buttons: [[button]] } },
-    presentation: {
-      blocks: [
-        {
-          type: "buttons",
-          buttons: [
-            {
-              label,
-              webApp: { url: button.web_app.url },
-            },
-          ],
-        },
-      ],
-    },
   };
 }
 
