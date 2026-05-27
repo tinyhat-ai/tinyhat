@@ -2,7 +2,7 @@
   "id": "tinyhat",
   "name": "Tinyhat",
   "description": "Tinyhat platform capabilities for managed OpenClaw Computers.",
-  "version": "0.1.8",
+  "version": "0.1.9",
   "configSchema": {
     "type": "object",
     "properties": {

@@ -22,6 +22,20 @@ ship `1.0.0`. Release-please is configured to honor this
   default skill, docs, roadmap, validation, and release metadata tracked
   by [#93](https://github.com/tinyhat-ai/tinyhat/issues/93).
 
+## [0.1.9](https://github.com/tinyhat-ai/tinyhat/compare/v0.1.8...v0.1.9) (2026-05-27)
+
+
+### Features
+
+* **plugin:** Reset as OpenClaw platform package ([#99](https://github.com/tinyhat-ai/tinyhat/issues/99)) ([1340ccb](https://github.com/tinyhat-ai/tinyhat/commit/1340ccb655954ee7056ab5f6897be755875fa6ea))
+* **skills:** Add authoring standard ([#102](https://github.com/tinyhat-ai/tinyhat/issues/102)) ([19a9294](https://github.com/tinyhat-ai/tinyhat/commit/19a92945e63b647384e98153217e6ddd08dda77c))
+* **skills:** Add default capability router ([#103](https://github.com/tinyhat-ai/tinyhat/issues/103)) ([f1878bc](https://github.com/tinyhat-ai/tinyhat/commit/f1878bceee5118d6c824472777ee63426bb691d2))
+
+
+### Bug Fixes
+
+* **plugin:** Keep Mini App URLs transport-only ([#104](https://github.com/tinyhat-ai/tinyhat/issues/104)) ([933588a](https://github.com/tinyhat-ai/tinyhat/commit/933588a30fefd6af4b216d8eec5f51c573279315))
+
 ## [0.1.8](https://github.com/tinyhat-ai/tinyhat/compare/v0.1.7...v0.1.8) (2026-04-23)
 
 
