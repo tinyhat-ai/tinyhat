@@ -19,6 +19,11 @@
           "type": "json",
           "path": "openclaw.plugin.json",
           "jsonpath": "$.version"
+        },
+        {
+          "type": "toml",
+          "path": "pyproject.toml",
+          "jsonpath": "$.project.version"
         }
       ]
     }
