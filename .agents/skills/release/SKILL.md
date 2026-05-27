@@ -22,6 +22,7 @@ Release-please updates:
 - `.release-please-manifest.json`
 - `package.json`
 - `openclaw.plugin.json`
+- `pyproject.toml`
 
 No `version.txt` or `.claude-plugin` files exist in this package.
 
@@ -35,7 +36,7 @@ No `version.txt` or `.claude-plugin` files exist in this package.
 
 2. Verify the proposed version is right for the commits since the last
    tag.
-3. Verify the only versioned package files are the four files listed
+3. Verify the only versioned package files are the files listed
    above.
 4. Check that CHANGELOG entries describe shipped OpenClaw plugin
    behavior.

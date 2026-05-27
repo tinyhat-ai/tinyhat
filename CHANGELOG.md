@@ -22,7 +22,7 @@ ship `1.0.0`. Release-please is configured to honor this
   default skill, docs, roadmap, validation, and release metadata tracked
   by [#93](https://github.com/tinyhat-ai/tinyhat/issues/93).
 
-## [0.1.9](https://github.com/tinyhat-ai/tinyhat/compare/v0.1.8...v0.1.9) (2026-05-27)
+## [0.2.0](https://github.com/tinyhat-ai/tinyhat/compare/v0.1.8...v0.2.0) (2026-05-27)
 
 
 ### Features
