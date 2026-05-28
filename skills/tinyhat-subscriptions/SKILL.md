@@ -57,21 +57,27 @@ setting above.
    sentence: *"have you turned on Enable device code authorization
    for Codex in your ChatGPT security settings? If yes, I'll start
    the link."*).
-2. Call `tinyhat_open_chatgpt_subscription_link`. The platform starts
-   a device-code session on this Computer; the supervisor reports a
-   verification URL and a 9-character user code back to the platform.
-3. The tool returns a Telegram inline-keyboard URL button pointing
-   at `https://auth.openai.com/codex/device` plus the 9-character
-   code as paste-able text. Render both in the reply. The
-   verification URL is the **only** raw URL allowed in chat for this
-   flow — the v0.5 "no raw URLs in chat" exemption, by design.
+2. Call `tinyhat_open_chatgpt_subscription_link`. **The tool runs
+   `openclaw models auth login --provider openai-codex
+   --device-code` directly on this Computer** (no backend
+   round-trip), parses the verification URL + 9-character user code
+   from the CLI's stdout, and returns them. The CLI subprocess keeps
+   polling `auth.openai.com` in the background; when the user
+   approves, OpenClaw writes the OAuth credential to its per-agent
+   auth store on disk.
+3. The tool result carries a Telegram inline-keyboard URL button
+   pointing at `https://auth.openai.com/codex/device` plus the
+   9-character code as paste-able text. Render both in the reply.
+   The verification URL is the **only** raw URL allowed in chat for
+   this flow — the v0.5 "no raw URLs in chat" exemption, by design.
 4. Tell the user: *"open the URL on a device where you're signed in
    to ChatGPT, then paste the code. The code expires in about 15
    minutes."*
-5. The platform will push a one-line confirmation back via the
-   existing `reply_via_telegram` tool when the link completes
-   ("you are now running on your ChatGPT plan"). Do not poll; just
-   continue the conversation.
+5. The Computer's supervisor detects the new auth-profile on its
+   next tick and rewrites `openclaw.json` so subsequent agent turns
+   route through `openai/gpt-5.5` via the native Codex runtime. The
+   first agent reply after that switch confirms it — no polling,
+   no separate notification flow.
 
 ## Subscription Button Contract
 
@@ -94,15 +100,19 @@ setting above.
 
 ## Revert To Platform Credits
 
-1. Call `tinyhat_revert_to_platform_credits`.
-2. The platform flips the Computer back to Tinyhat-funded credits
-   and tells the supervisor to wipe the per-agent OpenClaw auth
-   store (the OAuth credential on disk).
-3. Confirm to the user: *"you are now back on Tinyhat-funded
+1. Call `tinyhat_revert_to_platform_credits`. **The tool deletes the
+   `openai-codex` profile entry from this Computer's OpenClaw auth
+   store directly** (no backend round-trip), then returns
+   confirmation.
+2. The supervisor detects the missing profile on its next tick and
+   rewrites `openclaw.json` back to the OpenRouter / platform-credit
+   route. The first agent turn after that switch is back on
+   platform-funded credits.
+3. Confirm to the user: *"done — you're now back on Tinyhat-funded
    credits. Your ChatGPT subscription is no longer linked to this
    Computer."*
 4. If the user asks where the OAuth token went, explain truthfully:
-   it was deleted from the Computer's local auth store; the
+   it was deleted from this Computer's local auth store; the
    platform never had it.
 
 ## Failure Messages
