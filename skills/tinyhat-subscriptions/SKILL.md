@@ -32,7 +32,7 @@ error and the user has to enable the setting and retry.
 When the user first asks to connect their ChatGPT subscription, walk
 them through it:
 
-1. Open [chatgpt.com → Settings → Security](https://chatgpt.com/#settings/Security).
+1. Open `chatgpt.com` → Settings → Security.
 2. Scroll to **Secure sign in with ChatGPT**.
 3. Toggle on **Enable device code authorization for Codex**.
 4. (Personal accounts.) The toggle is the user's to flip directly.
@@ -66,10 +66,13 @@ setting above.
    approves, OpenClaw writes the OAuth credential to its per-agent
    auth store on disk.
 3. The tool result carries a Telegram inline-keyboard URL button
-   pointing at `https://auth.openai.com/codex/device` plus the
-   9-character code as paste-able text. Render both in the reply.
-   The verification URL is the **only** raw URL allowed in chat for
-   this flow — the v0.5 "no raw URLs in chat" exemption, by design.
+   pointing at the OpenAI verification page (host `auth.openai.com`)
+   plus the 9-character code as paste-able text. Render both in the
+   reply. The verification URL is the **only** raw URL allowed in
+   chat for this flow — the v0.5 "no raw URLs in chat" exemption,
+   by design. Do **not** invent or paste a raw Mini App URL into
+   chat under any circumstances — Mini App launches are
+   button-only.
 4. Tell the user: *"open the URL on a device where you're signed in
    to ChatGPT, then paste the code. The code expires in about 15
    minutes."*
@@ -132,6 +135,11 @@ status surface is unavailable, say so and stop guessing.
 
 ## Do Not
 
+- **Never ask the user to paste a secret value in chat.** The 9-character
+  device code is intentionally non-secret (paste-able by design); OAuth
+  tokens, refresh tokens, `auth.json` contents, API keys, passwords,
+  and account ids are secret values and must never enter the chat
+  surface — not in messages, not in tool inputs, not in tool outputs.
 - Do not ask the user for their ChatGPT password, OAuth token,
   `auth.json` contents, refresh token, API key, account id, or any
   other credential material in chat or via any tool input.
