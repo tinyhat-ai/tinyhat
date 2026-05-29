@@ -40,6 +40,7 @@
       "tinyhat_request_runtime_secret",
       "tinyhat_open_manage_computer_link",
       "tinyhat_open_terminal_link",
+      "tinyhat_open_chatgpt_subscription_prerequisite_help",
       "tinyhat_open_chatgpt_subscription_link",
       "tinyhat_revert_to_platform_credits",
       "tinyhat_report_problem",
@@ -82,9 +83,14 @@
         "userSurface": "redacted_tool_result"
       },
       {
+        "name": "subscriptions.open_prerequisite_help",
+        "tool": "tinyhat_open_chatgpt_subscription_prerequisite_help",
+        "userSurface": "telegram_photo_plus_text"
+      },
+      {
         "name": "subscriptions.open_link",
         "tool": "tinyhat_open_chatgpt_subscription_link",
-        "userSurface": "telegram_url_button_plus_paste_code"
+        "userSurface": "telegram_url_button_plus_bare_code_bubble"
       },
       {
         "name": "subscriptions.revert_to_platform_credits",

@@ -18,7 +18,8 @@ OpenAI verification URL (`auth.openai.com`) and a short device code.
 
 | User ask | Operation / tool |
 | --- | --- |
-| Connect, link, sign in with, switch to my own ChatGPT subscription / plan / Pro / Plus / Team / Business | `subscriptions.open_link` / `tinyhat_open_chatgpt_subscription_link` |
+| First-time ask about connecting ChatGPT, "how do I connect", or the link failed because device-code is disabled | `subscriptions.open_prerequisite_help` / `tinyhat_open_chatgpt_subscription_prerequisite_help` |
+| Connect, link, sign in with, switch to my own ChatGPT subscription / plan / Pro / Plus / Team / Business (after the prerequisite is on) | `subscriptions.open_link` / `tinyhat_open_chatgpt_subscription_link` |
 | Revert, switch back, stop using my plan, go back to Tinyhat credits / platform credits / free / funded | `subscriptions.revert_to_platform_credits` / `tinyhat_revert_to_platform_credits` |
 
 ## Prerequisite — enable device code authorization in ChatGPT
@@ -29,18 +30,27 @@ is OpenAI's standing requirement for headless device-code sign-in
 flows; without it the linking attempt fails with a clear non-secret
 error and the user has to enable the setting and retry.
 
-When the user first asks to connect their ChatGPT subscription, walk
-them through it:
+When the user first asks to connect their ChatGPT subscription:
 
-1. Open `chatgpt.com` → Settings → Security.
-2. Scroll to **Secure sign in with ChatGPT**.
-3. Toggle on **Enable device code authorization for Codex**.
-4. (Personal accounts.) The toggle is the user's to flip directly.
-   (Team / Business / Enterprise.) The toggle is workspace-admin-only;
-   if it's greyed out, the user has to ask the workspace admin to
-   enable it. There is no way around this.
+1. **Call `tinyhat_open_chatgpt_subscription_prerequisite_help` first.**
+   The tool sends the canonical settings screenshot directly to the
+   user via Telegram (`photo_delivered: true`) and returns the
+   walkthrough text — do not re-send the photo, do not paste the
+   image URL into chat, and do not describe the screenshot as if the
+   user might not have seen it. Forward the walkthrough text on its
+   own via `reply_via_telegram`, acknowledging briefly that you've
+   shared the screenshot above.
+2. The steps the user has to follow on their end:
+   - Open `chatgpt.com` → Settings → Security.
+   - Scroll to **Secure sign in with ChatGPT**.
+   - Toggle on **Enable device code authorization for Codex**.
+   - Personal accounts can flip the toggle directly. Team / Business
+     / Enterprise: workspace-admin-only — if it's greyed out, ask the
+     workspace admin to enable it.
 
-The setting is shown here (toggle highlighted blue at the bottom):
+The canonical screenshot in this repo (for your reference only — the
+plugin's prerequisite-help tool is what sends it to the user; never
+paste this asset path into chat):
 
 ![ChatGPT Security settings — Enable device code authorization for Codex](assets/chatgpt-enable-device-code-for-codex.png)
 
@@ -48,8 +58,10 @@ Only ask the user to confirm they've enabled it before calling
 `tinyhat_open_chatgpt_subscription_link`. If they haven't, the
 linking attempt will fail with a message like *"device-code login is
 disabled on your ChatGPT account — see your ChatGPT security
-settings to enable it"*; surface that verbatim and re-link to the
-setting above.
+settings to enable it"*; surface that verbatim and, on the failure
+path, call `tinyhat_open_chatgpt_subscription_prerequisite_help`
+again so the user sees the screenshot inline rather than just the
+error text.
 
 ## Link The Subscription
 
@@ -66,17 +78,22 @@ setting above.
    the verification URL + 9-character user code back to the platform.
    The tool polls until those values arrive (typically a few
    seconds) and returns them.
-3. The tool result carries a Telegram inline-keyboard URL button
-   pointing at the OpenAI verification page (host `auth.openai.com`)
-   plus the 9-character code as paste-able text. Render both in the
-   reply. The verification URL is the **only** raw URL allowed in
-   chat for this flow — the v0.5 "no raw URLs in chat" exemption,
-   by design. Do **not** invent or paste a raw Mini App URL into
-   chat under any circumstances — Mini App launches are
-   button-only.
-4. Tell the user: *"open the URL on a device where you're signed in
-   to ChatGPT, then paste the code. The code expires in about 15
-   minutes."*
+3. The tool sends two Telegram messages directly to the user before
+   it returns control: first a message with the inline-keyboard URL
+   button pointing at `auth.openai.com` (`delivered: true`), then a
+   second bare-text bubble containing **only** the 9-character device
+   code (`code_delivered: true`). The bare bubble is intentional —
+   it lets the user long-press → Copy on mobile to grab only the
+   code without dragging a selection across surrounding sentence
+   text. Do not re-paste the device code in your own free-text
+   reply, do not re-render the URL button, and do not paste any raw
+   URL into chat. The verification URL is the v0.5 "no raw URLs in
+   chat" exemption and stays inside the inline-keyboard button only;
+   never invent or paste a raw Mini App URL into chat — Mini App
+   launches are button-only as a separate rule.
+4. Acknowledge briefly: *"started — tap “Sign in to ChatGPT” above,
+   then paste the code from the next message on the device you're
+   signed in to. The code expires in about 15 minutes."*
 5. The Computer's supervisor detects the new auth-profile on its
    next tick and rewrites `openclaw.json` so subsequent agent turns
    route through `openai/gpt-5.5` via the native Codex runtime. The
@@ -89,10 +106,20 @@ setting above.
 - If `delivered: true` is present, the plugin has already sent the
   native Telegram URL button. Acknowledge briefly only if needed;
   do not send a duplicate button.
-- Treat `channelData.telegram.buttons` as transport-only button
-  data. Preserve it for Telegram rendering, but never quote or
-  summarize any transport URL **other than the OpenAI verification
-  URL** (the one exemption).
+- If `code_delivered: true` is present (link tool path), the
+  9-character device code has already been sent as its own bare
+  Telegram message bubble. Do not re-paste the code in your
+  follow-up reply.
+- If `photo_delivered: true` is present (prerequisite-help tool
+  path), the canonical settings screenshot has already been sent to
+  the user via Telegram. Do not re-send the photo, do not paste the
+  image URL into chat, and do not describe the screenshot as if the
+  user might not have seen it.
+- Treat `channelData.telegram.buttons` and
+  `channelData.telegram.photo_url` / `photo_caption` /
+  `followup_text` as transport-only payloads. Preserve them for
+  Telegram rendering, but never quote or summarize any transport URL
+  **other than the OpenAI verification URL** (the one exemption).
 - The 9-character device code is the **only** paste-able non-secret
   string the user is asked to handle. Never reuse a captured code
   for a second user — codes are single-use, single-session.

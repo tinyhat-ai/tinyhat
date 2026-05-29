@@ -2,8 +2,12 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import {
+  markTelegramCodeDelivered,
   markTelegramDelivered,
+  markTelegramPhotoDelivered,
   sendTelegramMiniAppButton,
+  sendTelegramPhoto,
+  sendTelegramText,
   telegramBotTokenFromConfig,
   telegramChatIdFromDeliveryContext,
 } from "../src/telegram_delivery.js";
@@ -126,4 +130,188 @@ test("telegram config helpers support default and account tokens", () => {
     ),
     "work-token",
   );
+});
+
+// ── #108 — photo + bare-text delivery helpers ─────────────────────────
+
+const PHOTO_URL =
+  "https://raw.githubusercontent.com/tinyhat-ai/tinyhat/main/skills/tinyhat-subscriptions/assets/chatgpt-enable-device-code-for-codex.png";
+
+test("sendTelegramPhoto posts /sendPhoto with caption and chat id", async () => {
+  const calls = [];
+  const result = await sendTelegramPhoto({
+    api: {},
+    toolContext: {
+      deliveryContext: {
+        channel: "telegram",
+        to: "telegram:101216939",
+        accountId: "default",
+      },
+      config: { channels: { telegram: { botToken: "123:token" } } },
+    },
+    photoUrl: PHOTO_URL,
+    caption: "Toggle the highlighted setting.",
+    fetchImpl: async (url, init) => {
+      calls.push({ url, init });
+      return {
+        ok: true,
+        status: 200,
+        json: async () => ({
+          ok: true,
+          result: { message_id: 91, chat: { id: 101216939 } },
+        }),
+      };
+    },
+  });
+
+  assert.deepEqual(result, {
+    sent: true,
+    channel: "telegram",
+    chat_id: "101216939",
+    message_id: "91",
+  });
+  assert.equal(calls.length, 1);
+  assert.equal(calls[0].url, "https://api.telegram.org/bot123:token/sendPhoto");
+  assert.deepEqual(JSON.parse(calls[0].init.body), {
+    chat_id: "101216939",
+    photo: PHOTO_URL,
+    caption: "Toggle the highlighted setting.",
+  });
+});
+
+test("sendTelegramPhoto refuses without a photoUrl", async () => {
+  const result = await sendTelegramPhoto({
+    toolContext: {
+      deliveryContext: { channel: "telegram", to: "telegram:1" },
+      config: { channels: { telegram: { botToken: "t" } } },
+    },
+    photoUrl: "",
+    fetchImpl: async () => {
+      throw new Error("should not send");
+    },
+  });
+  assert.deepEqual(result, { sent: false, reason: "missing_photo_url" });
+});
+
+test("sendTelegramText posts /sendMessage with no inline keyboard", async () => {
+  const calls = [];
+  const result = await sendTelegramText({
+    api: {},
+    toolContext: {
+      deliveryContext: {
+        channel: "telegram",
+        to: "telegram:101216939",
+        accountId: "default",
+      },
+      config: { channels: { telegram: { botToken: "123:token" } } },
+    },
+    text: "SZ85-LWNTP",
+    fetchImpl: async (url, init) => {
+      calls.push({ url, init });
+      return {
+        ok: true,
+        status: 200,
+        json: async () => ({
+          ok: true,
+          result: { message_id: 92, chat: { id: 101216939 } },
+        }),
+      };
+    },
+  });
+
+  assert.deepEqual(result, {
+    sent: true,
+    channel: "telegram",
+    chat_id: "101216939",
+    message_id: "92",
+  });
+  assert.equal(calls.length, 1);
+  assert.equal(calls[0].url, "https://api.telegram.org/bot123:token/sendMessage");
+  const body = JSON.parse(calls[0].init.body);
+  assert.deepEqual(body, {
+    chat_id: "101216939",
+    text: "SZ85-LWNTP",
+  });
+  // The bare-bubble path is deliberately keyboard-free — that's what
+  // makes long-press → Copy on mobile capture only the code.
+  assert.equal(body.reply_markup, undefined);
+});
+
+test("sendTelegramText refuses without text", async () => {
+  const result = await sendTelegramText({
+    toolContext: {
+      deliveryContext: { channel: "telegram", to: "telegram:1" },
+      config: { channels: { telegram: { botToken: "t" } } },
+    },
+    text: "",
+    fetchImpl: async () => {
+      throw new Error("should not send");
+    },
+  });
+  assert.deepEqual(result, { sent: false, reason: "missing_text" });
+});
+
+test("photo and bare-text helpers skip non-telegram delivery contexts", async () => {
+  const photoResult = await sendTelegramPhoto({
+    toolContext: { deliveryContext: { channel: "slack" }, config: {} },
+    photoUrl: PHOTO_URL,
+    fetchImpl: async () => {
+      throw new Error("should not send");
+    },
+  });
+  assert.deepEqual(photoResult, {
+    sent: false,
+    reason: "not_telegram_delivery_context",
+  });
+
+  const textResult = await sendTelegramText({
+    toolContext: { deliveryContext: { channel: "slack" }, config: {} },
+    text: "abc",
+    fetchImpl: async () => {
+      throw new Error("should not send");
+    },
+  });
+  assert.deepEqual(textResult, {
+    sent: false,
+    reason: "not_telegram_delivery_context",
+  });
+});
+
+test("markTelegramPhotoDelivered flags photo and tells the agent not to re-send", () => {
+  const reply = { text: "Walkthrough", agent_instructions: ["existing"] };
+  const marked = markTelegramPhotoDelivered(reply, {
+    sent: true,
+    channel: "telegram",
+    chat_id: "1",
+    message_id: "91",
+  });
+  assert.equal(marked.photo_delivered, true);
+  assert.equal(marked.telegram_photo_delivery.message_id, "91");
+  assert.equal(marked.agent_instructions[0], "existing");
+  assert.match(marked.agent_instructions.at(-1), /illustrative photo/i);
+  assert.match(marked.agent_instructions.at(-1), /already been sent directly/i);
+});
+
+test("markTelegramPhotoDelivered is a no-op when delivery did not succeed", () => {
+  const reply = { text: "x", agent_instructions: ["a"] };
+  const same = markTelegramPhotoDelivered(reply, { sent: false });
+  assert.strictEqual(same, reply);
+});
+
+test("markTelegramCodeDelivered flags the bare-code bubble and locks the agent out of re-pasting", () => {
+  const reply = {
+    text: "URL+button intro",
+    agent_instructions: ["existing"],
+  };
+  const marked = markTelegramCodeDelivered(reply, {
+    sent: true,
+    channel: "telegram",
+    chat_id: "1",
+    message_id: "92",
+  });
+  assert.equal(marked.code_delivered, true);
+  assert.equal(marked.telegram_code_delivery.message_id, "92");
+  assert.equal(marked.agent_instructions[0], "existing");
+  assert.match(marked.agent_instructions.at(-1), /bare Telegram message bubble/i);
+  assert.match(marked.agent_instructions.at(-1), /long-press/i);
 });
