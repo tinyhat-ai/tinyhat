@@ -22,6 +22,13 @@ ship `1.0.0`. Release-please is configured to honor this
   default skill, docs, roadmap, validation, and release metadata tracked
   by [#93](https://github.com/tinyhat-ai/tinyhat/issues/93).
 
+## [0.2.2](https://github.com/tinyhat-ai/tinyhat/compare/v0.2.1...v0.2.2) (2026-05-29)
+
+
+### Bug Fixes
+
+* **skills:** Send the ChatGPT settings screenshot inline + split the device code into its own bare bubble (closes [#108](https://github.com/tinyhat-ai/tinyhat/issues/108)) ([#109](https://github.com/tinyhat-ai/tinyhat/issues/109)) ([b48b27c](https://github.com/tinyhat-ai/tinyhat/commit/b48b27ca8fc1d8528f6af4c319829f34d7302afe))
+
 ## [0.2.1](https://github.com/tinyhat-ai/tinyhat/compare/v0.2.0...v0.2.1) (2026-05-29)
 
 
