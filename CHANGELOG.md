@@ -22,6 +22,13 @@ ship `1.0.0`. Release-please is configured to honor this
   default skill, docs, roadmap, validation, and release metadata tracked
   by [#93](https://github.com/tinyhat-ai/tinyhat/issues/93).
 
+## [0.2.1](https://github.com/tinyhat-ai/tinyhat/compare/v0.2.0...v0.2.1) (2026-05-29)
+
+
+### Features
+
+* **skills:** Add tinyhat-subscriptions for ChatGPT BYO device-code linking ([#106](https://github.com/tinyhat-ai/tinyhat/issues/106)) ([2aa19d6](https://github.com/tinyhat-ai/tinyhat/commit/2aa19d6dee57c9e78fef47d6ef664aa0af5d8a39))
+
 ## [0.2.0](https://github.com/tinyhat-ai/tinyhat/compare/v0.1.8...v0.2.0) (2026-05-27)
 
 
