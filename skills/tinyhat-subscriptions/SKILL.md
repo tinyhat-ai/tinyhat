@@ -57,14 +57,15 @@ setting above.
    sentence: *"have you turned on Enable device code authorization
    for Codex in your ChatGPT security settings? If yes, I'll start
    the link."*).
-2. Call `tinyhat_open_chatgpt_subscription_link`. **The tool runs
-   `openclaw models auth login --provider openai-codex
-   --device-code` directly on this Computer** (no backend
-   round-trip), parses the verification URL + 9-character user code
-   from the CLI's stdout, and returns them. The CLI subprocess keeps
-   polling `auth.openai.com` in the background; when the user
-   approves, OpenClaw writes the OAuth credential to its per-agent
-   auth store on disk.
+2. Call `tinyhat_open_chatgpt_subscription_link`. The tool asks the
+   platform to start a device-code session for this Computer; the
+   Computer's runtime supervisor runs
+   `openclaw models auth login --provider openai-codex --device-code`
+   (the supervisor owns the subprocess so this plugin stays
+   subprocess-free per OpenClaw's plugin-install policy) and reports
+   the verification URL + 9-character user code back to the platform.
+   The tool polls until those values arrive (typically a few
+   seconds) and returns them.
 3. The tool result carries a Telegram inline-keyboard URL button
    pointing at the OpenAI verification page (host `auth.openai.com`)
    plus the 9-character code as paste-able text. Render both in the
@@ -103,13 +104,13 @@ setting above.
 
 ## Revert To Platform Credits
 
-1. Call `tinyhat_revert_to_platform_credits`. **The tool deletes the
-   `openai-codex` profile entry from this Computer's OpenClaw auth
-   store directly** (no backend round-trip), then returns
-   confirmation.
-2. The supervisor detects the missing profile on its next tick and
+1. Call `tinyhat_revert_to_platform_credits`. The tool tells the
+   platform to flip this Computer back to Tinyhat-funded credits
+   and bumps the supervisor's config revision; the supervisor's
+   next apply tick wipes the per-agent OAuth credential on disk and
    rewrites `openclaw.json` back to the OpenRouter / platform-credit
-   route. The first agent turn after that switch is back on
+   route.
+2. The first agent turn after the supervisor reapplies is back on
    platform-funded credits.
 3. Confirm to the user: *"done — you're now back on Tinyhat-funded
    credits. Your ChatGPT subscription is no longer linked to this

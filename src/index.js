@@ -8,7 +8,7 @@ import {
 } from "./presentation_helpers.js";
 import {
   revertChatgptSubscriptionAuth,
-  startChatgptDeviceCodeLogin,
+  startChatgptSubscriptionLink,
 } from "./subscriptions.js";
 import {
   markTelegramDelivered,
@@ -71,22 +71,25 @@ function buildSubscriptionLinkFailureReply(err) {
   };
 }
 
-function buildSubscriptionRevertReply({ removedProfiles }) {
-  if (!removedProfiles || removedProfiles.length === 0) {
+function buildSubscriptionRevertReply({ alreadyOnPlatformCredits }) {
+  if (alreadyOnPlatformCredits) {
     return {
       action: "subscriptions.revert_to_platform_credits",
       text:
         "This Computer was already on Tinyhat-funded credits — nothing to revert.",
-      removed_profiles: [],
       idempotent: true,
     };
   }
+  // Deliberately no `removed_profiles` / OAuth account email / profile
+  // id in this reply — those would leak the user's ChatGPT account
+  // identifier into the chat surface, which the operation's
+  // declared `metadata_only_tool_result` userSurface forbids.
   return {
     action: "subscriptions.revert_to_platform_credits",
     text:
       "Done — you're now back on Tinyhat-funded credits. Your ChatGPT " +
       "subscription is no longer linked to this Computer.",
-    removed_profiles: removedProfiles,
+    idempotent: false,
   };
 }
 
@@ -359,9 +362,19 @@ const plugin = defineToolPlugin({
         execute: async (_toolCallId, _params, signal) => {
           const runtime = resolveExecutionRuntime(config, { signal });
           runtime.signal?.throwIfAborted?.();
+          // Bind the platform call so the helper doesn't have to
+          // know about config / token resolution. The runtime
+          // supervisor (sibling repo) is the layer that spawns the
+          // device-code CLI in a PTY; we just kick the link and
+          // poll the backend for the URL+code result.
+          const boundCall = (path, init, sig) =>
+            callTinyhat(runtime.config, path, init, sig);
           let session;
           try {
-            session = await startChatgptDeviceCodeLogin();
+            session = await startChatgptSubscriptionLink({
+              callTinyhat: boundCall,
+              signal: runtime.signal,
+            });
           } catch (err) {
             return buildSubscriptionLinkFailureReply(err);
           }
@@ -384,9 +397,16 @@ const plugin = defineToolPlugin({
         "subscription back to Tinyhat-funded platform credits (wipes the " +
         "per-agent OAuth credential).",
       parameters: emptyParameters,
-      execute: async (_params, _config, _context) => {
+      execute: async (_params, config, context) => {
+        const runtime = resolveExecutionRuntime(config, context);
+        runtime.signal?.throwIfAborted?.();
+        const boundCall = (path, init, sig) =>
+          callTinyhat(runtime.config, path, init, sig);
         try {
-          const result = await revertChatgptSubscriptionAuth();
+          const result = await revertChatgptSubscriptionAuth({
+            callTinyhat: boundCall,
+            signal: runtime.signal,
+          });
           return buildSubscriptionRevertReply(result);
         } catch (err) {
           return buildSubscriptionRevertFailureReply(err);
