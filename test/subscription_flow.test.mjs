@@ -8,15 +8,18 @@ import test from "node:test";
 import { fileURLToPath } from "node:url";
 
 import {
-  SUBSCRIPTION_AGENT_INSTRUCTIONS,
-  SUBSCRIPTION_PREREQUISITE_AGENT_INSTRUCTIONS,
+  SUBSCRIPTION_LINK_BASE_AGENT_INSTRUCTIONS,
+  SUBSCRIPTION_PREREQUISITE_BASE_AGENT_INSTRUCTIONS,
   SUBSCRIPTION_PREREQUISITE_PHOTO_CAPTION,
   SUBSCRIPTION_PREREQUISITE_SCREENSHOT_URL,
   SUBSCRIPTION_PREREQUISITE_WALKTHROUGH_TEXT,
+  SUBSCRIPTION_PREREQUISITE_WALKTHROUGH_TEXT_WITH_SCREENSHOT,
   buildSubscriptionLinkFailureReply,
   buildSubscriptionLinkReply,
   buildSubscriptionPrerequisiteHelpReply,
   buildSubscriptionRevertReply,
+  finalizeSubscriptionLinkReply,
+  finalizeSubscriptionPrerequisiteHelpReply,
 } from "../src/subscription_builders.js";
 
 const REPO_ROOT = path.resolve(
@@ -24,11 +27,24 @@ const REPO_ROOT = path.resolve(
   "..",
 );
 
-test("prerequisite-help reply carries the canonical screenshot URL + caption + walkthrough", () => {
+const ALREADY_SENT = /already (been )?sent/i;
+
+// ── Base builders are NEUTRAL — they must never claim delivery ─────────
+// (Codex P1, #109: a `{ sent: false }` result must never leave a stale
+// "already sent" claim, so the builders that run BEFORE delivery cannot
+// contain that language at all.)
+
+test("prerequisite-help BASE reply makes no delivery claim and uses the plain text", () => {
   const reply = buildSubscriptionPrerequisiteHelpReply();
 
   assert.equal(reply.action, "subscriptions.open_prerequisite_help");
+  // Plain, self-contained text — no "screenshot above" reference, so it
+  // is correct even if the photo send fails.
   assert.equal(reply.text, SUBSCRIPTION_PREREQUISITE_WALKTHROUGH_TEXT);
+  assert.ok(
+    !/screenshot/i.test(reply.text),
+    "base walkthrough text must not reference a screenshot",
+  );
   assert.match(reply.text, /enable device-code/i);
   assert.match(reply.text, /workspace admin/i);
 
@@ -39,52 +55,19 @@ test("prerequisite-help reply carries the canonical screenshot URL + caption + w
     },
   });
 
-  // The canonical screenshot URL points at a real file in this repo on
-  // main; pin the constant so a typo / move breaks the test rather than
-  // silently shipping a broken Telegram photo URL.
-  assert.match(
-    SUBSCRIPTION_PREREQUISITE_SCREENSHOT_URL,
-    /^https:\/\/raw\.githubusercontent\.com\/tinyhat-ai\/tinyhat\/main\//,
+  assert.deepEqual(
+    reply.agent_instructions,
+    SUBSCRIPTION_PREREQUISITE_BASE_AGENT_INSTRUCTIONS,
   );
-  assert.ok(
-    SUBSCRIPTION_PREREQUISITE_SCREENSHOT_URL.endsWith(
-      "skills/tinyhat-subscriptions/assets/chatgpt-enable-device-code-for-codex.png",
-    ),
-    "screenshot URL must end with the in-repo asset path",
-  );
-
-  assert.deepEqual(reply.agent_instructions, SUBSCRIPTION_PREREQUISITE_AGENT_INSTRUCTIONS);
-  assert.ok(
-    reply.agent_instructions.some((line) =>
-      /already been sent.*telegram/i.test(line),
-    ),
-    "must tell the agent the photo is already sent",
-  );
-  assert.ok(
-    reply.agent_instructions.some((line) =>
-      /do not.*re-?send.*photo|do not.*paste.*url/i.test(line),
-    ),
-    "must forbid re-sending the photo / pasting the URL",
-  );
+  for (const line of reply.agent_instructions) {
+    assert.ok(
+      !ALREADY_SENT.test(line),
+      `base prerequisite instruction must not claim delivery: ${line}`,
+    );
+  }
 });
 
-test("the screenshot URL constant matches a file that actually exists in the repo", () => {
-  // Re-derive the in-repo asset path from the constant and confirm the
-  // file is present on disk. Prevents a broken Telegram photo URL from
-  // shipping with the next release.
-  const expectedSuffix =
-    "skills/tinyhat-subscriptions/assets/chatgpt-enable-device-code-for-codex.png";
-  assert.ok(
-    SUBSCRIPTION_PREREQUISITE_SCREENSHOT_URL.endsWith(expectedSuffix),
-    "constant must end with the in-repo asset path",
-  );
-  const onDisk = path.join(REPO_ROOT, expectedSuffix);
-  // `readFileSync` throws ENOENT if the file is missing.
-  const bytes = readFileSync(onDisk);
-  assert.ok(bytes.length > 1000, "screenshot must be a real (non-empty) PNG");
-});
-
-test("link-success reply puts URL+button in text but NEVER the device code", () => {
+test("link BASE reply makes no delivery claim, hides the code from text, carries it for the follow-up", () => {
   const reply = buildSubscriptionLinkReply({
     verificationUrl: "https://auth.openai.com/verify",
     userCode: "SZ85-LWNTP",
@@ -97,35 +80,196 @@ test("link-success reply puts URL+button in text but NEVER the device code", () 
   // The whole point of #108 — the code must NOT leak into the main bubble.
   assert.ok(
     !reply.text.includes("SZ85-LWNTP"),
-    "main text must not include the device code (#108 — bare bubble path)",
+    "main text must not include the device code (bare-bubble path)",
   );
-  // Main text must direct the user to the next bubble.
   assert.match(reply.text, /paste the device code from the next message/i);
-  assert.match(reply.text, /expires in about 15 minutes/i);
 
-  // The URL+button payload stays in channelData for the tool body to fan
-  // out via `sendTelegramMiniAppButton`.
   assert.deepEqual(reply.channelData.telegram.buttons, [
     [{ text: "Sign in to ChatGPT", url: "https://auth.openai.com/verify" }],
   ]);
-  // The bare-code follow-up is carried separately for the tool body to
-  // ship via `sendTelegramText`.
   assert.equal(reply.channelData.telegram.followup_text, "SZ85-LWNTP");
 
-  assert.deepEqual(reply.agent_instructions, SUBSCRIPTION_AGENT_INSTRUCTIONS);
-  assert.ok(
-    reply.agent_instructions.some((line) =>
-      /bare.*bubble|long-press/i.test(line),
-    ),
-    "agent_instructions must reflect the bare-bubble copy UX",
+  assert.deepEqual(
+    reply.agent_instructions,
+    SUBSCRIPTION_LINK_BASE_AGENT_INSTRUCTIONS,
   );
+  for (const line of reply.agent_instructions) {
+    assert.ok(
+      !ALREADY_SENT.test(line),
+      `base link instruction must not claim delivery: ${line}`,
+    );
+  }
+});
+
+// ── Prerequisite finalizer — success vs failure ───────────────────────
+
+test("prerequisite finalizer SUCCESS swaps in the screenshot text + 'already sent' guidance", () => {
+  const reply = buildSubscriptionPrerequisiteHelpReply();
+  const final = finalizeSubscriptionPrerequisiteHelpReply(reply, {
+    sent: true,
+    channel: "telegram",
+    chat_id: "1",
+    message_id: "91",
+  });
+
+  assert.equal(final.photo_delivered, true);
+  assert.equal(final.telegram_photo_delivery.message_id, "91");
+  // Text now references the screenshot we KNOW landed.
+  assert.equal(final.text, SUBSCRIPTION_PREREQUISITE_WALKTHROUGH_TEXT_WITH_SCREENSHOT);
+  assert.match(final.text, /screenshot I just sent/i);
+  // The "already sent / do not resend" claim appears only here.
   assert.ok(
-    reply.agent_instructions.some((line) =>
-      /do not.*re-?paste.*device code/i.test(line),
+    final.agent_instructions.some(
+      (l) => ALREADY_SENT.test(l) && /do not re-?send|do not paste the image/i.test(l),
     ),
-    "agent_instructions must forbid re-pasting the code in free text",
+    "success path must add the 'already sent, do not resend' instruction",
   );
 });
+
+test("prerequisite finalizer FAILURE keeps plain text, adds recovery, makes NO 'already sent' claim", () => {
+  const reply = buildSubscriptionPrerequisiteHelpReply();
+  const final = finalizeSubscriptionPrerequisiteHelpReply(reply, {
+    sent: false,
+    reason: "telegram_send_failed",
+  });
+
+  assert.equal(final.photo_delivered, false);
+  // Plain text — must not claim a screenshot was shown.
+  assert.equal(final.text, SUBSCRIPTION_PREREQUISITE_WALKTHROUGH_TEXT);
+  assert.ok(!/screenshot I just sent/i.test(final.text));
+  for (const line of final.agent_instructions) {
+    assert.ok(
+      !ALREADY_SENT.test(line),
+      `failure path must not claim the photo was sent: ${line}`,
+    );
+  }
+  // Recovery: tell the agent NOT to claim a screenshot + convey steps in words.
+  assert.ok(
+    final.agent_instructions.some(
+      (l) => /could NOT be delivered/i.test(l) && /Settings → Security/i.test(l),
+    ),
+    "failure path must add a recovery instruction with the manual steps",
+  );
+});
+
+test("prerequisite finalizer treats a null/undefined delivery as failure", () => {
+  const reply = buildSubscriptionPrerequisiteHelpReply();
+  const final = finalizeSubscriptionPrerequisiteHelpReply(reply, undefined);
+  assert.equal(final.photo_delivered, false);
+  assert.deepEqual(final.telegram_photo_delivery, { sent: false });
+});
+
+// ── Link finalizer — the three real outcomes ──────────────────────────
+
+test("link finalizer HAPPY (button + code both sent) strips channelData and adds both 'already sent' lines", () => {
+  const reply = buildSubscriptionLinkReply({
+    verificationUrl: "https://auth.openai.com/verify",
+    userCode: "SZ85-LWNTP",
+  });
+  const final = finalizeSubscriptionLinkReply(reply, {
+    buttonDelivery: { sent: true, message_id: "10" },
+    codeDelivery: { sent: true, message_id: "11" },
+  });
+
+  assert.equal(final.delivered, true);
+  assert.equal(final.code_delivered, true);
+  // Transport payload (raw verification URL button) never reaches the agent.
+  assert.equal(final.channelData, undefined);
+  assert.ok(
+    final.agent_instructions.some((l) => /URL button has already been sent/i.test(l)),
+  );
+  assert.ok(
+    final.agent_instructions.some(
+      (l) => /bare Telegram message bubble/i.test(l) && /long-press/i.test(l),
+    ),
+  );
+  assert.ok(
+    final.agent_instructions.some((l) => /do not re-?paste the code/i.test(l)),
+  );
+});
+
+test("link finalizer BUTTON-OK / CODE-FAIL tells the agent to paste the code, never claims the code was sent", () => {
+  const reply = buildSubscriptionLinkReply({
+    verificationUrl: "https://auth.openai.com/verify",
+    userCode: "SZ85-LWNTP",
+  });
+  const final = finalizeSubscriptionLinkReply(reply, {
+    buttonDelivery: { sent: true, message_id: "10" },
+    codeDelivery: { sent: false, reason: "telegram_send_failed" },
+  });
+
+  assert.equal(final.delivered, true);
+  assert.equal(final.code_delivered, false);
+  assert.equal(final.channelData, undefined);
+  // The code must still be reachable so the agent can paste it.
+  assert.equal(final.user_code, "SZ85-LWNTP");
+  // Button claim is fine (it WAS sent); the code claim must NOT say "sent".
+  assert.ok(
+    final.agent_instructions.some((l) => /URL button has already been sent/i.test(l)),
+  );
+  assert.ok(
+    !final.agent_instructions.some((l) =>
+      /code has already been sent as its own bare/i.test(l),
+    ),
+    "must not claim the code bubble was sent when it failed",
+  );
+  // Recovery: paste the code now from user_code.
+  assert.ok(
+    final.agent_instructions.some(
+      (l) => /could NOT be sent/i.test(l) && /user_code/.test(l),
+    ),
+    "must instruct the agent to paste the code from user_code",
+  );
+});
+
+test("link finalizer BUTTON-FAIL asks the user to retry and never claims any delivery", () => {
+  const reply = buildSubscriptionLinkReply({
+    verificationUrl: "https://auth.openai.com/verify",
+    userCode: "SZ85-LWNTP",
+  });
+  const final = finalizeSubscriptionLinkReply(reply, {
+    buttonDelivery: { sent: false, reason: "missing_telegram_bot_token" },
+    codeDelivery: { sent: false, reason: "skipped_button_not_sent" },
+  });
+
+  assert.equal(final.delivered, false);
+  assert.equal(final.code_delivered, false);
+  assert.equal(final.channelData, undefined);
+  for (const line of final.agent_instructions) {
+    assert.ok(
+      !ALREADY_SENT.test(line),
+      `button-fail path must not claim any delivery: ${line}`,
+    );
+  }
+  assert.ok(
+    final.agent_instructions.some(
+      (l) => /could NOT be delivered/i.test(l) && /retry|try .*again/i.test(l),
+    ),
+    "button-fail path must ask the user to retry",
+  );
+});
+
+test("link finalizer always strips the transport verification URL button from the result", () => {
+  const reply = buildSubscriptionLinkReply({
+    verificationUrl: "https://auth.openai.com/UNIQUE-MARKER",
+    userCode: "AAAA-BBBBB",
+  });
+  for (const outcome of [
+    { buttonDelivery: { sent: true }, codeDelivery: { sent: true } },
+    { buttonDelivery: { sent: true }, codeDelivery: { sent: false } },
+    { buttonDelivery: { sent: false }, codeDelivery: { sent: false } },
+  ]) {
+    const final = finalizeSubscriptionLinkReply(reply, outcome);
+    assert.equal(final.channelData, undefined);
+    // The raw URL must not appear in any agent_instructions line.
+    assert.ok(
+      !final.agent_instructions.some((l) => l.includes("UNIQUE-MARKER")),
+      "verification URL must never appear in agent_instructions",
+    );
+  }
+});
+
+// ── Failure + revert builders ─────────────────────────────────────────
 
 test("link-failure reply nudges the agent toward the prerequisite-help tool on disabled device-code", () => {
   const reply = buildSubscriptionLinkFailureReply(
@@ -134,10 +278,7 @@ test("link-failure reply nudges the agent toward the prerequisite-help tool on d
 
   assert.equal(reply.ok, false);
   assert.equal(reply.action, "subscriptions.open_link");
-  assert.equal(
-    reply.error,
-    "device-code login disabled on your ChatGPT account",
-  );
+  assert.equal(reply.error, "device-code login disabled on your ChatGPT account");
   assert.match(reply.text, /enable device code authorization/i);
   assert.ok(
     reply.agent_instructions.some((line) =>
@@ -152,14 +293,26 @@ test("revert reply suppresses any account / profile identifier", () => {
   assert.equal(reply.action, "subscriptions.revert_to_platform_credits");
   assert.equal(reply.idempotent, false);
   assert.match(reply.text, /back on Tinyhat-funded credits/);
-  // The reply must not leak the OpenAI account email / profile id even
-  // if the caller threads one through — the builder takes only the
-  // alreadyOnPlatformCredits boolean.
   const serialized = JSON.stringify(reply);
+  assert.ok(!/@/.test(serialized), "revert reply must not contain an email-shaped string");
+});
+
+// ── Repo wiring: manifest + on-disk asset + SKILL.md ──────────────────
+
+test("the screenshot URL constant matches a file that actually exists in the repo", () => {
+  const expectedSuffix =
+    "skills/tinyhat-subscriptions/assets/chatgpt-enable-device-code-for-codex.png";
   assert.ok(
-    !/@/.test(serialized),
-    "revert reply must not contain an email-shaped string",
+    SUBSCRIPTION_PREREQUISITE_SCREENSHOT_URL.endsWith(expectedSuffix),
+    "constant must end with the in-repo asset path",
   );
+  assert.match(
+    SUBSCRIPTION_PREREQUISITE_SCREENSHOT_URL,
+    /^https:\/\/raw\.githubusercontent\.com\/tinyhat-ai\/tinyhat\/main\//,
+  );
+  const onDisk = path.join(REPO_ROOT, expectedSuffix);
+  const bytes = readFileSync(onDisk);
+  assert.ok(bytes.length > 1000, "screenshot must be a real (non-empty) PNG");
 });
 
 test("openclaw.plugin.json registers the new prerequisite-help tool + operation", () => {
@@ -171,17 +324,15 @@ test("openclaw.plugin.json registers the new prerequisite-help tool + operation"
     manifest.contracts.tools.includes(
       "tinyhat_open_chatgpt_subscription_prerequisite_help",
     ),
-    "prerequisite-help tool must be in contracts.tools",
   );
   assert.ok(
     manifest.contracts.tools.includes("tinyhat_open_chatgpt_subscription_link"),
-    "link tool must still be in contracts.tools",
   );
 
   const prerequisiteOp = manifest.contracts.operations.find(
     (op) => op.name === "subscriptions.open_prerequisite_help",
   );
-  assert.ok(prerequisiteOp, "subscriptions.open_prerequisite_help operation must exist");
+  assert.ok(prerequisiteOp);
   assert.equal(
     prerequisiteOp.tool,
     "tinyhat_open_chatgpt_subscription_prerequisite_help",
@@ -191,25 +342,17 @@ test("openclaw.plugin.json registers the new prerequisite-help tool + operation"
   const linkOp = manifest.contracts.operations.find(
     (op) => op.name === "subscriptions.open_link",
   );
-  assert.ok(linkOp, "subscriptions.open_link operation must still exist");
-  assert.equal(
-    linkOp.userSurface,
-    "telegram_url_button_plus_bare_code_bubble",
-    "link operation's userSurface must reflect the bare-code-bubble UX",
-  );
+  assert.ok(linkOp);
+  assert.equal(linkOp.userSurface, "telegram_url_button_plus_bare_code_bubble");
 });
 
-test("subscription SKILL.md routes the prerequisite-help tool and forbids re-sending the photo", () => {
+test("subscription SKILL.md routes the prerequisite-help tool and documents the delivery markers", () => {
   const skill = readFileSync(
     path.join(REPO_ROOT, "skills/tinyhat-subscriptions/SKILL.md"),
     "utf8",
   );
-  // The Route User Intent table must offer the prerequisite-help tool.
   assert.match(skill, /tinyhat_open_chatgpt_subscription_prerequisite_help/);
-  // The Link section must tell the agent the code lands as its own bare
-  // bubble so it doesn't re-paste.
   assert.match(skill, /code_delivered/);
-  assert.match(skill, /long-press.*Copy|bare.*bubble/i);
-  // The Subscription Button Contract must call out photo_delivered too.
   assert.match(skill, /photo_delivered/);
+  assert.match(skill, /long-press.*Copy|bare.*bubble/i);
 });

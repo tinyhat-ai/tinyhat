@@ -109,12 +109,20 @@ error text.
 - If `code_delivered: true` is present (link tool path), the
   9-character device code has already been sent as its own bare
   Telegram message bubble. Do not re-paste the code in your
-  follow-up reply.
+  follow-up reply. If `code_delivered: false` is present, the bare
+  bubble failed to send — paste the device code from the `user_code`
+  field in your reply so the user still receives it (the code is the
+  one paste-able non-secret value in this flow).
+- If `delivered: false` is present on the link result, the sign-in
+  button could not be delivered — tell the user the link couldn't
+  start and ask them to retry; never paste the verification URL.
 - If `photo_delivered: true` is present (prerequisite-help tool
   path), the canonical settings screenshot has already been sent to
   the user via Telegram. Do not re-send the photo, do not paste the
   image URL into chat, and do not describe the screenshot as if the
-  user might not have seen it.
+  user might not have seen it. If `photo_delivered: false` is
+  present, the screenshot failed to send — do not claim a screenshot
+  was shown; walk the user through the toggle in words instead.
 - Treat `channelData.telegram.buttons` and
   `channelData.telegram.photo_url` / `photo_caption` /
   `followup_text` as transport-only payloads. Preserve them for

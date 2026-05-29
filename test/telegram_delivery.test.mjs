@@ -2,9 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import {
-  markTelegramCodeDelivered,
   markTelegramDelivered,
-  markTelegramPhotoDelivered,
   sendTelegramMiniAppButton,
   sendTelegramPhoto,
   sendTelegramText,
@@ -277,41 +275,7 @@ test("photo and bare-text helpers skip non-telegram delivery contexts", async ()
   });
 });
 
-test("markTelegramPhotoDelivered flags photo and tells the agent not to re-send", () => {
-  const reply = { text: "Walkthrough", agent_instructions: ["existing"] };
-  const marked = markTelegramPhotoDelivered(reply, {
-    sent: true,
-    channel: "telegram",
-    chat_id: "1",
-    message_id: "91",
-  });
-  assert.equal(marked.photo_delivered, true);
-  assert.equal(marked.telegram_photo_delivery.message_id, "91");
-  assert.equal(marked.agent_instructions[0], "existing");
-  assert.match(marked.agent_instructions.at(-1), /illustrative photo/i);
-  assert.match(marked.agent_instructions.at(-1), /already been sent directly/i);
-});
-
-test("markTelegramPhotoDelivered is a no-op when delivery did not succeed", () => {
-  const reply = { text: "x", agent_instructions: ["a"] };
-  const same = markTelegramPhotoDelivered(reply, { sent: false });
-  assert.strictEqual(same, reply);
-});
-
-test("markTelegramCodeDelivered flags the bare-code bubble and locks the agent out of re-pasting", () => {
-  const reply = {
-    text: "URL+button intro",
-    agent_instructions: ["existing"],
-  };
-  const marked = markTelegramCodeDelivered(reply, {
-    sent: true,
-    channel: "telegram",
-    chat_id: "1",
-    message_id: "92",
-  });
-  assert.equal(marked.code_delivered, true);
-  assert.equal(marked.telegram_code_delivery.message_id, "92");
-  assert.equal(marked.agent_instructions[0], "existing");
-  assert.match(marked.agent_instructions.at(-1), /bare Telegram message bubble/i);
-  assert.match(marked.agent_instructions.at(-1), /long-press/i);
-});
+// NOTE: subscription photo / bare-code delivery-state claims are now
+// owned by `finalizeSubscription*Reply` (outcome-aware: success vs
+// failure recovery) — see test/subscription_flow.test.mjs. The generic
+// `markTelegramDelivered` (Mini App button path) is covered above.

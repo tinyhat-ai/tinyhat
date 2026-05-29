@@ -12,15 +12,15 @@ import {
   buildSubscriptionPrerequisiteHelpReply,
   buildSubscriptionRevertFailureReply,
   buildSubscriptionRevertReply,
+  finalizeSubscriptionLinkReply,
+  finalizeSubscriptionPrerequisiteHelpReply,
 } from "./subscription_builders.js";
 import {
   revertChatgptSubscriptionAuth,
   startChatgptSubscriptionLink,
 } from "./subscriptions.js";
 import {
-  markTelegramCodeDelivered,
   markTelegramDelivered,
-  markTelegramPhotoDelivered,
   sendTelegramMiniAppButton,
   sendTelegramPhoto,
   sendTelegramText,
@@ -313,7 +313,9 @@ const plugin = defineToolPlugin({
             caption: reply.channelData.telegram.photo_caption,
             signal: runtime.signal,
           });
-          return markTelegramPhotoDelivered(reply, photoDelivery);
+          // The finalizer is the only place delivery-state claims are
+          // made: success → "already sent"; failure → recovery guidance.
+          return finalizeSubscriptionPrerequisiteHelpReply(reply, photoDelivery);
         },
       }),
     }),
@@ -360,25 +362,27 @@ const plugin = defineToolPlugin({
             text: reply.text,
             signal: runtime.signal,
           });
-          let withButtonDelivered = markTelegramDelivered(
-            reply,
+          // Only attempt the bare-code bubble when the button reached the
+          // user — a lone code bubble with no verification button would
+          // just confuse them. The finalizer turns each outcome into an
+          // accurate reply (success → "already sent"; code-fail → tell the
+          // agent to paste the code; button-fail → tell the user to retry).
+          let codeDelivery = { sent: false, reason: "skipped_button_not_sent" };
+          if (buttonDelivery?.sent) {
+            // The device code lands as its own bare bubble — long-press →
+            // Copy on mobile then captures only the 9 characters (#108).
+            codeDelivery = await sendTelegramText({
+              api,
+              toolContext,
+              text:
+                reply.channelData?.telegram?.followup_text || session.userCode,
+              signal: runtime.signal,
+            });
+          }
+          return finalizeSubscriptionLinkReply(reply, {
             buttonDelivery,
-          );
-          // Then send the device code as its own bare bubble — long-press
-          // → Copy on mobile then captures only the 9 characters (#108).
-          // The code never enters the main reply text precisely so this
-          // bare bubble is the cleanest copy target.
-          const codeDelivery = await sendTelegramText({
-            api,
-            toolContext,
-            text: reply.channelData?.telegram?.followup_text || session.userCode,
-            signal: runtime.signal,
-          });
-          withButtonDelivered = markTelegramCodeDelivered(
-            withButtonDelivered,
             codeDelivery,
-          );
-          return withButtonDelivered;
+          });
         },
       }),
     }),

@@ -206,47 +206,13 @@ export function markTelegramDelivered(reply, delivery) {
   };
 }
 
-/**
- * Wrap a reply that was delivered as a Telegram **photo** (e.g. the
- * canonical screenshot for the ChatGPT-subscription prerequisite, #108).
- * The agent must not re-send the same photo or paste the photo URL into
- * chat — the plugin already delivered it.
- */
-export function markTelegramPhotoDelivered(reply, delivery) {
-  if (!delivery?.sent) {
-    return reply;
-  }
-  return {
-    ...(reply || {}),
-    telegram_photo_delivery: delivery,
-    photo_delivered: true,
-    agent_instructions: [
-      ...(Array.isArray(reply?.agent_instructions) ? reply.agent_instructions : []),
-      "The illustrative photo has already been sent directly to the user via Telegram. Do not re-send it, do not paste the image URL, and do not describe the photo as if the user might not have seen it.",
-    ],
-  };
-}
-
-/**
- * Wrap a reply that has already had its **device code** (or any other
- * bare-text follow-up bubble) sent via Telegram (#108). Lets the agent
- * know that a second bubble was delivered after the main button reply so
- * it doesn't duplicate or paraphrase the value in its own free-text turn.
- */
-export function markTelegramCodeDelivered(reply, delivery) {
-  if (!delivery?.sent) {
-    return reply;
-  }
-  return {
-    ...(reply || {}),
-    telegram_code_delivery: delivery,
-    code_delivered: true,
-    agent_instructions: [
-      ...(Array.isArray(reply?.agent_instructions) ? reply.agent_instructions : []),
-      "The 9-character device code has already been sent as its own bare Telegram message bubble so the user can long-press → Copy to grab it cleanly. Do not re-paste the code in your own free-text reply.",
-    ],
-  };
-}
+// NOTE: subscription photo / bare-code delivery-state claims are NOT
+// handled by success-only markers here. They live in
+// `finalizeSubscription*Reply` in `src/subscription_builders.js`, which
+// branches on the real send outcome (success vs failure) and returns a
+// recovery instruction when a send fails — so a `{ sent: false }` result
+// can never leave a stale "already sent" claim in the tool result (Codex
+// P1, #109 review).
 
 export function telegramChatIdFromDeliveryContext(deliveryContext, toolContext) {
   const raw =

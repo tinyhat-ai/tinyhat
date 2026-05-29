@@ -1,4 +1,4 @@
-// ChatGPT BYO subscription chat-tool reply builders.
+// ChatGPT BYO subscription chat-tool reply builders + finalizers.
 //
 // Kept separate from `src/index.js` so the test suite can import + pin
 // the reply shapes directly (the `index.js` plugin entrypoint is the
@@ -7,10 +7,17 @@
 // `skills/*/SKILL.md` cannot contain raw URLs per the package validator,
 // so the URL stays in `src/`.
 //
-// Builders are pure: they take the platform-returned session shape and
-// return the tool reply object. Telegram delivery side-effects (photo +
-// URL button + bare-code follow-up) happen in the tool execute() body in
-// `index.js`, fed by the `channelData.telegram.*` fields produced here.
+// Two-layer shape (Codex P1, #109 review):
+//   1. `build*Reply()` produces a NEUTRAL reply — it makes NO claim that
+//      anything was delivered. Its `agent_instructions` and `text` are
+//      correct even if every Telegram send fails.
+//   2. `finalize*Reply(reply, delivery)` runs AFTER the Telegram sends
+//      and is the ONLY place delivery-state claims are made: on success
+//      it adds "already sent / do not resend"; on failure it adds a
+//      concrete recovery instruction (and, for the link, keeps the
+//      device code reachable so the agent can paste it).
+// Builders never assert delivery, so a `{ sent: false }` result can
+// never leave a stale "already sent" claim in the tool result.
 
 /**
  * Canonical raw-GitHub URL for the ChatGPT security-settings screenshot
@@ -25,34 +32,49 @@ export const SUBSCRIPTION_PREREQUISITE_SCREENSHOT_URL =
 export const SUBSCRIPTION_PREREQUISITE_PHOTO_CAPTION =
   "ChatGPT Security — toggle “Enable device code authorization for Codex” on.";
 
+// Plain, self-contained walkthrough — makes NO claim that a screenshot
+// was shown, so it stays correct when the photo send fails. The success
+// finalizer swaps in the screenshot-referencing variant below.
 export const SUBSCRIPTION_PREREQUISITE_WALKTHROUGH_TEXT =
   "Before I start the link, OpenAI needs you to enable device-code " +
-  "sign-in on your ChatGPT account once (the screenshot above shows the " +
-  "exact toggle). On chatgpt.com → Settings → Security → Secure sign in " +
-  "with ChatGPT, turn on “Enable device code authorization for Codex”, " +
-  "then tell me when it's on and I'll start the link.\n\n" +
+  "sign-in on your ChatGPT account once. On chatgpt.com → Settings → " +
+  "Security → Secure sign in with ChatGPT, turn on “Enable device code " +
+  "authorization for Codex”, then tell me when it's on and I'll start " +
+  "the link.\n\n" +
   "Personal accounts can flip the toggle directly. Team / Business / " +
   "Enterprise: the toggle is workspace-admin-only — if it's greyed out, " +
   "ask the workspace admin to enable it.";
 
-export const SUBSCRIPTION_PREREQUISITE_AGENT_INSTRUCTIONS = [
-  "The illustrative ChatGPT security-settings screenshot has already been sent to the user via Telegram photo. Do not re-send the photo, do not paste the image URL into chat, and do not describe the screenshot as if the user might not have seen it.",
-  "Send the prerequisite walkthrough text to the user via `reply_via_telegram`. Acknowledge briefly that you've shared the screenshot above and that you'll start the link as soon as they confirm the toggle is on.",
-  "Do not call `tinyhat_open_chatgpt_subscription_link` until the user confirms the toggle is on; otherwise the linking attempt will fail with the disabled-device-code error.",
+// Used by the success finalizer only (we know the photo landed, so the
+// "I just sent" reference is accurate).
+export const SUBSCRIPTION_PREREQUISITE_WALKTHROUGH_TEXT_WITH_SCREENSHOT =
+  "Before I start the link, OpenAI needs you to enable device-code " +
+  "sign-in on your ChatGPT account once — the screenshot I just sent " +
+  "shows the exact toggle. On chatgpt.com → Settings → Security → " +
+  "Secure sign in with ChatGPT, turn on “Enable device code " +
+  "authorization for Codex”, then tell me when it's on and I'll start " +
+  "the link.\n\n" +
+  "Personal accounts can flip the toggle directly. Team / Business / " +
+  "Enterprise: the toggle is workspace-admin-only — if it's greyed out, " +
+  "ask the workspace admin to enable it.";
+
+// Base (pre-delivery) instructions — neutral; assert nothing about what
+// was delivered.
+export const SUBSCRIPTION_PREREQUISITE_BASE_AGENT_INSTRUCTIONS = [
+  "Forward the walkthrough text to the user via `reply_via_telegram`.",
+  "Do not call `tinyhat_open_chatgpt_subscription_link` until the user confirms the device-code toggle is on; otherwise the linking attempt fails with the disabled-device-code error.",
 ];
 
-export const SUBSCRIPTION_AGENT_INSTRUCTIONS = [
-  "The OpenAI verification URL has already been sent to the user as a Telegram inline-keyboard URL button targeting auth.openai.com — do not paste or re-render the URL in chat. The 9-character device code has been sent as its own bare Telegram message bubble so the user can long-press → Copy to grab only the code on mobile.",
-  "Acknowledge briefly in chat that you've started the link, point at the “Sign in to ChatGPT” button, and remind the user the code (which they already see as the bare bubble) expires in about 15 minutes. Do not re-paste the device code in your own free-text reply.",
-  "Never paste any other URL, query parameter, signed token, OAuth token, or secret value in chat.",
-  "The OpenAI verification URL is the v0.5 'no raw URLs in chat' exemption; the device code is the only paste-able non-secret string the owner is asked to handle.",
+export const SUBSCRIPTION_LINK_BASE_AGENT_INSTRUCTIONS = [
+  "Never paste any URL, query parameter, signed token, OAuth token, or secret value in chat other than the 9-character device code — the device code is the only paste-able non-secret string in this flow.",
+  "The OpenAI verification URL is the v0.5 'no raw URLs in chat' exemption and reaches the user only through the inline-keyboard button; never paste it as text.",
 ];
 
 /**
- * Pre-link prerequisite help reply (#108). Pairs with the
- * `tinyhat_open_chatgpt_subscription_prerequisite_help` tool body: the
- * tool sends the screenshot via Telegram photo BEFORE this reply lands,
- * so the agent's job is just to forward the walkthrough text.
+ * Pre-link prerequisite help reply (#108). NEUTRAL — the plain
+ * walkthrough text makes no claim that a screenshot was shown. The tool
+ * body sends the screenshot via Telegram photo, then calls
+ * `finalizeSubscriptionPrerequisiteHelpReply` with the delivery result.
  */
 export function buildSubscriptionPrerequisiteHelpReply() {
   return {
@@ -64,22 +86,61 @@ export function buildSubscriptionPrerequisiteHelpReply() {
         photo_caption: SUBSCRIPTION_PREREQUISITE_PHOTO_CAPTION,
       },
     },
-    agent_instructions: SUBSCRIPTION_PREREQUISITE_AGENT_INSTRUCTIONS,
+    agent_instructions: SUBSCRIPTION_PREREQUISITE_BASE_AGENT_INSTRUCTIONS,
   };
 }
 
 /**
- * Link-success reply: URL+button intro in `text`, bare device code in
- * `channelData.telegram.followup_text` (#108). The tool body sends the
- * URL+button message first, then the bare code as its own bubble so the
- * user can long-press → Copy on mobile to grab only the code.
+ * Finalize the prerequisite-help reply with the real photo-send outcome
+ * (Codex P1, #109). On success: swap to the screenshot-referencing text
+ * and add the "already sent / do not resend" guidance. On failure: keep
+ * the plain text and add a recovery instruction that explicitly tells the
+ * agent NOT to claim a screenshot was shown and to convey the steps in
+ * words instead.
+ */
+export function finalizeSubscriptionPrerequisiteHelpReply(reply, photoDelivery) {
+  const base = reply || {};
+  const baseInstructions = Array.isArray(base.agent_instructions)
+    ? base.agent_instructions
+    : [];
+  if (photoDelivery?.sent) {
+    return {
+      ...base,
+      text: SUBSCRIPTION_PREREQUISITE_WALKTHROUGH_TEXT_WITH_SCREENSHOT,
+      photo_delivered: true,
+      telegram_photo_delivery: photoDelivery,
+      agent_instructions: [
+        ...baseInstructions,
+        "The ChatGPT security-settings screenshot has already been sent to the user via Telegram photo. Do not re-send the photo, do not paste the image URL into chat, and do not describe the screenshot as if the user might not have seen it.",
+        "Acknowledge briefly that you've shared the screenshot above, then forward the walkthrough text via `reply_via_telegram`.",
+      ],
+    };
+  }
+  return {
+    ...base,
+    text: SUBSCRIPTION_PREREQUISITE_WALKTHROUGH_TEXT,
+    photo_delivered: false,
+    telegram_photo_delivery: photoDelivery || { sent: false },
+    agent_instructions: [
+      ...baseInstructions,
+      "The settings screenshot could NOT be delivered to the user. Do not tell the user to look at a screenshot. Instead, walk them through the steps in your own `reply_via_telegram` message: on chatgpt.com open Settings → Security → Secure sign in with ChatGPT and turn on “Enable device code authorization for Codex”.",
+    ],
+  };
+}
+
+/**
+ * Link-success base reply (#108). NEUTRAL — URL+button intro in `text`,
+ * bare device code in `channelData.telegram.followup_text`. Asserts no
+ * delivery. The tool body sends the URL+button message, then the bare
+ * code bubble, then calls `finalizeSubscriptionLinkReply` with both
+ * outcomes.
  */
 export function buildSubscriptionLinkReply({ verificationUrl, userCode }) {
   return {
     action: "subscriptions.open_link",
-    // The device code intentionally does NOT appear in `text` — it
-    // lands as its own bare-bubble follow-up so long-press → Copy
-    // captures only the code on mobile.
+    // The device code intentionally does NOT appear in `text` — it lands
+    // as its own bare-bubble follow-up so long-press → Copy captures only
+    // the code on mobile.
     text:
       "Sign in to ChatGPT to connect your subscription. Tap the button " +
       "below to open auth.openai.com on a device you're signed in to, " +
@@ -93,7 +154,84 @@ export function buildSubscriptionLinkReply({ verificationUrl, userCode }) {
         followup_text: userCode,
       },
     },
-    agent_instructions: SUBSCRIPTION_AGENT_INSTRUCTIONS,
+    agent_instructions: SUBSCRIPTION_LINK_BASE_AGENT_INSTRUCTIONS,
+  };
+}
+
+/**
+ * Finalize the link reply with the real URL-button + bare-code-bubble
+ * send outcomes (Codex P1, #109). The transport `channelData` is always
+ * stripped so the raw verification URL / button payload never reaches the
+ * agent. Three outcomes:
+ *
+ *   - button NOT sent → the user can't reach the verification page; tell
+ *     them to retry (the backend device-code session is idempotent, so a
+ *     retry reuses it). `delivered: false`.
+ *   - button sent + code sent → happy path; "already sent, don't resend".
+ *     `delivered: true, code_delivered: true`.
+ *   - button sent + code NOT sent → the button message already told the
+ *     user to expect the code in a follow-up, so the agent must supply it:
+ *     paste the code from `user_code` (kept on the reply). `delivered:
+ *     true, code_delivered: false`.
+ */
+export function finalizeSubscriptionLinkReply(
+  reply,
+  { buttonDelivery, codeDelivery } = {},
+) {
+  const base = reply || {};
+  const baseInstructions = Array.isArray(base.agent_instructions)
+    ? base.agent_instructions
+    : [];
+  // Never surface the transport button payload / verification URL button
+  // to the agent, regardless of outcome.
+  const { channelData: _channelData, ...withoutChannelData } = base;
+  const buttonSent = !!buttonDelivery?.sent;
+  const codeSent = !!codeDelivery?.sent;
+
+  if (!buttonSent) {
+    return {
+      ...withoutChannelData,
+      delivered: false,
+      code_delivered: codeSent,
+      telegram_delivery: buttonDelivery || { sent: false },
+      telegram_code_delivery: codeDelivery || { sent: false },
+      agent_instructions: [
+        ...baseInstructions,
+        "The “Sign in to ChatGPT” button could NOT be delivered to the user, so they have no way to open the verification page. Tell the user the link couldn't be started right now and ask them to say “connect my ChatGPT subscription” again to retry. Do not paste the verification URL into chat.",
+      ],
+    };
+  }
+
+  if (codeSent) {
+    return {
+      ...withoutChannelData,
+      delivered: true,
+      code_delivered: true,
+      telegram_delivery: buttonDelivery,
+      telegram_code_delivery: codeDelivery,
+      agent_instructions: [
+        ...baseInstructions,
+        "The “Sign in to ChatGPT” URL button has already been sent to the user directly. Do not re-render the button or paste the verification URL into chat.",
+        "The 9-character device code has already been sent as its own bare Telegram message bubble so the user can long-press → Copy to grab only the code on mobile. Do not re-paste the code in your own free-text reply.",
+      ],
+    };
+  }
+
+  // Button sent, code bubble failed — the button message already told the
+  // user to paste the code from the next message, so the agent must
+  // supply it. The device code is the one paste-able non-secret value in
+  // this flow, so re-pasting it here is allowed.
+  return {
+    ...withoutChannelData,
+    delivered: true,
+    code_delivered: false,
+    telegram_delivery: buttonDelivery,
+    telegram_code_delivery: codeDelivery || { sent: false },
+    agent_instructions: [
+      ...baseInstructions,
+      "The “Sign in to ChatGPT” URL button has already been sent to the user directly. Do not re-render the button or paste the verification URL into chat.",
+      "The bare device-code bubble could NOT be sent, but the button message already told the user to paste the code from the next message. Reply now with the 9-character device code from the `user_code` field of this result so the user still receives it — the device code is the only paste-able non-secret value in this flow.",
+    ],
   };
 }
 
