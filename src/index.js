@@ -7,6 +7,10 @@ import {
   formatSecretRequestReply,
 } from "./presentation_helpers.js";
 import {
+  revertChatgptSubscriptionAuth,
+  startChatgptSubscriptionLink,
+} from "./subscriptions.js";
+import {
   markTelegramDelivered,
   sendTelegramMiniAppButton,
 } from "./telegram_delivery.js";
@@ -22,7 +26,84 @@ const DEFAULT_SKILLS = [
   { name: "tinyhat-runtime-status", role: "runtime_status" },
   { name: "tinyhat-package-inventory", role: "package_inventory" },
   { name: "tinyhat-support-report", role: "support_report" },
+  { name: "tinyhat-subscriptions", role: "subscriptions" },
 ];
+
+const SUBSCRIPTION_AGENT_INSTRUCTIONS = [
+  "Render the inline-keyboard URL button to auth.openai.com so the owner can tap to approve.",
+  "Render the 9-character device code as paste-able text in the message body — not inside a button.",
+  "Never paste any other URL, query parameter, signed token, OAuth token, or secret value in chat.",
+  "The OpenAI verification URL is the v0.5 'no raw URLs in chat' exemption; the device code is the only paste-able non-secret string the owner is asked to handle.",
+];
+
+function buildSubscriptionLinkReply({ verificationUrl, userCode }) {
+  return {
+    action: "subscriptions.open_link",
+    text:
+      "Sign in to ChatGPT to connect your subscription. Tap the button to " +
+      `open auth.openai.com on a device you're signed in to, then paste this code:\n\n${userCode}\n\n` +
+      "The code expires in about 15 minutes. Never share the code.",
+    verification_url: verificationUrl,
+    user_code: userCode,
+    channelData: {
+      telegram: {
+        buttons: [[{ text: "Sign in to ChatGPT", url: verificationUrl }]],
+      },
+    },
+    agent_instructions: SUBSCRIPTION_AGENT_INSTRUCTIONS,
+  };
+}
+
+function buildSubscriptionLinkFailureReply(err) {
+  const message = String(err?.message || err || "Subscription linking failed.").slice(0, 1023);
+  return {
+    ok: false,
+    action: "subscriptions.open_link",
+    text:
+      "I couldn't start the ChatGPT subscription login. " +
+      "Check that 'Enable device code authorization for Codex' is on in your " +
+      "ChatGPT security settings, then ask me to try again.",
+    error: message,
+    agent_instructions: [
+      "Surface the platform's non-secret reason verbatim if it explains the failure.",
+      "Never request the user's password, OAuth token, or any credential in chat.",
+    ],
+  };
+}
+
+function buildSubscriptionRevertReply({ alreadyOnPlatformCredits }) {
+  if (alreadyOnPlatformCredits) {
+    return {
+      action: "subscriptions.revert_to_platform_credits",
+      text:
+        "This Computer was already on Tinyhat-funded credits — nothing to revert.",
+      idempotent: true,
+    };
+  }
+  // Deliberately no `removed_profiles` / OAuth account email / profile
+  // id in this reply — those would leak the user's ChatGPT account
+  // identifier into the chat surface, which the operation's
+  // declared `metadata_only_tool_result` userSurface forbids.
+  return {
+    action: "subscriptions.revert_to_platform_credits",
+    text:
+      "Done — you're now back on Tinyhat-funded credits. Your ChatGPT " +
+      "subscription is no longer linked to this Computer.",
+    idempotent: false,
+  };
+}
+
+function buildSubscriptionRevertFailureReply(err) {
+  const message = String(err?.message || err || "Subscription revert failed.").slice(0, 1023);
+  return {
+    ok: false,
+    action: "subscriptions.revert_to_platform_credits",
+    text:
+      "I couldn't revert this Computer to Tinyhat-funded credits. " +
+      "Try again in a moment.",
+    error: message,
+  };
+}
 
 const configSchema = {
   type: "object",
@@ -263,6 +344,73 @@ const plugin = defineToolPlugin({
             runtime.signal,
           ),
         );
+      },
+    }),
+    tool({
+      name: "tinyhat_open_chatgpt_subscription_link",
+      description:
+        "Start a ChatGPT BYO subscription device-code login on this Computer " +
+        "and return the OpenAI verification URL + 9-character device code so " +
+        "the owner can approve from a signed-in device.",
+      parameters: emptyParameters,
+      factory: ({ api, config, toolContext }) => ({
+        name: "tinyhat_open_chatgpt_subscription_link",
+        label: "tinyhat_open_chatgpt_subscription_link",
+        description:
+          "Start a ChatGPT BYO subscription device-code login and return URL/code.",
+        parameters: emptyParameters,
+        execute: async (_toolCallId, _params, signal) => {
+          const runtime = resolveExecutionRuntime(config, { signal });
+          runtime.signal?.throwIfAborted?.();
+          // Bind the platform call so the helper doesn't have to
+          // know about config / token resolution. The runtime
+          // supervisor (sibling repo) is the layer that spawns the
+          // device-code CLI in a PTY; we just kick the link and
+          // poll the backend for the URL+code result.
+          const boundCall = (path, init, sig) =>
+            callTinyhat(runtime.config, path, init, sig);
+          let session;
+          try {
+            session = await startChatgptSubscriptionLink({
+              callTinyhat: boundCall,
+              signal: runtime.signal,
+            });
+          } catch (err) {
+            return buildSubscriptionLinkFailureReply(err);
+          }
+          const reply = buildSubscriptionLinkReply(session);
+          const delivery = await sendTelegramMiniAppButton({
+            api,
+            toolContext,
+            reply,
+            text: reply.text,
+            signal: runtime.signal,
+          });
+          return markTelegramDelivered(reply, delivery);
+        },
+      }),
+    }),
+    tool({
+      name: "tinyhat_revert_to_platform_credits",
+      description:
+        "Revert this Computer's LLM auth from the owner's ChatGPT " +
+        "subscription back to Tinyhat-funded platform credits (wipes the " +
+        "per-agent OAuth credential).",
+      parameters: emptyParameters,
+      execute: async (_params, config, context) => {
+        const runtime = resolveExecutionRuntime(config, context);
+        runtime.signal?.throwIfAborted?.();
+        const boundCall = (path, init, sig) =>
+          callTinyhat(runtime.config, path, init, sig);
+        try {
+          const result = await revertChatgptSubscriptionAuth({
+            callTinyhat: boundCall,
+            signal: runtime.signal,
+          });
+          return buildSubscriptionRevertReply(result);
+        } catch (err) {
+          return buildSubscriptionRevertFailureReply(err);
+        }
       },
     }),
   ],
