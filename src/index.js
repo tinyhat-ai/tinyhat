@@ -7,12 +7,23 @@ import {
   formatSecretRequestReply,
 } from "./presentation_helpers.js";
 import {
+  buildSubscriptionLinkFailureReply,
+  buildSubscriptionLinkReply,
+  buildSubscriptionPrerequisiteHelpReply,
+  buildSubscriptionRevertFailureReply,
+  buildSubscriptionRevertReply,
+  finalizeSubscriptionLinkReply,
+  finalizeSubscriptionPrerequisiteHelpReply,
+} from "./subscription_builders.js";
+import {
   revertChatgptSubscriptionAuth,
   startChatgptSubscriptionLink,
 } from "./subscriptions.js";
 import {
   markTelegramDelivered,
   sendTelegramMiniAppButton,
+  sendTelegramPhoto,
+  sendTelegramText,
 } from "./telegram_delivery.js";
 
 const METADATA_BASE_URL_KEY = "tinyhat-platform-base-url";
@@ -29,81 +40,11 @@ const DEFAULT_SKILLS = [
   { name: "tinyhat-subscriptions", role: "subscriptions" },
 ];
 
-const SUBSCRIPTION_AGENT_INSTRUCTIONS = [
-  "Render the inline-keyboard URL button to auth.openai.com so the owner can tap to approve.",
-  "Render the 9-character device code as paste-able text in the message body — not inside a button.",
-  "Never paste any other URL, query parameter, signed token, OAuth token, or secret value in chat.",
-  "The OpenAI verification URL is the v0.5 'no raw URLs in chat' exemption; the device code is the only paste-able non-secret string the owner is asked to handle.",
-];
-
-function buildSubscriptionLinkReply({ verificationUrl, userCode }) {
-  return {
-    action: "subscriptions.open_link",
-    text:
-      "Sign in to ChatGPT to connect your subscription. Tap the button to " +
-      `open auth.openai.com on a device you're signed in to, then paste this code:\n\n${userCode}\n\n` +
-      "The code expires in about 15 minutes. Never share the code.",
-    verification_url: verificationUrl,
-    user_code: userCode,
-    channelData: {
-      telegram: {
-        buttons: [[{ text: "Sign in to ChatGPT", url: verificationUrl }]],
-      },
-    },
-    agent_instructions: SUBSCRIPTION_AGENT_INSTRUCTIONS,
-  };
-}
-
-function buildSubscriptionLinkFailureReply(err) {
-  const message = String(err?.message || err || "Subscription linking failed.").slice(0, 1023);
-  return {
-    ok: false,
-    action: "subscriptions.open_link",
-    text:
-      "I couldn't start the ChatGPT subscription login. " +
-      "Check that 'Enable device code authorization for Codex' is on in your " +
-      "ChatGPT security settings, then ask me to try again.",
-    error: message,
-    agent_instructions: [
-      "Surface the platform's non-secret reason verbatim if it explains the failure.",
-      "Never request the user's password, OAuth token, or any credential in chat.",
-    ],
-  };
-}
-
-function buildSubscriptionRevertReply({ alreadyOnPlatformCredits }) {
-  if (alreadyOnPlatformCredits) {
-    return {
-      action: "subscriptions.revert_to_platform_credits",
-      text:
-        "This Computer was already on Tinyhat-funded credits — nothing to revert.",
-      idempotent: true,
-    };
-  }
-  // Deliberately no `removed_profiles` / OAuth account email / profile
-  // id in this reply — those would leak the user's ChatGPT account
-  // identifier into the chat surface, which the operation's
-  // declared `metadata_only_tool_result` userSurface forbids.
-  return {
-    action: "subscriptions.revert_to_platform_credits",
-    text:
-      "Done — you're now back on Tinyhat-funded credits. Your ChatGPT " +
-      "subscription is no longer linked to this Computer.",
-    idempotent: false,
-  };
-}
-
-function buildSubscriptionRevertFailureReply(err) {
-  const message = String(err?.message || err || "Subscription revert failed.").slice(0, 1023);
-  return {
-    ok: false,
-    action: "subscriptions.revert_to_platform_credits",
-    text:
-      "I couldn't revert this Computer to Tinyhat-funded credits. " +
-      "Try again in a moment.",
-    error: message,
-  };
-}
+// Subscription chat-tool reply builders + the canonical screenshot URL
+// live in `src/subscription_builders.js` (#108) — kept out of this
+// entrypoint so the test suite can import them directly and so the
+// raw-URL constant stays out of `skills/*/SKILL.md` (the package
+// validator forbids `https?://` in skill markdown).
 
 const configSchema = {
   type: "object",
@@ -347,6 +288,38 @@ const plugin = defineToolPlugin({
       },
     }),
     tool({
+      name: "tinyhat_open_chatgpt_subscription_prerequisite_help",
+      description:
+        "Send the user the canonical screenshot of the ChatGPT security " +
+        "setting they have to enable before a device-code link will work, " +
+        "plus the matching walkthrough text. Call this when the user first " +
+        "asks to connect their ChatGPT subscription, before " +
+        "`tinyhat_open_chatgpt_subscription_link`.",
+      parameters: emptyParameters,
+      factory: ({ api, config, toolContext }) => ({
+        name: "tinyhat_open_chatgpt_subscription_prerequisite_help",
+        label: "tinyhat_open_chatgpt_subscription_prerequisite_help",
+        description:
+          "Send the prerequisite screenshot + walkthrough to the user via Telegram.",
+        parameters: emptyParameters,
+        execute: async (_toolCallId, _params, signal) => {
+          const runtime = resolveExecutionRuntime(config, { signal });
+          runtime.signal?.throwIfAborted?.();
+          const reply = buildSubscriptionPrerequisiteHelpReply();
+          const photoDelivery = await sendTelegramPhoto({
+            api,
+            toolContext,
+            photoUrl: reply.channelData.telegram.photo_url,
+            caption: reply.channelData.telegram.photo_caption,
+            signal: runtime.signal,
+          });
+          // The finalizer is the only place delivery-state claims are
+          // made: success → "already sent"; failure → recovery guidance.
+          return finalizeSubscriptionPrerequisiteHelpReply(reply, photoDelivery);
+        },
+      }),
+    }),
+    tool({
       name: "tinyhat_open_chatgpt_subscription_link",
       description:
         "Start a ChatGPT BYO subscription device-code login on this Computer " +
@@ -379,14 +352,37 @@ const plugin = defineToolPlugin({
             return buildSubscriptionLinkFailureReply(err);
           }
           const reply = buildSubscriptionLinkReply(session);
-          const delivery = await sendTelegramMiniAppButton({
+          // Send the URL-button intro first so the user sees the
+          // "Sign in to ChatGPT" tap target right after the prerequisite
+          // walkthrough.
+          const buttonDelivery = await sendTelegramMiniAppButton({
             api,
             toolContext,
             reply,
             text: reply.text,
             signal: runtime.signal,
           });
-          return markTelegramDelivered(reply, delivery);
+          // Only attempt the bare-code bubble when the button reached the
+          // user — a lone code bubble with no verification button would
+          // just confuse them. The finalizer turns each outcome into an
+          // accurate reply (success → "already sent"; code-fail → tell the
+          // agent to paste the code; button-fail → tell the user to retry).
+          let codeDelivery = { sent: false, reason: "skipped_button_not_sent" };
+          if (buttonDelivery?.sent) {
+            // The device code lands as its own bare bubble — long-press →
+            // Copy on mobile then captures only the 9 characters (#108).
+            codeDelivery = await sendTelegramText({
+              api,
+              toolContext,
+              text:
+                reply.channelData?.telegram?.followup_text || session.userCode,
+              signal: runtime.signal,
+            });
+          }
+          return finalizeSubscriptionLinkReply(reply, {
+            buttonDelivery,
+            codeDelivery,
+          });
         },
       }),
     }),
