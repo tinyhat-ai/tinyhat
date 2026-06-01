@@ -1,6 +1,6 @@
 [project]
 name = "tinyhat"
-version = "0.4.1"
+version = "0.4.2"
 description = "Tinyhat platform capabilities for managed OpenClaw Computers."
 readme = "README.md"
 requires-python = ">=3.9"
