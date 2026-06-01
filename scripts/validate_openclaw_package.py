@@ -15,6 +15,7 @@ REQUIRED_TOOLS = {
     "tinyhat_list_runtime_secrets",
     "tinyhat_request_runtime_secret",
     "tinyhat_open_manage_computer_link",
+    "tinyhat_open_software_updates_link",
     "tinyhat_open_terminal_link",
     "tinyhat_report_problem",
     "tinyhat_secret_command",
@@ -24,6 +25,7 @@ REQUIRED_OPERATIONS = {
     "credentials.open_add_secret": "tinyhat_request_runtime_secret",
     "credentials.list_metadata": "tinyhat_list_runtime_secrets",
     "computer.open_manage": "tinyhat_open_manage_computer_link",
+    "computer.software_updates": "tinyhat_open_software_updates_link",
     "computer.open_terminal": "tinyhat_open_terminal_link",
     "computer.status": "tinyhat_get_platform_status",
     "packages.list_installed": "tinyhat_list_installed_packages",
@@ -34,6 +36,7 @@ REQUIRED_SKILLS = {
     "tinyhat-platform",
     "tinyhat-secrets",
     "tinyhat-computer-access",
+    "tinyhat-software-updates",
     "tinyhat-runtime-status",
     "tinyhat-package-inventory",
     "tinyhat-support-report",
@@ -303,6 +306,7 @@ def validate_source(root: Path) -> None:
         "tinyhat_secrets",
         "tinyhat_secrets_manage",
         "tinyhat_computer",
+        "tinyhat_software",
         "tinyhat_terminal",
     ):
         require(f'name: "{command}"' in source, f"src/index.js missing command {command}")

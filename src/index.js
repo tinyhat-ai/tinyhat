@@ -5,6 +5,7 @@ import {
   formatButtonReply,
   formatSecretListReply,
   formatSecretRequestReply,
+  formatSoftwareUpdatesReply,
 } from "./presentation_helpers.js";
 import {
   buildSubscriptionLinkFailureReply,
@@ -34,6 +35,7 @@ const DEFAULT_SKILLS = [
   { name: "tinyhat-platform", role: "router" },
   { name: "tinyhat-secrets", role: "secrets" },
   { name: "tinyhat-computer-access", role: "computer_access" },
+  { name: "tinyhat-software-updates", role: "software_updates" },
   { name: "tinyhat-runtime-status", role: "runtime_status" },
   { name: "tinyhat-package-inventory", role: "package_inventory" },
   { name: "tinyhat-support-report", role: "support_report" },
@@ -222,6 +224,19 @@ const plugin = defineToolPlugin({
           await fetchManageComputerLink(runtime.config, runtime.signal),
           "Manage computer",
           "computer.open_manage",
+        );
+      },
+    }),
+    tool({
+      name: "tinyhat_open_software_updates_link",
+      description:
+        "Create a Telegram Mini App button payload for Software / Updates.",
+      parameters: emptyParameters,
+      execute: async (_params, config, context) => {
+        const runtime = resolveExecutionRuntime(config, context);
+        runtime.signal?.throwIfAborted?.();
+        return formatSoftwareUpdatesReply(
+          await fetchManageComputerLink(runtime.config, runtime.signal),
         );
       },
     }),
@@ -479,6 +494,22 @@ plugin.register = (api) => {
     handler: async () => {
       const payload = await fetchManageComputerLink(platformConfig);
       return formatButtonReply(payload, "Manage computer", "computer.open_manage");
+    },
+  });
+
+  api.registerCommand({
+    name: "tinyhat_software",
+    nativeNames: { default: "tinyhat_software" },
+    description: "Open Tinyhat Software / Updates.",
+    channels: ["telegram"],
+    acceptsArgs: false,
+    agentPromptGuidance: [
+      "Use /tinyhat_software when an agent admin asks to update, " +
+        "upgrade, roll back, or inspect Tinyhat platform software versions.",
+    ],
+    handler: async () => {
+      const payload = await fetchManageComputerLink(platformConfig);
+      return formatSoftwareUpdatesReply(payload);
     },
   });
 

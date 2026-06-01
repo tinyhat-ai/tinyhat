@@ -39,6 +39,7 @@
       "tinyhat_list_runtime_secrets",
       "tinyhat_request_runtime_secret",
       "tinyhat_open_manage_computer_link",
+      "tinyhat_open_software_updates_link",
       "tinyhat_open_terminal_link",
       "tinyhat_open_chatgpt_subscription_prerequisite_help",
       "tinyhat_open_chatgpt_subscription_link",
@@ -60,6 +61,11 @@
       {
         "name": "computer.open_manage",
         "tool": "tinyhat_open_manage_computer_link",
+        "userSurface": "telegram_web_app_button"
+      },
+      {
+        "name": "computer.software_updates",
+        "tool": "tinyhat_open_software_updates_link",
         "userSurface": "telegram_web_app_button"
       },
       {

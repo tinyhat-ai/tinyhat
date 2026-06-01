@@ -5,6 +5,7 @@ import {
   formatButtonReply,
   formatSecretListReply,
   formatSecretRequestReply,
+  formatSoftwareUpdatesReply,
 } from "../src/presentation_helpers.js";
 
 const MINI_APP_URL =
@@ -146,5 +147,25 @@ test("formatButtonReply keeps Manage Computer URLs transport-only", () => {
   assert.equal(reply.text, "Manage Computer is ready.");
   assert(!("unsupported_channel_text" in reply));
   assert.equal(reply.channelData.telegram.buttons[0][0].web_app.url, MINI_APP_URL);
+  assertNoRawSecretTransportInVisibleReply(reply);
+});
+
+test("formatSoftwareUpdatesReply opens the Software page as transport only", () => {
+  const reply = formatSoftwareUpdatesReply({
+    mini_app_url: MINI_APP_URL,
+    message: "Manage Computer is ready.",
+    telegram_button: {
+      text: "Manage computer",
+      web_app: { url: MINI_APP_URL },
+    },
+  });
+
+  assert.equal(reply.action, "computer.software_updates");
+  assert.equal(reply.button.label, "Open Software / Updates");
+  assert.match(reply.text, /Software \/ Updates/);
+  assert.match(
+    reply.channelData.telegram.buttons[0][0].web_app.url,
+    /\/software\?/,
+  );
   assertNoRawSecretTransportInVisibleReply(reply);
 });

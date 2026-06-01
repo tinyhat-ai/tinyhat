@@ -1,6 +1,6 @@
 ---
 name: tinyhat-platform
-description: Route Tinyhat platform capability requests from a managed OpenClaw Computer. Use when the user asks broadly about Tinyhat/OpenClaw platform actions, including secrets, Manage Computer, terminal access, runtime status, installed packages, restart or reload boundaries, or support reports.
+description: Route Tinyhat platform capability requests from a managed OpenClaw Computer. Use when the user asks broadly about Tinyhat/OpenClaw platform actions, including secrets, Manage Computer, software updates, terminal access, runtime status, installed packages, restart or reload boundaries, or support reports.
 ---
 
 # Tinyhat Platform Router
@@ -16,9 +16,10 @@ skill's instructions for the capability call and user-facing response.
 | Add, set, replace, or configure a secret/API key/token | `tinyhat-secrets` | `credentials.open_add_secret` / `tinyhat_request_runtime_secret` |
 | List configured secret metadata | `tinyhat-secrets` | `credentials.list_metadata` / `tinyhat_list_runtime_secrets` |
 | Open or inspect Manage Computer | `tinyhat-computer-access` | `computer.open_manage` / `tinyhat_open_manage_computer_link` |
+| Update, upgrade, or roll back platform software | `tinyhat-software-updates` | `computer.software_updates` / `tinyhat_open_software_updates_link` |
 | Open a terminal or SSH-like shell | `tinyhat-computer-access` | `computer.open_terminal` / `tinyhat_open_terminal_link` |
 | Ask what this agent is running on | `tinyhat-runtime-status` | `computer.status` / `tinyhat_get_platform_status` |
-| Ask to restart, reload, update, or apply runtime config | `tinyhat-runtime-status` | explain the exposed boundary; do not invent a restart tool |
+| Ask to restart, reload, reboot, or apply runtime config | `tinyhat-runtime-status` | explain the exposed boundary; do not invent a restart tool |
 | Ask what Tinyhat installed | `tinyhat-package-inventory` | `packages.list_installed` / `tinyhat_list_installed_packages` |
 | Report a Tinyhat/OpenClaw problem | `tinyhat-support-report` | `support.report_problem` / `tinyhat_report_problem` |
 
