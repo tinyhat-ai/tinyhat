@@ -22,6 +22,13 @@ ship `1.0.0`. Release-please is configured to honor this
   default skill, docs, roadmap, validation, and release metadata tracked
   by [#93](https://github.com/tinyhat-ai/tinyhat/issues/93).
 
+## [0.4.0](https://github.com/tinyhat-ai/tinyhat/compare/v0.3.0...v0.4.0) (2026-06-01)
+
+
+### Features
+
+* **release-catalog:** Add a sample minor release for Tinyhat Software update testing.
+
 ## [0.3.0](https://github.com/tinyhat-ai/tinyhat/compare/v0.2.2...v0.3.0) (2026-06-01)
 
 
