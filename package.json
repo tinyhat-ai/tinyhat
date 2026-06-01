@@ -1,6 +1,6 @@
 {
   "name": "tinyhat",
-  "version": "0.2.2",
+  "version": "0.2.3",
   "description": "Tinyhat platform capabilities for managed OpenClaw Computers.",
   "type": "module",
   "private": true,
