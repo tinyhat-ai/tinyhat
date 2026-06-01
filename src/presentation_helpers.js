@@ -85,6 +85,19 @@ export function formatButtonReply(payload, fallbackLabel, action) {
   });
 }
 
+export function formatSoftwareUpdatesReply(payload) {
+  return formatButtonReply(
+    {
+      ...withMiniAppChildPath(payload, "software", "Open Software / Updates"),
+      message:
+        "Open Software / Updates in Manage Computer. Choose Update to " +
+        "latest, or pick a release to roll back.",
+    },
+    "Open Software / Updates",
+    "computer.software_updates",
+  );
+}
+
 export function buttonTransport(button, fallbackLabel) {
   const label = normalizeString(button?.text) || fallbackLabel;
   return {
@@ -127,6 +140,39 @@ function withSafeButtonTransport({ action, text, secret, secrets, button, fallba
     ...base,
     ...buttonTransport(button, fallbackLabel),
   };
+}
+
+function withMiniAppChildPath(payload, childPath, buttonText) {
+  const button = payload?.telegram_button;
+  if (!hasTelegramWebAppButton(button)) {
+    return payload;
+  }
+  return {
+    ...payload,
+    telegram_button: {
+      ...button,
+      text: buttonText,
+      web_app: {
+        ...button.web_app,
+        url: appendPathSegment(button.web_app.url, childPath),
+      },
+    },
+  };
+}
+
+function appendPathSegment(value, segment) {
+  const text = normalizeString(value);
+  if (!text) {
+    return text;
+  }
+  try {
+    const url = new URL(text);
+    const suffix = String(segment).replace(/^\/+/, "");
+    url.pathname = `${url.pathname.replace(/\/+$/, "")}/${suffix}`;
+    return url.toString();
+  } catch {
+    return text;
+  }
 }
 
 function hasTelegramWebAppButton(button) {

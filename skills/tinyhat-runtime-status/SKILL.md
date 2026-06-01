@@ -15,7 +15,8 @@ or reload platform-managed components.
 | --- | --- |
 | What am I running on, what is Tinyhat, is this managed by Tinyhat | `computer.status` / `tinyhat_get_platform_status` |
 | Is a capability available, why is a button/tool missing | `computer.status` / `tinyhat_get_platform_status` |
-| Restart, reload, upgrade, apply config, or reboot platform runtime | explain the boundary; do not invent a restart tool |
+| Update, upgrade, or roll back platform software | route to `tinyhat-software-updates` |
+| Restart, reload, apply config, or reboot platform runtime | explain the boundary; do not invent a restart tool |
 
 ## Status Response
 
@@ -30,7 +31,10 @@ or reload platform-managed components.
 ## Restart Or Reload Boundary
 
 - The v0.5 capability contract does not expose a generic agent-callable
-  restart, reload, upgrade, or reboot tool.
+  restart, reload, or reboot tool.
+- Software updates are owner-initiated through the authenticated Mini
+  App. Route update, upgrade, and rollback asks to
+  `tinyhat-software-updates`.
 - If the user wants to inspect or change platform settings, route to
   `tinyhat-computer-access` and open Manage Computer.
 - If the user reports a broken runtime, route to `tinyhat-support-report`

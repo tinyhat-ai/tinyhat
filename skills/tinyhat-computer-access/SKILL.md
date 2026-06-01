@@ -1,6 +1,6 @@
 ---
 name: tinyhat-computer-access
-description: Open authenticated Tinyhat Manage Computer and terminal access. Use when the user asks to manage, inspect, configure, administer, or open a terminal or shell for this Tinyhat-managed OpenClaw Computer.
+description: Open authenticated Tinyhat Manage Computer, Software / Updates, and terminal access. Use when the user asks to manage, inspect, configure, administer, open software updates, or open a terminal or shell for this Tinyhat-managed OpenClaw Computer.
 ---
 
 # Tinyhat Computer Access
@@ -13,6 +13,7 @@ authenticated platform surface instead of an agent-written URL.
 | User ask | Operation / tool |
 | --- | --- |
 | Open Manage Computer, inspect the Computer, manage settings | `computer.open_manage` / `tinyhat_open_manage_computer_link` |
+| Open Software / Updates | `computer.software_updates` / `tinyhat_open_software_updates_link` |
 | Open a terminal, shell, SSH-like session, or run one admin-reviewed command | `computer.open_terminal` / `tinyhat_open_terminal_link` |
 
 ## Manage Computer
@@ -22,6 +23,14 @@ authenticated platform surface instead of an agent-written URL.
    supported.
 3. Say that Manage Computer is the authenticated place to inspect or
    change platform settings.
+
+## Software Updates
+
+1. Call `tinyhat_open_software_updates_link`.
+2. Render the returned Telegram button payload when buttons are
+   supported.
+3. Say that Software / Updates lets the owner choose latest or a
+   published rollback release for Tinyhat platform-owned components.
 
 ## Terminal Access
 
