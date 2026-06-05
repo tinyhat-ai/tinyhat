@@ -356,3 +356,21 @@ test("subscription SKILL.md routes the prerequisite-help tool and documents the 
   assert.match(skill, /photo_delivered/);
   assert.match(skill, /long-press.*Copy|bare.*bubble/i);
 });
+
+test("subscription guidance tracks the current OpenAI provider", () => {
+  const skill = readFileSync(
+    path.join(REPO_ROOT, "skills/tinyhat-subscriptions/SKILL.md"),
+    "utf8",
+  );
+  const helper = readFileSync(
+    path.join(REPO_ROOT, "src/subscriptions.js"),
+    "utf8",
+  );
+  const combined = `${skill}\n${helper}`;
+
+  assert.match(
+    combined,
+    /openclaw models auth login --provider openai --device-code/,
+  );
+  assert.doesNotMatch(combined, /openai-codex/);
+});
