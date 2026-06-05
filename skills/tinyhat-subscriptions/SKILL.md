@@ -97,7 +97,7 @@ error text.
 5. The Computer's supervisor detects the new auth-profile on its
    next tick and rewrites `openclaw.json` so subsequent agent turns
    select the `openai` OAuth profile and route through
-   `openai/gpt-5.5` via the native Codex runtime. The first agent
+   `openai/gpt-5.5` via OpenClaw's native model route. The first agent
    reply after that switch confirms it — no polling,
    no separate notification flow.
 
