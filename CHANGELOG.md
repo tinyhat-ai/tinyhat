@@ -22,6 +22,14 @@ ship `1.0.0`. Release-please is configured to honor this
   default skill, docs, roadmap, validation, and release metadata tracked
   by [#93](https://github.com/tinyhat-ai/tinyhat/issues/93).
 
+## [0.4.4](https://github.com/tinyhat-ai/tinyhat/compare/v0.4.3...v0.4.4) (2026-06-05)
+
+
+### Bug Fixes
+
+* **subscriptions:** Track current OpenAI provider ([8a91fe2](https://github.com/tinyhat-ai/tinyhat/commit/8a91fe24a460fbf1baa10895352a1c4624818783))
+* **subscriptions:** Track current OpenAI provider ([f2a1570](https://github.com/tinyhat-ai/tinyhat/commit/f2a157089469ab56891fcc357611638c5dad40be))
+
 ## [0.4.3](https://github.com/tinyhat-ai/tinyhat/compare/v0.4.2...v0.4.3) (2026-06-01)
 
 
