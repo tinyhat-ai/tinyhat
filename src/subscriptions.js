@@ -7,7 +7,7 @@
 //   3. POST /hapi/v1/computers/me/subscription-link/revert (back to platform_credits)
 //
 // The runtime supervisor is the layer that actually spawns the
-// `openclaw models auth login --provider openai-codex --device-code`
+// `openclaw models auth login --provider openai --device-code`
 // CLI in a PTY — see the sibling runtime repo for the heartbeat-command
 // handler. This plugin must not import `node:child_process` or
 // `node:fs` for OAuth state because OpenClaw's plugin installer

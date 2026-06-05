@@ -72,7 +72,7 @@ error text.
 2. Call `tinyhat_open_chatgpt_subscription_link`. The tool asks the
    platform to start a device-code session for this Computer; the
    Computer's runtime supervisor runs
-   `openclaw models auth login --provider openai-codex --device-code`
+   `openclaw models auth login --provider openai --device-code`
    (the supervisor owns the subprocess so this plugin stays
    subprocess-free per OpenClaw's plugin-install policy) and reports
    the verification URL + 9-character user code back to the platform.
@@ -96,8 +96,9 @@ error text.
    signed in to. The code expires in about 15 minutes."*
 5. The Computer's supervisor detects the new auth-profile on its
    next tick and rewrites `openclaw.json` so subsequent agent turns
-   route through `openai/gpt-5.5` via the native Codex runtime. The
-   first agent reply after that switch confirms it — no polling,
+   select the `openai` OAuth profile and route through
+   `openai/gpt-5.5` via OpenClaw's native model route. The first agent
+   reply after that switch confirms it — no polling,
    no separate notification flow.
 
 ## Subscription Button Contract
