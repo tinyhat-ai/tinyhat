@@ -18,8 +18,14 @@
 // in by the tool body) so they reuse the Computer-bearer-token auth +
 // platform base URL resolution that every other Tinyhat tool uses.
 
-const POLL_INTERVAL_MS = 1_500;
-const POLL_TIMEOUT_MS = 15_000;
+export const CHATGPT_LINK_POLL_INTERVAL_MS = 1_500;
+// The chat tool starts a platform row, then waits for the supervisor's next
+// heartbeat to receive the command, spawn the OpenClaw device-code CLI, retry
+// transient pre-code failures, and POST URL+code back. A 15s budget raced real
+// local Computers where the code arrived just after the tool returned failure.
+// This is only the plugin-side ceiling: OpenClaw's tool-call abort signal still
+// wins first because the loop checks `signal` and passes it into `callTinyhat`.
+export const CHATGPT_LINK_POLL_TIMEOUT_MS = 90_000;
 
 /**
  * Start (or retrieve, if already in flight) a ChatGPT BYO device-code
@@ -36,8 +42,8 @@ const POLL_TIMEOUT_MS = 15_000;
 export async function startChatgptSubscriptionLink({
   callTinyhat,
   signal,
-  pollIntervalMs = POLL_INTERVAL_MS,
-  pollTimeoutMs = POLL_TIMEOUT_MS,
+  pollIntervalMs = CHATGPT_LINK_POLL_INTERVAL_MS,
+  pollTimeoutMs = CHATGPT_LINK_POLL_TIMEOUT_MS,
 }) {
   // Kick off (or retrieve) the link session. The backend bumps the
   // row to pending + signals the supervisor via the heartbeat command;

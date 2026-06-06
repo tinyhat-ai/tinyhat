@@ -184,13 +184,17 @@ export function finalizeSubscriptionLinkReply(
     : [];
   // Never surface the transport button payload / verification URL button
   // to the agent, regardless of outcome.
-  const { channelData: _channelData, ...withoutChannelData } = base;
+  const {
+    channelData: _channelData,
+    verification_url: _verificationUrl,
+    ...withoutTransportData
+  } = base;
   const buttonSent = !!buttonDelivery?.sent;
   const codeSent = !!codeDelivery?.sent;
 
   if (!buttonSent) {
     return {
-      ...withoutChannelData,
+      ...withoutTransportData,
       delivered: false,
       code_delivered: codeSent,
       telegram_delivery: buttonDelivery || { sent: false },
@@ -204,7 +208,7 @@ export function finalizeSubscriptionLinkReply(
 
   if (codeSent) {
     return {
-      ...withoutChannelData,
+      ...withoutTransportData,
       delivered: true,
       code_delivered: true,
       telegram_delivery: buttonDelivery,
@@ -222,7 +226,7 @@ export function finalizeSubscriptionLinkReply(
   // supply it. The device code is the one paste-able non-secret value in
   // this flow, so re-pasting it here is allowed.
   return {
-    ...withoutChannelData,
+    ...withoutTransportData,
     delivered: true,
     code_delivered: false,
     telegram_delivery: buttonDelivery,

@@ -21,6 +21,11 @@ import {
   finalizeSubscriptionLinkReply,
   finalizeSubscriptionPrerequisiteHelpReply,
 } from "../src/subscription_builders.js";
+import {
+  CHATGPT_LINK_POLL_TIMEOUT_MS,
+  startChatgptSubscriptionLink,
+} from "../src/subscriptions.js";
+import { jsonToolResult } from "../src/tool_results.js";
 
 const REPO_ROOT = path.resolve(
   path.dirname(fileURLToPath(import.meta.url)),
@@ -28,6 +33,70 @@ const REPO_ROOT = path.resolve(
 );
 
 const ALREADY_SENT = /already (been )?sent/i;
+
+// Local proxy for OpenClaw's wrapper behavior: factory-tool results are reduced
+// over `content[]`, so a raw finalized reply reproduces the crash shape without
+// importing OpenClaw internals into this plugin's unit tests.
+function collectOpenClawTextContentProxy(result) {
+  return result.content.reduce((chunks, item) => {
+    if (item?.type === "text" && typeof item.text === "string") {
+      chunks.push(item.text);
+    }
+    return chunks;
+  }, []).join("\n");
+}
+
+// ── Platform/runtime polling budget ──────────────────────────────────
+
+test("chatgpt link default polling budget covers heartbeat plus retry latency", () => {
+  assert.ok(
+    CHATGPT_LINK_POLL_TIMEOUT_MS >= 90_000,
+    "chat-triggered link must wait through supervisor heartbeat skew and runtime retry",
+  );
+  assert.ok(
+    CHATGPT_LINK_POLL_TIMEOUT_MS > 15_000,
+    "regression guard: 15s timed out before real local Computers posted URL+code",
+  );
+});
+
+test("chatgpt link helper keeps polling until the supervisor posts URL and code", async () => {
+  const paths = [];
+  let statusCalls = 0;
+
+  const result = await startChatgptSubscriptionLink({
+    pollIntervalMs: 1,
+    pollTimeoutMs: 200,
+    callTinyhat: async (path) => {
+      paths.push(path);
+      if (path.endsWith("/subscription-link/start")) {
+        return { status: "pending", session_id: "session-1" };
+      }
+      assert.ok(path.endsWith("/subscription-link/status"));
+      statusCalls += 1;
+      if (statusCalls < 8) {
+        return {
+          status: "pending",
+          pending_session: { session_id: "session-1" },
+        };
+      }
+      return {
+        status: "pending",
+        pending_session: {
+          session_id: "session-1",
+          verification_url: "https://auth.openai.com/verify",
+          user_code: "ABCD-EFGHI",
+        },
+      };
+    },
+  });
+
+  assert.deepEqual(result, {
+    verificationUrl: "https://auth.openai.com/verify",
+    userCode: "ABCD-EFGHI",
+  });
+  assert.equal(paths[0], "/hapi/v1/computers/me/subscription-link/start");
+  assert.equal(statusCalls, 8);
+});
 
 // ── Base builders are NEUTRAL — they must never claim delivery ─────────
 // (Codex P1, #109: a `{ sent: false }` result must never leave a stale
@@ -261,12 +330,74 @@ test("link finalizer always strips the transport verification URL button from th
   ]) {
     const final = finalizeSubscriptionLinkReply(reply, outcome);
     assert.equal(final.channelData, undefined);
+    assert.equal(final.verification_url, undefined);
+    assert.ok(
+      !JSON.stringify(final).includes("UNIQUE-MARKER"),
+      "finalized tool payload must be safe to JSON-serialize for OpenClaw",
+    );
     // The raw URL must not appear in any agent_instructions line.
     assert.ok(
       !final.agent_instructions.some((l) => l.includes("UNIQUE-MARKER")),
       "verification URL must never appear in agent_instructions",
     );
   }
+});
+
+test("subscription link final result is safe for the local OpenClaw reducer proxy", () => {
+  const reply = buildSubscriptionLinkReply({
+    verificationUrl: "https://auth.openai.com/codex/device",
+    userCode: "6JTR-X8OS4",
+  });
+  const final = finalizeSubscriptionLinkReply(reply, {
+    buttonDelivery: { sent: true, message_id: "10" },
+    codeDelivery: { sent: true, message_id: "11" },
+  });
+
+  assert.throws(
+    () => collectOpenClawTextContentProxy(final),
+    /Cannot read properties of undefined \(reading 'reduce'\)|reduce/,
+    "raw finalized replies reproduce the OpenClaw wrapper failure",
+  );
+
+  const wrapped = jsonToolResult(final);
+  assert.deepEqual(Object.keys(wrapped).sort(), ["content", "details"]);
+  assert.equal(wrapped.content[0].type, "text");
+
+  const text = collectOpenClawTextContentProxy(wrapped);
+  const parsed = JSON.parse(text);
+  assert.equal(parsed.action, "subscriptions.open_link");
+  assert.equal(parsed.delivered, true);
+  assert.equal(parsed.code_delivered, true);
+  assert.equal(parsed.user_code, "6JTR-X8OS4");
+  assert.equal(parsed.verification_url, undefined);
+  assert.equal(parsed.channelData, undefined);
+  assert.deepEqual(wrapped.details, final);
+});
+
+test("jsonToolResult normalizes nullish payloads to an object payload", () => {
+  const wrapped = jsonToolResult(undefined);
+  assert.deepEqual(wrapped.details, {});
+  assert.deepEqual(JSON.parse(collectOpenClawTextContentProxy(wrapped)), {});
+});
+
+test("ChatGPT subscription factory tools return OpenClaw JSON tool results", () => {
+  const entrypoint = readFileSync(path.join(REPO_ROOT, "src/index.js"), "utf8");
+
+  assert.match(
+    entrypoint,
+    /return jsonToolResult\(\s*finalizeSubscriptionPrerequisiteHelpReply/s,
+    "prerequisite-help factory tool must not return a raw object",
+  );
+  assert.match(
+    entrypoint,
+    /return jsonToolResult\(buildSubscriptionLinkFailureReply\(err\)\)/,
+    "subscription-link failure path must include content[]",
+  );
+  assert.match(
+    entrypoint,
+    /return jsonToolResult\(\s*finalizeSubscriptionLinkReply/s,
+    "subscription-link success path must include content[]",
+  );
 });
 
 // ── Failure + revert builders ─────────────────────────────────────────

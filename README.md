@@ -64,6 +64,9 @@ The first package exposes these named Tinyhat operations:
 | `computer.open_terminal` | `tinyhat_open_terminal_link` | Telegram Mini App button with optional admin-reviewed command. |
 | `computer.status` | `tinyhat_get_platform_status` | Secret-free runtime/platform status. |
 | `packages.list_installed` | `tinyhat_list_installed_packages` | Public refs/SHAs and Tinyhat-vs-user package split when available. |
+| `subscriptions.open_prerequisite_help` | `tinyhat_open_chatgpt_subscription_prerequisite_help` | Telegram photo plus walkthrough text. |
+| `subscriptions.open_link` | `tinyhat_open_chatgpt_subscription_link` | Telegram URL button plus bare device-code bubble. |
+| `subscriptions.revert_to_platform_credits` | `tinyhat_revert_to_platform_credits` | Metadata-only tool result. |
 | `support.report_problem` | `tinyhat_report_problem` | Redacted support context. |
 
 Secret values, signed Mini App intent tokens, raw backend URLs, and

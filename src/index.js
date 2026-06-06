@@ -26,6 +26,7 @@ import {
   sendTelegramPhoto,
   sendTelegramText,
 } from "./telegram_delivery.js";
+import { jsonToolResult } from "./tool_results.js";
 
 const METADATA_BASE_URL_KEY = "tinyhat-platform-base-url";
 const METADATA_AUDIENCE_KEY = "tinyhat-backend-audience";
@@ -330,7 +331,9 @@ const plugin = defineToolPlugin({
           });
           // The finalizer is the only place delivery-state claims are
           // made: success → "already sent"; failure → recovery guidance.
-          return finalizeSubscriptionPrerequisiteHelpReply(reply, photoDelivery);
+          return jsonToolResult(
+            finalizeSubscriptionPrerequisiteHelpReply(reply, photoDelivery),
+          );
         },
       }),
     }),
@@ -364,7 +367,7 @@ const plugin = defineToolPlugin({
               signal: runtime.signal,
             });
           } catch (err) {
-            return buildSubscriptionLinkFailureReply(err);
+            return jsonToolResult(buildSubscriptionLinkFailureReply(err));
           }
           const reply = buildSubscriptionLinkReply(session);
           // Send the URL-button intro first so the user sees the
@@ -394,10 +397,12 @@ const plugin = defineToolPlugin({
               signal: runtime.signal,
             });
           }
-          return finalizeSubscriptionLinkReply(reply, {
-            buttonDelivery,
-            codeDelivery,
-          });
+          return jsonToolResult(
+            finalizeSubscriptionLinkReply(reply, {
+              buttonDelivery,
+              codeDelivery,
+            }),
+          );
         },
       }),
     }),
@@ -537,13 +542,6 @@ function resolveExecutionRuntime(configArg, contextArg) {
   return {
     config: configCandidate,
     signal: contextArg?.signal ?? configArg?.signal,
-  };
-}
-
-function jsonToolResult(payload) {
-  return {
-    content: [{ type: "text", text: JSON.stringify(payload, null, 2) }],
-    details: payload,
   };
 }
 
