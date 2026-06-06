@@ -261,12 +261,37 @@ test("link finalizer always strips the transport verification URL button from th
   ]) {
     const final = finalizeSubscriptionLinkReply(reply, outcome);
     assert.equal(final.channelData, undefined);
+    assert.equal(final.verification_url, undefined);
+    assert.ok(
+      !JSON.stringify(final).includes("UNIQUE-MARKER"),
+      "finalized tool payload must be safe to JSON-serialize for OpenClaw",
+    );
     // The raw URL must not appear in any agent_instructions line.
     assert.ok(
       !final.agent_instructions.some((l) => l.includes("UNIQUE-MARKER")),
       "verification URL must never appear in agent_instructions",
     );
   }
+});
+
+test("ChatGPT subscription factory tools return OpenClaw JSON tool results", () => {
+  const entrypoint = readFileSync(path.join(REPO_ROOT, "src/index.js"), "utf8");
+
+  assert.match(
+    entrypoint,
+    /return jsonToolResult\(\s*finalizeSubscriptionPrerequisiteHelpReply/s,
+    "prerequisite-help factory tool must not return a raw object",
+  );
+  assert.match(
+    entrypoint,
+    /return jsonToolResult\(buildSubscriptionLinkFailureReply\(err\)\)/,
+    "subscription-link failure path must include content[]",
+  );
+  assert.match(
+    entrypoint,
+    /return jsonToolResult\(\s*finalizeSubscriptionLinkReply/s,
+    "subscription-link success path must include content[]",
+  );
 });
 
 // ── Failure + revert builders ─────────────────────────────────────────

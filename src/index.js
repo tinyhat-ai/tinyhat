@@ -330,7 +330,9 @@ const plugin = defineToolPlugin({
           });
           // The finalizer is the only place delivery-state claims are
           // made: success → "already sent"; failure → recovery guidance.
-          return finalizeSubscriptionPrerequisiteHelpReply(reply, photoDelivery);
+          return jsonToolResult(
+            finalizeSubscriptionPrerequisiteHelpReply(reply, photoDelivery),
+          );
         },
       }),
     }),
@@ -364,7 +366,7 @@ const plugin = defineToolPlugin({
               signal: runtime.signal,
             });
           } catch (err) {
-            return buildSubscriptionLinkFailureReply(err);
+            return jsonToolResult(buildSubscriptionLinkFailureReply(err));
           }
           const reply = buildSubscriptionLinkReply(session);
           // Send the URL-button intro first so the user sees the
@@ -394,10 +396,12 @@ const plugin = defineToolPlugin({
               signal: runtime.signal,
             });
           }
-          return finalizeSubscriptionLinkReply(reply, {
-            buttonDelivery,
-            codeDelivery,
-          });
+          return jsonToolResult(
+            finalizeSubscriptionLinkReply(reply, {
+              buttonDelivery,
+              codeDelivery,
+            }),
+          );
         },
       }),
     }),
@@ -541,9 +545,10 @@ function resolveExecutionRuntime(configArg, contextArg) {
 }
 
 function jsonToolResult(payload) {
+  const safePayload = payload ?? {};
   return {
-    content: [{ type: "text", text: JSON.stringify(payload, null, 2) }],
-    details: payload,
+    content: [{ type: "text", text: JSON.stringify(safePayload, null, 2) }],
+    details: safePayload,
   };
 }
 
