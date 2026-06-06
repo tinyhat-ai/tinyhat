@@ -34,7 +34,10 @@ const REPO_ROOT = path.resolve(
 
 const ALREADY_SENT = /already (been )?sent/i;
 
-function collectOpenClawTextContent(result) {
+// Local proxy for OpenClaw's wrapper behavior: factory-tool results are reduced
+// over `content[]`, so a raw finalized reply reproduces the crash shape without
+// importing OpenClaw internals into this plugin's unit tests.
+function collectOpenClawTextContentProxy(result) {
   return result.content.reduce((chunks, item) => {
     if (item?.type === "text" && typeof item.text === "string") {
       chunks.push(item.text);
@@ -340,7 +343,7 @@ test("link finalizer always strips the transport verification URL button from th
   }
 });
 
-test("subscription link final result is safe for OpenClaw content reducers", () => {
+test("subscription link final result is safe for the local OpenClaw reducer proxy", () => {
   const reply = buildSubscriptionLinkReply({
     verificationUrl: "https://auth.openai.com/codex/device",
     userCode: "6JTR-X8OS4",
@@ -351,7 +354,7 @@ test("subscription link final result is safe for OpenClaw content reducers", () 
   });
 
   assert.throws(
-    () => collectOpenClawTextContent(final),
+    () => collectOpenClawTextContentProxy(final),
     /Cannot read properties of undefined \(reading 'reduce'\)|reduce/,
     "raw finalized replies reproduce the OpenClaw wrapper failure",
   );
@@ -360,7 +363,7 @@ test("subscription link final result is safe for OpenClaw content reducers", () 
   assert.deepEqual(Object.keys(wrapped).sort(), ["content", "details"]);
   assert.equal(wrapped.content[0].type, "text");
 
-  const text = collectOpenClawTextContent(wrapped);
+  const text = collectOpenClawTextContentProxy(wrapped);
   const parsed = JSON.parse(text);
   assert.equal(parsed.action, "subscriptions.open_link");
   assert.equal(parsed.delivered, true);
@@ -374,7 +377,7 @@ test("subscription link final result is safe for OpenClaw content reducers", () 
 test("jsonToolResult normalizes nullish payloads to an object payload", () => {
   const wrapped = jsonToolResult(undefined);
   assert.deepEqual(wrapped.details, {});
-  assert.deepEqual(JSON.parse(collectOpenClawTextContent(wrapped)), {});
+  assert.deepEqual(JSON.parse(collectOpenClawTextContentProxy(wrapped)), {});
 });
 
 test("ChatGPT subscription factory tools return OpenClaw JSON tool results", () => {

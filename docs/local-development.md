@@ -80,6 +80,8 @@ That targeted suite must prove:
 - the chat-side polling budget covers supervisor heartbeat skew plus runtime
   pre-code retry, so a valid URL/code that arrives after the old 15s window is
   not surfaced to the user as a timeout;
+- the 90s plugin-side polling ceiling remains bounded by OpenClaw's tool-call
+  abort signal; if the runtime cancels sooner, the `signal` path wins;
 - the URL button and bare-code bubble success/failure states produce accurate
   recovery instructions.
 
@@ -90,7 +92,8 @@ cd ../tinyhat--runtimes--openclaw
 python3 scripts/smoke_start_chatgpt_link_retry.py
 ```
 
-Then run the Tinyloop E2E scenario:
+Then run the Tinyloop monorepo E2E scenario (this file lives in
+`tinyloophub/tinyloop`, not in this public plugin repo):
 
 ```text
 docs/e2e-scenarios/tinyhat/20-chatgpt-byo-subscription.md

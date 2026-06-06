@@ -23,6 +23,8 @@ export const CHATGPT_LINK_POLL_INTERVAL_MS = 1_500;
 // heartbeat to receive the command, spawn the OpenClaw device-code CLI, retry
 // transient pre-code failures, and POST URL+code back. A 15s budget raced real
 // local Computers where the code arrived just after the tool returned failure.
+// This is only the plugin-side ceiling: OpenClaw's tool-call abort signal still
+// wins first because the loop checks `signal` and passes it into `callTinyhat`.
 export const CHATGPT_LINK_POLL_TIMEOUT_MS = 90_000;
 
 /**
