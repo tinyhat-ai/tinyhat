@@ -47,6 +47,55 @@ pipx run ruff format --check .
 | `node --test` | Runs pure JavaScript safety tests for redaction and command parsing. |
 | `ruff` | Lints and format-checks Python helper scripts. |
 
+## ChatGPT Subscription Link Regression Loop
+
+The ChatGPT/Codex subscription link is a cross-repo contract between:
+
+- this plugin (`tinyhat-ai/tinyhat`) for chat routing, Telegram button/code
+  delivery, and OpenClaw tool-result shape;
+- the runtime (`tinyloophub/tinyhat--runtimes--openclaw`) for provider-plugin
+  install/verification and the `openclaw models auth login --provider openai
+  --device-code` worker;
+- the platform (`tinyloophub/tinyloop`) for
+  `/hapi/v1/computers/me/subscription-link/*` state and Telegram Mini App
+  surfaces.
+
+Before merging plugin changes that touch
+`tinyhat_open_chatgpt_subscription_link`,
+`tinyhat_open_chatgpt_subscription_prerequisite_help`,
+`src/subscriptions.js`, `src/subscription_builders.js`, or Telegram button
+delivery, run at least:
+
+```bash
+node --test test/subscription_flow.test.mjs test/telegram_delivery.test.mjs
+```
+
+That targeted suite must prove:
+
+- subscription factory tools return MCP/OpenClaw-style results with
+  `content[]`; raw objects can reproduce OpenClaw wrapper failures such as
+  `Cannot read properties of undefined (reading 'reduce')`;
+- the serialized tool result never exposes the raw OpenAI verification URL
+  after Telegram button delivery handling;
+- the URL button and bare-code bubble success/failure states produce accurate
+  recovery instructions.
+
+For release-gate work, pair the plugin suite with the runtime retry smoke:
+
+```bash
+cd ../tinyhat--runtimes--openclaw
+python3 scripts/smoke_start_chatgpt_link_retry.py
+```
+
+Then run the Tinyloop E2E scenario:
+
+```text
+docs/e2e-scenarios/tinyhat/20-chatgpt-byo-subscription.md
+```
+
+The live pass condition is Telegram showing a native **Sign in to ChatGPT**
+button plus a separate bare device-code message for a real assigned Computer.
+
 ## Manual OpenClaw Smoke Test
 
 Use an OpenClaw development instance when available:

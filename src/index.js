@@ -26,6 +26,7 @@ import {
   sendTelegramPhoto,
   sendTelegramText,
 } from "./telegram_delivery.js";
+import { jsonToolResult } from "./tool_results.js";
 
 const METADATA_BASE_URL_KEY = "tinyhat-platform-base-url";
 const METADATA_AUDIENCE_KEY = "tinyhat-backend-audience";
@@ -541,14 +542,6 @@ function resolveExecutionRuntime(configArg, contextArg) {
   return {
     config: configCandidate,
     signal: contextArg?.signal ?? configArg?.signal,
-  };
-}
-
-function jsonToolResult(payload) {
-  const safePayload = payload ?? {};
-  return {
-    content: [{ type: "text", text: JSON.stringify(safePayload, null, 2) }],
-    details: safePayload,
   };
 }
 

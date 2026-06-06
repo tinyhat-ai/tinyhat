@@ -21,6 +21,7 @@ import {
   finalizeSubscriptionLinkReply,
   finalizeSubscriptionPrerequisiteHelpReply,
 } from "../src/subscription_builders.js";
+import { jsonToolResult } from "../src/tool_results.js";
 
 const REPO_ROOT = path.resolve(
   path.dirname(fileURLToPath(import.meta.url)),
@@ -28,6 +29,15 @@ const REPO_ROOT = path.resolve(
 );
 
 const ALREADY_SENT = /already (been )?sent/i;
+
+function collectOpenClawTextContent(result) {
+  return result.content.reduce((chunks, item) => {
+    if (item?.type === "text" && typeof item.text === "string") {
+      chunks.push(item.text);
+    }
+    return chunks;
+  }, []).join("\n");
+}
 
 // ── Base builders are NEUTRAL — they must never claim delivery ─────────
 // (Codex P1, #109: a `{ sent: false }` result must never leave a stale
@@ -272,6 +282,43 @@ test("link finalizer always strips the transport verification URL button from th
       "verification URL must never appear in agent_instructions",
     );
   }
+});
+
+test("subscription link final result is safe for OpenClaw content reducers", () => {
+  const reply = buildSubscriptionLinkReply({
+    verificationUrl: "https://auth.openai.com/codex/device",
+    userCode: "6JTR-X8OS4",
+  });
+  const final = finalizeSubscriptionLinkReply(reply, {
+    buttonDelivery: { sent: true, message_id: "10" },
+    codeDelivery: { sent: true, message_id: "11" },
+  });
+
+  assert.throws(
+    () => collectOpenClawTextContent(final),
+    /Cannot read properties of undefined \(reading 'reduce'\)|reduce/,
+    "raw finalized replies reproduce the OpenClaw wrapper failure",
+  );
+
+  const wrapped = jsonToolResult(final);
+  assert.deepEqual(Object.keys(wrapped).sort(), ["content", "details"]);
+  assert.equal(wrapped.content[0].type, "text");
+
+  const text = collectOpenClawTextContent(wrapped);
+  const parsed = JSON.parse(text);
+  assert.equal(parsed.action, "subscriptions.open_link");
+  assert.equal(parsed.delivered, true);
+  assert.equal(parsed.code_delivered, true);
+  assert.equal(parsed.user_code, "6JTR-X8OS4");
+  assert.equal(parsed.verification_url, undefined);
+  assert.equal(parsed.channelData, undefined);
+  assert.deepEqual(wrapped.details, final);
+});
+
+test("jsonToolResult normalizes nullish payloads to an object payload", () => {
+  const wrapped = jsonToolResult(undefined);
+  assert.deepEqual(wrapped.details, {});
+  assert.deepEqual(JSON.parse(collectOpenClawTextContent(wrapped)), {});
 });
 
 test("ChatGPT subscription factory tools return OpenClaw JSON tool results", () => {
