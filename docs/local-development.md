@@ -77,6 +77,9 @@ That targeted suite must prove:
   `Cannot read properties of undefined (reading 'reduce')`;
 - the serialized tool result never exposes the raw OpenAI verification URL
   after Telegram button delivery handling;
+- the chat-side polling budget covers supervisor heartbeat skew plus runtime
+  pre-code retry, so a valid URL/code that arrives after the old 15s window is
+  not surfaced to the user as a timeout;
 - the URL button and bare-code bubble success/failure states produce accurate
   recovery instructions.
 

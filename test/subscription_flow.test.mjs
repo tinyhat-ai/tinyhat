@@ -21,6 +21,10 @@ import {
   finalizeSubscriptionLinkReply,
   finalizeSubscriptionPrerequisiteHelpReply,
 } from "../src/subscription_builders.js";
+import {
+  CHATGPT_LINK_POLL_TIMEOUT_MS,
+  startChatgptSubscriptionLink,
+} from "../src/subscriptions.js";
 import { jsonToolResult } from "../src/tool_results.js";
 
 const REPO_ROOT = path.resolve(
@@ -38,6 +42,58 @@ function collectOpenClawTextContent(result) {
     return chunks;
   }, []).join("\n");
 }
+
+// ── Platform/runtime polling budget ──────────────────────────────────
+
+test("chatgpt link default polling budget covers heartbeat plus retry latency", () => {
+  assert.ok(
+    CHATGPT_LINK_POLL_TIMEOUT_MS >= 90_000,
+    "chat-triggered link must wait through supervisor heartbeat skew and runtime retry",
+  );
+  assert.ok(
+    CHATGPT_LINK_POLL_TIMEOUT_MS > 15_000,
+    "regression guard: 15s timed out before real local Computers posted URL+code",
+  );
+});
+
+test("chatgpt link helper keeps polling until the supervisor posts URL and code", async () => {
+  const paths = [];
+  let statusCalls = 0;
+
+  const result = await startChatgptSubscriptionLink({
+    pollIntervalMs: 1,
+    pollTimeoutMs: 200,
+    callTinyhat: async (path) => {
+      paths.push(path);
+      if (path.endsWith("/subscription-link/start")) {
+        return { status: "pending", session_id: "session-1" };
+      }
+      assert.ok(path.endsWith("/subscription-link/status"));
+      statusCalls += 1;
+      if (statusCalls < 8) {
+        return {
+          status: "pending",
+          pending_session: { session_id: "session-1" },
+        };
+      }
+      return {
+        status: "pending",
+        pending_session: {
+          session_id: "session-1",
+          verification_url: "https://auth.openai.com/verify",
+          user_code: "ABCD-EFGHI",
+        },
+      };
+    },
+  });
+
+  assert.deepEqual(result, {
+    verificationUrl: "https://auth.openai.com/verify",
+    userCode: "ABCD-EFGHI",
+  });
+  assert.equal(paths[0], "/hapi/v1/computers/me/subscription-link/start");
+  assert.equal(statusCalls, 8);
+});
 
 // ── Base builders are NEUTRAL — they must never claim delivery ─────────
 // (Codex P1, #109: a `{ sent: false }` result must never leave a stale
