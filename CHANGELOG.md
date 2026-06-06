@@ -22,6 +22,15 @@ ship `1.0.0`. Release-please is configured to honor this
   default skill, docs, roadmap, validation, and release metadata tracked
   by [#93](https://github.com/tinyhat-ai/tinyhat/issues/93).
 
+## [0.4.5](https://github.com/tinyhat-ai/tinyhat/compare/v0.4.4...v0.4.5) (2026-06-06)
+
+
+### Bug Fixes
+
+* **subscriptions:** Return JSON tool results ([d2acd9f](https://github.com/tinyhat-ai/tinyhat/commit/d2acd9fdc0f6029a4ed0ed7d472a32cf8e547b95))
+* **subscriptions:** Return JSON tool results ([f8aadf8](https://github.com/tinyhat-ai/tinyhat/commit/f8aadf806491d2410109cb8d7638a50e31c0f70a))
+* **subscriptions:** Wait through device-code startup ([0e44edb](https://github.com/tinyhat-ai/tinyhat/commit/0e44edbe7f7456bdeb2626ad935c685f508f1cc6))
+
 ## [0.4.4](https://github.com/tinyhat-ai/tinyhat/compare/v0.4.3...v0.4.4) (2026-06-05)
 
 
