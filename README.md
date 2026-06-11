@@ -99,6 +99,41 @@ python3 scripts/validate_openclaw_package.py
 node --check src/index.js
 ```
 
+## Verifying the Plugin Actually Loads
+
+Installed is not loaded: OpenClaw skips an enabled extension it cannot
+read or import without failing the gateway, and
+`openclaw plugins inspect` attests registration, not loadability. Two
+mechanisms make a load failure loud instead of a silent capability
+loss:
+
+- **Load beacon.** When the extension module evaluates successfully it
+  logs one line (`[tinyhat] plugin loaded vX.Y.Z …`) and best-effort
+  writes `tinyhat-plugin-loaded.json` (plugin, version, `loaded_at`,
+  `pid`, `node`) under `$OPENCLAW_STATE_DIR` (fallback `~/.openclaw`).
+  Host supervisors can treat "plugin enabled but no fresh beacon after
+  gateway start" as a load failure. The beacon never breaks the load:
+  write errors degrade to the log line.
+
+- **Loadability self-check.** Run it as the user the gateway runs as,
+  against a checkout or an installed extension directory:
+
+  ```bash
+  node scripts/check_plugin_load.mjs [--plugin-dir <dir>] [--require-import]
+  ```
+
+  It verifies the manifests, that every packaged file is readable by
+  the current user (the classic failure: a privileged installer leaves
+  the tree root-owned while the gateway runs unprivileged), and — when
+  the `openclaw` package is resolvable next to the plugin — that the
+  extension entry imports and registers the full `tinyhat_*` toolset.
+  Exit code 0 means loadable; failures name the exact broken path.
+
+CI runs the self-check against each supported OpenClaw version,
+installs the plugin the way a deployment does, and reproduces the
+root-owned-files case to assert it fails loudly (see the
+`plugin-load` job in `.github/workflows/ci.yml`).
+
 ## Repository Boundaries
 
 - `tinyhat-ai/tinyhat` owns Tinyhat's OpenClaw plugin, capability

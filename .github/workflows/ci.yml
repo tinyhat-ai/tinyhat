@@ -71,3 +71,89 @@ jobs:
 
       - name: JavaScript unit tests
         run: node --test
+
+  plugin-load:
+    # The plugin must actually LOAD, not just install (#124): OpenClaw
+    # skips an enabled-but-unloadable extension without failing the
+    # gateway, and `openclaw plugins inspect` reports `status: "loaded"`
+    # even when the extension entry is unreadable. This job installs the
+    # plugin the way a real deployment does against each supported
+    # OpenClaw version, asserts registration AND true loadability, and
+    # reproduces the root-owned-files incident to prove the failure is
+    # loud. `latest` failing here is the alarm that a new OpenClaw broke
+    # plugin loading.
+    name: plugin-load (openclaw ${{ matrix.openclaw-version }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        # Known-good floor + whatever npm currently serves.
+        openclaw-version: ["2026.6.1", "latest"]
+    env:
+      OPENCLAW_STATE_DIR: ${{ github.workspace }}/.ci-openclaw-state
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: actions/setup-node@v6
+        with:
+          node-version: "22"
+
+      - name: Install OpenClaw ${{ matrix.openclaw-version }}
+        run: npm install --no-save "openclaw@${{ matrix.openclaw-version }}"
+
+      - name: Loadability self-check on the checkout (real import)
+        run: node scripts/check_plugin_load.mjs --require-import
+
+      - name: Install the plugin like a deployment does
+        run: ./node_modules/.bin/openclaw plugins install . --force
+
+      - name: Plugin is registered and enabled in OpenClaw
+        run: |
+          ./node_modules/.bin/openclaw plugins inspect tinyhat --json \
+            > "$RUNNER_TEMP/inspect.json"
+          node --input-type=module - "$RUNNER_TEMP/inspect.json" <<'EOF'
+          import fs from "node:fs";
+          const inspect = JSON.parse(fs.readFileSync(process.argv[2], "utf8"));
+          const plugin = inspect.plugin || {};
+          const pkg = JSON.parse(fs.readFileSync("package.json", "utf8"));
+          const problems = [];
+          if (plugin.id !== "tinyhat") problems.push(`id=${plugin.id}`);
+          if (plugin.enabled !== true) problems.push("not enabled");
+          if (plugin.status !== "loaded") problems.push(`status=${plugin.status}`);
+          if (plugin.version !== pkg.version)
+            problems.push(`version=${plugin.version} != ${pkg.version}`);
+          if (problems.length > 0) {
+            console.error(`inspect mismatch: ${problems.join("; ")}`);
+            process.exit(1);
+          }
+          console.log(`inspect ok: tinyhat v${plugin.version} enabled+registered`);
+          EOF
+
+      - name: Loadability self-check on the installed extension
+        run: |
+          node scripts/check_plugin_load.mjs \
+            --plugin-dir "$OPENCLAW_STATE_DIR/extensions/tinyhat" \
+            --require-import
+
+      - name: Root-owned install must fail LOUDLY (incident regression)
+        # Reproduces the silent capability loss this job exists for: a
+        # privileged installer leaves the extension tree root-owned while
+        # the gateway user cannot read it. The self-check must fail and
+        # name the broken paths — never report loadable.
+        run: |
+          sudo chown -R root:root "$OPENCLAW_STATE_DIR/extensions/tinyhat"
+          sudo chmod -R go-rwx "$OPENCLAW_STATE_DIR/extensions/tinyhat"
+          set +e
+          node scripts/check_plugin_load.mjs \
+            --plugin-dir "$OPENCLAW_STATE_DIR/extensions/tinyhat" \
+            --require-import > "$RUNNER_TEMP/rooted.log" 2>&1
+          status=$?
+          set -e
+          cat "$RUNNER_TEMP/rooted.log"
+          if [ "$status" -eq 0 ]; then
+            echo "self-check reported loadable for a root-owned tree" >&2
+            exit 1
+          fi
+          grep -q "verdict: NOT LOADABLE" "$RUNNER_TEMP/rooted.log"
+          grep -Eq "not (readable|statable|listable) by uid=" "$RUNNER_TEMP/rooted.log"
+          echo "root-owned tree failed loudly, as required"
