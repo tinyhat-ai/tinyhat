@@ -122,12 +122,15 @@ loss:
   node scripts/check_plugin_load.mjs [--plugin-dir <dir>] [--require-import]
   ```
 
-  It verifies the manifests, that every packaged file is readable by
-  the current user (the classic failure: a privileged installer leaves
-  the tree root-owned while the gateway runs unprivileged), and — when
-  the `openclaw` package is resolvable next to the plugin — that the
-  extension entry imports and registers the full `tinyhat_*` toolset.
-  Exit code 0 means loadable; failures name the exact broken path.
+  It verifies the manifests, that `src/` and every manifest-declared
+  skills root exist, ship skills, and are readable by the current user
+  (the classic failure: a privileged installer leaves the tree
+  root-owned while the gateway runs unprivileged), and — when the
+  `openclaw` package is resolvable next to the plugin — that the
+  extension entry imports and registers every tool declared in
+  `openclaw.plugin.json` `contracts.tools` (a hardcoded floor guards
+  against truncated manifests). Exit code 0 means loadable; failures
+  name the exact broken path or missing tool.
 
 CI runs the self-check against each supported OpenClaw version,
 installs the plugin the way a deployment does, and reproduces the

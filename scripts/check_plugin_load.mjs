@@ -31,9 +31,12 @@ import path from "node:path";
 import process from "node:process";
 import { pathToFileURL } from "node:url";
 
-// Mirrors REQUIRED_TOOLS in scripts/validate_openclaw_package.py — the
-// stable tool contract this plugin promises a Computer.
-const REQUIRED_TOOLS = [
+// Floor mirrored from REQUIRED_TOOLS in scripts/validate_openclaw_package.py.
+// The authoritative expected set is `contracts.tools` from
+// openclaw.plugin.json; this floor only guards against a truncated or
+// tampered manifest on an installed copy (a manifest that "declares"
+// fewer tools must not shrink the contract below this).
+const REQUIRED_TOOLS_FLOOR = [
   "tinyhat_get_platform_status",
   "tinyhat_list_installed_packages",
   "tinyhat_list_runtime_secrets",
@@ -45,8 +48,8 @@ const REQUIRED_TOOLS = [
   "tinyhat_secret_command",
 ];
 
-const PACKAGED_DIRS = ["src", "skills"];
 const PACKAGED_FILES = ["openclaw.plugin.json", "package.json"];
+const DEFAULT_SKILL_ROOTS = ["skills"];
 
 function parseArgs(argv) {
   const args = { pluginDir: process.cwd(), requireImport: false };
@@ -99,21 +102,49 @@ function checkManifests(pluginDir) {
   if (manifest && manifest.id !== "tinyhat") {
     fail(`openclaw.plugin.json id is ${JSON.stringify(manifest.id)}, expected "tinyhat"`);
   }
+  const declaredTools = Array.isArray(manifest?.contracts?.tools)
+    ? manifest.contracts.tools.filter((name) => typeof name === "string" && name)
+    : [];
+  if (manifest && declaredTools.length === 0) {
+    fail("openclaw.plugin.json contracts.tools is missing or empty");
+  }
+  const skillRoots =
+    Array.isArray(manifest?.skills) && manifest.skills.length > 0
+      ? manifest.skills.filter((name) => typeof name === "string" && name)
+      : DEFAULT_SKILL_ROOTS;
   const entries = pkg?.openclaw?.extensions;
   if (!Array.isArray(entries) || entries.length === 0) {
     fail("package.json openclaw.extensions is missing or empty");
-    return { manifest, pkg, entry: null };
+    return { manifest, pkg, entry: null, declaredTools, skillRoots };
   }
   ok("manifests parse and agree on the extension entry");
-  return { manifest, pkg, entry: path.resolve(pluginDir, entries[0]) };
+  return {
+    manifest,
+    pkg,
+    entry: path.resolve(pluginDir, entries[0]),
+    declaredTools,
+    skillRoots,
+  };
 }
 
-function walkPackagedPaths(pluginDir) {
+function walkPackagedPaths(pluginDir, skillRoots) {
   const targets = [];
   for (const file of PACKAGED_FILES) {
     targets.push(path.join(pluginDir, file));
   }
-  const stack = PACKAGED_DIRS.map((dir) => path.join(pluginDir, dir));
+  // src/ and every manifest-declared skills root are REQUIRED packaged
+  // dirs: an install copy that drops one of them is exactly the silent
+  // capability loss this check exists to make loud.
+  const requiredDirs = ["src", ...skillRoots];
+  const stack = [];
+  for (const dir of requiredDirs) {
+    const absolute = path.join(pluginDir, dir);
+    if (!fs.existsSync(absolute)) {
+      fail(`required packaged directory is missing: ${absolute}`);
+      continue;
+    }
+    stack.push(absolute);
+  }
   while (stack.length > 0) {
     const current = stack.pop();
     let entries;
@@ -144,6 +175,32 @@ function walkPackagedPaths(pluginDir) {
   return targets;
 }
 
+function checkSkillContent(pluginDir, skillRoots) {
+  // A present-but-gutted skills root must be as loud as a missing one:
+  // OpenClaw mounts skills from these roots, so zero SKILL.md entries
+  // means the agent silently loses every tinyhat skill.
+  for (const root of skillRoots) {
+    const absolute = path.join(pluginDir, root);
+    let skillFiles = [];
+    try {
+      skillFiles = fs
+        .readdirSync(absolute, { withFileTypes: true })
+        .filter((entry) => entry.isDirectory())
+        .filter((entry) =>
+          fs.existsSync(path.join(absolute, entry.name, "SKILL.md")),
+        );
+    } catch {
+      // Missing/unreadable roots are reported by the readability walk.
+      continue;
+    }
+    if (skillFiles.length === 0) {
+      fail(`skills root has no <skill>/SKILL.md entries: ${absolute}`);
+    } else {
+      ok(`skills root ${root}/ ships ${skillFiles.length} skill(s)`);
+    }
+  }
+}
+
 function describeUser() {
   try {
     const uid = typeof process.getuid === "function" ? process.getuid() : "?";
@@ -153,9 +210,9 @@ function describeUser() {
   }
 }
 
-function checkReadability(pluginDir) {
+function checkReadability(pluginDir, skillRoots) {
   let broken = 0;
-  for (const target of walkPackagedPaths(pluginDir)) {
+  for (const target of walkPackagedPaths(pluginDir, skillRoots)) {
     let stats;
     try {
       stats = fs.statSync(target);
@@ -189,7 +246,7 @@ function checkReadability(pluginDir) {
   return true;
 }
 
-async function checkImport(entry, pkg, requireImport) {
+async function checkImport(entry, pkg, declaredTools, requireImport) {
   if (!entry) {
     fail("no extension entry to import");
     return;
@@ -248,18 +305,30 @@ async function checkImport(entry, pkg, requireImport) {
     fail(`plugin.register() threw against a stub host: ${error.message}`);
     return;
   }
-  const missing = REQUIRED_TOOLS.filter((name) => !toolNames.includes(name));
+  // The manifest is the authoritative tool contract; the hardcoded floor
+  // only stops a truncated installed manifest from shrinking it.
+  const expected = [...new Set([...declaredTools, ...REQUIRED_TOOLS_FLOOR])];
+  const missing = expected.filter((name) => !toolNames.includes(name));
+  const undeclared = toolNames.filter((name) => !expected.includes(name));
   const offBrand = toolNames.filter((name) => !name.startsWith("tinyhat_"));
   if (missing.length > 0) {
-    fail(`registration is missing required tools: ${missing.join(", ")}`);
+    fail(
+      `registration is missing manifest-declared tools: ${missing.join(", ")}`,
+    );
+  }
+  if (undeclared.length > 0) {
+    fail(
+      "registration produced tools the manifest does not declare " +
+        `(manifest drift): ${undeclared.join(", ")}`,
+    );
   }
   if (offBrand.length > 0) {
     fail(`registration produced non-tinyhat tool names: ${offBrand.join(", ")}`);
   }
-  if (missing.length === 0 && offBrand.length === 0) {
+  if (missing.length === 0 && undeclared.length === 0 && offBrand.length === 0) {
     ok(
       `registration yields ${toolNames.length} tinyhat_* tools ` +
-        `(all ${REQUIRED_TOOLS.length} required tools present)`,
+        `(all ${expected.length} manifest-declared tools present)`,
     );
   }
   const declared = pkg?.version;
@@ -274,10 +343,13 @@ async function main() {
     fail(`plugin dir does not exist: ${args.pluginDir}`);
   } else {
     console.log(`checking plugin dir: ${args.pluginDir} as ${describeUser()}`);
-    const { pkg, entry } = checkManifests(args.pluginDir);
-    const readable = checkReadability(args.pluginDir);
+    const { pkg, entry, declaredTools, skillRoots } = checkManifests(
+      args.pluginDir,
+    );
+    const readable = checkReadability(args.pluginDir, skillRoots);
+    checkSkillContent(args.pluginDir, skillRoots);
     if (readable || args.requireImport) {
-      await checkImport(entry, pkg, args.requireImport);
+      await checkImport(entry, pkg, declaredTools, args.requireImport);
     } else {
       console.log("skip: import check skipped while packaged paths are unreadable");
     }
