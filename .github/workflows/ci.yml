@@ -90,7 +90,11 @@ jobs:
         # Known-good floor + whatever npm currently serves.
         openclaw-version: ["2026.6.1", "latest"]
     env:
-      OPENCLAW_STATE_DIR: ${{ github.workspace }}/.ci-openclaw-state
+      # Outside the workspace: `openclaw plugins install .` copies the
+      # checkout into the state dir and refuses a destination that is a
+      # subdirectory of the source. Static path because the `runner`
+      # context is not available in job-level env.
+      OPENCLAW_STATE_DIR: /tmp/openclaw-ci-state
     steps:
       - uses: actions/checkout@v6
 
