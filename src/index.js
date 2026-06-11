@@ -1,5 +1,6 @@
 import { defineToolPlugin } from "openclaw/plugin-sdk/tool-plugin";
 
+import { announcePluginLoaded } from "./load_beacon.js";
 import { parseSecretCommand, redactObject } from "./platform_helpers.js";
 import {
   formatButtonReply,
@@ -533,6 +534,12 @@ plugin.register = (api) => {
     },
   });
 };
+
+// Loud-load beacon (#124): runs only when the whole module evaluated
+// successfully, so the log line + beacon file mean "the plugin actually
+// loaded", not "the install succeeded". Hosts and
+// `scripts/check_plugin_load.mjs` use it to catch silent load failures.
+announcePluginLoaded();
 
 export default plugin;
 
