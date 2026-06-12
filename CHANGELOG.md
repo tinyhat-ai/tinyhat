@@ -22,6 +22,20 @@ ship `1.0.0`. Release-please is configured to honor this
   default skill, docs, roadmap, validation, and release metadata tracked
   by [#93](https://github.com/tinyhat-ai/tinyhat/issues/93).
 
+## [0.5.0](https://github.com/tinyhat-ai/tinyhat/compare/v0.4.5...v0.5.0) (2026-06-12)
+
+### Features
+
+* Declare the full capability manifest (tools, skills, framework range) and
+  cover it in the load beacon ([#128](https://github.com/tinyhat-ai/tinyhat/pull/128)).
+* Make plugin load failures loud and CI-covered
+  ([#125](https://github.com/tinyhat-ai/tinyhat/pull/125)).
+
+### Bug Fixes
+
+* Enforce the manifest tool contract and packaged skills tree in the load
+  check ([#125](https://github.com/tinyhat-ai/tinyhat/pull/125)).
+
 ## [0.4.5](https://github.com/tinyhat-ai/tinyhat/compare/v0.4.4...v0.4.5) (2026-06-06)
 
 
