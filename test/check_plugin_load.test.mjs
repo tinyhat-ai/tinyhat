@@ -25,6 +25,19 @@ const FIXTURE_TOOLS = [
   "tinyhat_revert_to_platform_credits",
 ];
 
+// The skills floor the script demands even from a truncated manifest.
+const FIXTURE_SKILLS = [
+  "tinyhat-platform",
+  "tinyhat-secrets",
+  "tinyhat-computer-access",
+  "tinyhat-software-updates",
+  "tinyhat-runtime-status",
+  "tinyhat-package-inventory",
+  "tinyhat-support-report",
+];
+
+const FIXTURE_FRAMEWORK = { name: "openclaw", minimum: "2026.6.1" };
+
 function runCheck(args) {
   const result = spawnSync(process.execPath, [SCRIPT, ...args], {
     encoding: "utf8",
@@ -42,16 +55,26 @@ function runCheck(args) {
 function makeFixturePlugin({
   declaredTools = FIXTURE_TOOLS,
   registerTools = FIXTURE_TOOLS,
+  declaredSkills = FIXTURE_SKILLS,
+  shippedSkills = null,
+  framework = FIXTURE_FRAMEWORK,
   includeSkills = true,
   entryImportsOpenclaw = false,
 } = {}) {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), "tinyhat-loadcheck-"));
+  const contracts = { tools: declaredTools };
+  if (declaredSkills !== null) {
+    contracts.skills = declaredSkills;
+  }
+  if (framework !== null) {
+    contracts.framework = framework;
+  }
   fs.writeFileSync(
     path.join(dir, "openclaw.plugin.json"),
     JSON.stringify({
       id: "tinyhat",
       skills: ["skills"],
-      contracts: { tools: declaredTools },
+      contracts,
     }),
   );
   fs.writeFileSync(
@@ -78,13 +101,10 @@ export default {
 `;
   fs.writeFileSync(path.join(dir, "src", "index.js"), entrySource);
   if (includeSkills) {
-    fs.mkdirSync(path.join(dir, "skills", "tinyhat-platform"), {
-      recursive: true,
-    });
-    fs.writeFileSync(
-      path.join(dir, "skills", "tinyhat-platform", "SKILL.md"),
-      "# fixture\n",
-    );
+    for (const name of shippedSkills ?? declaredSkills ?? ["tinyhat-platform"]) {
+      fs.mkdirSync(path.join(dir, "skills", name), { recursive: true });
+      fs.writeFileSync(path.join(dir, "skills", name, "SKILL.md"), "# fixture\n");
+    }
   }
   return dir;
 }
@@ -94,9 +114,69 @@ test("passes a fixture whose registration matches the manifest contract", () => 
   const { code, out } = runCheck(["--plugin-dir", dir, "--require-import"]);
   assert.equal(code, 0, out);
   assert.match(out, /every packaged path is readable/);
-  assert.match(out, /skills root skills\/ ships 1 skill\(s\)/);
+  assert.match(out, /skills root skills\/ ships 7 skill\(s\)/);
+  assert.match(out, /all 7 manifest-declared skills are present/);
+  assert.match(out, /framework range declared: openclaw >= 2026\.6\.1/);
   assert.match(out, /all 12 manifest-declared tools present/);
   assert.match(out, /verdict: loadable/);
+  fs.rmSync(dir, { recursive: true, force: true });
+});
+
+test("a manifest-declared skill missing from the tree fails loudly", () => {
+  const dir = makeFixturePlugin({
+    shippedSkills: FIXTURE_SKILLS.filter((name) => name !== "tinyhat-secrets"),
+  });
+  const { code, out } = runCheck(["--plugin-dir", dir, "--require-import"]);
+  assert.equal(code, 1, out);
+  assert.match(
+    out,
+    /FAIL: manifest-declared skills are missing from the tree: tinyhat-secrets/,
+  );
+  assert.match(out, /verdict: NOT LOADABLE/);
+  fs.rmSync(dir, { recursive: true, force: true });
+});
+
+test("a manifest without contracts.skills fails loudly", () => {
+  const dir = makeFixturePlugin({ declaredSkills: null });
+  const { code, out } = runCheck(["--plugin-dir", dir]);
+  assert.equal(code, 1, out);
+  assert.match(
+    out,
+    /FAIL: openclaw.plugin.json contracts.skills is missing or empty/,
+  );
+  fs.rmSync(dir, { recursive: true, force: true });
+});
+
+test("a truncated manifest cannot shrink the skills contract below the floor", () => {
+  const dir = makeFixturePlugin({
+    declaredSkills: ["tinyhat-platform"],
+    shippedSkills: ["tinyhat-platform"],
+  });
+  const { code, out } = runCheck(["--plugin-dir", dir]);
+  assert.equal(code, 1, out);
+  assert.match(out, /FAIL: openclaw.plugin.json contracts.skills shrank below the floor/);
+  assert.match(out, /tinyhat-secrets/);
+  fs.rmSync(dir, { recursive: true, force: true });
+});
+
+test("a manifest without contracts.framework fails loudly", () => {
+  const dir = makeFixturePlugin({ framework: null });
+  const { code, out } = runCheck(["--plugin-dir", dir]);
+  assert.equal(code, 1, out);
+  assert.match(out, /FAIL: openclaw.plugin.json contracts.framework is missing/);
+  fs.rmSync(dir, { recursive: true, force: true });
+});
+
+test("a malformed framework range fails loudly", () => {
+  const dir = makeFixturePlugin({
+    framework: { name: "openclaw", minimum: "latest" },
+  });
+  const { code, out } = runCheck(["--plugin-dir", dir]);
+  assert.equal(code, 1, out);
+  assert.match(
+    out,
+    /FAIL: contracts.framework.minimum must be a dotted version, got "latest"/,
+  );
   fs.rmSync(dir, { recursive: true, force: true });
 });
 

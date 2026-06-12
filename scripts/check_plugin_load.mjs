@@ -48,6 +48,21 @@ const REQUIRED_TOOLS_FLOOR = [
   "tinyhat_secret_command",
 ];
 
+// Floor mirrored from REQUIRED_SKILLS in scripts/validate_openclaw_package.py,
+// same role as REQUIRED_TOOLS_FLOOR: `contracts.skills` is authoritative,
+// the floor only guards against a truncated or tampered installed manifest.
+const REQUIRED_SKILLS_FLOOR = [
+  "tinyhat-platform",
+  "tinyhat-secrets",
+  "tinyhat-computer-access",
+  "tinyhat-software-updates",
+  "tinyhat-runtime-status",
+  "tinyhat-package-inventory",
+  "tinyhat-support-report",
+];
+
+const VERSION_SHAPE = /^\d+(\.\d+)+$/;
+
 const PACKAGED_FILES = ["openclaw.plugin.json", "package.json"];
 const DEFAULT_SKILL_ROOTS = ["skills"];
 
@@ -108,6 +123,22 @@ function checkManifests(pluginDir) {
   if (manifest && declaredTools.length === 0) {
     fail("openclaw.plugin.json contracts.tools is missing or empty");
   }
+  const declaredSkills = Array.isArray(manifest?.contracts?.skills)
+    ? manifest.contracts.skills.filter((name) => typeof name === "string" && name)
+    : [];
+  if (manifest && declaredSkills.length === 0) {
+    fail("openclaw.plugin.json contracts.skills is missing or empty");
+  } else if (manifest) {
+    const missingFloor = REQUIRED_SKILLS_FLOOR.filter(
+      (name) => !declaredSkills.includes(name),
+    );
+    if (missingFloor.length > 0) {
+      fail(
+        `openclaw.plugin.json contracts.skills shrank below the floor: ${missingFloor.join(", ")}`,
+      );
+    }
+  }
+  checkFrameworkRange(manifest);
   const skillRoots =
     Array.isArray(manifest?.skills) && manifest.skills.length > 0
       ? manifest.skills.filter((name) => typeof name === "string" && name)
@@ -115,7 +146,7 @@ function checkManifests(pluginDir) {
   const entries = pkg?.openclaw?.extensions;
   if (!Array.isArray(entries) || entries.length === 0) {
     fail("package.json openclaw.extensions is missing or empty");
-    return { manifest, pkg, entry: null, declaredTools, skillRoots };
+    return { manifest, pkg, entry: null, declaredTools, declaredSkills, skillRoots };
   }
   ok("manifests parse and agree on the extension entry");
   return {
@@ -123,8 +154,42 @@ function checkManifests(pluginDir) {
     pkg,
     entry: path.resolve(pluginDir, entries[0]),
     declaredTools,
+    declaredSkills,
     skillRoots,
   };
+}
+
+function checkFrameworkRange(manifest) {
+  if (!manifest) {
+    return;
+  }
+  const framework = manifest?.contracts?.framework;
+  if (!framework || typeof framework !== "object" || Array.isArray(framework)) {
+    fail("openclaw.plugin.json contracts.framework is missing");
+    return;
+  }
+  if (framework.name !== "openclaw") {
+    fail(
+      `contracts.framework.name is ${JSON.stringify(framework.name)}, expected "openclaw"`,
+    );
+  }
+  if (typeof framework.minimum !== "string" || !VERSION_SHAPE.test(framework.minimum)) {
+    fail(
+      `contracts.framework.minimum must be a dotted version, got ${JSON.stringify(framework.minimum)}`,
+    );
+  }
+  if (
+    framework.maximum !== undefined &&
+    (typeof framework.maximum !== "string" || !VERSION_SHAPE.test(framework.maximum))
+  ) {
+    fail(
+      `contracts.framework.maximum must be a dotted version when set, got ${JSON.stringify(framework.maximum)}`,
+    );
+  }
+  ok(
+    `framework range declared: ${framework.name} >= ${framework.minimum}` +
+      (framework.maximum ? ` <= ${framework.maximum}` : ""),
+  );
 }
 
 function walkPackagedPaths(pluginDir, skillRoots) {
@@ -175,10 +240,11 @@ function walkPackagedPaths(pluginDir, skillRoots) {
   return targets;
 }
 
-function checkSkillContent(pluginDir, skillRoots) {
+function checkSkillContent(pluginDir, skillRoots, declaredSkills) {
   // A present-but-gutted skills root must be as loud as a missing one:
   // OpenClaw mounts skills from these roots, so zero SKILL.md entries
   // means the agent silently loses every tinyhat skill.
+  const found = new Set();
   for (const root of skillRoots) {
     const absolute = path.join(pluginDir, root);
     let skillFiles = [];
@@ -198,6 +264,22 @@ function checkSkillContent(pluginDir, skillRoots) {
     } else {
       ok(`skills root ${root}/ ships ${skillFiles.length} skill(s)`);
     }
+    for (const entry of skillFiles) {
+      found.add(entry.name);
+    }
+  }
+  // The declared set is the contract: every contracts.skills entry must
+  // survive packaging/install as <root>/<name>/SKILL.md. A dropped dir
+  // is exactly the silent capability loss this check makes loud.
+  const missingDeclared = (declaredSkills || []).filter(
+    (name) => !found.has(name),
+  );
+  if (missingDeclared.length > 0) {
+    fail(
+      `manifest-declared skills are missing from the tree: ${missingDeclared.join(", ")}`,
+    );
+  } else if ((declaredSkills || []).length > 0) {
+    ok(`all ${declaredSkills.length} manifest-declared skills are present`);
   }
 }
 
@@ -343,11 +425,10 @@ async function main() {
     fail(`plugin dir does not exist: ${args.pluginDir}`);
   } else {
     console.log(`checking plugin dir: ${args.pluginDir} as ${describeUser()}`);
-    const { pkg, entry, declaredTools, skillRoots } = checkManifests(
-      args.pluginDir,
-    );
+    const { pkg, entry, declaredTools, declaredSkills, skillRoots } =
+      checkManifests(args.pluginDir);
     const readable = checkReadability(args.pluginDir, skillRoots);
-    checkSkillContent(args.pluginDir, skillRoots);
+    checkSkillContent(args.pluginDir, skillRoots, declaredSkills);
     if (readable || args.requireImport) {
       await checkImport(entry, pkg, declaredTools, args.requireImport);
     } else {

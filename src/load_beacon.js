@@ -41,6 +41,88 @@ export function beaconPath(env = process.env) {
   return path.join(stateDir, BEACON_FILENAME);
 }
 
+function cleanNameList(value) {
+  if (!Array.isArray(value)) {
+    return [];
+  }
+  return value.filter((name) => typeof name === "string" && name);
+}
+
+export function readDeclaredManifest() {
+  // The declared capability surface from openclaw.plugin.json, so the
+  // beacon covers WHAT loaded, not just THAT something loaded. A host
+  // that cannot inspect the live tool registry can compare this
+  // beacon-carried declaration against the manifest it expects without
+  // inventing data. Returns null when the manifest is unreadable — the
+  // beacon then degrades to the load facts alone.
+  try {
+    const manifest = JSON.parse(
+      fs.readFileSync(new URL("../openclaw.plugin.json", import.meta.url), "utf8"),
+    );
+    const contracts = manifest?.contracts ?? {};
+    const declared = {
+      tools: cleanNameList(contracts.tools),
+      skills: cleanNameList(contracts.skills),
+    };
+    const framework = contracts.framework;
+    if (framework && typeof framework === "object" && !Array.isArray(framework)) {
+      declared.framework = framework;
+    }
+    return declared;
+  } catch {
+    return null;
+  }
+}
+
+export function listSkillsPresent(skillRoots) {
+  // Skill directories that actually carry a SKILL.md at load time,
+  // under each manifest-declared skills root. This is the loader's
+  // view of the tree; a declared skill absent from this list is the
+  // silent capability loss the beacon exists to make observable.
+  const present = [];
+  for (const root of Array.isArray(skillRoots) ? skillRoots : []) {
+    if (typeof root !== "string" || !root) {
+      continue;
+    }
+    let entries;
+    try {
+      entries = fs.readdirSync(new URL(`../${root}/`, import.meta.url), {
+        withFileTypes: true,
+      });
+    } catch {
+      continue;
+    }
+    for (const entry of entries) {
+      if (!entry.isDirectory()) {
+        continue;
+      }
+      try {
+        fs.accessSync(
+          new URL(`../${root}/${entry.name}/SKILL.md`, import.meta.url),
+          fs.constants.R_OK,
+        );
+        present.push(entry.name);
+      } catch {
+        // Unreadable or missing SKILL.md: not present from the
+        // loader's point of view.
+      }
+    }
+  }
+  return present.sort();
+}
+
+export function readDeclaredSkillRoots() {
+  try {
+    const manifest = JSON.parse(
+      fs.readFileSync(new URL("../openclaw.plugin.json", import.meta.url), "utf8"),
+    );
+    const roots = cleanNameList(manifest?.skills);
+    return roots.length > 0 ? roots : ["skills"];
+  } catch {
+    return ["skills"];
+  }
+}
+
 export function announcePluginLoaded({
   env = process.env,
   log = console.error,
@@ -56,20 +138,23 @@ export function announcePluginLoaded({
   try {
     const target = beaconPath(env);
     fs.mkdirSync(path.dirname(target), { recursive: true });
-    fs.writeFileSync(
-      target,
-      JSON.stringify(
-        {
-          plugin: "tinyhat",
-          version,
-          loaded_at: now().toISOString(),
-          pid: process.pid,
-          node: process.version,
-        },
-        null,
-        2,
-      ) + "\n",
-    );
+    const payload = {
+      plugin: "tinyhat",
+      version,
+      loaded_at: now().toISOString(),
+      pid: process.pid,
+      node: process.version,
+    };
+    // Manifest coverage (best-effort, never load-breaking): the
+    // declared tools/skills/framework range this load was built from,
+    // plus the skill dirs the loader can actually see. Hosts use this
+    // to verify the declared manifest without registry access.
+    const declared = readDeclaredManifest();
+    if (declared) {
+      payload.declared = declared;
+      payload.skills_present = listSkillsPresent(readDeclaredSkillRoots());
+    }
+    fs.writeFileSync(target, JSON.stringify(payload, null, 2) + "\n");
   } catch {
     // Best-effort: an unwritable state dir degrades to the log line.
   }
