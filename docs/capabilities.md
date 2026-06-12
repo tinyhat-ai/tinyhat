@@ -13,9 +13,9 @@ call raw Tinyhat backend URLs.
 | `credentials.list_metadata` | `tinyhat_list_runtime_secrets` | none | Secret names/descriptions/status only; Manage Secrets button transport when available. |
 | `computer.open_manage` | `tinyhat_open_manage_computer_link` | none | Safe copy plus Telegram button transport. |
 | `computer.open_terminal` | `tinyhat_open_terminal_link` | optional admin-reviewed `command` | Safe copy plus Telegram button transport. |
-| `computer.status` | `tinyhat_get_platform_status` | none | Secret-free status and platform contract. |
+| `computer.status` | `tinyhat_get_platform_status` | none | Secret-free status and platform contract. Returns final support guidance if Computer auth is malformed. |
 | `packages.list_installed` | `tinyhat_list_installed_packages` | none | Public package refs/SHAs and Tinyhat/user split when available. |
-| `support.report_problem` | `tinyhat_report_problem` | optional summary | Redacted support context. |
+| `support.report_problem` | `tinyhat_report_problem` | optional summary | Redacted support context. Returns final support guidance if Computer auth is malformed. |
 
 ## Default Skill Layer
 
@@ -60,3 +60,9 @@ capability descriptions, default skills, and public release metadata.
 Do not add tenant secrets, signed intent tokens, private Tinyhat URLs,
 local development paths, or private docs to package metadata, skills,
 or issue/PR text.
+
+For `computer-auth: malformed_token`, tools must direct users only to
+Tinyhat-owned support at `https://tinyhat.ai`, `support@tinyhat.ai`,
+or Telegram `@tinyhatchat`, and preserve the returned diagnostic
+handoff. Do not invent Discord, the old `support@tinyhat.com` address,
+or slash-command support channels in public copy.

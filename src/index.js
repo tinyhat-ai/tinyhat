@@ -22,6 +22,11 @@ import {
   startChatgptSubscriptionLink,
 } from "./subscriptions.js";
 import {
+  buildComputerAuthFailureSupportGuidance,
+  isMalformedComputerAuthError,
+  TinyhatRequestError,
+} from "./support_guidance.js";
+import {
   markTelegramDelivered,
   sendTelegramMiniAppButton,
   sendTelegramPhoto,
@@ -31,6 +36,7 @@ import { jsonToolResult } from "./tool_results.js";
 
 const METADATA_BASE_URL_KEY = "tinyhat-platform-base-url";
 const METADATA_AUDIENCE_KEY = "tinyhat-backend-audience";
+const METADATA_COMPUTER_ID_KEY = "tinyhat-computer-id";
 const DEV_RUNTIME_BEARER = "dev-runtime";
 const SECRET_REPLY_SAFETY = "Do not paste the value in chat.";
 const DEFAULT_SKILLS = [
@@ -57,6 +63,7 @@ const configSchema = {
     backendAudience: { type: "string" },
     devMode: { type: "boolean" },
     devBearer: { type: "string" },
+    computerId: { type: "string" },
   },
   additionalProperties: false,
 };
@@ -138,12 +145,23 @@ const plugin = defineToolPlugin({
       execute: async (_params, config, context) => {
         const runtime = resolveExecutionRuntime(config, context);
         runtime.signal?.throwIfAborted?.();
-        return callTinyhat(
-          runtime.config,
-          "/hapi/v1/computers/me/platform-status",
-          { method: "GET" },
-          runtime.signal,
-        );
+        try {
+          return await callTinyhat(
+            runtime.config,
+            "/hapi/v1/computers/me/platform-status",
+            { method: "GET" },
+            runtime.signal,
+          );
+        } catch (err) {
+          if (isMalformedComputerAuthError(err)) {
+            return computerAuthFailureSupportGuidance(
+              runtime.config,
+              runtime.signal,
+              "tinyhat_get_platform_status",
+            );
+          }
+          throw err;
+        }
       },
     }),
     tool({
@@ -266,8 +284,20 @@ const plugin = defineToolPlugin({
       execute: async ({ summary } = {}, config, context) => {
         const runtime = resolveExecutionRuntime(config, context);
         runtime.signal?.throwIfAborted?.();
-        const status = await fetchPlatformStatus(runtime.config, runtime.signal);
-        return supportReportFromStatus(status, summary);
+        try {
+          const status = await fetchPlatformStatus(runtime.config, runtime.signal);
+          return supportReportFromStatus(status, summary);
+        } catch (err) {
+          if (isMalformedComputerAuthError(err)) {
+            return computerAuthFailureSupportGuidance(
+              runtime.config,
+              runtime.signal,
+              "tinyhat_report_problem",
+              summary,
+            );
+          }
+          throw err;
+        }
       },
     }),
     tool({
@@ -572,9 +602,13 @@ function looksLikePlatformConfig(value) {
   return Boolean(
     value &&
       typeof value === "object" &&
-      ["platformBaseUrl", "backendAudience", "devMode", "devBearer"].some((key) =>
-        Object.prototype.hasOwnProperty.call(value, key),
-      ),
+      [
+        "platformBaseUrl",
+        "backendAudience",
+        "devMode",
+        "devBearer",
+        "computerId",
+      ].some((key) => Object.prototype.hasOwnProperty.call(value, key)),
   );
 }
 
@@ -673,6 +707,19 @@ function supportReportFromStatus(status, summary) {
   };
 }
 
+async function computerAuthFailureSupportGuidance(
+  config,
+  signal,
+  sourceTool,
+  summary,
+) {
+  return buildComputerAuthFailureSupportGuidance({
+    computerId: await resolveComputerId(config, signal),
+    sourceTool,
+    summary,
+  });
+}
+
 async function callTinyhat(config, path, init, signal) {
   const baseUrl = await resolvePlatformBaseUrl(config, signal);
   const token = await resolveBearerToken(config, signal);
@@ -688,11 +735,27 @@ async function callTinyhat(config, path, init, signal) {
   const text = await response.text();
   const payload = text ? parseJson(text) : {};
   if (!response.ok) {
-    throw new Error(
-      `Tinyhat request failed (${response.status}): ${readDetail(payload, text)}`,
+    const detail = readDetail(payload, text);
+    throw new TinyhatRequestError(
+      `Tinyhat request failed (${response.status}): ${detail}`,
+      { status: response.status, detail, path, payload },
     );
   }
   return payload;
+}
+
+async function resolveComputerId(config, signal) {
+  const configured = normalizeString(config?.computerId);
+  if (configured) {
+    return configured;
+  }
+  const envConfigured =
+    readProcessEnv("TINYHAT_COMPUTER_ID") ||
+    readProcessEnv("DEV_AUTO_COMPUTER_ID");
+  if (envConfigured) {
+    return envConfigured;
+  }
+  return tryReadMetadataValue(METADATA_COMPUTER_ID_KEY, signal);
 }
 
 async function resolvePlatformBaseUrl(config, signal) {
@@ -747,6 +810,14 @@ async function readMetadataValue(key, signal) {
     throw new Error(`Could not read metadata ${key} (${response.status}).`);
   }
   return (await response.text()).trim();
+}
+
+async function tryReadMetadataValue(key, signal) {
+  try {
+    return await readMetadataValue(key, signal);
+  } catch {
+    return "";
+  }
 }
 
 function normalizeString(value) {

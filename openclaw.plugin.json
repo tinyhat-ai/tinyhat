@@ -21,6 +21,10 @@
       "devBearer": {
         "type": "string",
         "description": "Local development bearer token. Never set this in production package metadata."
+      },
+      "computerId": {
+        "type": "string",
+        "description": "Optional Tinyhat Computer id used only for support diagnostics."
       }
     },
     "additionalProperties": false
