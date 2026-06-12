@@ -23,6 +23,10 @@ problem and the agent needs redacted platform context.
 3. Call `tinyhat_report_problem` with the non-secret summary.
 4. Return the redacted support context and a concise explanation of what
    was captured.
+5. If the tool returns `action: "platform_auth_failure"`, use the
+   returned `text` as the final user-facing guidance. Do not call another
+   Tinyhat platform tool after this failure; the Computer auth path is
+   already unavailable.
 
 ## What To Capture In The Summary
 
@@ -40,3 +44,8 @@ problem and the agent needs redacted platform context.
   deployment details.
 - Redacted support context is safe to summarize; secret values are not
   available through Tinyhat tools.
+- For `computer-auth: malformed_token`, direct the user only to
+  `tinyhat.ai`, `support@tinyhat.ai`, or Telegram `@tinyhatchat`,
+  and preserve the returned diagnostic handoff.
+  Do not mention Discord, `support@tinyhat.com`, or slash-command
+  support channels.

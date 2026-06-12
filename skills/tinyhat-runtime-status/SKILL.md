@@ -27,6 +27,10 @@ or reload platform-managed components.
    whether it is available.
 4. Do not expose backend endpoints, metadata server details, bearer
    tokens, tenant ids, or private hostnames.
+5. If the tool returns `action: "platform_auth_failure"`, use the
+   returned `text` as the final user-facing guidance. Do not route to
+   `tinyhat_report_problem`; the fallback already explains that normal
+   platform reporting cannot authenticate.
 
 ## Restart Or Reload Boundary
 
@@ -50,3 +54,8 @@ or reload platform-managed components.
 - Do not claim access to secret values, private URLs, or internal
   runtime controls.
 - Prefer a clear boundary over an invented platform action.
+- For `computer-auth: malformed_token`, direct the user only to
+  `tinyhat.ai`, `support@tinyhat.ai`, or Telegram `@tinyhatchat`,
+  and preserve the returned diagnostic handoff.
+  Do not mention Discord, `support@tinyhat.com`, or slash-command
+  support channels.
