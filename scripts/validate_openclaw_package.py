@@ -40,6 +40,7 @@ REQUIRED_SKILLS = {
     "tinyhat-runtime-status",
     "tinyhat-package-inventory",
     "tinyhat-support-report",
+    "tinyhat-subscriptions",
 }
 
 VERSION_SHAPE = re.compile(r"^\d+(\.\d+)+$")
@@ -233,6 +234,35 @@ def validate_manifest(manifest: dict[str, Any]) -> None:
     )
 
 
+def validate_framework_peer_range(manifest: dict[str, Any], package: dict[str, Any]) -> None:
+    """The npm peer range and the manifest framework floor must agree.
+
+    contracts.framework is the host-verifiable support contract; a
+    peerDependencies.openclaw floor below it lets a package manager
+    select a framework version the plugin does not support.
+    """
+    contracts = manifest.get("contracts")
+    framework = contracts.get("framework") if isinstance(contracts, dict) else None
+    minimum = framework.get("minimum") if isinstance(framework, dict) else None
+    peers = package.get("peerDependencies")
+    require(isinstance(peers, dict), "package.json must declare peerDependencies")
+    peer_range = peers.get("openclaw")
+    require(
+        isinstance(peer_range, str) and peer_range.strip(),
+        "package.json peerDependencies.openclaw is missing",
+    )
+    match = re.fullmatch(r">=\s*(\d+(?:\.\d+)+)", peer_range.strip())
+    require(
+        match is not None,
+        "package.json peerDependencies.openclaw must be a '>=<version>' range",
+    )
+    require(
+        match.group(1) == minimum,
+        "package.json peerDependencies.openclaw floor "
+        f"({match.group(1)}) must equal contracts.framework.minimum ({minimum})",
+    )
+
+
 def validate_skills(root: Path, manifest: dict[str, Any]) -> None:
     skill_files = sorted((root / "skills").glob("*/SKILL.md"))
     require(skill_files, "skills/ must contain at least one SKILL.md")
@@ -391,6 +421,7 @@ def main() -> int:
     validate_versions(root, manifest, package)
     validate_package_metadata(package)
     validate_manifest(manifest)
+    validate_framework_peer_range(manifest, package)
     validate_authoring_standard(root)
     validate_skills(root, manifest)
     validate_source(root)

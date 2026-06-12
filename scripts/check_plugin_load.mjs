@@ -59,6 +59,7 @@ const REQUIRED_SKILLS_FLOOR = [
   "tinyhat-runtime-status",
   "tinyhat-package-inventory",
   "tinyhat-support-report",
+  "tinyhat-subscriptions",
 ];
 
 const VERSION_SHAPE = /^\d+(\.\d+)+$/;

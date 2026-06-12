@@ -34,6 +34,7 @@ const FIXTURE_SKILLS = [
   "tinyhat-runtime-status",
   "tinyhat-package-inventory",
   "tinyhat-support-report",
+  "tinyhat-subscriptions",
 ];
 
 const FIXTURE_FRAMEWORK = { name: "openclaw", minimum: "2026.6.1" };
@@ -114,8 +115,8 @@ test("passes a fixture whose registration matches the manifest contract", () => 
   const { code, out } = runCheck(["--plugin-dir", dir, "--require-import"]);
   assert.equal(code, 0, out);
   assert.match(out, /every packaged path is readable/);
-  assert.match(out, /skills root skills\/ ships 7 skill\(s\)/);
-  assert.match(out, /all 7 manifest-declared skills are present/);
+  assert.match(out, /skills root skills\/ ships 8 skill\(s\)/);
+  assert.match(out, /all 8 manifest-declared skills are present/);
   assert.match(out, /framework range declared: openclaw >= 2026\.6\.1/);
   assert.match(out, /all 12 manifest-declared tools present/);
   assert.match(out, /verdict: loadable/);
@@ -156,6 +157,28 @@ test("a truncated manifest cannot shrink the skills contract below the floor", (
   assert.equal(code, 1, out);
   assert.match(out, /FAIL: openclaw.plugin.json contracts.skills shrank below the floor/);
   assert.match(out, /tinyhat-secrets/);
+  fs.rmSync(dir, { recursive: true, force: true });
+});
+
+test("an installed copy whose manifest AND tree drop one canonical skill fails", () => {
+  // Review repro on #128: a tampered installed copy that omits only
+  // tinyhat-subscriptions from both contracts.skills and skills/ used
+  // to pass (the old seven-skill floor predated the skill). The floor
+  // must make exactly this silent skill loss loud.
+  const sevenSkills = FIXTURE_SKILLS.filter(
+    (name) => name !== "tinyhat-subscriptions",
+  );
+  const dir = makeFixturePlugin({
+    declaredSkills: sevenSkills,
+    shippedSkills: sevenSkills,
+  });
+  const { code, out } = runCheck(["--plugin-dir", dir, "--require-import"]);
+  assert.equal(code, 1, out);
+  assert.match(
+    out,
+    /FAIL: openclaw.plugin.json contracts.skills shrank below the floor: tinyhat-subscriptions/,
+  );
+  assert.match(out, /verdict: NOT LOADABLE/);
   fs.rmSync(dir, { recursive: true, force: true });
 });
 

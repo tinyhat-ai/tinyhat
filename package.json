@@ -27,7 +27,7 @@
   },
   "license": "MIT",
   "peerDependencies": {
-    "openclaw": ">=2026.5.17"
+    "openclaw": ">=2026.6.1"
   },
   "openclaw": {
     "extensions": [
