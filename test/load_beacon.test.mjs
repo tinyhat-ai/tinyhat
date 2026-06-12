@@ -8,6 +8,9 @@ import {
   BEACON_FILENAME,
   announcePluginLoaded,
   beaconPath,
+  listSkillsPresent,
+  readDeclaredManifest,
+  readDeclaredSkillRoots,
   readOwnPackageVersion,
 } from "../src/load_beacon.js";
 
@@ -44,6 +47,59 @@ test("announcePluginLoaded logs one line and writes the beacon file", () => {
   assert.equal(beacon.node, process.version);
 
   fs.rmSync(stateDir, { recursive: true, force: true });
+});
+
+test("the beacon covers the declared manifest and the skills present", () => {
+  const stateDir = fs.mkdtempSync(path.join(os.tmpdir(), "tinyhat-beacon-mf-"));
+  announcePluginLoaded({
+    env: { OPENCLAW_STATE_DIR: stateDir },
+    log: () => {},
+  });
+
+  const beacon = JSON.parse(
+    fs.readFileSync(path.join(stateDir, BEACON_FILENAME), "utf8"),
+  );
+  const manifest = JSON.parse(
+    fs.readFileSync(new URL("../openclaw.plugin.json", import.meta.url), "utf8"),
+  );
+  // The beacon's declared block IS the manifest contract — a host that
+  // can only read the beacon must see the same declaration the
+  // manifest carries, not a paraphrase.
+  assert.deepEqual(beacon.declared.tools, manifest.contracts.tools);
+  assert.deepEqual(beacon.declared.skills, manifest.contracts.skills);
+  assert.deepEqual(beacon.declared.framework, manifest.contracts.framework);
+  // Every declared skill ships in this checkout, so the loader's view
+  // must report all of them present.
+  assert.deepEqual(
+    beacon.skills_present,
+    [...manifest.contracts.skills].sort(),
+  );
+  // The runtime caps beacon reads at 8 KiB; a manifest-covering beacon
+  // must stay comfortably inside that.
+  const size = fs.statSync(path.join(stateDir, BEACON_FILENAME)).size;
+  assert.ok(size < 4096, `beacon is ${size} bytes; expected < 4096`);
+
+  fs.rmSync(stateDir, { recursive: true, force: true });
+});
+
+test("readDeclaredManifest mirrors openclaw.plugin.json contracts", () => {
+  const manifest = JSON.parse(
+    fs.readFileSync(new URL("../openclaw.plugin.json", import.meta.url), "utf8"),
+  );
+  const declared = readDeclaredManifest();
+  assert.deepEqual(declared.tools, manifest.contracts.tools);
+  assert.deepEqual(declared.skills, manifest.contracts.skills);
+  assert.deepEqual(declared.framework, manifest.contracts.framework);
+});
+
+test("listSkillsPresent reports declared-root skills and tolerates junk roots", () => {
+  const present = listSkillsPresent(readDeclaredSkillRoots());
+  assert.ok(present.includes("tinyhat-platform"));
+  assert.ok(present.includes("tinyhat-subscriptions"));
+  // Unknown roots and non-string entries degrade to "nothing found"
+  // instead of throwing — the beacon must never break the load.
+  assert.deepEqual(listSkillsPresent(["no-such-root", 42, null]), []);
+  assert.deepEqual(listSkillsPresent("not-a-list"), []);
 });
 
 test("announcePluginLoaded never throws when the state dir is unwritable", () => {

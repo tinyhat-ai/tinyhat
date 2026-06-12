@@ -40,7 +40,10 @@ REQUIRED_SKILLS = {
     "tinyhat-runtime-status",
     "tinyhat-package-inventory",
     "tinyhat-support-report",
+    "tinyhat-subscriptions",
 }
+
+VERSION_SHAPE = re.compile(r"^\d+(\.\d+)+$")
 
 SKILL_MD_MAX_LINES = 200
 SKILL_DESCRIPTION_MAX_CHARS = 1024
@@ -179,6 +182,33 @@ def validate_manifest(manifest: dict[str, Any]) -> None:
     missing_tools = REQUIRED_TOOLS.difference(tools)
     require(not missing_tools, f"manifest missing tools: {sorted(missing_tools)}")
 
+    declared_skills = contracts.get("skills")
+    require(isinstance(declared_skills, list), "manifest contracts.skills must be a list")
+    require(
+        all(isinstance(name, str) and name for name in declared_skills),
+        "manifest contracts.skills entries must be non-empty strings",
+    )
+    missing_skills = REQUIRED_SKILLS.difference(declared_skills)
+    require(not missing_skills, f"manifest contracts.skills missing: {sorted(missing_skills)}")
+
+    framework = contracts.get("framework")
+    require(isinstance(framework, dict), "manifest contracts.framework must be an object")
+    require(
+        framework.get("name") == "openclaw",
+        "manifest contracts.framework.name must be openclaw",
+    )
+    minimum = framework.get("minimum")
+    require(
+        isinstance(minimum, str) and VERSION_SHAPE.fullmatch(minimum) is not None,
+        "manifest contracts.framework.minimum must be a dotted version string",
+    )
+    maximum = framework.get("maximum")
+    require(
+        maximum is None
+        or (isinstance(maximum, str) and VERSION_SHAPE.fullmatch(maximum) is not None),
+        "manifest contracts.framework.maximum must be a dotted version string when set",
+    )
+
     operations = contracts.get("operations")
     require(isinstance(operations, list), "manifest contracts.operations must be a list")
     operation_map = {
@@ -204,12 +234,55 @@ def validate_manifest(manifest: dict[str, Any]) -> None:
     )
 
 
-def validate_skills(root: Path) -> None:
+def validate_framework_peer_range(manifest: dict[str, Any], package: dict[str, Any]) -> None:
+    """The npm peer range and the manifest framework floor must agree.
+
+    contracts.framework is the host-verifiable support contract; a
+    peerDependencies.openclaw floor below it lets a package manager
+    select a framework version the plugin does not support.
+    """
+    contracts = manifest.get("contracts")
+    framework = contracts.get("framework") if isinstance(contracts, dict) else None
+    minimum = framework.get("minimum") if isinstance(framework, dict) else None
+    peers = package.get("peerDependencies")
+    require(isinstance(peers, dict), "package.json must declare peerDependencies")
+    peer_range = peers.get("openclaw")
+    require(
+        isinstance(peer_range, str) and peer_range.strip(),
+        "package.json peerDependencies.openclaw is missing",
+    )
+    match = re.fullmatch(r">=\s*(\d+(?:\.\d+)+)", peer_range.strip())
+    require(
+        match is not None,
+        "package.json peerDependencies.openclaw must be a '>=<version>' range",
+    )
+    require(
+        match.group(1) == minimum,
+        "package.json peerDependencies.openclaw floor "
+        f"({match.group(1)}) must equal contracts.framework.minimum ({minimum})",
+    )
+
+
+def validate_skills(root: Path, manifest: dict[str, Any]) -> None:
     skill_files = sorted((root / "skills").glob("*/SKILL.md"))
     require(skill_files, "skills/ must contain at least one SKILL.md")
     skill_names = {skill_file.parent.name for skill_file in skill_files}
     missing_skills = REQUIRED_SKILLS.difference(skill_names)
     require(not missing_skills, f"skills/ missing default skills: {sorted(missing_skills)}")
+    # contracts.skills is the declared capability surface hosts verify
+    # against; it must exactly match the tree this package ships.
+    contracts = manifest.get("contracts")
+    declared = set(contracts.get("skills") or []) if isinstance(contracts, dict) else set()
+    undeclared = skill_names.difference(declared)
+    require(
+        not undeclared,
+        f"skills/ ships skills the manifest does not declare: {sorted(undeclared)}",
+    )
+    phantom = declared.difference(skill_names)
+    require(
+        not phantom,
+        f"manifest contracts.skills declares skills not in skills/: {sorted(phantom)}",
+    )
     for skill_file in skill_files:
         text = skill_file.read_text(encoding="utf-8")
         relative_path = skill_file.relative_to(root)
@@ -348,8 +421,9 @@ def main() -> int:
     validate_versions(root, manifest, package)
     validate_package_metadata(package)
     validate_manifest(manifest)
+    validate_framework_peer_range(manifest, package)
     validate_authoring_standard(root)
-    validate_skills(root)
+    validate_skills(root, manifest)
     validate_source(root)
     validate_retired_terms_absent(root)
 

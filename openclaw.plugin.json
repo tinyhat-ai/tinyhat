@@ -47,6 +47,20 @@
       "tinyhat_report_problem",
       "tinyhat_secret_command"
     ],
+    "skills": [
+      "tinyhat-computer-access",
+      "tinyhat-package-inventory",
+      "tinyhat-platform",
+      "tinyhat-runtime-status",
+      "tinyhat-secrets",
+      "tinyhat-software-updates",
+      "tinyhat-subscriptions",
+      "tinyhat-support-report"
+    ],
+    "framework": {
+      "name": "openclaw",
+      "minimum": "2026.6.1"
+    },
     "operations": [
       {
         "name": "credentials.open_add_secret",
