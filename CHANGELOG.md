@@ -22,6 +22,13 @@ ship `1.0.0`. Release-please is configured to honor this
   default skill, docs, roadmap, validation, and release metadata tracked
   by [#93](https://github.com/tinyhat-ai/tinyhat/issues/93).
 
+## [0.5.1](https://github.com/tinyhat-ai/tinyhat/compare/v0.5.0...v0.5.1) (2026-06-13)
+
+
+### Bug Fixes
+
+* **plugin:** Add auth failure guidance ([#131](https://github.com/tinyhat-ai/tinyhat/issues/131)) ([9b9c9d7](https://github.com/tinyhat-ai/tinyhat/commit/9b9c9d7d1f4c262b89e07d1e90fe7042fb1f1c27))
+
 ## [0.5.0](https://github.com/tinyhat-ai/tinyhat/compare/v0.4.5...v0.5.0) (2026-06-12)
 
 ### Features
