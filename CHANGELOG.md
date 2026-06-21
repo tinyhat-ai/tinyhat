@@ -22,6 +22,14 @@ ship `1.0.0`. Release-please is configured to honor this
   default skill, docs, roadmap, validation, and release metadata tracked
   by [#93](https://github.com/tinyhat-ai/tinyhat/issues/93).
 
+## [0.5.2](https://github.com/tinyhat-ai/tinyhat/compare/v0.5.1...v0.5.2) (2026-06-21)
+
+
+### Bug Fixes
+
+* **plugin:** Restore subscription command contract ([b34dce6](https://github.com/tinyhat-ai/tinyhat/commit/b34dce675500ec2a9b76cbf730b7ed6e05b7742b))
+* **plugin:** Restore subscription command contract ([b611fbc](https://github.com/tinyhat-ai/tinyhat/commit/b611fbc18ad18634eb6a2d1ff6ff747488cfb923))
+
 ## [0.5.1](https://github.com/tinyhat-ai/tinyhat/compare/v0.5.0...v0.5.1) (2026-06-13)
 
 
