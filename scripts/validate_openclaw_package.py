@@ -380,6 +380,7 @@ def validate_source(root: Path) -> None:
         "tinyhat_secrets_manage",
         "tinyhat_computer",
         "tinyhat_software",
+        "tinyhat_subscriptions",
         "tinyhat_terminal",
     ):
         require(f'name: "{command}"' in source, f"src/index.js missing command {command}")
