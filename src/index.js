@@ -9,18 +9,11 @@ import {
   formatSoftwareUpdatesReply,
 } from "./presentation_helpers.js";
 import {
-  buildSubscriptionLinkFailureReply,
-  buildSubscriptionLinkReply,
-  buildSubscriptionPrerequisiteHelpReply,
-  buildSubscriptionRevertFailureReply,
-  buildSubscriptionRevertReply,
-  finalizeSubscriptionLinkReply,
-  finalizeSubscriptionPrerequisiteHelpReply,
-} from "./subscription_builders.js";
-import {
-  revertChatgptSubscriptionAuth,
-  startChatgptSubscriptionLink,
-} from "./subscriptions.js";
+  buildSubscriptionRevertCommandReply,
+  handleSubscriptionCommand,
+  sendSubscriptionPrerequisiteHelpReply,
+  startAndSendSubscriptionLinkReply,
+} from "./subscription_commands.js";
 import {
   buildComputerAuthFailureSupportGuidance,
   isMalformedComputerAuthError,
@@ -29,8 +22,6 @@ import {
 import {
   markTelegramDelivered,
   sendTelegramMiniAppButton,
-  sendTelegramPhoto,
-  sendTelegramText,
 } from "./telegram_delivery.js";
 import { jsonToolResult } from "./tool_results.js";
 
@@ -352,18 +343,12 @@ const plugin = defineToolPlugin({
         execute: async (_toolCallId, _params, signal) => {
           const runtime = resolveExecutionRuntime(config, { signal });
           runtime.signal?.throwIfAborted?.();
-          const reply = buildSubscriptionPrerequisiteHelpReply();
-          const photoDelivery = await sendTelegramPhoto({
-            api,
-            toolContext,
-            photoUrl: reply.channelData.telegram.photo_url,
-            caption: reply.channelData.telegram.photo_caption,
-            signal: runtime.signal,
-          });
-          // The finalizer is the only place delivery-state claims are
-          // made: success → "already sent"; failure → recovery guidance.
           return jsonToolResult(
-            finalizeSubscriptionPrerequisiteHelpReply(reply, photoDelivery),
+            await sendSubscriptionPrerequisiteHelpReply({
+              api,
+              toolContext,
+              signal: runtime.signal,
+            }),
           );
         },
       }),
@@ -391,47 +376,12 @@ const plugin = defineToolPlugin({
           // poll the backend for the URL+code result.
           const boundCall = (path, init, sig) =>
             callTinyhat(runtime.config, path, init, sig);
-          let session;
-          try {
-            session = await startChatgptSubscriptionLink({
+          return jsonToolResult(
+            await startAndSendSubscriptionLinkReply({
               callTinyhat: boundCall,
-              signal: runtime.signal,
-            });
-          } catch (err) {
-            return jsonToolResult(buildSubscriptionLinkFailureReply(err));
-          }
-          const reply = buildSubscriptionLinkReply(session);
-          // Send the URL-button intro first so the user sees the
-          // "Sign in to ChatGPT" tap target right after the prerequisite
-          // walkthrough.
-          const buttonDelivery = await sendTelegramMiniAppButton({
-            api,
-            toolContext,
-            reply,
-            text: reply.text,
-            signal: runtime.signal,
-          });
-          // Only attempt the bare-code bubble when the button reached the
-          // user — a lone code bubble with no verification button would
-          // just confuse them. The finalizer turns each outcome into an
-          // accurate reply (success → "already sent"; code-fail → tell the
-          // agent to paste the code; button-fail → tell the user to retry).
-          let codeDelivery = { sent: false, reason: "skipped_button_not_sent" };
-          if (buttonDelivery?.sent) {
-            // The device code lands as its own bare bubble — long-press →
-            // Copy on mobile then captures only the 9 characters (#108).
-            codeDelivery = await sendTelegramText({
               api,
               toolContext,
-              text:
-                reply.channelData?.telegram?.followup_text || session.userCode,
               signal: runtime.signal,
-            });
-          }
-          return jsonToolResult(
-            finalizeSubscriptionLinkReply(reply, {
-              buttonDelivery,
-              codeDelivery,
             }),
           );
         },
@@ -449,15 +399,10 @@ const plugin = defineToolPlugin({
         runtime.signal?.throwIfAborted?.();
         const boundCall = (path, init, sig) =>
           callTinyhat(runtime.config, path, init, sig);
-        try {
-          const result = await revertChatgptSubscriptionAuth({
-            callTinyhat: boundCall,
-            signal: runtime.signal,
-          });
-          return buildSubscriptionRevertReply(result);
-        } catch (err) {
-          return buildSubscriptionRevertFailureReply(err);
-        }
+        return buildSubscriptionRevertCommandReply({
+          callTinyhat: boundCall,
+          signal: runtime.signal,
+        });
       },
     }),
   ],
@@ -546,6 +491,29 @@ plugin.register = (api) => {
     handler: async () => {
       const payload = await fetchManageComputerLink(platformConfig);
       return formatSoftwareUpdatesReply(payload);
+    },
+  });
+
+  api.registerCommand({
+    name: "tinyhat_subscriptions",
+    nativeNames: { default: "tinyhat_subscriptions" },
+    description: "Connect ChatGPT subscription or revert to Tinyhat credits.",
+    channels: ["telegram"],
+    acceptsArgs: true,
+    agentPromptGuidance: [
+      "Use /tinyhat_subscriptions help, prerequisite, link, or revert for ChatGPT subscription flows.",
+    ],
+    handler: async (ctx) => {
+      const runtime = resolveExecutionRuntime(platformConfig, ctx);
+      runtime.signal?.throwIfAborted?.();
+      const boundCall = (path, init, signal) =>
+        callTinyhat(runtime.config, path, init, signal);
+      return handleSubscriptionCommand({
+        api,
+        ctx,
+        callTinyhat: boundCall,
+        signal: runtime.signal,
+      });
     },
   });
 

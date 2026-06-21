@@ -25,6 +25,7 @@ import {
   CHATGPT_LINK_POLL_TIMEOUT_MS,
   startChatgptSubscriptionLink,
 } from "../src/subscriptions.js";
+import { handleSubscriptionCommand } from "../src/subscription_commands.js";
 import { jsonToolResult } from "../src/tool_results.js";
 
 const REPO_ROOT = path.resolve(
@@ -385,17 +386,12 @@ test("ChatGPT subscription factory tools return OpenClaw JSON tool results", () 
 
   assert.match(
     entrypoint,
-    /return jsonToolResult\(\s*finalizeSubscriptionPrerequisiteHelpReply/s,
+    /return jsonToolResult\(\s*await sendSubscriptionPrerequisiteHelpReply/s,
     "prerequisite-help factory tool must not return a raw object",
   );
   assert.match(
     entrypoint,
-    /return jsonToolResult\(buildSubscriptionLinkFailureReply\(err\)\)/,
-    "subscription-link failure path must include content[]",
-  );
-  assert.match(
-    entrypoint,
-    /return jsonToolResult\(\s*finalizeSubscriptionLinkReply/s,
+    /return jsonToolResult\(\s*await startAndSendSubscriptionLinkReply/s,
     "subscription-link success path must include content[]",
   );
 });
@@ -475,6 +471,86 @@ test("openclaw.plugin.json registers the new prerequisite-help tool + operation"
   );
   assert.ok(linkOp);
   assert.equal(linkOp.userSurface, "telegram_url_button_plus_bare_code_bubble");
+});
+
+test("subscription slash command stays registered for the platform contract", () => {
+  const entrypoint = readFileSync(path.join(REPO_ROOT, "src/index.js"), "utf8");
+
+  assert.match(entrypoint, /api\.registerCommand\(\{\s*name: "tinyhat_subscriptions"/s);
+  assert.match(entrypoint, /handleSubscriptionCommand\(\{/);
+  assert.match(entrypoint, /callTinyhat\(runtime\.config, path, init, signal\)/);
+});
+
+test("subscription slash command sends button plus code before returning finalized reply", async () => {
+  const platformPaths = [];
+  const telegramCalls = [];
+  const reply = await handleSubscriptionCommand({
+    api: {},
+    ctx: {
+      args: "link",
+      deliveryContext: {
+        channel: "telegram",
+        to: "telegram:101216939",
+        accountId: "default",
+      },
+      config: { channels: { telegram: { botToken: "123:token" } } },
+    },
+    callTinyhat: async (path, init) => {
+      platformPaths.push({ path, method: init?.method });
+      if (path.endsWith("/subscription-link/start")) {
+        return { status: "pending", session_id: "session-1" };
+      }
+      assert.ok(path.endsWith("/subscription-link/status"));
+      return {
+        status: "pending",
+        pending_session: {
+          session_id: "session-1",
+          verification_url: "https://auth.openai.com/command-test",
+          user_code: "SZ85-LWNTP",
+        },
+      };
+    },
+    fetchImpl: async (url, init) => {
+      const body = JSON.parse(init.body);
+      telegramCalls.push({ url, body });
+      return {
+        ok: true,
+        status: 200,
+        json: async () => ({
+          ok: true,
+          result: {
+            message_id: telegramCalls.length,
+            chat: { id: 101216939 },
+          },
+        }),
+      };
+    },
+  });
+
+  assert.deepEqual(platformPaths, [
+    { path: "/hapi/v1/computers/me/subscription-link/start", method: "POST" },
+    { path: "/hapi/v1/computers/me/subscription-link/status", method: "GET" },
+  ]);
+  assert.equal(telegramCalls.length, 2);
+  assert.equal(
+    telegramCalls[0].url,
+    "https://api.telegram.org/bot123:token/sendMessage",
+  );
+  assert.deepEqual(telegramCalls[0].body.reply_markup.inline_keyboard, [
+    [{ text: "Sign in to ChatGPT", url: "https://auth.openai.com/command-test" }],
+  ]);
+  assert.equal(telegramCalls[1].body.text, "SZ85-LWNTP");
+  assert.equal(telegramCalls[1].body.reply_markup, undefined);
+
+  assert.equal(reply.delivered, true);
+  assert.equal(reply.code_delivered, true);
+  assert.equal(reply.user_code, "SZ85-LWNTP");
+  assert.equal(reply.verification_url, undefined);
+  assert.equal(reply.channelData, undefined);
+  assert.ok(
+    !JSON.stringify(reply).includes("https://auth.openai.com/command-test"),
+    "command reply must not expose the raw verification URL after delivery",
+  );
 });
 
 test("subscription SKILL.md routes the prerequisite-help tool and documents the delivery markers", () => {
