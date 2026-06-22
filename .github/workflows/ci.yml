@@ -15,7 +15,7 @@ jobs:
     name: packaging-guard
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
 
       - name: Dev-only assets stay out of packaged plugin surfaces
         run: bash .github/scripts/check_packaging.sh
@@ -27,7 +27,7 @@ jobs:
     name: lint
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
 
       - name: Set up Python
         uses: actions/setup-python@v6
@@ -53,7 +53,7 @@ jobs:
         os: [ubuntu-latest, macos-latest]
         python-version: ["3.9", "3.11", "3.12"]
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
 
       - name: Set up Python ${{ matrix.python-version }}
         uses: actions/setup-python@v6
@@ -96,7 +96,7 @@ jobs:
       # context is not available in job-level env.
       OPENCLAW_STATE_DIR: /tmp/openclaw-ci-state
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
 
       - uses: actions/setup-node@v6
         with:
