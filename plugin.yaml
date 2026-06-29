@@ -1,8 +1,9 @@
 name: tinyhat
-version: 0.20.3
+version: 0.20.4
 description: Framework-neutral Tinyhat platform skills and tools.
 kind: plugin
 author: Tinyloop
 provides_tools:
   - tinyhat_plugin_version
   - tinyhat_tell_joke
+  - tinyhat_private_secret_handoff

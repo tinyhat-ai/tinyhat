@@ -6,6 +6,8 @@ import json
 from pathlib import Path
 from typing import Any
 
+from .secret_handoff import start_private_secret_handoff
+
 
 def plugin_version_payload() -> dict[str, str]:
     """Return the version of the Tinyhat plugin code currently loaded."""
@@ -49,3 +51,8 @@ def tell_joke(args: dict[str, Any] | None = None, **_: Any) -> str:
         },
         sort_keys=True,
     )
+
+
+def private_secret_handoff(args: dict[str, Any] | None = None, **kwargs: Any) -> str:
+    """Start a blind private-secret handoff through the Tinyhat platform."""
+    return start_private_secret_handoff(args, **kwargs)

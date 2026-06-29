@@ -45,3 +45,17 @@ become the platform or the runtime.
 Future skills will call named platform capabilities through the
 Computer's attested identity. They should not paste raw backend URLs or
 ask users for secrets in chat.
+
+## Secret Handoff Pattern
+
+The plugin can start a private secret handoff without expanding the
+runtime. The platform exposes a versioned handoff API. The Computer calls
+that API with its attested identity, the plugin skill gives the user a
+Telegram Mini App button, and the browser encrypts the secret value before
+it reaches Tinyhat.
+
+This pattern keeps responsibilities narrow:
+
+- the platform owns authorization and stores short-lived ciphertext;
+- the plugin owns the agent-facing instruction and tool;
+- the runtime stays focused on identity, heartbeat, and installation.

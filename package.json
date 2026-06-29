@@ -1,12 +1,14 @@
 {
   "name": "tinyhat",
-  "version": "0.20.3",
+  "version": "0.20.4",
   "description": "Hermes plugin that teaches agents how to use Tinyhat platform capabilities.",
   "private": true,
   "files": [
     "plugin.yaml",
     "hermes.plugin.json",
     "__init__.py",
+    "platform.py",
+    "secret_handoff.py",
     "schemas.py",
     "tools.py",
     "skills",

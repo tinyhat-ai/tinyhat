@@ -6,10 +6,21 @@ The current capability list is intentionally small.
 | --- | --- | --- |
 | `tinyhat_plugin_version` | Available now | Proves which Tinyhat plugin version Hermes has loaded for the live agent. |
 | `tinyhat_tell_joke` | Available now | Proves Hermes loaded the Tinyhat plugin and can call a plugin tool. |
+| `tinyhat_private_secret_handoff` | Available now | Lets a user enter a secret in a Telegram Mini App while Tinyhat stores only short-lived ciphertext. |
 
-The next capabilities will be added one at a time. Each one should be
-visible in this document, represented by a small tool or skill, and
-covered by validation.
+Each capability should be visible in this document, represented by a small
+tool or skill, and covered by validation.
+
+## Private Secret Handoff
+
+This capability is used when the user wants to save an API key, token,
+password, or credential for their agent.
+
+The agent must not ask for the secret in chat. Instead, it calls
+`tinyhat_private_secret_handoff`. The Computer creates a temporary key
+pair, the Mini App encrypts the entered value with the public key, and the
+Computer decrypts the submitted ciphertext with the temporary private key.
+Tinyhat stores only ciphertext during the short handoff window.
 
 ## Capability Rules
 
@@ -19,3 +30,5 @@ covered by validation.
   Computer identity provided by the runtime.
 - Secrets, signed URLs, and private platform endpoints must not be
   printed into chat.
+- Secret values must be entered in dedicated user-facing flows, not chat
+  messages or skill instructions.

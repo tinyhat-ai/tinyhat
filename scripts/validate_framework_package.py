@@ -10,9 +10,21 @@ from pathlib import Path
 
 
 VERSION_SHAPE = re.compile(r"^\d+\.\d+\.\d+$")
-REQUIRED_TOOLS = ["tinyhat_plugin_version", "tinyhat_tell_joke"]
-REQUIRED_COMMANDS = ["tinyhat_joke", "tinyhat_plugin_version"]
-REQUIRED_SKILLS = ["tinyhat-plugin-version", "tinyhat-tell-joke"]
+REQUIRED_TOOLS = [
+    "tinyhat_plugin_version",
+    "tinyhat_tell_joke",
+    "tinyhat_private_secret_handoff",
+]
+REQUIRED_COMMANDS = [
+    "tinyhat_joke",
+    "tinyhat_plugin_version",
+    "tinyhat_secret",
+]
+REQUIRED_SKILLS = [
+    "tinyhat-plugin-version",
+    "tinyhat-tell-joke",
+    "tinyhat-private-secret",
+]
 FORBIDDEN_PATHS = (
     "openclaw.plugin.json",
     "src",
@@ -23,7 +35,6 @@ FORBIDDEN_PATHS = (
 FORBIDDEN_TEXT = (
     "CLAUDE_PLUGIN_DATA",
     "ChatGPT subscription",
-    "Mini App URL",
 )
 
 
@@ -103,7 +114,15 @@ def validate_hermes_adapter(root: Path) -> None:
     require(isinstance(framework, dict), "framework must be an object")
     require(framework.get("name") == "hermes", "framework.name must be hermes")
 
-    for rel in ("plugin.yaml", "hermes.plugin.json", "__init__.py", "schemas.py", "tools.py"):
+    for rel in (
+        "plugin.yaml",
+        "hermes.plugin.json",
+        "__init__.py",
+        "schemas.py",
+        "tools.py",
+        "platform.py",
+        "secret_handoff.py",
+    ):
         require((root / rel).is_file(), f"{rel} is missing")
 
     entrypoint = hermes.get("entrypoint")
@@ -116,7 +135,7 @@ def validate_hermes_adapter(root: Path) -> None:
     require(isinstance(provided_tools, list), "plugin.yaml provides_tools must be a list")
     require(
         provided_tools == REQUIRED_TOOLS,
-        "plugin.yaml must provide only the Tinyhat proof tools",
+        "plugin.yaml provided tools drift",
     )
 
     source = (root / "__init__.py").read_text(encoding="utf-8")
@@ -130,6 +149,7 @@ def validate_hermes_adapter(root: Path) -> None:
     expected_skill_paths = {
         "tinyhat-plugin-version": "skills/tinyhat-plugin-version/SKILL.md",
         "tinyhat-tell-joke": "skills/tinyhat-tell-joke/SKILL.md",
+        "tinyhat-private-secret": "skills/tinyhat-private-secret/SKILL.md",
     }
     for skill in skills:
         require(isinstance(skill, dict), "skill declaration must be an object")
@@ -159,7 +179,10 @@ def validate_fresh_surface(root: Path) -> None:
         require(not (root / rel).exists(), f"{rel} must not exist in this fresh Hermes branch")
 
     skill_dirs = sorted(path.name for path in (root / "skills").iterdir() if path.is_dir())
-    require(skill_dirs == REQUIRED_SKILLS, "only Tinyhat proof skills may exist under skills/")
+    require(
+        skill_dirs == sorted(REQUIRED_SKILLS),
+        "skills directory does not match the Tinyhat public capability set",
+    )
 
     checked_roots = [
         root / "README.md",
@@ -172,6 +195,8 @@ def validate_fresh_surface(root: Path) -> None:
         root / "plugin.yaml",
         root / "hermes.plugin.json",
         root / "__init__.py",
+        root / "platform.py",
+        root / "secret_handoff.py",
         root / "schemas.py",
         root / "tools.py",
     ]
@@ -195,6 +220,7 @@ def validate_docs(root: Path) -> None:
             "Hermes only",
             "tinyhat-tell-joke",
             "tinyhat-plugin-version",
+            "tinyhat-private-secret",
             "channels/lts",
             "channels/latest",
         ),

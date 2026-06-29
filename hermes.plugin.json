@@ -1,6 +1,6 @@
 {
   "schema": "tinyhat.framework-adapter.v1",
-  "version": "0.20.3",
+  "version": "0.20.4",
   "framework": {
     "name": "hermes",
     "minimum": "0.0.0"
@@ -20,6 +20,11 @@
       "name": "tinyhat-tell-joke",
       "path": "skills/tinyhat-tell-joke/SKILL.md",
       "purpose": "Simple wiring proof that a Hermes agent can discover Tinyhat plugin skills."
+    },
+    {
+      "name": "tinyhat-private-secret",
+      "path": "skills/tinyhat-private-secret/SKILL.md",
+      "purpose": "Starts a private browser-encrypted secret handoff to the assigned Computer."
     }
   ],
   "tools": [
@@ -32,6 +37,11 @@
       "name": "tinyhat_tell_joke",
       "handler": "tools.tell_joke",
       "skill": "tinyhat-tell-joke"
+    },
+    {
+      "name": "tinyhat_private_secret_handoff",
+      "handler": "tools.private_secret_handoff",
+      "skill": "tinyhat-private-secret"
     }
   ],
   "commands": [
@@ -44,6 +54,11 @@
       "name": "tinyhat_plugin_version",
       "tool": "tinyhat_plugin_version",
       "purpose": "Human-visible proof of the Tinyhat plugin version loaded by Hermes."
+    },
+    {
+      "name": "tinyhat_secret",
+      "tool": "tinyhat_private_secret_handoff",
+      "purpose": "Human-visible test path for creating a private secret handoff."
     }
   ],
   "release": {

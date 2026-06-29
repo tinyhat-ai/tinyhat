@@ -9,11 +9,11 @@ the part that can evolve faster. It adds the agent-facing skills and tools
 that explain how to use Tinyhat platform capabilities without exposing
 private platform URLs, machine credentials, bot tokens, or tenant data.
 
-For the first v0.20 version, this repo is deliberately tiny. It supports
-Hermes only, and it ships two proof skills: a small joke command used to
-prove that the plugin is installed and discoverable from a real agent
-chat, and a version command used to prove which plugin code Hermes is
-actually running.
+For the first v0.20 version, this repo is deliberately small. It supports
+Hermes only, ships two proof skills, and now includes the first real
+Tinyhat platform capability: a private secret handoff that lets the user
+enter a secret in a Telegram Mini App without sending the plaintext to
+Tinyhat's servers.
 
 ## What This Plugin Does
 
@@ -22,9 +22,10 @@ actually running.
 | `plugin.yaml` | Hermes plugin manifest. |
 | `__init__.py` | Hermes registration entrypoint. |
 | `hermes.plugin.json` | Tinyhat metadata for the Hermes adapter, skill, command, and release channels. |
-| `tools.py` / `schemas.py` | The first tiny tools: `tinyhat_tell_joke` and `tinyhat_plugin_version`. |
+| `tools.py` / `schemas.py` | Tinyhat tools: plugin version, joke proof, and private secret handoff. |
 | `skills/tinyhat-tell-joke/SKILL.md` | Deterministic joke proof. |
 | `skills/tinyhat-plugin-version/SKILL.md` | Live plugin version proof. |
+| `skills/tinyhat-private-secret/SKILL.md` | Browser-encrypted secret handoff guidance. |
 | `docs/skill-authoring.md` | The standard for future Tinyhat skills. |
 | `RELEASING.md` | How releases and `channels/lts` / `channels/latest` work. |
 
@@ -50,7 +51,7 @@ That separation matters:
 - Users can inspect which skills and tools are being installed.
 - Privileged actions can stay behind platform APIs and Telegram buttons.
 
-## Current Skill
+## Current Skills
 
 `tinyhat-tell-joke` is a wiring proof. When the user asks whether the
 Tinyhat plugin is available, or asks for a joke, the agent can call
@@ -61,6 +62,14 @@ whole installation path before adding real platform capabilities.
 Tinyhat plugin version is running, the agent can call
 `tinyhat_plugin_version`. The answer comes from the plugin code loaded by
 Hermes, not from admin metadata or a GitHub branch name.
+
+`tinyhat-private-secret` is the first real capability. When the user asks
+to save an API key, token, password, or credential, the agent calls
+`tinyhat_private_secret_handoff`. The Computer creates a one-time key
+pair, the user enters the value in a Telegram Mini App, the browser
+encrypts the value with the public key, and the Computer decrypts it with
+the temporary private key. Tinyhat stores only short-lived ciphertext for
+the handoff and wipes it after completion, expiration, or failure.
 
 ## Installing
 
@@ -82,7 +91,7 @@ For development or manual testing, use `channels/latest` or an exact tag:
 
 ```bash
 TINYHAT_PLUGIN_REF=channels/latest
-TINYHAT_PLUGIN_REF=v0.20.3
+TINYHAT_PLUGIN_REF=v0.20.4
 ```
 
 ## Channels
@@ -107,9 +116,6 @@ python3 -m compileall -q .
 
 ## Roadmap
 
-The next skills will teach agents how to use Tinyhat platform
-capabilities through attested APIs. Examples include opening safe
-Telegram buttons for secrets, showing Computer status, and reporting
-support diagnostics. Those will be added one skill at a time, with the
-same goal as this first branch: small, inspectable files that make the
-agent more capable without hiding what is happening.
+The next skills will continue this pattern: small, inspectable plugin
+tools that call versioned Tinyhat platform APIs through the Computer's
+attested identity. Runtime code should stay boring and stable.
