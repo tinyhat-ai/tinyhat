@@ -39,8 +39,8 @@ class FakeHermesContext:
     def register_tool(self, **kwargs) -> None:
         self.tools[kwargs["name"]] = kwargs
 
-    def register_command(self, **kwargs) -> None:
-        self.commands[kwargs["name"]] = kwargs
+    def register_command(self, name: str, handler, **kwargs) -> None:
+        self.commands[name] = {"name": name, "handler": handler, **kwargs}
 
     def register_skill(self, name: str, skill_md: Path) -> None:
         self.skills[name] = skill_md

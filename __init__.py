@@ -60,21 +60,18 @@ def register(ctx: Any) -> None:
         handler=tools.private_secret_handoff,
     )
     ctx.register_command(
-        name="tinyhat_joke",
-        handler=_joke_command_handler,
+        "tinyhat_joke",
+        _joke_command_handler,
         description="Tell a short Tinyhat plugin wiring-test joke.",
-        args_hint="[topic]",
     )
     ctx.register_command(
-        name="tinyhat_plugin_version",
-        handler=_plugin_version_command_handler,
+        "tinyhat_plugin_version",
+        _plugin_version_command_handler,
         description="Show the Tinyhat plugin version currently loaded in Hermes.",
-        args_hint="",
     )
     ctx.register_command(
-        name="tinyhat_secret",
-        handler=_private_secret_command_handler,
+        "tinyhat_secret",
+        _private_secret_command_handler,
         description="Start a secure Tinyhat Mini App handoff for a secret.",
-        args_hint="SECRET_NAME [description]",
     )
     _register_skills(ctx)

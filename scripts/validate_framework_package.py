@@ -94,6 +94,10 @@ def validate_versions(root: Path) -> str:
     package = read_json(root / "package.json")
     hermes = read_json(root / "hermes.plugin.json")
     yaml_data = read_plugin_yaml(root)
+    require(
+        yaml_data.get("kind") == "standalone",
+        "plugin.yaml kind must be standalone for Hermes",
+    )
     version = package.get("version")
     require(isinstance(version, str), "package.json version must be a string")
     require(VERSION_SHAPE.fullmatch(version) is not None, "version must be shaped X.Y.Z")
