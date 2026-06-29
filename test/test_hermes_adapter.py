@@ -138,9 +138,12 @@ class HermesAdapterTests(unittest.TestCase):
             "/hapi/v1/computers/local-dev/private-secret-handoffs/v1",
         )
         self.assertEqual(fake_client.payload["name"], "GITHUB_TOKEN")
-        self.assertIn("secure entry button", reply)
+        self.assertIn("Tap Enter secret", reply)
         self.assertIn("GITHUB_TOKEN", reply)
-        self.assertIn("will not receive or store the plaintext", reply)
+        self.assertIn("within about 5 minutes", reply)
+        self.assertIn("never sees the plaintext", reply)
+        self.assertNotIn("Expires", reply)
+        self.assertNotIn("waiting_for_user", reply)
         self.assertFalse(reply.strip().startswith("{"))
 
     def test_private_secret_handoff_infers_name_from_user_wording(self) -> None:

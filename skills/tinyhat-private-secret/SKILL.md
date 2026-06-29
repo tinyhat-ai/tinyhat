@@ -18,8 +18,8 @@ handoff instead:
 2. Add a short plain-English description that helps the user remember
    why the secret exists.
 3. Call `tinyhat_private_secret_handoff` with `name` and `description`.
-4. Show the returned secure Mini App button/link and explain that the
-   user has about five minutes to enter the value.
+4. Let the returned message stand. Tinyhat already sends the secure
+   button.
 
 Do not use generic names such as `TINYHAT_SECRET`, `SECRET`, `API_KEY`,
 `TOKEN`, `PASSWORD`, or `CREDENTIAL`. If the provider or purpose is not
@@ -46,7 +46,9 @@ key pair. The Tinyhat page encrypts the secret in the user's browser
 with the public key, and this Computer decrypts it with the temporary
 private key. Tinyhat stores only encrypted ciphertext during the handoff.
 
-If the handoff expires, ask the user whether to create a new secure
+If the entry window expires, ask the user whether to create a new secure
 link. Do not reuse old links.
 
-Keep the chat response short. The button is the main action.
+Keep the chat response short. Do not render a table, exact expiration
+timestamp, status field, raw URL, JSON payload, or extra explanation. The
+button is the main action.

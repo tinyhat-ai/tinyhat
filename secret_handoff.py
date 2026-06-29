@@ -98,8 +98,8 @@ def start_private_secret_handoff(
     worker.start()
     shown_name = str(handoff.get("secret_name") or secret_name)
     return (
-        f"I sent the secure entry button for `{shown_name}`. "
-        "Paste the value there; Tinyhat will not receive or store the plaintext."
+        f"Tap Enter secret and paste the `{shown_name}` value within about "
+        "5 minutes. Tinyhat never sees the plaintext."
     )
 
 
