@@ -10,8 +10,10 @@ that explain how to use Tinyhat platform capabilities without exposing
 private platform URLs, machine credentials, bot tokens, or tenant data.
 
 For the first v0.20 version, this repo is deliberately tiny. It supports
-Hermes only, and it ships one skill: a small joke command used to prove
-that the plugin is installed and discoverable from a real agent chat.
+Hermes only, and it ships two proof skills: a small joke command used to
+prove that the plugin is installed and discoverable from a real agent
+chat, and a version command used to prove which plugin code Hermes is
+actually running.
 
 ## What This Plugin Does
 
@@ -20,8 +22,9 @@ that the plugin is installed and discoverable from a real agent chat.
 | `plugin.yaml` | Hermes plugin manifest. |
 | `__init__.py` | Hermes registration entrypoint. |
 | `hermes.plugin.json` | Tinyhat metadata for the Hermes adapter, skill, command, and release channels. |
-| `tools.py` / `schemas.py` | The first tiny tool: `tinyhat_tell_joke`. |
-| `skills/tinyhat-tell-joke/SKILL.md` | The one packaged skill in this first branch. |
+| `tools.py` / `schemas.py` | The first tiny tools: `tinyhat_tell_joke` and `tinyhat_plugin_version`. |
+| `skills/tinyhat-tell-joke/SKILL.md` | Deterministic joke proof. |
+| `skills/tinyhat-plugin-version/SKILL.md` | Live plugin version proof. |
 | `docs/skill-authoring.md` | The standard for future Tinyhat skills. |
 | `RELEASING.md` | How releases and `channels/lts` / `channels/latest` work. |
 
@@ -54,6 +57,11 @@ Tinyhat plugin is available, or asks for a joke, the agent can call
 `tinyhat_tell_joke`. The result is intentionally simple so we can test the
 whole installation path before adding real platform capabilities.
 
+`tinyhat-plugin-version` is the update proof. When the user asks which
+Tinyhat plugin version is running, the agent can call
+`tinyhat_plugin_version`. The answer comes from the plugin code loaded by
+Hermes, not from admin metadata or a GitHub branch name.
+
 ## Installing
 
 Tinyhat-managed Hermes Computers install from the LTS channel by default:
@@ -74,7 +82,7 @@ For development or manual testing, use `channels/latest` or an exact tag:
 
 ```bash
 TINYHAT_PLUGIN_REF=channels/latest
-TINYHAT_PLUGIN_REF=v0.20.1
+TINYHAT_PLUGIN_REF=v0.20.2
 ```
 
 ## Channels
@@ -83,7 +91,7 @@ TINYHAT_PLUGIN_REF=v0.20.1
 | --- | --- |
 | `channels/lts` | Conservative default for managed Computers. |
 | `channels/latest` | Newest promoted final version, used when we want faster adoption. |
-| exact tag, for example `v0.20.1` | Immutable version for tests, rollbacks, and audits. |
+| exact tag, for example `v0.20.2` | Immutable version for tests, rollbacks, and audits. |
 
 During the v0.20 build-out, both channels may point at this reviewed
 branch so Computers can install the fresh Hermes plugin shape before it

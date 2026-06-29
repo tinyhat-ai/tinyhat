@@ -4,6 +4,7 @@ The current capability list is intentionally small.
 
 | Capability | Status | Why it exists |
 | --- | --- | --- |
+| `tinyhat_plugin_version` | Available now | Proves which Tinyhat plugin version Hermes has loaded for the live agent. |
 | `tinyhat_tell_joke` | Available now | Proves Hermes loaded the Tinyhat plugin and can call a plugin tool. |
 
 The next capabilities will be added one at a time. Each one should be

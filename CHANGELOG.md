@@ -12,5 +12,7 @@ All notable changes to the Tinyhat plugin are documented here.
   plugin wiring proof.
 - Make the first proof tool tolerate Hermes dispatcher metadata such as
   `task_id`, so it works from the first live agent interaction.
+- Add `tinyhat-plugin-version` and `tinyhat_plugin_version` so a live
+  Hermes agent can report the plugin version it is actually running.
 - Document `channels/lts` and `channels/latest` as the install channels
   used by Tinyhat-managed Hermes Computers.

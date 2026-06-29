@@ -1,6 +1,6 @@
 {
   "schema": "tinyhat.framework-adapter.v1",
-  "version": "0.20.1",
+  "version": "0.20.2",
   "framework": {
     "name": "hermes",
     "minimum": "0.0.0"
@@ -12,12 +12,22 @@
   },
   "skills": [
     {
+      "name": "tinyhat-plugin-version",
+      "path": "skills/tinyhat-plugin-version/SKILL.md",
+      "purpose": "Reports the Tinyhat plugin version currently loaded by Hermes."
+    },
+    {
       "name": "tinyhat-tell-joke",
       "path": "skills/tinyhat-tell-joke/SKILL.md",
       "purpose": "Simple wiring proof that a Hermes agent can discover Tinyhat plugin skills."
     }
   ],
   "tools": [
+    {
+      "name": "tinyhat_plugin_version",
+      "handler": "tools.plugin_version",
+      "skill": "tinyhat-plugin-version"
+    },
     {
       "name": "tinyhat_tell_joke",
       "handler": "tools.tell_joke",
@@ -29,6 +39,11 @@
       "name": "tinyhat_joke",
       "tool": "tinyhat_tell_joke",
       "purpose": "Human-visible slash-command smoke test for plugin loading."
+    },
+    {
+      "name": "tinyhat_plugin_version",
+      "tool": "tinyhat_plugin_version",
+      "purpose": "Human-visible proof of the Tinyhat plugin version loaded by Hermes."
     }
   ],
   "release": {

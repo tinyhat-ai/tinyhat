@@ -38,10 +38,21 @@ class HermesAdapterTests(unittest.TestCase):
 
         tinyhat.register(ctx)
 
+        self.assertIn("tinyhat_plugin_version", ctx.tools)
         self.assertIn("tinyhat_tell_joke", ctx.tools)
+        self.assertIn("tinyhat_plugin_version", ctx.commands)
         self.assertIn("tinyhat_joke", ctx.commands)
+        self.assertIn("tinyhat-plugin-version", ctx.skills)
         self.assertIn("tinyhat-tell-joke", ctx.skills)
+        self.assertTrue(ctx.skills["tinyhat-plugin-version"].is_file())
         self.assertTrue(ctx.skills["tinyhat-tell-joke"].is_file())
+
+    def test_plugin_version_returns_live_manifest_version(self) -> None:
+        payload = json.loads(tools.plugin_version())
+
+        self.assertEqual(payload["schema"], "tinyhat_plugin_version_v1")
+        self.assertEqual(payload["name"], "tinyhat")
+        self.assertEqual(payload["version"], "0.20.2")
 
     def test_tell_joke_returns_stable_json(self) -> None:
         payload = json.loads(tools.tell_joke({"topic": "Hermes"}))

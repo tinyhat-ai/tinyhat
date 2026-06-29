@@ -10,9 +10,9 @@ from pathlib import Path
 
 
 VERSION_SHAPE = re.compile(r"^\d+\.\d+\.\d+$")
-REQUIRED_TOOL = "tinyhat_tell_joke"
-REQUIRED_COMMAND = "tinyhat_joke"
-REQUIRED_SKILL = "tinyhat-tell-joke"
+REQUIRED_TOOLS = ["tinyhat_plugin_version", "tinyhat_tell_joke"]
+REQUIRED_COMMANDS = ["tinyhat_joke", "tinyhat_plugin_version"]
+REQUIRED_SKILLS = ["tinyhat-plugin-version", "tinyhat-tell-joke"]
 FORBIDDEN_PATHS = (
     "openclaw.plugin.json",
     "src",
@@ -114,7 +114,10 @@ def validate_hermes_adapter(root: Path) -> None:
 
     provided_tools = yaml_data.get("provides_tools")
     require(isinstance(provided_tools, list), "plugin.yaml provides_tools must be a list")
-    require(provided_tools == [REQUIRED_TOOL], "plugin.yaml must provide only tinyhat_tell_joke")
+    require(
+        provided_tools == REQUIRED_TOOLS,
+        "plugin.yaml must provide only the Tinyhat proof tools",
+    )
 
     source = (root / "__init__.py").read_text(encoding="utf-8")
     for phrase in ("ctx.register_tool", "ctx.register_skill", "ctx.register_command"):
@@ -122,34 +125,41 @@ def validate_hermes_adapter(root: Path) -> None:
 
     skills = hermes.get("skills")
     require(isinstance(skills, list), "hermes.plugin.json skills must be a list")
-    require(len(skills) == 1, "this branch must ship exactly one skill")
-    skill = skills[0]
-    require(isinstance(skill, dict), "skill declaration must be an object")
-    require(skill.get("name") == REQUIRED_SKILL, "only tinyhat-tell-joke is supported now")
-    require(
-        skill.get("path") == "skills/tinyhat-tell-joke/SKILL.md",
-        "tinyhat-tell-joke path drift",
-    )
-    require((root / "skills" / REQUIRED_SKILL / "SKILL.md").is_file(), "proof skill missing")
+    skill_names = [skill.get("name") for skill in skills if isinstance(skill, dict)]
+    require(skill_names == REQUIRED_SKILLS, "skill declaration drift")
+    expected_skill_paths = {
+        "tinyhat-plugin-version": "skills/tinyhat-plugin-version/SKILL.md",
+        "tinyhat-tell-joke": "skills/tinyhat-tell-joke/SKILL.md",
+    }
+    for skill in skills:
+        require(isinstance(skill, dict), "skill declaration must be an object")
+        name = skill.get("name")
+        require(
+            skill.get("path") == expected_skill_paths.get(str(name)),
+            f"{name} path drift",
+        )
+        require(
+            (root / str(skill.get("path"))).is_file(),
+            f"{name} proof skill missing",
+        )
 
     tools = hermes.get("tools")
     require(isinstance(tools, list), "hermes.plugin.json tools must be a list")
-    require(len(tools) == 1 and tools[0].get("name") == REQUIRED_TOOL, "tool declaration drift")
+    tool_names = [tool.get("name") for tool in tools if isinstance(tool, dict)]
+    require(tool_names == REQUIRED_TOOLS, "tool declaration drift")
 
     commands = hermes.get("commands")
     require(isinstance(commands, list), "hermes.plugin.json commands must be a list")
-    require(
-        len(commands) == 1 and commands[0].get("name") == REQUIRED_COMMAND,
-        "command declaration drift",
-    )
+    command_names = [command.get("name") for command in commands if isinstance(command, dict)]
+    require(command_names == REQUIRED_COMMANDS, "command declaration drift")
 
 
 def validate_fresh_surface(root: Path) -> None:
     for rel in FORBIDDEN_PATHS:
         require(not (root / rel).exists(), f"{rel} must not exist in this fresh Hermes branch")
 
-    skill_dirs = [path.name for path in (root / "skills").iterdir() if path.is_dir()]
-    require(skill_dirs == [REQUIRED_SKILL], "only tinyhat-tell-joke may exist under skills/")
+    skill_dirs = sorted(path.name for path in (root / "skills").iterdir() if path.is_dir())
+    require(skill_dirs == REQUIRED_SKILLS, "only Tinyhat proof skills may exist under skills/")
 
     checked_roots = [
         root / "README.md",
@@ -184,6 +194,7 @@ def validate_docs(root: Path) -> None:
             "teaches an agent what the Tinyhat",
             "Hermes only",
             "tinyhat-tell-joke",
+            "tinyhat-plugin-version",
             "channels/lts",
             "channels/latest",
         ),

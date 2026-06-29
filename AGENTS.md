@@ -21,7 +21,8 @@ a fresh Hermes-only start.
 - `__init__.py`: Hermes registration entrypoint.
 - `hermes.plugin.json`: Tinyhat adapter metadata.
 - `tools.py` and `schemas.py`: tiny public tool surface.
-- `skills/tinyhat-tell-joke/SKILL.md`: the only packaged skill for now.
+- `skills/tinyhat-tell-joke/SKILL.md`: deterministic joke proof.
+- `skills/tinyhat-plugin-version/SKILL.md`: live plugin version proof.
 
 ## Checks
 

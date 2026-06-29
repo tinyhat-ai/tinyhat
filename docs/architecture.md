@@ -19,14 +19,17 @@ tinyhat/
 |-- schemas.py
 |-- tools.py
 |-- skills/
+|   |-- tinyhat-plugin-version/
+|   |   `-- SKILL.md
 |   `-- tinyhat-tell-joke/
 |       `-- SKILL.md
 `-- docs/
 ```
 
-The first branch supports Hermes only. The single skill is a wiring
-proof: if an agent can call it from chat, we know the Computer installed
-the plugin and Hermes loaded it.
+The first branch supports Hermes only. Its proof skills are deliberately
+small: one reports the plugin version Hermes has actually loaded, and one
+tells a deterministic joke. If an agent can call them from chat, we know
+the Computer installed the plugin and Hermes loaded it.
 
 ## Boundary
 

@@ -3,7 +3,26 @@
 from __future__ import annotations
 
 import json
+from pathlib import Path
 from typing import Any
+
+
+def plugin_version_payload() -> dict[str, str]:
+    """Return the version of the Tinyhat plugin code currently loaded."""
+    manifest_path = Path(__file__).resolve().parent / "hermes.plugin.json"
+    manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+    version = str(manifest.get("version") or "unknown").strip() or "unknown"
+    return {
+        "schema": "tinyhat_plugin_version_v1",
+        "name": "tinyhat",
+        "version": version,
+    }
+
+
+def plugin_version(args: dict[str, Any] | None = None, **_: Any) -> str:
+    """Hermes tool handler for reporting the loaded Tinyhat plugin version."""
+    _ = args
+    return json.dumps(plugin_version_payload(), sort_keys=True)
 
 
 def joke_text(topic: str | None = None) -> str:

@@ -30,7 +30,11 @@ description: Tell a short Tinyhat wiring-test joke when the user asks for proof 
   machine paths.
 - Do not ask the user to paste secret values in chat.
 
-## Current Skill
+## Current Skills
 
 `tinyhat-tell-joke` is intentionally small. It proves the plugin is
 installed before we add real Tinyhat platform capabilities.
+
+`tinyhat-plugin-version` proves which plugin version Hermes is actually
+running. Use it for update tests so we do not confuse admin metadata with
+the live plugin code loaded in an agent session.

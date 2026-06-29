@@ -8,9 +8,15 @@ from typing import Any
 from . import schemas, tools
 
 
-def _command_handler(raw_args: str = "") -> str:
+def _joke_command_handler(raw_args: str = "") -> str:
     topic = raw_args.strip() or None
     return tools.joke_text(topic)
+
+
+def _plugin_version_command_handler(raw_args: str = "") -> str:
+    _ = raw_args
+    payload = tools.plugin_version_payload()
+    return f"Tinyhat plugin {payload['version']} is loaded in Hermes."
 
 
 def _register_skills(ctx: Any) -> list[str]:
@@ -27,6 +33,12 @@ def _register_skills(ctx: Any) -> list[str]:
 def register(ctx: Any) -> None:
     """Register Tinyhat skills and the first Hermes smoke-test tool."""
     ctx.register_tool(
+        name="tinyhat_plugin_version",
+        toolset="tinyhat",
+        schema=schemas.TINYHAT_PLUGIN_VERSION_SCHEMA,
+        handler=tools.plugin_version,
+    )
+    ctx.register_tool(
         name="tinyhat_tell_joke",
         toolset="tinyhat",
         schema=schemas.TINYHAT_TELL_JOKE_SCHEMA,
@@ -34,8 +46,14 @@ def register(ctx: Any) -> None:
     )
     ctx.register_command(
         name="tinyhat_joke",
-        handler=_command_handler,
+        handler=_joke_command_handler,
         description="Tell a short Tinyhat plugin wiring-test joke.",
         args_hint="[topic]",
+    )
+    ctx.register_command(
+        name="tinyhat_plugin_version",
+        handler=_plugin_version_command_handler,
+        description="Show the Tinyhat plugin version currently loaded in Hermes.",
+        args_hint="",
     )
     _register_skills(ctx)
