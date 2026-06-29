@@ -1,74 +1,65 @@
-# Releasing the Tinyhat OpenClaw plugin
+# Releasing
 
-This repository publishes the public Tinyhat plugin payload for managed
-OpenClaw Computers. It versions independently from every other Tinyhat
-repository.
+Tinyhat plugin releases are separate from Tinyhat runtime releases.
 
-## Release shapes
+The runtime asks for a plugin channel. This repo decides what that channel
+means.
 
-- Final releases use tags shaped `vX.Y.Z`.
-- Release candidates use tags shaped `vX.Y.Z-rc.N`.
-- The GitHub release title must equal the tag exactly.
-- Release summaries belong in the release body or `CHANGELOG.md`, not in the
-  title.
-- Mark GitHub **Pre-release** exactly when the tag is `vX.Y.Z-rc.N`.
-- Mark GitHub **Latest** only on the final release being promoted, never on a
-  release candidate.
-- Published tags are immutable. Fix naming drift by editing the GitHub release
-  title or marker flags, not by deleting or rewriting tags.
+## Version Shapes
 
-## Commands
+- Final releases: `vX.Y.Z`
+- Release candidates: `vX.Y.Z-rc.N`
+- Development releases: `vX.Y.Z-dev.YYYYMMDDTHHMMSSZ[.suffix]`
 
-Final release:
+GitHub release titles should match the tag exactly. Final releases are
+not pre-releases. Release candidates and development releases are
+pre-releases.
+
+## Channels
+
+| Branch | Meaning |
+| --- | --- |
+| `channels/lts` | Conservative default for managed Computers. |
+| `channels/latest` | Newest promoted final branch/tag for faster adoption. |
+
+During the v0.20 development window, both channels may point at the
+reviewed `codex/v0.20-hermes-plugin` branch so Hermes Computers can
+install this fresh plugin shape before the branch replaces `main`.
+
+After the first final v0.20 release, channels should point at immutable
+release tags unless the maintainer explicitly chooses a temporary test
+window.
+
+## Promote A Branch During v0.20 Build-Out
+
+```bash
+BRANCH=codex/v0.20-hermes-plugin
+git fetch origin "$BRANCH"
+git checkout -B channels/lts "origin/$BRANCH"
+git push origin channels/lts --force-with-lease
+git checkout -B channels/latest "origin/$BRANCH"
+git push origin channels/latest --force-with-lease
+```
+
+## Promote A Final Release
 
 ```bash
 TAG=vX.Y.Z
-gh release create "$TAG" \
+git fetch origin --tags
+gh release edit "$TAG" \
   --repo tinyhat-ai/tinyhat \
-  --title "$TAG" \
   --latest \
-  --verify-tag \
-  --notes-file CHANGELOG.md
+  --prerelease=false \
+  --draft=false
+git checkout -B channels/latest "$TAG"
+git push origin channels/latest --force-with-lease
+git checkout -B channels/lts "$TAG"
+git push origin channels/lts --force-with-lease
 ```
 
-Release candidate:
+## Verify
 
 ```bash
-TAG=vX.Y.Z-rc.N
-gh release create "$TAG" \
-  --repo tinyhat-ai/tinyhat \
-  --title "$TAG" \
-  --prerelease \
-  --latest=false \
-  --verify-tag \
-  --notes-file CHANGELOG.md
+git ls-remote --heads origin channels/lts channels/latest
+gh release list --repo tinyhat-ai/tinyhat --limit 10
 ```
-
-If the tag is created by release automation, keep the `gh release create`
-marker flags the same.
-
-## Conformance check
-
-Before treating a release as done, inspect its marker payload:
-
-```bash
-gh release list \
-  --repo tinyhat-ai/tinyhat \
-  --limit 500 \
-  --json tagName,name,isPrerelease,isLatest,isDraft \
-  --jq "map(select(.tagName == \"$TAG\")) | .[0]"
-```
-
-Expected:
-
-- `tagName` equals `name`.
-- `isDraft` is `false`.
-- `isPrerelease` is `true` for `vX.Y.Z-rc.N` and `false` for `vX.Y.Z`.
-- `isLatest` is `false` for candidates and `true` for the final promotion cut.
-
-## npm
-
-The package manifest is currently private and not published to npm. If this
-repository later publishes an owned npm package, publish finals to the `latest`
-dist-tag, candidates to `next`, and do not use `lts` until a support owner and
-backport policy exist.

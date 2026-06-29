@@ -1,71 +1,44 @@
 # Architecture
 
-Tinyhat is the OpenClaw platform plugin package installed into
-Tinyhat-managed Computers.
+Tinyhat has two public layers on a managed Computer:
 
-The package has one job: teach the agent the safe, named Tinyhat
-capabilities available around it.
+1. **Runtime**: small infrastructure code that keeps the Computer
+   connected to the Tinyhat platform.
+2. **Plugin**: agent-facing skills and tools that teach the framework how
+   to use Tinyhat capabilities.
 
-## Package Shape
+This repository is the plugin layer.
+
+## Current v0.20 Shape
 
 ```text
 tinyhat/
-├── openclaw.plugin.json       OpenClaw manifest and capability contract
-├── package.json               package version and OpenClaw extension entry
-├── src/index.js               tool plugin implementation
-├── skills/tinyhat-platform/   compact default skill for agent routing
-└── docs/                      public capability and boundary docs
+|-- plugin.yaml
+|-- hermes.plugin.json
+|-- __init__.py
+|-- schemas.py
+|-- tools.py
+|-- skills/
+|   `-- tinyhat-tell-joke/
+|       `-- SKILL.md
+`-- docs/
 ```
 
-## Runtime Flow
-
-```text
-Tinyhat platform
-  provisions Computer + repo/ref metadata
-        |
-        v
-OpenClaw runtime package
-  boots OpenClaw, clones this repo, installs plugin
-        |
-        v
-Tinyhat plugin package
-  registers tools + default skills in OpenClaw
-        |
-        v
-Agent
-  uses named capabilities instead of raw Tinyhat URLs
-```
-
-## Capability Surface
-
-The manifest declares a compact contract:
-
-- `credentials.open_add_secret`
-- `credentials.list_metadata`
-- `computer.open_manage`
-- `computer.open_terminal`
-- `computer.status`
-- `packages.list_installed`
-- `support.report_problem`
-
-The JavaScript plugin maps those operations to HAPI calls using the
-Computer identity token or local development bearer configuration.
-User-facing privileged actions return Telegram Mini App button payloads.
-Secret values and signed Mini App URLs are not printed in chat.
+The first branch supports Hermes only. The single skill is a wiring
+proof: if an agent can call it from chat, we know the Computer installed
+the plugin and Hermes loaded it.
 
 ## Boundary
 
-This repo owns:
+The plugin can explain and use Tinyhat capabilities, but it should not
+become the platform or the runtime.
 
-- OpenClaw plugin metadata.
-- Tinyhat tool names and parameters.
-- Button-presentation policy for agent-visible responses.
-- Default skills that route user intent to the correct tool.
-- Public package release metadata.
+| Layer | Owns |
+| --- | --- |
+| Tinyhat platform | Auth, authorization, users, agents, Computers, invitations, and APIs. |
+| Tinyhat runtime | Heartbeat, attestation, runtime commands, framework install, plugin install/update. |
+| Tinyhat plugin | Public skills, small adapter tools, and safe agent instructions. |
 
-The OpenClaw runtime repo owns boot, supervision, apply/config, health,
-rollback, and cloning/pinning this repo.
-
-The Tinyhat platform owns authenticated backend endpoints, Computer
-assignment, provisioning, Telegram Mini App authentication, package
-inventory, and rollout policy.
+Future skills will call named platform capabilities through the
+Computer's attested identity. They should not paste raw backend URLs or
+ask users for secrets in chat.

@@ -1,0 +1,38 @@
+{
+  "schema": "tinyhat.framework-adapter.v1",
+  "version": "0.20.0",
+  "framework": {
+    "name": "hermes",
+    "minimum": "0.0.0"
+  },
+  "entrypoint": {
+    "manifest": "plugin.yaml",
+    "module": "__init__.py",
+    "register": "register"
+  },
+  "skills": [
+    {
+      "name": "tinyhat-tell-joke",
+      "path": "skills/tinyhat-tell-joke/SKILL.md",
+      "purpose": "Simple wiring proof that a Hermes agent can discover Tinyhat plugin skills."
+    }
+  ],
+  "tools": [
+    {
+      "name": "tinyhat_tell_joke",
+      "handler": "tools.tell_joke",
+      "skill": "tinyhat-tell-joke"
+    }
+  ],
+  "commands": [
+    {
+      "name": "tinyhat_joke",
+      "tool": "tinyhat_tell_joke",
+      "purpose": "Human-visible slash-command smoke test for plugin loading."
+    }
+  ],
+  "release": {
+    "defaultChannel": "channels/lts",
+    "fastChannel": "channels/latest"
+  }
+}

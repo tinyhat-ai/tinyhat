@@ -17,7 +17,7 @@
         },
         {
           "type": "json",
-          "path": "openclaw.plugin.json",
+          "path": "hermes.plugin.json",
           "jsonpath": "$.version"
         },
         {

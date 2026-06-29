@@ -1,40 +1,26 @@
 # Runtime Boundary
 
-Tinyhat's OpenClaw integration is split across public packages.
+The Tinyhat runtime should stay boring. It keeps a Computer reachable and
+trusted by the platform. It should not grow every product feature.
 
-## Runtime Package
+The plugin is where agent-facing product behavior belongs.
 
-`tinyhat--runtimes--openclaw` owns:
+## Runtime Responsibilities
 
-- bootstrapping OpenClaw on the Computer;
-- supervising the gateway;
-- applying config and Computer-scoped secret files;
-- runtime health, diagnostics, and rollback hooks;
-- cloning and pinning this plugin repo/ref.
+- Heartbeat
+- Attestation
+- Runtime command delivery
+- Framework installation
+- Plugin installation and update
+- Safe runtime update plumbing
 
-It must not own Tinyhat's agent-facing plugin tools, default skills, or
-Telegram presentation policy.
+## Plugin Responsibilities
 
-## Plugin Package
+- Skills that teach the agent what Tinyhat can do.
+- Small tools that expose named, safe capabilities.
+- Framework adapter metadata.
+- Public documentation that lets users inspect what is installed.
 
-`tinyhat-ai/tinyhat` owns:
-
-- `openclaw.plugin.json`;
-- `src/index.js` tool plugin implementation;
-- the `skills/` package injected into OpenClaw;
-- public capability names and response contracts;
-- docs that a public reader can understand without private Tinyhat
-  repositories.
-
-## Platform Package
-
-Tinyloop's platform backend owns:
-
-- authenticated HAPI endpoints;
-- Computer provisioning and assignment;
-- public repo/ref/commit metadata;
-- Manage Computer and Telegram Mini App auth;
-- canary, hold/pin, and rollback orchestration.
-
-This repository may name backend operation intent, but it must not
-document private endpoints as agent instructions.
+If a future feature is mainly "teach the agent how to use Tinyhat", it
+belongs in this repo. If it is "keep the Computer alive and trusted", it
+belongs in the runtime.

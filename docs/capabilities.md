@@ -1,68 +1,20 @@
-# Tinyhat Platform Capabilities
+# Capabilities
 
-This package exposes a small public contract for Tinyhat-managed
-OpenClaw Computers.
-The contract names capabilities and tools; it does not teach agents to
-call raw Tinyhat backend URLs.
+The current capability list is intentionally small.
 
-## Operation Table
+| Capability | Status | Why it exists |
+| --- | --- | --- |
+| `tinyhat_tell_joke` | Available now | Proves Hermes loaded the Tinyhat plugin and can call a plugin tool. |
 
-| Operation | Tool | Input | Output policy |
-| --- | --- | --- | --- |
-| `credentials.open_add_secret` | `tinyhat_request_runtime_secret` | `name`, optional `description` | Safe copy plus Telegram button transport; no secret values or raw URL prose. |
-| `credentials.list_metadata` | `tinyhat_list_runtime_secrets` | none | Secret names/descriptions/status only; Manage Secrets button transport when available. |
-| `computer.open_manage` | `tinyhat_open_manage_computer_link` | none | Safe copy plus Telegram button transport. |
-| `computer.open_terminal` | `tinyhat_open_terminal_link` | optional admin-reviewed `command` | Safe copy plus Telegram button transport. |
-| `computer.status` | `tinyhat_get_platform_status` | none | Secret-free status and platform contract. Returns final support guidance if Computer auth is malformed. |
-| `packages.list_installed` | `tinyhat_list_installed_packages` | none | Public package refs/SHAs and Tinyhat/user split when available. |
-| `support.report_problem` | `tinyhat_report_problem` | optional summary | Redacted support context. Returns final support guidance if Computer auth is malformed. |
+The next capabilities will be added one at a time. Each one should be
+visible in this document, represented by a small tool or skill, and
+covered by validation.
 
-## Default Skill Layer
+## Capability Rules
 
-The default skill layer uses one router plus focused skills:
-
-| Skill | Primary operations |
-| --- | --- |
-| `tinyhat-platform` | Routes broad user intent to the focused skills below. |
-| `tinyhat-secrets` | `credentials.open_add_secret`, `credentials.list_metadata`. |
-| `tinyhat-computer-access` | `computer.open_manage`, `computer.open_terminal`. |
-| `tinyhat-runtime-status` | `computer.status` and the no-generic-restart boundary. |
-| `tinyhat-package-inventory` | `packages.list_installed`. |
-| `tinyhat-support-report` | `support.report_problem`. |
-
-Skills call named tools or documented operation identifiers.
-They must not call raw Tinyhat backend paths.
-
-## Secret Entry
-
-Secret entry is a user action, not an agent-readable value.
-The agent supplies a non-secret name such as `OPENAI_API_KEY` and a
-short description.
-Tinyhat returns a Telegram Mini App button payload.
-The user enters the value inside Telegram, and the agent never receives
-the value.
-
-If a tool response contains Telegram transport metadata, only the
-renderer should use it.
-Skills must not paste any Mini App URL into chat.
-The only user-facing representation is the safe `text` copy and the
-structured Telegram button.
-
-## Runtime Boundary
-
-The runtime/bootstrap package may install or pin this plugin, but it
-does not own the Tinyhat capability behavior.
-This repository owns the OpenClaw plugin manifest, tool names,
-capability descriptions, default skills, and public release metadata.
-
-## Public Safety
-
-Do not add tenant secrets, signed intent tokens, private Tinyhat URLs,
-local development paths, or private docs to package metadata, skills,
-or issue/PR text.
-
-For `computer-auth: malformed_token`, tools must direct users only to
-Tinyhat-owned support at `https://tinyhat.ai`, `support@tinyhat.ai`,
-or Telegram `@tinyhatchat`, and preserve the returned diagnostic
-handoff. Do not invent Discord, the old `support@tinyhat.com` address,
-or slash-command support channels in public copy.
+- Capabilities must have clear names.
+- Skills should explain when to use a capability and what not to expose.
+- Privileged work should go through Tinyhat platform APIs using the
+  Computer identity provided by the runtime.
+- Secrets, signed URLs, and private platform endpoints must not be
+  printed into chat.

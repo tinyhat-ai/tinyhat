@@ -1,158 +1,107 @@
-# Tinyhat OpenClaw Platform Plugin
+# Tinyhat Plugin
 
-[![CI](https://github.com/tinyhat-ai/tinyhat/actions/workflows/ci.yml/badge.svg)](https://github.com/tinyhat-ai/tinyhat/actions/workflows/ci.yml)
-[![Version](https://img.shields.io/github/v/tag/tinyhat-ai/tinyhat?label=version&sort=semver)](https://github.com/tinyhat-ai/tinyhat/releases)
+Tinyhat is the public plugin that teaches an agent what the Tinyhat
+platform can do for it.
 
-Tinyhat is the public platform plugin package for Tinyhat-managed
-OpenClaw Computers.
+The runtime stays intentionally small: heartbeat, attestation, command
+delivery, framework install, and safe update plumbing. This repository is
+the part that can evolve faster. It adds the agent-facing skills and tools
+that explain how to use Tinyhat platform capabilities without exposing
+private platform URLs, machine credentials, bot tokens, or tenant data.
 
-Tinyhat installs this repository into each managed OpenClaw runtime so
-the agent can discover the Tinyhat capabilities around it: credential
-entry, Manage Computer, terminal entry, safe status, installed package
-inventory, and redacted support context.
+For the first v0.20 version, this repo is deliberately tiny. It supports
+Hermes only, and it ships one skill: a small joke command used to prove
+that the plugin is installed and discoverable from a real agent chat.
 
-This repository is intentionally separate from the OpenClaw runtime
-package.
-The runtime boots OpenClaw, supervises it, applies config, and pins this
-plugin repo/ref.
-This plugin owns the agent-facing Tinyhat capability tools, the public
-manifest, and the default skills that teach the agent which capability
-to use.
+## What This Plugin Does
 
-## What Ships Here
-
-| Surface | Purpose |
+| File | Purpose |
 | --- | --- |
-| [`openclaw.plugin.json`](openclaw.plugin.json) | OpenClaw plugin manifest and capability contract metadata. |
-| [`src/index.js`](src/index.js) | Tinyhat tool plugin implementation. |
-| [`skills/tinyhat-platform/SKILL.md`](skills/tinyhat-platform/SKILL.md) | Router skill that maps broad Tinyhat/OpenClaw platform intent to focused default skills. |
-| [`skills/`](skills) | Focused default skills for secrets, Computer access, runtime status, package inventory, and support reports. |
-| [`docs/capabilities.md`](docs/capabilities.md) | Public operation list, safety rules, and response boundaries. |
-| [`docs/architecture.md`](docs/architecture.md) | Runtime-vs-plugin ownership boundary. |
-| [`docs/skill-authoring.md`](docs/skill-authoring.md) | Standard for authoring packaged Tinyhat skills. |
+| `plugin.yaml` | Hermes plugin manifest. |
+| `__init__.py` | Hermes registration entrypoint. |
+| `hermes.plugin.json` | Tinyhat metadata for the Hermes adapter, skill, command, and release channels. |
+| `tools.py` / `schemas.py` | The first tiny tool: `tinyhat_tell_joke`. |
+| `skills/tinyhat-tell-joke/SKILL.md` | The one packaged skill in this first branch. |
+| `docs/skill-authoring.md` | The standard for future Tinyhat skills. |
+| `RELEASING.md` | How releases and `channels/lts` / `channels/latest` work. |
 
-The skill-authoring standard that governs those skills lives in
-[`docs/skill-authoring.md`](docs/skill-authoring.md).
+There is no legacy framework adapter in this branch. Additional framework
+adapters will come later as separate, small files once the Hermes path is
+proven.
 
-## Default Skill Architecture
+## Trust Boundary
 
-The default skill layer is intentionally split into a thin router plus
-focused skills:
+Tinyhat managed Computers call Tinyhat platform APIs through the runtime's
+attested Computer identity. That identity lets the platform know which
+Computer, agent, user, and account are involved.
 
-| Skill | Owns |
+This plugin does not mint identity. It does not store tokens. It does not
+call private platform APIs directly from random shell snippets. Its job is
+to teach the agent how to use named Tinyhat capabilities that the runtime
+and platform make available.
+
+That separation matters:
+
+- The runtime remains boring and stable.
+- The plugin remains readable and easy to update.
+- Users can inspect which skills and tools are being installed.
+- Privileged actions can stay behind platform APIs and Telegram buttons.
+
+## Current Skill
+
+`tinyhat-tell-joke` is a wiring proof. When the user asks whether the
+Tinyhat plugin is available, or asks for a joke, the agent can call
+`tinyhat_tell_joke`. The result is intentionally simple so we can test the
+whole installation path before adding real platform capabilities.
+
+## Installing
+
+Tinyhat-managed Hermes Computers install from the LTS channel by default:
+
+```bash
+TINYHAT_PLUGIN_REPO_URL=https://github.com/tinyhat-ai/tinyhat.git
+TINYHAT_PLUGIN_REF=channels/lts
+```
+
+The runtime resolves that ref, prepares a local checkout, then asks Hermes
+to install the plugin using Hermes' public plugin command:
+
+```bash
+hermes plugins install file:///path/to/tinyhat-checkout --enable --force
+```
+
+For development or manual testing, use `channels/latest` or an exact tag:
+
+```bash
+TINYHAT_PLUGIN_REF=channels/latest
+TINYHAT_PLUGIN_REF=v0.20.0
+```
+
+## Channels
+
+| Channel | Meaning |
 | --- | --- |
-| [`tinyhat-platform`](skills/tinyhat-platform/SKILL.md) | Routes broad platform requests to the right focused skill and named operation. |
-| [`tinyhat-secrets`](skills/tinyhat-secrets/SKILL.md) | Secret-entry buttons and secret metadata listing. |
-| [`tinyhat-computer-access`](skills/tinyhat-computer-access/SKILL.md) | Manage Computer and terminal button flows. |
-| [`tinyhat-runtime-status`](skills/tinyhat-runtime-status/SKILL.md) | Runtime/environment explanation and restart/reload boundaries. |
-| [`tinyhat-package-inventory`](skills/tinyhat-package-inventory/SKILL.md) | Tinyhat-installed defaults versus user-installed package inventory. |
-| [`tinyhat-support-report`](skills/tinyhat-support-report/SKILL.md) | Redacted support reports for platform problems. |
+| `channels/lts` | Conservative default for managed Computers. |
+| `channels/latest` | Newest promoted final version, used when we want faster adoption. |
+| exact tag, for example `v0.20.0` | Immutable version for tests, rollbacks, and audits. |
 
-The plugin layer exposes tools, button payloads, environment facts, and
-redacted diagnostics.
-The skills decide when to call those tools and how to respond safely.
+During the v0.20 build-out, both channels may point at this reviewed
+branch so Computers can install the fresh Hermes plugin shape before it
+replaces `main`.
 
-## Capabilities
-
-The first package exposes these named Tinyhat operations:
-
-| Operation | Tool | User surface |
-| --- | --- | --- |
-| `credentials.open_add_secret` | `tinyhat_request_runtime_secret` | Telegram Mini App button. |
-| `credentials.list_metadata` | `tinyhat_list_runtime_secrets` | Metadata-only tool result. |
-| `computer.open_manage` | `tinyhat_open_manage_computer_link` | Telegram Mini App button. |
-| `computer.open_terminal` | `tinyhat_open_terminal_link` | Telegram Mini App button with optional admin-reviewed command. |
-| `computer.status` | `tinyhat_get_platform_status` | Secret-free runtime/platform status. |
-| `packages.list_installed` | `tinyhat_list_installed_packages` | Public refs/SHAs and Tinyhat-vs-user package split when available. |
-| `subscriptions.open_prerequisite_help` | `tinyhat_open_chatgpt_subscription_prerequisite_help` | Telegram photo plus walkthrough text. |
-| `subscriptions.open_link` | `tinyhat_open_chatgpt_subscription_link` | Telegram URL button plus bare device-code bubble. |
-| `subscriptions.revert_to_platform_credits` | `tinyhat_revert_to_platform_credits` | Metadata-only tool result. |
-| `support.report_problem` | `tinyhat_report_problem` | Redacted support context. |
-
-Secret values, signed Mini App intent tokens, raw backend URLs, and
-private Computer URLs are not agent-facing output.
-Privileged user actions should render as Telegram buttons.
-If a channel cannot render a button, the agent should explain the
-limitation instead of pasting a Mini App URL into chat.
-
-## Installation
-
-Tinyhat-managed Computers install this package during runtime startup.
-The platform passes the public repo and ref through the Computer
-provisioning manifest:
+## Local Checks
 
 ```bash
-TINYHAT_PLATFORM_PLUGIN_REPO_URL=https://github.com/tinyhat-ai/tinyhat.git
-TINYHAT_PLATFORM_PLUGIN_REPO_REF=main
+python3 scripts/validate_framework_package.py
+python3 -m unittest discover -s test -p "*.py"
+python3 -m compileall -q .
 ```
 
-The OpenClaw runtime clones that ref and runs:
+## Roadmap
 
-```bash
-openclaw plugins install /path/to/tinyhat --force
-```
-
-For local package validation from this checkout:
-
-```bash
-python3 scripts/validate_openclaw_package.py
-node --check src/index.js
-```
-
-## Verifying the Plugin Actually Loads
-
-Installed is not loaded: OpenClaw skips an enabled extension it cannot
-read or import without failing the gateway, and
-`openclaw plugins inspect` attests registration, not loadability. Two
-mechanisms make a load failure loud instead of a silent capability
-loss:
-
-- **Load beacon.** When the extension module evaluates successfully it
-  logs one line (`[tinyhat] plugin loaded vX.Y.Z …`) and best-effort
-  writes `tinyhat-plugin-loaded.json` (plugin, version, `loaded_at`,
-  `pid`, `node`) under `$OPENCLAW_STATE_DIR` (fallback `~/.openclaw`).
-  Host supervisors can treat "plugin enabled but no fresh beacon after
-  gateway start" as a load failure. The beacon never breaks the load:
-  write errors degrade to the log line.
-
-- **Loadability self-check.** Run it as the user the gateway runs as,
-  against a checkout or an installed extension directory:
-
-  ```bash
-  node scripts/check_plugin_load.mjs [--plugin-dir <dir>] [--require-import]
-  ```
-
-  It verifies the manifests, that `src/` and every manifest-declared
-  skills root exist, ship skills, and are readable by the current user
-  (the classic failure: a privileged installer leaves the tree
-  root-owned while the gateway runs unprivileged), and — when the
-  `openclaw` package is resolvable next to the plugin — that the
-  extension entry imports and registers every tool declared in
-  `openclaw.plugin.json` `contracts.tools` (a hardcoded floor guards
-  against truncated manifests). Exit code 0 means loadable; failures
-  name the exact broken path or missing tool.
-
-CI runs the self-check against each supported OpenClaw version,
-installs the plugin the way a deployment does, and reproduces the
-root-owned-files case to assert it fails loudly (see the
-`plugin-load` job in `.github/workflows/ci.yml`).
-
-## Repository Boundaries
-
-- `tinyhat-ai/tinyhat` owns Tinyhat's OpenClaw plugin, capability
-  tools, default skills, references, and public release metadata.
-- `tinyloophub/tinyhat--runtimes--openclaw` owns OpenClaw boot,
-  supervisor, config/apply, health, and pinning this plugin source.
-- `tinyloophub/tinyloop` owns platform APIs, provisioning,
-  Computer metadata, inventory, canary, hold/pin, rollback, and the
-  gitlink/ref Tinyhat deploys.
-
-Do not move platform backend code, runtime boot scripts, tenant
-secrets, internal URLs, or private docs into this repository.
-
-## Development
-
-See [docs/local-development.md](docs/local-development.md) for local
-checks, [docs/skill-authoring.md](docs/skill-authoring.md) for
-packaged-skill standards, and [AGENTS.md](AGENTS.md) for contribution
-rules.
+The next skills will teach agents how to use Tinyhat platform
+capabilities through attested APIs. Examples include opening safe
+Telegram buttons for secrets, showing Computer status, and reporting
+support diagnostics. Those will be added one skill at a time, with the
+same goal as this first branch: small, inspectable files that make the
+agent more capable without hiding what is happening.
