@@ -74,7 +74,7 @@ For development or manual testing, use `channels/latest` or an exact tag:
 
 ```bash
 TINYHAT_PLUGIN_REF=channels/latest
-TINYHAT_PLUGIN_REF=v0.20.0
+TINYHAT_PLUGIN_REF=v0.20.1
 ```
 
 ## Channels
@@ -83,7 +83,7 @@ TINYHAT_PLUGIN_REF=v0.20.0
 | --- | --- |
 | `channels/lts` | Conservative default for managed Computers. |
 | `channels/latest` | Newest promoted final version, used when we want faster adoption. |
-| exact tag, for example `v0.20.0` | Immutable version for tests, rollbacks, and audits. |
+| exact tag, for example `v0.20.1` | Immutable version for tests, rollbacks, and audits. |
 
 During the v0.20 build-out, both channels may point at this reviewed
 branch so Computers can install the fresh Hermes plugin shape before it
