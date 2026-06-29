@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import base64
-import json
 import re
 import shutil
 import subprocess
@@ -20,6 +19,36 @@ KEY_ALGORITHM = "RSA-OAEP-256"
 DEFAULT_EXPIRES_IN_SECONDS = 300
 SECRET_NAME_RE = re.compile(r"^[A-Z_][A-Z0-9_]{0,126}$")
 _WORKERS: set[threading.Thread] = set()
+GENERIC_SECRET_NAMES = {
+    "TINYHAT_SECRET",
+    "SECRET",
+    "API_KEY",
+    "TOKEN",
+    "PASSWORD",
+    "CREDENTIAL",
+    "WEBHOOK_SECRET",
+}
+SECRET_NAME_HINTS: tuple[tuple[tuple[str, ...], str], ...] = (
+    (("exa", "exa.ai"), "EXA_API_KEY"),
+    (("openrouter", "open router"), "OPENROUTER_API_KEY"),
+    (("openai", "chatgpt"), "OPENAI_API_KEY"),
+    (("anthropic", "claude"), "ANTHROPIC_API_KEY"),
+    (("github", "git hub"), "GITHUB_TOKEN"),
+    (("stripe",), "STRIPE_SECRET_KEY"),
+    (("tavily",), "TAVILY_API_KEY"),
+    (("firecrawl", "fire crawl"), "FIRECRAWL_API_KEY"),
+    (("perplexity",), "PERPLEXITY_API_KEY"),
+    (("serper",), "SERPER_API_KEY"),
+    (("deepseek", "deep seek"), "DEEPSEEK_API_KEY"),
+    (("gemini", "google ai", "google/gemini"), "GEMINI_API_KEY"),
+    (("xai", "grok"), "XAI_API_KEY"),
+    (("slack",), "SLACK_BOT_TOKEN"),
+    (("telegram",), "TELEGRAM_BOT_TOKEN"),
+    (("resend",), "RESEND_API_KEY"),
+    (("elevenlabs", "eleven labs"), "ELEVENLABS_API_KEY"),
+    (("browserbase", "browser base"), "BROWSERBASE_API_KEY"),
+    (("fal", "fal.ai"), "FAL_API_KEY"),
+)
 
 
 class SecretHandoffError(RuntimeError):
@@ -36,8 +65,8 @@ def start_private_secret_handoff(
 ) -> str:
     """Hermes tool handler that starts one private secret handoff."""
     payload = args or {}
-    secret_name = _normalize_secret_name(str(payload.get("name") or "TINYHAT_SECRET"))
     description = _clean_description(payload.get("description"))
+    secret_name = _resolve_secret_name(payload.get("name"), description)
     expires_in_seconds = int(
         payload.get("expires_in_seconds") or DEFAULT_EXPIRES_IN_SECONDS
     )
@@ -67,24 +96,10 @@ def start_private_secret_handoff(
     )
     _WORKERS.add(worker)
     worker.start()
-    return json.dumps(
-        {
-            "schema": "tinyhat_private_secret_handoff_v1",
-            "status": "waiting_for_user",
-            "secret_name": handoff.get("secret_name", secret_name),
-            "description": handoff.get("description") or description,
-            "mini_app_url": handoff.get("mini_app_url"),
-            "button_text": handoff.get("button_text", "Enter secret"),
-            "telegram_button": handoff.get("telegram_button"),
-            "telegram_message_sent": bool(handoff.get("telegram_message_sent")),
-            "expires_at": handoff.get("expires_at"),
-            "message": (
-                "Open the secure Tinyhat page to enter this value. Tinyhat "
-                "stores only encrypted ciphertext; the temporary private key "
-                "stays on this Computer."
-            ),
-        },
-        sort_keys=True,
+    shown_name = str(handoff.get("secret_name") or secret_name)
+    return (
+        f"I sent the secure entry button for `{shown_name}`. "
+        "Paste the value there; Tinyhat will not receive or store the plaintext."
     )
 
 
@@ -299,6 +314,45 @@ def _normalize_secret_name(value: str) -> str:
     if not SECRET_NAME_RE.fullmatch(name):
         raise SecretHandoffError("Secret names must look like OPENROUTER_API_KEY.")
     return name
+
+
+def _resolve_secret_name(value: Any, description: str | None) -> str:
+    raw = str(value or "").strip()
+    inferred = _infer_secret_name(
+        " ".join(part for part in (raw, description or "") if part)
+    )
+    if not raw:
+        if inferred:
+            return inferred
+        raise SecretHandoffError(
+            "Choose a specific secret name like EXA_API_KEY or GITHUB_TOKEN."
+        )
+
+    try:
+        name = _normalize_secret_name(raw)
+    except SecretHandoffError:
+        if inferred:
+            return inferred
+        raise
+
+    if name in GENERIC_SECRET_NAMES:
+        if inferred and inferred not in GENERIC_SECRET_NAMES:
+            return inferred
+        raise SecretHandoffError(
+            "Secret names must be specific, for example EXA_API_KEY instead of TINYHAT_SECRET."
+        )
+    return name
+
+
+def _infer_secret_name(text: str) -> str | None:
+    normalized = re.sub(r"[^a-z0-9]+", " ", str(text or "").lower()).strip()
+    if not normalized:
+        return None
+    padded = f" {normalized} "
+    for hints, name in SECRET_NAME_HINTS:
+        if any(f" {hint} " in padded for hint in hints):
+            return name
+    return None
 
 
 def _clean_description(value: Any) -> str | None:

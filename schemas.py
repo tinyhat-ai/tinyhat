@@ -22,7 +22,11 @@ TINYHAT_PRIVATE_SECRET_HANDOFF_SCHEMA = {
     "properties": {
         "name": {
             "type": "string",
-            "description": "Env-style secret name, for example OPENROUTER_API_KEY.",
+            "description": (
+                "Specific env-style secret name chosen from the user request, "
+                "for example EXA_API_KEY for an Exa API key. Never use "
+                "generic placeholders such as TINYHAT_SECRET, SECRET, API_KEY, or TOKEN."
+            ),
         },
         "description": {
             "type": "string",

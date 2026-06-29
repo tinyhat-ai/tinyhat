@@ -11,13 +11,35 @@ current Tinyhat-managed Computer.
 Never ask the user to paste the secret value in chat. Start a private
 handoff instead:
 
-1. Pick an env-style name such as `OPENROUTER_API_KEY`, `GITHUB_TOKEN`,
-   or `STRIPE_SECRET_KEY`.
+1. Pick a specific env-style name from the user's request. If the user
+   says "my Exa API key", use `EXA_API_KEY`. If they say GitHub token,
+   use `GITHUB_TOKEN`. If they say Stripe secret key, use
+   `STRIPE_SECRET_KEY`.
 2. Add a short plain-English description that helps the user remember
    why the secret exists.
 3. Call `tinyhat_private_secret_handoff` with `name` and `description`.
 4. Show the returned secure Mini App button/link and explain that the
    user has about five minutes to enter the value.
+
+Do not use generic names such as `TINYHAT_SECRET`, `SECRET`, `API_KEY`,
+`TOKEN`, `PASSWORD`, or `CREDENTIAL`. If the provider or purpose is not
+clear enough to choose a meaningful name, ask one short clarification
+question before starting the handoff.
+
+Use these common names when they match the user request:
+
+| User wording | Secret name |
+| --- | --- |
+| Exa API key | `EXA_API_KEY` |
+| OpenRouter API key | `OPENROUTER_API_KEY` |
+| OpenAI API key | `OPENAI_API_KEY` |
+| Anthropic API key | `ANTHROPIC_API_KEY` |
+| GitHub token | `GITHUB_TOKEN` |
+| Stripe secret key | `STRIPE_SECRET_KEY` |
+| Tavily API key | `TAVILY_API_KEY` |
+| Firecrawl API key | `FIRECRAWL_API_KEY` |
+| Telegram bot token | `TELEGRAM_BOT_TOKEN` |
+| Slack bot token | `SLACK_BOT_TOKEN` |
 
 The handoff works like a device flow. This Computer creates a one-time
 key pair. The Tinyhat page encrypts the secret in the user's browser

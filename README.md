@@ -27,6 +27,7 @@ Tinyhat's servers.
 | `skills/tinyhat-plugin-version/SKILL.md` | Live plugin version proof. |
 | `skills/tinyhat-private-secret/SKILL.md` | Browser-encrypted secret handoff guidance. |
 | `docs/skill-authoring.md` | The standard for future Tinyhat skills. |
+| `.agents/skills/tinyhat-plugin-skill-authoring/SKILL.md` | Maintainer workflow for adding or changing plugin skills. |
 | `RELEASING.md` | How releases and `channels/lts` / `channels/latest` work. |
 
 There is no legacy framework adapter in this branch. Additional framework

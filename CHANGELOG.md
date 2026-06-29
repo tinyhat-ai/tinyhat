@@ -6,6 +6,11 @@ All notable changes to the Tinyhat plugin are documented here.
 
 ### Changed
 
+- Teach the private secret skill and tool to use meaningful env-style names
+  such as `EXA_API_KEY` instead of generic placeholders like
+  `TINYHAT_SECRET`.
+- Add a repo-local Tinyhat plugin skill-authoring skill and expand the
+  public skill standard for future plugin capabilities.
 - Bump the fresh Hermes plugin package to `0.20.3` so managed Computers can
   verify the Tinyhat plugin update flow from `0.20.2`.
 - Start the v0.20 Tinyhat plugin branch as a fresh Hermes-only package.

@@ -91,7 +91,7 @@ class HermesAdapterTests(unittest.TestCase):
         self.assertEqual(payload["schema"], "tinyhat_tell_joke_v1")
         self.assertIn("Hermes", payload["joke"])
 
-    def test_private_secret_handoff_returns_secure_button_payload(self) -> None:
+    def test_private_secret_handoff_returns_readable_confirmation(self) -> None:
         class FakeClient:
             def post_json(self, path: str, payload: dict) -> dict:
                 self.path = path
@@ -122,13 +122,11 @@ class HermesAdapterTests(unittest.TestCase):
             secret_handoff._generate_key_pair = lambda: ("PRIVATE", "PUBLIC")
             secret_handoff._poll_and_install_secret = lambda **_: None
 
-            payload = json.loads(
-                tools.private_secret_handoff(
-                    {
-                        "name": "github_token",
-                        "description": "GitHub access for repository tasks",
-                    }
-                )
+            reply = tools.private_secret_handoff(
+                {
+                    "name": "github_token",
+                    "description": "GitHub access for repository tasks",
+                }
             )
         finally:
             secret_handoff.build_platform_client = original_build
@@ -140,10 +138,58 @@ class HermesAdapterTests(unittest.TestCase):
             "/hapi/v1/computers/local-dev/private-secret-handoffs/v1",
         )
         self.assertEqual(fake_client.payload["name"], "GITHUB_TOKEN")
-        self.assertEqual(payload["schema"], "tinyhat_private_secret_handoff_v1")
-        self.assertEqual(payload["status"], "waiting_for_user")
-        self.assertEqual(payload["button_text"], "Enter secret")
-        self.assertIn("web_app", payload["telegram_button"])
+        self.assertIn("secure entry button", reply)
+        self.assertIn("GITHUB_TOKEN", reply)
+        self.assertIn("will not receive or store the plaintext", reply)
+        self.assertFalse(reply.strip().startswith("{"))
+
+    def test_private_secret_handoff_infers_name_from_user_wording(self) -> None:
+        class FakeClient:
+            def post_json(self, path: str, payload: dict) -> dict:
+                self.path = path
+                self.payload = payload
+                return {
+                    "handoff_id": "sh_exa",
+                    "status": "pending",
+                    "secret_name": payload["name"],
+                    "description": payload["description"],
+                    "expires_at": "2026-06-29T12:00:00Z",
+                    "poll_after_ms": 2000,
+                }
+
+        fake_client = FakeClient()
+        original_build = secret_handoff.build_platform_client
+        original_generate = secret_handoff._generate_key_pair
+        original_worker = secret_handoff._poll_and_install_secret
+        try:
+            secret_handoff.build_platform_client = lambda: (fake_client, "local_dev")
+            secret_handoff._generate_key_pair = lambda: ("PRIVATE", "PUBLIC")
+            secret_handoff._poll_and_install_secret = lambda **_: None
+
+            reply = tools.private_secret_handoff(
+                {
+                    "name": "TINYHAT_SECRET",
+                    "description": "Exa API key for search research",
+                }
+            )
+        finally:
+            secret_handoff.build_platform_client = original_build
+            secret_handoff._generate_key_pair = original_generate
+            secret_handoff._poll_and_install_secret = original_worker
+
+        self.assertEqual(fake_client.payload["name"], "EXA_API_KEY")
+        self.assertIn("EXA_API_KEY", reply)
+
+    def test_private_secret_handoff_rejects_generic_unknown_name(self) -> None:
+        with self.assertRaises(secret_handoff.SecretHandoffError) as exc:
+            tools.private_secret_handoff(
+                {
+                    "name": "TINYHAT_SECRET",
+                    "description": "generic credential",
+                }
+            )
+
+        self.assertIn("specific", str(exc.exception))
 
     def test_worker_claim_failure_message_is_sanitized(self) -> None:
         class FakeClient:

@@ -28,7 +28,6 @@ REQUIRED_SKILLS = [
 FORBIDDEN_PATHS = (
     "openclaw.plugin.json",
     "src",
-    ".agents",
     ".claude",
     "roadmap",
 )
@@ -194,6 +193,7 @@ def validate_fresh_surface(root: Path) -> None:
         root / "CONTRIBUTING.md",
         root / "RELEASING.md",
         root / "docs",
+        root / ".agents",
         root / "skills",
         root / "test",
         root / "plugin.yaml",
@@ -231,6 +231,11 @@ def validate_docs(root: Path) -> None:
         "docs/skill-authoring.md": (
             "Tinyhat skills are public instructions",
             "Do not ask the user to paste secret values in chat.",
+            "Secret Naming Standard",
+        ),
+        ".agents/skills/tinyhat-plugin-skill-authoring/SKILL.md": (
+            "Create, modify, or review Tinyhat plugin skills.",
+            "Reject or clarify generic names",
         ),
         "RELEASING.md": (
             "channels/lts",

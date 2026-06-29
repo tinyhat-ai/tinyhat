@@ -24,6 +24,8 @@ a fresh Hermes-only start.
 - `skills/tinyhat-tell-joke/SKILL.md`: deterministic joke proof.
 - `skills/tinyhat-plugin-version/SKILL.md`: live plugin version proof.
 - `skills/tinyhat-private-secret/SKILL.md`: private Mini App secret handoff.
+- `.agents/skills/tinyhat-plugin-skill-authoring/SKILL.md`: maintainer
+  workflow for adding or changing plugin skills.
 
 ## Checks
 
@@ -34,6 +36,9 @@ python3 scripts/validate_framework_package.py
 python3 -m unittest discover -s test -p "*.py"
 python3 -m compileall -q .
 ```
+
+When adding or changing plugin skills, read
+`.agents/skills/tinyhat-plugin-skill-authoring/SKILL.md` first.
 
 ## Writing
 

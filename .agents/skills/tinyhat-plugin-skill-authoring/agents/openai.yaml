@@ -1,0 +1,4 @@
+interface:
+  display_name: "Tinyhat Plugin Skill Authoring"
+  short_description: "Create and review Tinyhat plugin skills."
+  default_prompt: "Use this when adding or changing a Tinyhat plugin skill, tool schema, or Hermes adapter registration."
