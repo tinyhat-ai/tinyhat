@@ -52,7 +52,7 @@ class HermesAdapterTests(unittest.TestCase):
 
         self.assertEqual(payload["schema"], "tinyhat_plugin_version_v1")
         self.assertEqual(payload["name"], "tinyhat")
-        self.assertEqual(payload["version"], "0.20.2")
+        self.assertEqual(payload["version"], "0.20.3")
 
     def test_tell_joke_returns_stable_json(self) -> None:
         payload = json.loads(tools.tell_joke({"topic": "Hermes"}))

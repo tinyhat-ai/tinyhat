@@ -6,6 +6,8 @@ All notable changes to the Tinyhat plugin are documented here.
 
 ### Changed
 
+- Bump the fresh Hermes plugin package to `0.20.3` so managed Computers can
+  verify the Tinyhat plugin update flow from `0.20.2`.
 - Start the v0.20 Tinyhat plugin branch as a fresh Hermes-only package.
 - Remove the legacy plugin surface from this branch.
 - Add the first packaged skill, `tinyhat-tell-joke`, as an end-to-end
