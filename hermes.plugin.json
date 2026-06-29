@@ -46,17 +46,17 @@
   ],
   "commands": [
     {
-      "name": "tinyhat_joke",
+      "name": "tinyhat-joke",
       "tool": "tinyhat_tell_joke",
       "purpose": "Human-visible slash-command smoke test for plugin loading."
     },
     {
-      "name": "tinyhat_plugin_version",
+      "name": "tinyhat-plugin-version",
       "tool": "tinyhat_plugin_version",
       "purpose": "Human-visible proof of the Tinyhat plugin version loaded by Hermes."
     },
     {
-      "name": "tinyhat_secret",
+      "name": "tinyhat-secret",
       "tool": "tinyhat_private_secret_handoff",
       "purpose": "Human-visible test path for creating a private secret handoff."
     }

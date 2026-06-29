@@ -16,9 +16,9 @@ REQUIRED_TOOLS = [
     "tinyhat_private_secret_handoff",
 ]
 REQUIRED_COMMANDS = [
-    "tinyhat_joke",
-    "tinyhat_plugin_version",
-    "tinyhat_secret",
+    "tinyhat-joke",
+    "tinyhat-plugin-version",
+    "tinyhat-secret",
 ]
 REQUIRED_SKILLS = [
     "tinyhat-plugin-version",

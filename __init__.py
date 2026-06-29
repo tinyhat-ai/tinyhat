@@ -59,18 +59,21 @@ def register(ctx: Any) -> None:
         schema=schemas.TINYHAT_PRIVATE_SECRET_HANDOFF_SCHEMA,
         handler=tools.private_secret_handoff,
     )
+    # Hermes registers plugin slash commands by their canonical names, then
+    # Telegram shows them with underscores and maps inbound underscores back to
+    # hyphens before dispatch.
     ctx.register_command(
-        "tinyhat_joke",
+        "tinyhat-joke",
         _joke_command_handler,
         description="Tell a short Tinyhat plugin wiring-test joke.",
     )
     ctx.register_command(
-        "tinyhat_plugin_version",
+        "tinyhat-plugin-version",
         _plugin_version_command_handler,
         description="Show the Tinyhat plugin version currently loaded in Hermes.",
     )
     ctx.register_command(
-        "tinyhat_secret",
+        "tinyhat-secret",
         _private_secret_command_handler,
         description="Start a secure Tinyhat Mini App handoff for a secret.",
     )

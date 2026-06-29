@@ -55,15 +55,28 @@ class HermesAdapterTests(unittest.TestCase):
         self.assertIn("tinyhat_plugin_version", ctx.tools)
         self.assertIn("tinyhat_tell_joke", ctx.tools)
         self.assertIn("tinyhat_private_secret_handoff", ctx.tools)
-        self.assertIn("tinyhat_plugin_version", ctx.commands)
-        self.assertIn("tinyhat_joke", ctx.commands)
-        self.assertIn("tinyhat_secret", ctx.commands)
+        self.assertIn("tinyhat-plugin-version", ctx.commands)
+        self.assertIn("tinyhat-joke", ctx.commands)
+        self.assertIn("tinyhat-secret", ctx.commands)
         self.assertIn("tinyhat-plugin-version", ctx.skills)
         self.assertIn("tinyhat-tell-joke", ctx.skills)
         self.assertIn("tinyhat-private-secret", ctx.skills)
         self.assertTrue(ctx.skills["tinyhat-plugin-version"].is_file())
         self.assertTrue(ctx.skills["tinyhat-tell-joke"].is_file())
         self.assertTrue(ctx.skills["tinyhat-private-secret"].is_file())
+
+    def test_registered_commands_match_telegram_dispatch_names(self) -> None:
+        ctx = FakeHermesContext()
+
+        tinyhat.register(ctx)
+
+        for telegram_name in (
+            "tinyhat_joke",
+            "tinyhat_plugin_version",
+            "tinyhat_secret",
+        ):
+            hermes_dispatch_name = telegram_name.replace("_", "-")
+            self.assertIn(hermes_dispatch_name, ctx.commands)
 
     def test_plugin_version_returns_live_manifest_version(self) -> None:
         payload = json.loads(tools.plugin_version())
