@@ -49,6 +49,14 @@ class HermesAdapterTests(unittest.TestCase):
         self.assertEqual(payload["schema"], "tinyhat_tell_joke_v1")
         self.assertIn("Hermes", payload["joke"])
 
+    def test_tell_joke_ignores_hermes_runtime_metadata(self) -> None:
+        payload = json.loads(
+            tools.tell_joke({"topic": "Hermes"}, task_id="task_123")
+        )
+
+        self.assertEqual(payload["schema"], "tinyhat_tell_joke_v1")
+        self.assertIn("Hermes", payload["joke"])
+
 
 if __name__ == "__main__":
     unittest.main()

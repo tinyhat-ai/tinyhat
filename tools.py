@@ -15,8 +15,13 @@ def joke_text(topic: str | None = None) -> str:
     )
 
 
-def tell_joke(args: dict[str, Any] | None = None) -> str:
-    """Hermes tool handler for the Tinyhat joke proof."""
+def tell_joke(args: dict[str, Any] | None = None, **_: Any) -> str:
+    """Hermes tool handler for the Tinyhat joke proof.
+
+    Hermes can pass dispatcher metadata such as ``task_id`` to tool handlers.
+    The Tinyhat plugin should ignore that metadata so the tool works from the
+    first live agent interaction.
+    """
     payload = args or {}
     return json.dumps(
         {
