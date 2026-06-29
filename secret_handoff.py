@@ -14,7 +14,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
-from .platform import PlatformClient, PlatformError, build_platform_client, computer_api_path
+from .platform import PlatformClient, build_platform_client, computer_api_path
 
 KEY_ALGORITHM = "RSA-OAEP-256"
 DEFAULT_EXPIRES_IN_SECONDS = 300
@@ -24,6 +24,10 @@ _WORKERS: set[threading.Thread] = set()
 
 class SecretHandoffError(RuntimeError):
     """The private secret handoff could not start or finish."""
+
+    def __init__(self, message: str, *, public_message: str | None = None) -> None:
+        super().__init__(message)
+        self.public_message = public_message or "Private secret handoff failed."
 
 
 def start_private_secret_handoff(
@@ -130,7 +134,7 @@ def _poll_and_install_secret(
                 platform_auth,
                 handoff_id,
                 installed=False,
-                message=str(exc)[:500],
+                message=_public_failure_message(exc),
             )
         except Exception:
             pass
@@ -250,8 +254,10 @@ def _set_hermes_secret(secret_name: str, value: str) -> None:
         check=False,
     )
     if result.returncode != 0:
-        detail = (result.stderr or result.stdout or "Hermes config set failed").strip()
-        raise SecretHandoffError(detail[:500])
+        raise SecretHandoffError(
+            "Hermes config set failed.",
+            public_message="Hermes could not save this secret.",
+        )
 
 
 def _run(command: list[str], *, text: bool = True) -> str | bytes:
@@ -266,6 +272,14 @@ def _run(command: list[str], *, text: bool = True) -> str | bytes:
         stderr = result.stderr if text else result.stderr.decode("utf-8", "replace")
         raise SecretHandoffError((stderr or "command failed").strip()[:500])
     return result.stdout if text else result.stdout
+
+
+def _public_failure_message(exc: BaseException) -> str:
+    if isinstance(exc, SecretHandoffError):
+        return exc.public_message[:500]
+    if isinstance(exc, UnicodeDecodeError):
+        return "The encrypted secret could not be decoded."
+    return "Private secret handoff failed."
 
 
 def _parse_expires_at(value: Any) -> float | None:
