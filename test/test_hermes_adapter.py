@@ -130,7 +130,27 @@ class HermesAdapterTests(unittest.TestCase):
                 self.assertIsNotNone(injected)
                 assert injected is not None
                 self.assertIn("tinyhat:tinyhat-codex-auth", injected["context"])
-                self.assertIn("Do not ask a multiple-choice clarification", injected["context"])
+                self.assertIn("do not ask a multiple-choice clarification", injected["context"])
+                self.assertIn("start the Tinyhat Codex auth flow yourself", injected["context"])
+
+    def test_codex_auth_skill_packages_prerequisite_screenshot(self) -> None:
+        skill_md = REPO_ROOT / "skills" / "tinyhat-codex-auth" / "SKILL.md"
+        screenshot = (
+            REPO_ROOT
+            / "skills"
+            / "tinyhat-codex-auth"
+            / "assets"
+            / "chatgpt-enable-device-code-for-codex.png"
+        )
+        text = skill_md.read_text(encoding="utf-8")
+
+        self.assertTrue(screenshot.is_file())
+        self.assertGreater(screenshot.stat().st_size, 10_000)
+        self.assertIn("send this screenshot", text)
+        self.assertIn("Do the work yourself.", text)
+        self.assertIn("Do not tell the user to send `/codex_auth`", text)
+        self.assertIn("primary path", text)
+        self.assertIn("hermes_runtime.telegram_codex_auth start", text)
 
     def test_context_hook_injects_for_env_style_secret_names(self) -> None:
         for secret_name in (

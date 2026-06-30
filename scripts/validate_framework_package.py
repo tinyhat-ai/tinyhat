@@ -130,6 +130,16 @@ def validate_hermes_adapter(root: Path) -> None:
     ):
         require((root / rel).is_file(), f"{rel} is missing")
 
+    codex_screenshot = (
+        root
+        / "skills"
+        / "tinyhat-codex-auth"
+        / "assets"
+        / "chatgpt-enable-device-code-for-codex.png"
+    )
+    require(codex_screenshot.is_file(), "Codex auth prerequisite screenshot is missing")
+    require(codex_screenshot.stat().st_size > 10_000, "Codex auth screenshot looks empty")
+
     entrypoint = hermes.get("entrypoint")
     require(isinstance(entrypoint, dict), "entrypoint must be an object")
     require(entrypoint.get("manifest") == "plugin.yaml", "entrypoint.manifest must be plugin.yaml")
@@ -243,6 +253,13 @@ def validate_docs(root: Path) -> None:
             "Secret Naming Standard",
             "Tinyhat Platform Context",
             "tinyhat-codex-auth",
+        ),
+        "skills/tinyhat-codex-auth/SKILL.md": (
+            "send this screenshot",
+            "Do the work yourself.",
+            "Do not tell the user to send `/codex_auth`",
+            "primary path",
+            "hermes_runtime.telegram_codex_auth start",
         ),
         ".agents/skills/tinyhat-plugin-skill-authoring/SKILL.md": (
             "Create, modify, or review Tinyhat plugin skills.",
