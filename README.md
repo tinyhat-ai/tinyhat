@@ -10,10 +10,10 @@ that explain how to use Tinyhat platform capabilities without exposing
 private platform URLs, machine credentials, bot tokens, or tenant data.
 
 For the first v0.20 version, this repo is deliberately small. It supports
-Hermes only, ships two proof skills, and now includes the first real
-Tinyhat platform capability: a private secret handoff that lets the user
-enter a secret in a Telegram Mini App without sending the plaintext to
-Tinyhat's servers.
+Hermes only, ships two proof skills, a small Tinyhat context hook, and
+now includes the first real Tinyhat platform capability: a private secret
+handoff that lets the user enter a secret in a Telegram Mini App without
+sending the plaintext to Tinyhat's servers.
 
 ## What This Plugin Does
 
@@ -22,10 +22,12 @@ Tinyhat's servers.
 | `plugin.yaml` | Hermes plugin manifest. |
 | `__init__.py` | Hermes registration entrypoint. |
 | `hermes.plugin.json` | Tinyhat metadata for the Hermes adapter, skill, command, and release channels. |
+| `context.py` | Small Hermes `pre_llm_call` context hook for Tinyhat-sensitive turns. |
 | `tools.py` / `schemas.py` | Tinyhat tools: plugin version, joke proof, and private secret handoff. |
 | `skills/tinyhat-tell-joke/SKILL.md` | Deterministic joke proof. |
 | `skills/tinyhat-plugin-version/SKILL.md` | Live plugin version proof. |
 | `skills/tinyhat-private-secret/SKILL.md` | Browser-encrypted secret handoff guidance. |
+| `skills/tinyhat-platform/SKILL.md` | Platform context for Tinyhat-managed Hermes agents. |
 | `docs/skill-authoring.md` | The standard for future Tinyhat skills. |
 | `.agents/skills/tinyhat-plugin-skill-authoring/SKILL.md` | Maintainer workflow for adding or changing plugin skills. |
 | `RELEASING.md` | How releases and `channels/lts` / `channels/latest` work. |
@@ -71,6 +73,13 @@ pair, the user enters the value in a Telegram Mini App, the browser
 encrypts the value with the public key, and the Computer decrypts it with
 the temporary private key. Tinyhat stores only short-lived ciphertext for
 the handoff and wipes it after completion, expiration, or failure.
+
+`tinyhat-platform` is the operating context. It tells the agent that
+Tinyhat secrets are the default way to add credentials to Hermes and that
+Tinyhat's installed Codex auth commands should be used for OpenAI Codex
+auth and limit checks. A small `pre_llm_call` hook injects only the short
+version of that context on first turn or when the user mentions secrets,
+credentials, Tinyhat, Codex auth, or usage limits.
 
 ## Installing
 

@@ -25,6 +25,11 @@
       "name": "tinyhat-private-secret",
       "path": "skills/tinyhat-private-secret/SKILL.md",
       "purpose": "Starts a private browser-encrypted secret handoff to the assigned Computer."
+    },
+    {
+      "name": "tinyhat-platform",
+      "path": "skills/tinyhat-platform/SKILL.md",
+      "purpose": "Explains Tinyhat-managed Hermes defaults for secrets, Codex auth, and platform boundaries."
     }
   ],
   "tools": [

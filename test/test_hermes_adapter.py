@@ -30,6 +30,7 @@ else:
     import tinyhat  # noqa: E402
 
 from tinyhat import secret_handoff, tools  # noqa: E402
+from tinyhat import context as tinyhat_context  # noqa: E402
 from tinyhat import secret_handoff_worker  # noqa: E402
 
 
@@ -38,6 +39,7 @@ class FakeHermesContext:
         self.tools: dict[str, dict] = {}
         self.commands: dict[str, dict] = {}
         self.skills: dict[str, Path] = {}
+        self.hooks: dict[str, list] = {}
 
     def register_tool(self, **kwargs) -> None:
         self.tools[kwargs["name"]] = kwargs
@@ -47,6 +49,9 @@ class FakeHermesContext:
 
     def register_skill(self, name: str, skill_md: Path) -> None:
         self.skills[name] = skill_md
+
+    def register_hook(self, name: str, handler) -> None:
+        self.hooks.setdefault(name, []).append(handler)
 
 
 class HermesAdapterTests(unittest.TestCase):
@@ -61,12 +66,15 @@ class HermesAdapterTests(unittest.TestCase):
         self.assertIn("tinyhat-plugin-version", ctx.commands)
         self.assertIn("tinyhat-joke", ctx.commands)
         self.assertIn("tinyhat-secret", ctx.commands)
+        self.assertIn("pre_llm_call", ctx.hooks)
         self.assertIn("tinyhat-plugin-version", ctx.skills)
         self.assertIn("tinyhat-tell-joke", ctx.skills)
         self.assertIn("tinyhat-private-secret", ctx.skills)
+        self.assertIn("tinyhat-platform", ctx.skills)
         self.assertTrue(ctx.skills["tinyhat-plugin-version"].is_file())
         self.assertTrue(ctx.skills["tinyhat-tell-joke"].is_file())
         self.assertTrue(ctx.skills["tinyhat-private-secret"].is_file())
+        self.assertTrue(ctx.skills["tinyhat-platform"].is_file())
 
     def test_registered_commands_match_telegram_dispatch_names(self) -> None:
         ctx = FakeHermesContext()
@@ -87,6 +95,70 @@ class HermesAdapterTests(unittest.TestCase):
         self.assertEqual(payload["schema"], "tinyhat_plugin_version_v1")
         self.assertEqual(payload["name"], "tinyhat")
         self.assertEqual(payload["version"], "0.20.4")
+
+    def test_context_hook_injects_for_secret_requests(self) -> None:
+        ctx = FakeHermesContext()
+        tinyhat.register(ctx)
+
+        injected = ctx.hooks["pre_llm_call"][0](
+            user_message="I want to add my Exa API key",
+            is_first_turn=False,
+        )
+
+        self.assertIsNotNone(injected)
+        assert injected is not None
+        self.assertIn("tinyhat_private_secret_handoff", injected["context"])
+        self.assertIn("Do not ask the user to paste secrets", injected["context"])
+        self.assertIn("/codex_auth", injected["context"])
+
+    def test_context_hook_injects_for_env_style_secret_names(self) -> None:
+        for secret_name in (
+            "EXA_API_KEY",
+            "OPENROUTER_API_KEY",
+            "GITHUB_TOKEN",
+            "STRIPE_SECRET_KEY",
+            "TAVILY_API_KEY",
+            "FIRECRAWL_API_KEY",
+        ):
+            with self.subTest(secret_name=secret_name):
+                injected = tinyhat_context.inject_tinyhat_context(
+                    user_message=f"Please add {secret_name}",
+                    is_first_turn=False,
+                )
+                self.assertIsNotNone(injected)
+
+    def test_context_hook_skips_unrelated_later_turns(self) -> None:
+        self.assertIsNone(
+            tinyhat_context.inject_tinyhat_context(
+                user_message="Tell me a short poem about the moon",
+                is_first_turn=False,
+            )
+        )
+        self.assertIsNone(
+            tinyhat_context.inject_tinyhat_context(
+                user_message="Write an author bio and estimate token count",
+                is_first_turn=False,
+            )
+        )
+
+    def test_context_hook_injects_on_first_turn(self) -> None:
+        injected = tinyhat_context.inject_tinyhat_context(
+            user_message="hello",
+            is_first_turn=True,
+        )
+
+        self.assertIsNotNone(injected)
+        assert injected is not None
+        self.assertIn("Tinyhat-managed Computer", injected["context"])
+
+    def test_tinyhat_secret_command_without_args_returns_usage(self) -> None:
+        ctx = FakeHermesContext()
+        tinyhat.register(ctx)
+
+        reply = ctx.commands["tinyhat-secret"]["handler"]("")
+
+        self.assertIn("/tinyhat_secret EXA_API_KEY", reply)
+        self.assertNotIn("TINYHAT_SECRET", reply)
 
     def test_tell_joke_returns_stable_json(self) -> None:
         payload = json.loads(tools.tell_joke({"topic": "Hermes"}))

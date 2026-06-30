@@ -24,6 +24,7 @@ REQUIRED_SKILLS = [
     "tinyhat-plugin-version",
     "tinyhat-tell-joke",
     "tinyhat-private-secret",
+    "tinyhat-platform",
 ]
 FORBIDDEN_PATHS = (
     "openclaw.plugin.json",
@@ -154,6 +155,7 @@ def validate_hermes_adapter(root: Path) -> None:
         "tinyhat-plugin-version": "skills/tinyhat-plugin-version/SKILL.md",
         "tinyhat-tell-joke": "skills/tinyhat-tell-joke/SKILL.md",
         "tinyhat-private-secret": "skills/tinyhat-private-secret/SKILL.md",
+        "tinyhat-platform": "skills/tinyhat-platform/SKILL.md",
     }
     for skill in skills:
         require(isinstance(skill, dict), "skill declaration must be an object")
@@ -201,6 +203,7 @@ def validate_fresh_surface(root: Path) -> None:
         root / "hermes.plugin.json",
         root / "__init__.py",
         root / "platform.py",
+        root / "context.py",
         root / "secret_handoff.py",
         root / "secret_handoff_worker.py",
         root / "schemas.py",
@@ -227,6 +230,8 @@ def validate_docs(root: Path) -> None:
             "tinyhat-tell-joke",
             "tinyhat-plugin-version",
             "tinyhat-private-secret",
+            "tinyhat-platform",
+            "pre_llm_call",
             "channels/lts",
             "channels/latest",
         ),
@@ -234,6 +239,7 @@ def validate_docs(root: Path) -> None:
             "Tinyhat skills are public instructions",
             "Do not ask the user to paste secret values in chat.",
             "Secret Naming Standard",
+            "Tinyhat Platform Context",
         ),
         ".agents/skills/tinyhat-plugin-skill-authoring/SKILL.md": (
             "Create, modify, or review Tinyhat plugin skills.",
