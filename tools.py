@@ -19,10 +19,10 @@ CODEX_AUTH_SCREENSHOT = (
     / "chatgpt-enable-device-code-for-codex.png"
 )
 CODEX_AUTH_CAPTION = (
-    "Before Codex sign-in can start:\n\n"
+    "To use your Codex subscription here:\n\n"
     "1. Open chatgpt.com > Settings > Security.\n"
     '2. Turn on "Enable device code authorization for Codex".\n\n'
-    "Then tap this command:\n"
+    "Then come back here and tap:\n\n"
     "/codex_auth"
 )
 TELEGRAM_ENV_CANDIDATES = (
@@ -84,7 +84,7 @@ def codex_auth(args: dict[str, Any] | None = None, **_: Any) -> str:
     """Send the Codex prerequisite first; start auth after confirmation."""
     payload = args or {}
     action = str(payload.get("action") or "prerequisite").strip().lower()
-    if action in {"start", "link"}:
+    if action == "start":
         if payload.get("confirmed") is not True:
             return json.dumps(
                 {

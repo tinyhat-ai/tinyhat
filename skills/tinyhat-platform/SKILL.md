@@ -16,7 +16,7 @@ Use this as the default routing map:
 | Add or save an API key, token, password, webhook secret, or credential | Call `tinyhat_private_secret_handoff` once. |
 | Ask which Tinyhat plugin is running | Call `tinyhat_plugin_version`. |
 | Check that the Tinyhat plugin exists | Call `tinyhat_tell_joke` or `tinyhat_plugin_version`. |
-| Connect ChatGPT / OpenAI Codex auth or use the user's OpenAI paid access | Load `tinyhat:tinyhat-codex-auth`; reply once with the ChatGPT Security setting path, then put `/codex_auth` on its own line. Do not call the screenshot tool unless the user asks where the setting is. |
+| Connect ChatGPT / OpenAI Codex auth or use the user's OpenAI paid access | Load `tinyhat:tinyhat-codex-auth`; call `tinyhat_codex_auth` once with `{"action": "prerequisite"}` so it sends the screenshot and `/codex_auth`. Do not send an extra text reply. |
 | Check Codex auth | Use `/codex_auth_status`. |
 | Inspect recent Codex auth output | Use `/codex_auth_log`. |
 | Show Codex usage limits | Use `/codex_limits`. |
@@ -52,14 +52,13 @@ OpenAI API key.
 
 Load `tinyhat:tinyhat-codex-auth` and follow its simple flow:
 
-1. Reply once: ask the user to open `chatgpt.com` > Settings > Security,
-   scroll to **Secure sign in with ChatGPT**, and turn on **Enable device
-   code authorization for Codex**. Put `/codex_auth` on its own line as
-   the action they should tap after they come back.
-2. Do not call `tinyhat_codex_auth` in the default path. That screenshot
-   tool is only for users who ask where the setting is or need the visual
-   guide. The `/codex_auth` command sends an OpenAI auth button and then a
-   separate copyable device code in Telegram.
+1. Call `tinyhat_codex_auth` once with `{"action": "prerequisite"}`.
+   It sends the ChatGPT Settings > Security screenshot and puts
+   `/codex_auth` on its own line as the action they should tap after they
+   come back.
+2. Do not send an extra normal text reply after the tool call. The
+   `/codex_auth` command sends an OpenAI auth button and then a separate
+   copyable device code in Telegram.
 
 Do not paste raw auth URLs unless the Tinyhat command reports that
 Telegram delivery failed.
