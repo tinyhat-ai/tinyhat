@@ -16,7 +16,7 @@ Use this as the default routing map:
 | Add or save an API key, token, password, webhook secret, or credential | Call `tinyhat_private_secret_handoff` once. |
 | Ask which Tinyhat plugin is running | Call `tinyhat_plugin_version`. |
 | Check that the Tinyhat plugin exists | Call `tinyhat_tell_joke` or `tinyhat_plugin_version`. |
-| Connect ChatGPT / OpenAI Codex auth or use the user's OpenAI paid access | Load `tinyhat:tinyhat-codex-auth`; send the ChatGPT Security prerequisite first, then start auth after the user confirms. |
+| Connect ChatGPT / OpenAI Codex auth or use the user's OpenAI paid access | Load `tinyhat:tinyhat-codex-auth`; send the ChatGPT Security prerequisite and confirmation button first, then start auth after the user taps it. |
 | Check Codex auth | Use `/codex_auth_status`. |
 | Inspect recent Codex auth output | Use `/codex_auth_log`. |
 | Show Codex usage limits | Use `/codex_limits`. |
@@ -53,11 +53,12 @@ OpenAI API key.
 Load `tinyhat:tinyhat-codex-auth` and follow its two-step flow:
 
 1. Call `tinyhat_codex_auth` with `action=prerequisite`. This sends the
-   ChatGPT Security screenshot. Ask the user to open `chatgpt.com` >
-   Settings > Security, scroll to **Secure sign in with ChatGPT**, turn
-   on **Enable device code authorization for Codex**, and confirm when
-   it is on.
-2. Only after the user confirms, call `tinyhat_codex_auth` with
+   ChatGPT Security screenshot and a confirmation button. Ask the user to
+   open `chatgpt.com` > Settings > Security, scroll to **Secure sign in
+   with ChatGPT**, turn on **Enable device code authorization for
+   Codex**, and tap the confirmation button.
+2. Only after the user taps the confirmation button or otherwise
+   confirms, call `tinyhat_codex_auth` with
    `action=start` and `confirmed=true`. The command sends an OpenAI auth
    button and then a separate copyable device code in Telegram.
 

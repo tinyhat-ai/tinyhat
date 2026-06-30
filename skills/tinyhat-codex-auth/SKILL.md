@@ -27,9 +27,15 @@ First call `tinyhat_codex_auth` with:
 {"action": "prerequisite"}
 ```
 
-The tool sends the ChatGPT device-code setting screenshot to Telegram.
-After that, ask the user to confirm the setting is enabled. Stop there.
-Do not start the auth helper in the same turn.
+The tool sends the ChatGPT device-code setting screenshot to Telegram and
+adds a confirmation button labeled:
+
+```text
+I enabled it - start Codex sign-in
+```
+
+After that, ask the user to turn on the setting and tap the button. Stop
+there. Do not start the auth helper in the same turn.
 
 The tool uses this bundled screenshot:
 
@@ -40,9 +46,9 @@ skills/tinyhat-codex-auth/assets/chatgpt-enable-device-code-for-codex.png
 with this short caption:
 
 ```text
-Open chatgpt.com > Settings > Security, scroll to "Secure sign in with
-ChatGPT", then turn on "Enable device code authorization for Codex".
-Reply here when it is on.
+Before Codex sign-in can start, open chatgpt.com > Settings > Security,
+scroll to "Secure sign in with ChatGPT", and turn on "Enable device code
+authorization for Codex". Then tap the button.
 ```
 
 If the tool is unavailable, send that one-sentence checklist in text and
@@ -63,7 +69,8 @@ disabled.
 
 ## Step 2: Start Auth After Confirmation
 
-When the user confirms the setting is on, call `tinyhat_codex_auth` with:
+When the user taps the confirmation button or otherwise confirms the
+setting is on, call `tinyhat_codex_auth` with:
 
 ```json
 {"action": "start", "confirmed": true}
@@ -106,6 +113,7 @@ token, or create an OpenAI API key.
 ## Message Contract
 
 - The Tinyhat auth helper sends the button and device code itself.
+- The prerequisite tool sends the confirmation button itself.
 - Do not start the helper until the user confirms the ChatGPT Security
   toggle is on.
 - Do not paste the raw auth URL or duplicate the device code unless the
@@ -122,8 +130,8 @@ After sending the prerequisite screenshot, a good short reply is:
 
 ```text
 I sent the ChatGPT setting screenshot. Please turn on "Enable device code
-authorization for Codex" in Settings > Security, then reply here when it
-is on. I will start the sign-in after that.
+authorization for Codex" in Settings > Security, then tap "I enabled it -
+start Codex sign-in". I will start sign-in after that.
 ```
 
 After the user confirms and the auth flow starts, a good short reply is:

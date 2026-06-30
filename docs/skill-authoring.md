@@ -97,9 +97,10 @@ to add or save an API key, token, password, or credential.
 Hermes agent to the user's OpenAI Codex / ChatGPT subscription. It should
 trigger for common user wording such as "connect my ChatGPT account" or
 "use my Codex subscription". It must first send the ChatGPT Settings >
-Security prerequisite and ask the user to confirm **Enable device code
-authorization for Codex** is on. Only after confirmation should it start
-the installed Tinyhat auth flow.
+Security prerequisite with a confirmation button and ask the user to turn
+on **Enable device code authorization for Codex**. Only after the user
+taps that button or otherwise confirms should it start the installed
+Tinyhat auth flow.
 
 `tinyhat-platform` is the compact operating map for Tinyhat-managed
 Hermes agents. It explains secrets, Codex auth commands, usage limit

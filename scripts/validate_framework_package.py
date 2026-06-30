@@ -262,6 +262,7 @@ def validate_docs(root: Path) -> None:
             "Open `chatgpt.com`",
             "Secure sign in with ChatGPT",
             "Enable device code authorization for Codex",
+            "I enabled it - start Codex sign-in",
             '{"action": "prerequisite"}',
             '{"action": "start", "confirmed": true}',
             "primary path",

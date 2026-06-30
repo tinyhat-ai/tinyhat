@@ -11,6 +11,9 @@ All notable changes to the Tinyhat plugin are documented here.
 - Require the agent to ask the user to enable ChatGPT Settings > Security
   > "Enable device code authorization for Codex" and confirm before
   starting the Codex auth helper.
+- Send a one-tap Telegram confirmation button for that prerequisite so the
+  follow-up turn can start Codex sign-in without asking the user to type a
+  command.
 - Teach the private secret skill and tool to use meaningful env-style names
   such as `EXA_API_KEY` instead of generic placeholders like
   `TINYHAT_SECRET`.

@@ -19,10 +19,11 @@ CODEX_AUTH_SCREENSHOT = (
     / "chatgpt-enable-device-code-for-codex.png"
 )
 CODEX_AUTH_CAPTION = (
-    'Open chatgpt.com > Settings > Security, scroll to "Secure sign in '
-    'with ChatGPT", then turn on "Enable device code authorization for '
-    'Codex". Reply here when it is on.'
+    'Before Codex sign-in can start, open chatgpt.com > Settings > '
+    'Security, scroll to "Secure sign in with ChatGPT", and turn on '
+    '"Enable device code authorization for Codex". Then tap the button.'
 )
+CODEX_AUTH_CONFIRM_BUTTON = "I enabled it - start Codex sign-in"
 TELEGRAM_ENV_CANDIDATES = (
     Path.home() / ".hermes" / ".env",
     Path("/usr/local/lib/hermes-agent/.env"),
@@ -117,9 +118,9 @@ def codex_auth(args: dict[str, Any] | None = None, **_: Any) -> str:
             "prerequisite": prerequisite,
             "message": (
                 "I sent the ChatGPT device-code setting screenshot. Ask the "
-                "user to reply when Enable device code authorization for "
-                "Codex is turned on; then call this tool with action=start "
-                "and confirmed=true."
+                "user to tap the confirmation button after Enable device "
+                "code authorization for Codex is turned on; then call this "
+                "tool with action=start and confirmed=true."
             ),
         },
         sort_keys=True,
@@ -138,25 +139,46 @@ def _send_codex_prerequisite() -> dict[str, Any]:
             chat_id=chat_id,
             photo_path=CODEX_AUTH_SCREENSHOT,
             caption=CODEX_AUTH_CAPTION,
+            reply_markup=_confirmation_reply_markup(),
         )
         if sent.get("ok"):
-            return {"ok": True, "mode": "photo"}
+            return {
+                "ok": True,
+                "mode": "photo",
+                "button_text": CODEX_AUTH_CONFIRM_BUTTON,
+            }
         fallback = _telegram_send_message(
             token=token,
             chat_id=chat_id,
             text=CODEX_AUTH_CAPTION,
+            reply_markup=_confirmation_reply_markup(),
         )
         return {
             "ok": bool(fallback.get("ok")),
             "mode": "text_fallback",
+            "button_text": CODEX_AUTH_CONFIRM_BUTTON,
             "photo_error": _safe_telegram_error(sent),
         }
     sent = _telegram_send_message(
         token=token,
         chat_id=chat_id,
         text=CODEX_AUTH_CAPTION,
+        reply_markup=_confirmation_reply_markup(),
     )
-    return {"ok": bool(sent.get("ok")), "mode": "text"}
+    return {
+        "ok": bool(sent.get("ok")),
+        "mode": "text",
+        "button_text": CODEX_AUTH_CONFIRM_BUTTON,
+    }
+
+
+def _confirmation_reply_markup() -> dict[str, Any]:
+    return {
+        "keyboard": [[{"text": CODEX_AUTH_CONFIRM_BUTTON}]],
+        "resize_keyboard": True,
+        "one_time_keyboard": True,
+        "input_field_placeholder": "Tap after enabling Codex device auth",
+    }
 
 
 def _start_runtime_codex_auth() -> dict[str, Any]:
@@ -234,11 +256,20 @@ def _parse_env_value(raw: str) -> str:
 
 
 def _telegram_send_message(
-    *, token: str, chat_id: str, text: str
+    *,
+    token: str,
+    chat_id: str,
+    text: str,
+    reply_markup: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
-    body = parse.urlencode(
-        {"chat_id": chat_id, "text": text[:3900], "disable_web_page_preview": "true"}
-    ).encode("utf-8")
+    payload: dict[str, Any] = {
+        "chat_id": chat_id,
+        "text": text[:3900],
+        "disable_web_page_preview": "true",
+    }
+    if reply_markup:
+        payload["reply_markup"] = json.dumps(reply_markup)
+    body = parse.urlencode(payload).encode("utf-8")
     return _telegram_post(
         token=token,
         method="sendMessage",
@@ -248,7 +279,12 @@ def _telegram_send_message(
 
 
 def _telegram_send_photo(
-    *, token: str, chat_id: str, photo_path: Path, caption: str
+    *,
+    token: str,
+    chat_id: str,
+    photo_path: Path,
+    caption: str,
+    reply_markup: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     boundary = "tinyhat_codex_auth_boundary"
     photo = photo_path.read_bytes()
@@ -263,8 +299,10 @@ def _telegram_send_photo(
         ).encode("utf-8")
         + photo
         + b"\r\n",
-        f"--{boundary}--\r\n".encode("utf-8"),
     ]
+    if reply_markup:
+        parts.append(_multipart_field(boundary, "reply_markup", json.dumps(reply_markup)))
+    parts.append(f"--{boundary}--\r\n".encode("utf-8"))
     return _telegram_post(
         token=token,
         method="sendPhoto",

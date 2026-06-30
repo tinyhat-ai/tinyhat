@@ -46,10 +46,10 @@ TINYHAT_CODEX_AUTH_SCHEMA = {
     "type": "object",
     "description": (
         "Starts Tinyhat's OpenAI Codex device-code auth flow for Telegram. "
-        "First sends the prerequisite screenshot/reminder and waits for the "
-        "user to confirm the ChatGPT setting is enabled. After confirmation, "
-        "starts the installed runtime helper that delivers the OpenAI auth "
-        "button and code."
+        "First sends the prerequisite screenshot/reminder with a Telegram "
+        "confirmation button and waits for the user to confirm the ChatGPT "
+        "setting is enabled. After confirmation, starts the installed runtime "
+        "helper that delivers the OpenAI auth button and code."
     ),
     "properties": {
         "action": {
