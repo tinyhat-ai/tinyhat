@@ -41,3 +41,14 @@ TINYHAT_PRIVATE_SECRET_HANDOFF_SCHEMA = {
     "required": ["name"],
     "additionalProperties": False,
 }
+
+TINYHAT_CODEX_AUTH_SCHEMA = {
+    "type": "object",
+    "description": (
+        "Starts Tinyhat's OpenAI Codex device-code auth flow for Telegram. "
+        "Sends the prerequisite screenshot/reminder and starts the installed "
+        "runtime helper that delivers the OpenAI auth button and code."
+    ),
+    "properties": {},
+    "additionalProperties": False,
+}

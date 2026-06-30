@@ -14,6 +14,7 @@ REQUIRED_TOOLS = [
     "tinyhat_plugin_version",
     "tinyhat_tell_joke",
     "tinyhat_private_secret_handoff",
+    "tinyhat_codex_auth",
 ]
 REQUIRED_COMMANDS = [
     "tinyhat-joke",
@@ -259,6 +260,7 @@ def validate_docs(root: Path) -> None:
             "Do the work yourself.",
             "Do not tell the user to send `/codex_auth`",
             "primary path",
+            "tinyhat_codex_auth",
             "hermes_runtime.telegram_codex_auth start",
         ),
         ".agents/skills/tinyhat-plugin-skill-authoring/SKILL.md": (

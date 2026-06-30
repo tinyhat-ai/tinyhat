@@ -25,7 +25,7 @@ is installed on each Hermes Computer.
 | `__init__.py` | Hermes registration entrypoint. |
 | `hermes.plugin.json` | Tinyhat metadata for the Hermes adapter, skill, command, and release channels. |
 | `context.py` | Small Hermes `pre_llm_call` context hook for Tinyhat-sensitive turns. |
-| `tools.py` / `schemas.py` | Tinyhat tools: plugin version, joke proof, and private secret handoff. |
+| `tools.py` / `schemas.py` | Tinyhat tools: plugin version, joke proof, private secret handoff, and Codex auth start. |
 | `skills/tinyhat-tell-joke/SKILL.md` | Deterministic joke proof. |
 | `skills/tinyhat-plugin-version/SKILL.md` | Live plugin version proof. |
 | `skills/tinyhat-private-secret/SKILL.md` | Browser-encrypted secret handoff guidance. |
@@ -80,9 +80,11 @@ the handoff and wipes it after completion, expiration, or failure.
 `tinyhat-codex-auth` teaches the agent how to start the Tinyhat-managed
 OpenAI Codex / ChatGPT subscription sign-in flow. When the user says
 "connect you to my ChatGPT account", "use my Codex subscription", or
-"switch from platform credits", the agent should start the installed
-Tinyhat `/codex_auth` flow instead of asking the user to choose between
-unrelated interpretations or giving manual `hermes auth` instructions.
+"switch from platform credits", the agent calls `tinyhat_codex_auth`.
+That tool sends the ChatGPT device-code setting reminder to Telegram and
+starts the installed Tinyhat Codex auth helper. The agent should not ask
+the user to choose between unrelated interpretations or give manual
+`hermes auth` instructions.
 
 `tinyhat-platform` is the operating context. It tells the agent that
 Tinyhat secrets are the default way to add credentials to Hermes and that
@@ -111,7 +113,7 @@ For development or manual testing, use `channels/latest` or an exact tag:
 
 ```bash
 TINYHAT_PLUGIN_REF=channels/latest
-TINYHAT_PLUGIN_REF=v0.20.4
+TINYHAT_PLUGIN_REF=v0.20.5
 ```
 
 ## Channels

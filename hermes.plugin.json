@@ -1,6 +1,6 @@
 {
   "schema": "tinyhat.framework-adapter.v1",
-  "version": "0.20.4",
+  "version": "0.20.5",
   "framework": {
     "name": "hermes",
     "minimum": "0.0.0"
@@ -52,6 +52,11 @@
       "name": "tinyhat_private_secret_handoff",
       "handler": "tools.private_secret_handoff",
       "skill": "tinyhat-private-secret"
+    },
+    {
+      "name": "tinyhat_codex_auth",
+      "handler": "tools.codex_auth",
+      "skill": "tinyhat-codex-auth"
     }
   ],
   "commands": [
