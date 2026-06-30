@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import importlib.util
+import os
 import subprocess
 import sys
 import tempfile
@@ -596,6 +597,236 @@ class HermesAdapterTests(unittest.TestCase):
             "Hermes could not save this secret.",
         )
         self.assertNotIn("super-secret-value", json.dumps(fake_client.claim_payloads))
+
+    def test_private_secret_save_uses_hermes_config_for_next_process_reload(self) -> None:
+        original_secret = os.environ.get("EXA_API_KEY")
+        try:
+            os.environ.pop("EXA_API_KEY", None)
+            with tempfile.TemporaryDirectory() as temp_dir:
+                temp_root = Path(temp_dir)
+                env_file = temp_root / "hermes.env"
+                package_link = temp_root / "tinyhat"
+                package_link.symlink_to(REPO_ROOT, target_is_directory=True)
+                bin_dir = temp_root / "bin"
+                bin_dir.mkdir()
+                fake_hermes = bin_dir / "hermes"
+                fake_hermes.write_text(
+                    """#!/usr/bin/env python3
+import os
+import sys
+from pathlib import Path
+
+if sys.argv[1:3] != ["config", "set"] or len(sys.argv) != 5:
+    sys.exit(2)
+
+key = sys.argv[3]
+value = sys.argv[4]
+path = Path(os.environ["HERMES_ENV_FILE"])
+path.parent.mkdir(parents=True, exist_ok=True)
+lines = path.read_text(encoding="utf-8").splitlines() if path.exists() else []
+escaped = value.replace("\\\\", "\\\\\\\\").replace('"', '\\\\"')
+entry = f'{key}="{escaped}"'
+updated = False
+next_lines = []
+for line in lines:
+    clean_key, sep, _raw = line.partition("=")
+    if sep and clean_key.strip() == key:
+        next_lines.append(entry)
+        updated = True
+    else:
+        next_lines.append(line)
+if not updated:
+    next_lines.append(entry)
+path.write_text("\\n".join(next_lines).rstrip() + "\\n", encoding="utf-8")
+path.chmod(0o600)
+""",
+                    encoding="utf-8",
+                )
+                fake_hermes.chmod(0o700)
+
+                worker_env = dict(os.environ)
+                worker_env.update(
+                    {
+                        "HERMES_ENV_FILE": str(env_file),
+                        "PATH": f"{bin_dir}{os.pathsep}{worker_env.get('PATH', '')}",
+                        "PYTHONPATH": str(temp_root),
+                    }
+                )
+                worker = subprocess.run(
+                    [
+                        sys.executable,
+                        "-c",
+                        (
+                            "from tinyhat.secret_handoff import _set_hermes_secret; "
+                            "_set_hermes_secret('EXA_API_KEY', 'test-secret-value')"
+                        ),
+                    ],
+                    cwd="/tmp",
+                    env=worker_env,
+                    capture_output=True,
+                    text=True,
+                    timeout=10,
+                    check=False,
+                )
+
+                self.assertEqual(worker.returncode, 0, worker.stderr)
+                self.assertNotIn("test-secret-value", worker.stdout + worker.stderr)
+                self.assertNotEqual(os.environ.get("EXA_API_KEY"), "test-secret-value")
+                self.assertIn('EXA_API_KEY="test-secret-value"', env_file.read_text())
+
+                reloader = subprocess.run(
+                    [
+                        sys.executable,
+                        "-c",
+                        """
+import os
+from pathlib import Path
+
+path = Path(os.environ["HERMES_ENV_FILE"])
+for line in path.read_text(encoding="utf-8").splitlines():
+    clean = line.strip()
+    if not clean or clean.startswith("#") or "=" not in clean:
+        continue
+    key, raw = clean.split("=", 1)
+    value = raw.strip()
+    if len(value) >= 2 and value[0] == value[-1] and value.startswith(("'", '"')):
+        value = value[1:-1]
+    os.environ[key.strip()] = value.replace('\\\\"', '"').replace("\\\\\\\\", "\\\\")
+print("set" if os.environ.get("EXA_API_KEY") == "test-secret-value" else "missing")
+""",
+                    ],
+                    cwd="/tmp",
+                    env={
+                        "HERMES_ENV_FILE": str(env_file),
+                    },
+                    capture_output=True,
+                    text=True,
+                    timeout=10,
+                    check=False,
+                )
+                self.assertEqual(reloader.returncode, 0, reloader.stderr)
+                self.assertEqual(reloader.stdout.strip(), "set")
+        finally:
+            if original_secret is None:
+                os.environ.pop("EXA_API_KEY", None)
+            else:
+                os.environ["EXA_API_KEY"] = original_secret
+
+    def test_private_secret_save_uses_hermes_env_writer_for_secret_key_names(self) -> None:
+        original_secret = os.environ.get("STRIPE_SECRET_KEY")
+        try:
+            os.environ.pop("STRIPE_SECRET_KEY", None)
+            with tempfile.TemporaryDirectory() as temp_dir:
+                temp_root = Path(temp_dir)
+                env_file = temp_root / "hermes.env"
+                package_link = temp_root / "tinyhat"
+                package_link.symlink_to(REPO_ROOT, target_is_directory=True)
+                bin_dir = temp_root / "bin"
+                venv_bin = temp_root / "hermes-agent" / "venv" / "bin"
+                bin_dir.mkdir()
+                venv_bin.mkdir(parents=True)
+
+                fake_python = venv_bin / "python"
+                fake_python.write_text(
+                    f"""#!{sys.executable}
+import os
+import sys
+from pathlib import Path
+
+key = sys.argv[-1]
+value = sys.stdin.read()
+path = Path(os.environ["HERMES_ENV_FILE"])
+path.parent.mkdir(parents=True, exist_ok=True)
+escaped = value.replace("\\\\", "\\\\\\\\").replace('"', '\\\\"')
+path.write_text(f'{{key}}="{{escaped}}"\\n', encoding="utf-8")
+path.chmod(0o600)
+""",
+                    encoding="utf-8",
+                )
+                fake_python.chmod(0o700)
+                fake_console = venv_bin / "hermes"
+                fake_console.write_text(f"#!{fake_python}\n", encoding="utf-8")
+                fake_console.chmod(0o700)
+                fake_wrapper = bin_dir / "hermes"
+                fake_wrapper.write_text(
+                    f'#!/bin/sh\nexec "{fake_console}" "$@"\n',
+                    encoding="utf-8",
+                )
+                fake_wrapper.chmod(0o700)
+
+                worker_env = dict(os.environ)
+                worker_env.update(
+                    {
+                        "HERMES_ENV_FILE": str(env_file),
+                        "PATH": f"{bin_dir}{os.pathsep}{worker_env.get('PATH', '')}",
+                        "PYTHONPATH": str(temp_root),
+                    }
+                )
+                worker = subprocess.run(
+                    [
+                        sys.executable,
+                        "-c",
+                        (
+                            "from tinyhat.secret_handoff import _set_hermes_secret; "
+                            "_set_hermes_secret('STRIPE_SECRET_KEY', 'test-secret-value')"
+                        ),
+                    ],
+                    cwd="/tmp",
+                    env=worker_env,
+                    capture_output=True,
+                    text=True,
+                    timeout=10,
+                    check=False,
+                )
+
+                self.assertEqual(worker.returncode, 0, worker.stderr)
+                self.assertNotIn("test-secret-value", worker.stdout + worker.stderr)
+                self.assertNotEqual(
+                    os.environ.get("STRIPE_SECRET_KEY"),
+                    "test-secret-value",
+                )
+                self.assertIn(
+                    'STRIPE_SECRET_KEY="test-secret-value"',
+                    env_file.read_text(encoding="utf-8"),
+                )
+
+                reloader = subprocess.run(
+                    [
+                        sys.executable,
+                        "-c",
+                        """
+import os
+from pathlib import Path
+
+path = Path(os.environ["HERMES_ENV_FILE"])
+for line in path.read_text(encoding="utf-8").splitlines():
+    clean = line.strip()
+    if not clean or clean.startswith("#") or "=" not in clean:
+        continue
+    key, raw = clean.split("=", 1)
+    value = raw.strip()
+    if len(value) >= 2 and value[0] == value[-1] and value.startswith(("'", '"')):
+        value = value[1:-1]
+    os.environ[key.strip()] = value.replace('\\\\"', '"').replace("\\\\\\\\", "\\\\")
+print("set" if os.environ.get("STRIPE_SECRET_KEY") == "test-secret-value" else "missing")
+""",
+                    ],
+                    cwd="/tmp",
+                    env={
+                        "HERMES_ENV_FILE": str(env_file),
+                    },
+                    capture_output=True,
+                    text=True,
+                    timeout=10,
+                    check=False,
+                )
+                self.assertEqual(reloader.returncode, 0, reloader.stderr)
+                self.assertEqual(reloader.stdout.strip(), "set")
+        finally:
+            if original_secret is None:
+                os.environ.pop("STRIPE_SECRET_KEY", None)
+            else:
+                os.environ["STRIPE_SECRET_KEY"] = original_secret
 
     def test_tell_joke_ignores_hermes_runtime_metadata(self) -> None:
         payload = json.loads(
