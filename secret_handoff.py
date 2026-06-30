@@ -333,20 +333,26 @@ def _reload_hermes_gateway_after_secret() -> dict[str, Any]:
         timeout=45,
     )
     start = _run_gateway_command([hermes, "gateway", "start"], timeout=180)
-    status_after_start = _run_gateway_command(
-        [hermes, "gateway", "status"],
-        timeout=45,
+    status_after_start = _wait_for_healthy_gateway(
+        hermes,
+        timeout_seconds=12,
     )
 
     foreground = None
-    if _gateway_status_is_healthy(status_after_stop) or _gateway_needs_foreground_run(
+    stop_left_gateway_running = _gateway_status_is_healthy(status_after_stop)
+    if stop_left_gateway_running or _gateway_needs_foreground_run(
         start=start,
         status=status_after_start,
     ):
+        # Local/Docker gateways may keep a foreground `gateway run` process
+        # alive even after `gateway stop`. In that case use Hermes' public
+        # replace mode so the new process gets a fresh env.
         foreground = _start_gateway_foreground(hermes)
-        status_after_start = _run_gateway_command(
-            [hermes, "gateway", "status"],
-            timeout=45,
+        status_after_start = _wait_for_healthy_gateway(
+            hermes,
+            timeout_seconds=15,
+            log_path=Path(str(foreground.get("log_path"))),
+            log_start_offset=int(foreground.get("log_start_offset") or 0),
         )
 
     foreground_log = (
@@ -354,8 +360,32 @@ def _reload_hermes_gateway_after_secret() -> dict[str, Any]:
         if isinstance(foreground, dict) and foreground.get("log_path")
         else None
     )
-    adapter_failure = _gateway_log_has_adapter_failure(foreground_log)
+    foreground_log_offset = (
+        int(foreground.get("log_start_offset") or 0)
+        if isinstance(foreground, dict)
+        else 0
+    )
+    adapter_failure = _gateway_log_has_adapter_failure(
+        foreground_log,
+        since_byte=foreground_log_offset,
+    )
     healthy = _gateway_status_is_healthy(status_after_start) and not adapter_failure
+    recovery_start = None
+    recovery_status = None
+    if not healthy:
+        recovery_start = _run_gateway_command([hermes, "gateway", "start"], timeout=60)
+        recovery_status = _wait_for_healthy_gateway(
+            hermes,
+            timeout_seconds=12,
+            log_path=foreground_log,
+            log_start_offset=foreground_log_offset,
+        )
+        adapter_failure = _gateway_log_has_adapter_failure(
+            foreground_log,
+            since_byte=foreground_log_offset,
+        )
+        healthy = _gateway_status_is_healthy(recovery_status) and not adapter_failure
+
     result = {
         "schema": "tinyhat_secret_hermes_reload_v1",
         "healthy": healthy,
@@ -366,6 +396,8 @@ def _reload_hermes_gateway_after_secret() -> dict[str, Any]:
         "start": _compact_gateway_process(start),
         "foreground": foreground,
         "status_after": _compact_gateway_process(status_after_start),
+        "recovery_start": _compact_gateway_process(recovery_start),
+        "recovery_status": _compact_gateway_process(recovery_status),
     }
     if not healthy:
         raise SecretHandoffError(
@@ -452,6 +484,26 @@ def _gateway_needs_foreground_run(
     return not _gateway_status_is_healthy(status)
 
 
+def _wait_for_healthy_gateway(
+    hermes: str,
+    *,
+    timeout_seconds: float,
+    log_path: Path | None = None,
+    log_start_offset: int = 0,
+) -> dict[str, Any]:
+    deadline = time.monotonic() + timeout_seconds
+    last_status = _run_gateway_command([hermes, "gateway", "status"], timeout=45)
+    while time.monotonic() < deadline:
+        if _gateway_status_is_healthy(last_status) and not _gateway_log_has_adapter_failure(
+            log_path,
+            since_byte=log_start_offset,
+        ):
+            return last_status
+        time.sleep(1)
+        last_status = _run_gateway_command([hermes, "gateway", "status"], timeout=45)
+    return last_status
+
+
 def _gateway_log_path() -> Path:
     state_dir = os.getenv("TINYHAT_RUNTIME_STATE_DIR")
     if state_dir:
@@ -459,11 +511,14 @@ def _gateway_log_path() -> Path:
     return Path.home() / ".tinyhat" / GATEWAY_RELOAD_LOG_NAME
 
 
-def _gateway_log_has_adapter_failure(path: Path | None) -> bool:
+def _gateway_log_has_adapter_failure(path: Path | None, *, since_byte: int = 0) -> bool:
     if path is None:
         return False
     try:
-        text = path.read_text(encoding="utf-8", errors="replace")[-8000:].lower()
+        with path.open("rb") as handle:
+            if since_byte > 0:
+                handle.seek(since_byte)
+            text = handle.read().decode("utf-8", errors="replace")[-8000:].lower()
     except OSError:
         return False
     needles = (
@@ -477,6 +532,10 @@ def _gateway_log_has_adapter_failure(path: Path | None) -> bool:
 def _start_gateway_foreground(hermes: str) -> dict[str, Any]:
     log_path = _gateway_log_path()
     log_path.parent.mkdir(parents=True, exist_ok=True)
+    try:
+        log_start_offset = log_path.stat().st_size
+    except OSError:
+        log_start_offset = 0
     with log_path.open("ab") as log_file:
         process = subprocess.Popen(
             [
@@ -500,6 +559,7 @@ def _start_gateway_foreground(hermes: str) -> dict[str, Any]:
         "started": returncode is None,
         "returncode": returncode,
         "log_path": str(log_path),
+        "log_start_offset": log_start_offset,
     }
 
 

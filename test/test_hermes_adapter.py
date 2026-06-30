@@ -630,6 +630,34 @@ class HermesAdapterTests(unittest.TestCase):
         )
         self.assertNotIn("super-secret-value", json.dumps(fake_client.claim_payloads))
 
+    def test_gateway_log_failure_scan_ignores_old_failures(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="tinyhat-log-test-") as temp_dir:
+            log_path = Path(temp_dir) / "gateway.log"
+            log_path.write_text(
+                "old adapter creation failed\n",
+                encoding="utf-8",
+            )
+            offset = log_path.stat().st_size
+            with log_path.open("a", encoding="utf-8") as handle:
+                handle.write("new start is healthy\n")
+
+            self.assertFalse(
+                secret_handoff._gateway_log_has_adapter_failure(
+                    log_path,
+                    since_byte=offset,
+                )
+            )
+
+            with log_path.open("a", encoding="utf-8") as handle:
+                handle.write("platform 'telegram' requirements not met\n")
+
+            self.assertTrue(
+                secret_handoff._gateway_log_has_adapter_failure(
+                    log_path,
+                    since_byte=offset,
+                )
+            )
+
     def test_worker_script_bootstraps_from_non_package_checkout(self) -> None:
         result = subprocess.run(
             [
