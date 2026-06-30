@@ -5,6 +5,7 @@ from __future__ import annotations
 import base64
 import os
 import re
+import shlex
 import shutil
 import subprocess
 import sys
@@ -297,31 +298,114 @@ def _decrypt_one_chunk(private_key_pem: str, ciphertext_b64: str) -> bytes:
 def _set_hermes_secret(secret_name: str, value: str) -> None:
     hermes = shutil.which("hermes")
     if not hermes:
-        raise SecretHandoffError("Hermes CLI was not found.")
-    result = subprocess.run(
-        [hermes, "config", "set", secret_name, value],
-        capture_output=True,
-        text=True,
-        timeout=45,
-        check=False,
-    )
-    if result.returncode != 0:
         raise SecretHandoffError(
-            "Hermes config set failed.",
+            "Hermes CLI was not found.",
             public_message="Hermes could not save this secret.",
         )
+    try:
+        if _can_save_with_hermes_config_set(secret_name):
+            _run([hermes, "config", "set", secret_name, value], redactions=(value,))
+            return
+        _save_hermes_env_value(hermes, secret_name, value)
+    except SecretHandoffError as exc:
+        raise SecretHandoffError(
+            "Hermes config could not save this secret.",
+            public_message="Hermes could not save this secret.",
+        ) from exc
 
 
-def _run(command: list[str], *, text: bool = True) -> str | bytes:
+def _can_save_with_hermes_config_set(secret_name: str) -> bool:
+    return (
+        secret_name.endswith(("_API_KEY", "_TOKEN"))
+        or secret_name.startswith("TERMINAL_SSH")
+        or secret_name
+        in {
+            "FAL_KEY",
+            "SUDO_PASSWORD",
+        }
+    )
+
+
+def _save_hermes_env_value(hermes: str, secret_name: str, value: str) -> None:
+    python = _hermes_python_executable(hermes)
+    if not python:
+        raise SecretHandoffError("Could not find Hermes' Python runtime.")
+    script = (
+        "import sys\n"
+        "from hermes_cli.config import save_env_value\n"
+        "save_env_value(sys.argv[1], sys.stdin.read())\n"
+    )
+    _run([python, "-c", script, secret_name], input_text=value, redactions=(value,))
+
+
+def _hermes_python_executable(hermes: str) -> str | None:
+    for candidate in _hermes_script_candidates(Path(hermes)):
+        for name in ("python", "python3"):
+            python = candidate.parent / name
+            if python.exists():
+                return str(python)
+        shebang = _read_first_line(candidate)
+        if not shebang.startswith("#!"):
+            continue
+        try:
+            parts = shlex.split(shebang[2:].strip())
+        except ValueError:
+            continue
+        if not parts:
+            continue
+        executable = Path(parts[0])
+        if executable.name.startswith("python") and executable.exists():
+            return str(executable)
+        if executable.name == "env" and len(parts) > 1 and parts[1].startswith("python"):
+            python = shutil.which(parts[1])
+            if python:
+                return python
+    return None
+
+
+def _hermes_script_candidates(hermes: Path) -> list[Path]:
+    candidates: list[Path] = []
+    try:
+        text = hermes.read_text(encoding="utf-8", errors="ignore")[:8192]
+    except OSError:
+        return [hermes]
+    for match in re.finditer(r"""["']([^"']*/hermes(?:\.exe)?)["']""", text):
+        candidate = Path(match.group(1))
+        if candidate.exists() and candidate not in candidates:
+            candidates.append(candidate)
+    if hermes not in candidates:
+        candidates.append(hermes)
+    return candidates
+
+
+def _read_first_line(path: Path) -> str:
+    try:
+        with path.open("r", encoding="utf-8", errors="ignore") as handle:
+            return handle.readline().strip()
+    except OSError:
+        return ""
+
+
+def _run(
+    command: list[str],
+    *,
+    text: bool = True,
+    input_text: str | None = None,
+    redactions: tuple[str, ...] = (),
+) -> str | bytes:
     result = subprocess.run(
         command,
         capture_output=True,
         text=text,
+        input=input_text,
         timeout=45,
         check=False,
     )
     if result.returncode != 0:
         stderr = result.stderr if text else result.stderr.decode("utf-8", "replace")
+        for value in redactions:
+            if value:
+                stderr = stderr.replace(value, "[redacted]")
         raise SecretHandoffError((stderr or "command failed").strip()[:500])
     return result.stdout if text else result.stdout
 
