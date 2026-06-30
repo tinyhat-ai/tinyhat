@@ -1,6 +1,6 @@
 ---
 name: tinyhat-platform
-description: Explain how this Hermes agent should use Tinyhat platform capabilities. Use for Tinyhat-managed Computers, secrets, API keys, credentials, Codex auth, usage limits, settings, or questions about where the agent is running.
+description: Explain how this Hermes agent should use Tinyhat platform capabilities. Use for Tinyhat-managed Computers, secrets, API keys, credentials, Codex auth, ChatGPT subscription auth, usage limits, settings, or questions about where the agent is running.
 ---
 
 # Tinyhat Platform
@@ -16,7 +16,7 @@ Use this as the default routing map:
 | Add or save an API key, token, password, webhook secret, or credential | Call `tinyhat_private_secret_handoff` once. |
 | Ask which Tinyhat plugin is running | Call `tinyhat_plugin_version`. |
 | Check that the Tinyhat plugin exists | Call `tinyhat_tell_joke` or `tinyhat_plugin_version`. |
-| Connect OpenAI Codex auth or use the user's OpenAI paid access | Use the installed `/codex_auth` flow. |
+| Connect ChatGPT / OpenAI Codex auth or use the user's OpenAI paid access | Load `tinyhat:tinyhat-codex-auth` and start the installed Tinyhat Codex auth flow. |
 | Check Codex auth | Use `/codex_auth_status`. |
 | Inspect recent Codex auth output | Use `/codex_auth_log`. |
 | Show Codex usage limits | Use `/codex_limits`. |
@@ -43,19 +43,21 @@ failure-handling rules.
 Tinyhat installs Telegram commands for Codex auth during Computer setup.
 The important one is `/codex_auth`.
 
-When the user asks to connect OpenAI Codex or their OpenAI paid access:
+When the user asks to connect ChatGPT, OpenAI, Codex, a ChatGPT
+subscription, ChatGPT Plus / Pro / Team, a paid ChatGPT account, their
+own OpenAI access, or to stop using platform credits, treat it as a
+Tinyhat Codex auth request by default. Do not ask a multiple-choice
+clarification unless they explicitly ask for ChatGPT history/data or an
+OpenAI API key.
 
-1. Prefer the Tinyhat `/codex_auth` flow. If your interface can run
-   slash commands, run `/codex_auth`. If it cannot, tell the user to
-   send `/codex_auth`.
-2. The command sends an OpenAI auth button and then a separate copyable
-   device code in Telegram.
-3. Do not paste raw auth URLs unless the Tinyhat command reports that
-   Telegram delivery failed.
-4. Do not ask for `auth.json`, passwords, refresh tokens, API keys, or
-   OAuth tokens.
-5. After the user signs in, use `/codex_auth_status` if you need proof,
-   and `/codex_limits` if they ask about remaining limits.
+Load `tinyhat:tinyhat-codex-auth` and start the Tinyhat flow. The
+command sends an OpenAI auth button and then a separate copyable device
+code in Telegram. Do not paste raw auth URLs unless the Tinyhat command
+reports that Telegram delivery failed.
+
+Do not ask for `auth.json`, passwords, refresh tokens, API keys, or
+OAuth tokens. After the user signs in, use `/codex_auth_status` if you
+need proof, and `/codex_limits` if they ask about remaining limits.
 
 ## Boundary
 

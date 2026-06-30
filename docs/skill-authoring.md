@@ -40,6 +40,11 @@ description: Tell a short Tinyhat wiring-test joke when the user asks for proof 
 - For Tinyhat-managed Hermes behavior that should be visible before a
   specific skill loads, use a short `pre_llm_call` context hook and keep
   the longer playbook in a skill.
+- For capability-discovery skills, include concrete trigger examples in
+  the frontmatter description. Example: `tinyhat-codex-auth` names
+  "connect you to my ChatGPT account", "use my Codex subscription", and
+  "switch from platform credits" so Hermes can load the right playbook
+  before it answers with generic model-provider advice.
 - Add or update tests when changing a skill's tool contract, naming
   behavior, security wording, or framework adapter registration.
 
@@ -87,6 +92,12 @@ the live plugin code loaded in an agent session.
 `tinyhat-private-secret` is the default way to add credentials to Hermes.
 It should be triggered before generic `.env` advice whenever a user asks
 to add or save an API key, token, password, or credential.
+
+`tinyhat-codex-auth` is the default way to connect a Tinyhat-managed
+Hermes agent to the user's OpenAI Codex / ChatGPT subscription. It should
+trigger for common user wording such as "connect my ChatGPT account" or
+"use my Codex subscription" and start the installed Tinyhat auth flow
+instead of asking the user to choose from unrelated meanings.
 
 `tinyhat-platform` is the compact operating map for Tinyhat-managed
 Hermes agents. It explains secrets, Codex auth commands, usage limit

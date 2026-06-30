@@ -24,6 +24,7 @@ REQUIRED_SKILLS = [
     "tinyhat-plugin-version",
     "tinyhat-tell-joke",
     "tinyhat-private-secret",
+    "tinyhat-codex-auth",
     "tinyhat-platform",
 ]
 FORBIDDEN_PATHS = (
@@ -34,7 +35,6 @@ FORBIDDEN_PATHS = (
 )
 FORBIDDEN_TEXT = (
     "CLAUDE_PLUGIN_DATA",
-    "ChatGPT subscription",
 )
 
 
@@ -155,6 +155,7 @@ def validate_hermes_adapter(root: Path) -> None:
         "tinyhat-plugin-version": "skills/tinyhat-plugin-version/SKILL.md",
         "tinyhat-tell-joke": "skills/tinyhat-tell-joke/SKILL.md",
         "tinyhat-private-secret": "skills/tinyhat-private-secret/SKILL.md",
+        "tinyhat-codex-auth": "skills/tinyhat-codex-auth/SKILL.md",
         "tinyhat-platform": "skills/tinyhat-platform/SKILL.md",
     }
     for skill in skills:
@@ -230,6 +231,7 @@ def validate_docs(root: Path) -> None:
             "tinyhat-tell-joke",
             "tinyhat-plugin-version",
             "tinyhat-private-secret",
+            "tinyhat-codex-auth",
             "tinyhat-platform",
             "pre_llm_call",
             "channels/lts",
@@ -240,6 +242,7 @@ def validate_docs(root: Path) -> None:
             "Do not ask the user to paste secret values in chat.",
             "Secret Naming Standard",
             "Tinyhat Platform Context",
+            "tinyhat-codex-auth",
         ),
         ".agents/skills/tinyhat-plugin-skill-authoring/SKILL.md": (
             "Create, modify, or review Tinyhat plugin skills.",

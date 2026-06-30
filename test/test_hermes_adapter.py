@@ -70,10 +70,12 @@ class HermesAdapterTests(unittest.TestCase):
         self.assertIn("tinyhat-plugin-version", ctx.skills)
         self.assertIn("tinyhat-tell-joke", ctx.skills)
         self.assertIn("tinyhat-private-secret", ctx.skills)
+        self.assertIn("tinyhat-codex-auth", ctx.skills)
         self.assertIn("tinyhat-platform", ctx.skills)
         self.assertTrue(ctx.skills["tinyhat-plugin-version"].is_file())
         self.assertTrue(ctx.skills["tinyhat-tell-joke"].is_file())
         self.assertTrue(ctx.skills["tinyhat-private-secret"].is_file())
+        self.assertTrue(ctx.skills["tinyhat-codex-auth"].is_file())
         self.assertTrue(ctx.skills["tinyhat-platform"].is_file())
 
     def test_registered_commands_match_telegram_dispatch_names(self) -> None:
@@ -110,6 +112,25 @@ class HermesAdapterTests(unittest.TestCase):
         self.assertIn("tinyhat_private_secret_handoff", injected["context"])
         self.assertIn("Do not ask the user to paste secrets", injected["context"])
         self.assertIn("/codex_auth", injected["context"])
+        self.assertIn("tinyhat:tinyhat-codex-auth", injected["context"])
+
+    def test_context_hook_injects_for_chatgpt_subscription_requests(self) -> None:
+        examples = (
+            "I want to connect you to my chatgpt account",
+            "I want to use my codex subscription here instead of platform credits",
+            "Please use my ChatGPT Pro plan",
+            "Switch from platform credits to my own OpenAI paid access",
+        )
+        for user_message in examples:
+            with self.subTest(user_message=user_message):
+                injected = tinyhat_context.inject_tinyhat_context(
+                    user_message=user_message,
+                    is_first_turn=False,
+                )
+                self.assertIsNotNone(injected)
+                assert injected is not None
+                self.assertIn("tinyhat:tinyhat-codex-auth", injected["context"])
+                self.assertIn("Do not ask a multiple-choice clarification", injected["context"])
 
     def test_context_hook_injects_for_env_style_secret_names(self) -> None:
         for secret_name in (

@@ -13,7 +13,9 @@ For the first v0.20 version, this repo is deliberately small. It supports
 Hermes only, ships two proof skills, a small Tinyhat context hook, and
 now includes the first real Tinyhat platform capability: a private secret
 handoff that lets the user enter a secret in a Telegram Mini App without
-sending the plaintext to Tinyhat's servers.
+sending the plaintext to Tinyhat's servers. It also teaches the agent
+the Tinyhat-managed OpenAI Codex / ChatGPT subscription auth flow that
+is installed on each Hermes Computer.
 
 ## What This Plugin Does
 
@@ -27,6 +29,7 @@ sending the plaintext to Tinyhat's servers.
 | `skills/tinyhat-tell-joke/SKILL.md` | Deterministic joke proof. |
 | `skills/tinyhat-plugin-version/SKILL.md` | Live plugin version proof. |
 | `skills/tinyhat-private-secret/SKILL.md` | Browser-encrypted secret handoff guidance. |
+| `skills/tinyhat-codex-auth/SKILL.md` | OpenAI Codex / ChatGPT subscription auth guidance. |
 | `skills/tinyhat-platform/SKILL.md` | Platform context for Tinyhat-managed Hermes agents. |
 | `docs/skill-authoring.md` | The standard for future Tinyhat skills. |
 | `.agents/skills/tinyhat-plugin-skill-authoring/SKILL.md` | Maintainer workflow for adding or changing plugin skills. |
@@ -73,6 +76,13 @@ pair, the user enters the value in a Telegram Mini App, the browser
 encrypts the value with the public key, and the Computer decrypts it with
 the temporary private key. Tinyhat stores only short-lived ciphertext for
 the handoff and wipes it after completion, expiration, or failure.
+
+`tinyhat-codex-auth` teaches the agent how to start the Tinyhat-managed
+OpenAI Codex / ChatGPT subscription sign-in flow. When the user says
+"connect you to my ChatGPT account", "use my Codex subscription", or
+"switch from platform credits", the agent should start the installed
+Tinyhat `/codex_auth` flow instead of asking the user to choose between
+unrelated interpretations or giving manual `hermes auth` instructions.
 
 `tinyhat-platform` is the operating context. It tells the agent that
 Tinyhat secrets are the default way to add credentials to Hermes and that
