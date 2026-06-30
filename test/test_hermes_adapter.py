@@ -118,6 +118,12 @@ class HermesAdapterTests(unittest.TestCase):
                 is_first_turn=False,
             )
         )
+        self.assertIsNone(
+            tinyhat_context.inject_tinyhat_context(
+                user_message="Write an author bio and estimate token count",
+                is_first_turn=False,
+            )
+        )
 
     def test_context_hook_injects_on_first_turn(self) -> None:
         injected = tinyhat_context.inject_tinyhat_context(
@@ -128,6 +134,15 @@ class HermesAdapterTests(unittest.TestCase):
         self.assertIsNotNone(injected)
         assert injected is not None
         self.assertIn("Tinyhat-managed Computer", injected["context"])
+
+    def test_tinyhat_secret_command_without_args_returns_usage(self) -> None:
+        ctx = FakeHermesContext()
+        tinyhat.register(ctx)
+
+        reply = ctx.commands["tinyhat-secret"]["handler"]("")
+
+        self.assertIn("/tinyhat_secret EXA_API_KEY", reply)
+        self.assertNotIn("TINYHAT_SECRET", reply)
 
     def test_tell_joke_returns_stable_json(self) -> None:
         payload = json.loads(tools.tell_joke({"topic": "Hermes"}))

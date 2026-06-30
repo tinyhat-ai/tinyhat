@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import re
 from typing import Any
 
 
@@ -11,31 +12,42 @@ TINYHAT_CONTEXT = """Tinyhat context: this Hermes agent runs on a Tinyhat-manage
 - For OpenAI Codex auth or usage limits, prefer the Tinyhat-installed /codex_auth, /codex_auth_status, /codex_auth_log, and /codex_limits flows. The auth flow sends the Telegram button and copyable device code; do not ask for auth.json, refresh tokens, passwords, or raw OAuth tokens.
 - Load tinyhat:tinyhat-platform, tinyhat:tinyhat-private-secret, or tinyhat:tinyhat-plugin-version when you need the longer Tinyhat playbook."""
 
-_CONTEXT_KEYWORDS = (
+_CONTEXT_PHRASES = (
     "api key",
-    "apikey",
-    "token",
-    "secret",
-    "credential",
-    "password",
+    "api token",
+    "access token",
+    "auth token",
+    "bot token",
+    "github token",
+    "oauth token",
+    "refresh token",
     "webhook secret",
+    "usage limit",
+    "usage limits",
+    "sign in",
+)
+
+_CONTEXT_TERMS = (
+    "apikey",
+    "secret",
+    "secrets",
+    "credential",
+    "credentials",
+    "password",
+    "passwords",
     "exa",
     "openrouter",
-    "github token",
     "stripe",
     "tavily",
     "firecrawl",
     "codex",
     "openai",
     "chatgpt",
-    "usage limit",
-    "usage limits",
     "quota",
     "credits",
     "subscription",
     "auth",
     "login",
-    "sign in",
     "settings",
     "tinyhat",
 )
@@ -46,7 +58,10 @@ def should_inject_tinyhat_context(user_message: str, *, is_first_turn: bool = Fa
     if is_first_turn:
         return True
     normalized = " ".join((user_message or "").lower().split())
-    return any(keyword in normalized for keyword in _CONTEXT_KEYWORDS)
+    if any(phrase in normalized for phrase in _CONTEXT_PHRASES):
+        return True
+    terms = set(re.findall(r"[a-z0-9_]+", normalized))
+    return any(term in terms for term in _CONTEXT_TERMS)
 
 
 def inject_tinyhat_context(
