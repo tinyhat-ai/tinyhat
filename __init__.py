@@ -64,6 +64,12 @@ def register(ctx: Any) -> None:
         schema=schemas.TINYHAT_PRIVATE_SECRET_HANDOFF_SCHEMA,
         handler=tools.private_secret_handoff,
     )
+    ctx.register_tool(
+        name="tinyhat_codex_auth",
+        toolset="tinyhat",
+        schema=schemas.TINYHAT_CODEX_AUTH_SCHEMA,
+        handler=tools.codex_auth,
+    )
     ctx.register_hook("pre_llm_call", context.inject_tinyhat_context)
     # Hermes registers plugin slash commands by their canonical names, then
     # Telegram shows them with underscores and maps inbound underscores back to

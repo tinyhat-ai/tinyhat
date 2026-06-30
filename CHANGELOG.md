@@ -6,6 +6,11 @@ All notable changes to the Tinyhat plugin are documented here.
 
 ### Changed
 
+- Add `tinyhat_codex_auth` so agents can send the ChatGPT device-code
+  prerequisite reminder and start the installed Codex auth flow directly.
+- Route natural-language Codex subscription requests to one short reply
+  with the ChatGPT Settings > Security path and `/codex_auth`; keep the
+  screenshot helper only for users who ask where the setting is.
 - Teach the private secret skill and tool to use meaningful env-style names
   such as `EXA_API_KEY` instead of generic placeholders like
   `TINYHAT_SECRET`.

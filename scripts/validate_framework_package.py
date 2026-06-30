@@ -14,6 +14,7 @@ REQUIRED_TOOLS = [
     "tinyhat_plugin_version",
     "tinyhat_tell_joke",
     "tinyhat_private_secret_handoff",
+    "tinyhat_codex_auth",
 ]
 REQUIRED_COMMANDS = [
     "tinyhat-joke",
@@ -24,6 +25,7 @@ REQUIRED_SKILLS = [
     "tinyhat-plugin-version",
     "tinyhat-tell-joke",
     "tinyhat-private-secret",
+    "tinyhat-codex-auth",
     "tinyhat-platform",
 ]
 FORBIDDEN_PATHS = (
@@ -34,7 +36,6 @@ FORBIDDEN_PATHS = (
 )
 FORBIDDEN_TEXT = (
     "CLAUDE_PLUGIN_DATA",
-    "ChatGPT subscription",
 )
 
 
@@ -130,6 +131,16 @@ def validate_hermes_adapter(root: Path) -> None:
     ):
         require((root / rel).is_file(), f"{rel} is missing")
 
+    codex_screenshot = (
+        root
+        / "skills"
+        / "tinyhat-codex-auth"
+        / "assets"
+        / "chatgpt-enable-device-code-for-codex.png"
+    )
+    require(codex_screenshot.is_file(), "Codex auth prerequisite screenshot is missing")
+    require(codex_screenshot.stat().st_size > 10_000, "Codex auth screenshot looks empty")
+
     entrypoint = hermes.get("entrypoint")
     require(isinstance(entrypoint, dict), "entrypoint must be an object")
     require(entrypoint.get("manifest") == "plugin.yaml", "entrypoint.manifest must be plugin.yaml")
@@ -155,6 +166,7 @@ def validate_hermes_adapter(root: Path) -> None:
         "tinyhat-plugin-version": "skills/tinyhat-plugin-version/SKILL.md",
         "tinyhat-tell-joke": "skills/tinyhat-tell-joke/SKILL.md",
         "tinyhat-private-secret": "skills/tinyhat-private-secret/SKILL.md",
+        "tinyhat-codex-auth": "skills/tinyhat-codex-auth/SKILL.md",
         "tinyhat-platform": "skills/tinyhat-platform/SKILL.md",
     }
     for skill in skills:
@@ -230,6 +242,7 @@ def validate_docs(root: Path) -> None:
             "tinyhat-tell-joke",
             "tinyhat-plugin-version",
             "tinyhat-private-secret",
+            "tinyhat-codex-auth",
             "tinyhat-platform",
             "pre_llm_call",
             "channels/lts",
@@ -240,6 +253,22 @@ def validate_docs(root: Path) -> None:
             "Do not ask the user to paste secret values in chat.",
             "Secret Naming Standard",
             "Tinyhat Platform Context",
+            "tinyhat-codex-auth",
+        ),
+        "skills/tinyhat-codex-auth/SKILL.md": (
+            "For common natural-language requests, do not call a tool first.",
+            "Keep `/codex_auth` on its own line",
+            "Open `chatgpt.com`",
+            "Secure sign in with ChatGPT",
+            "Enable device code authorization for Codex",
+            "Then come back here and tap:",
+            "/codex_auth",
+            "Do not call `tinyhat_codex_auth` twice",
+            "Optional Screenshot Fallback",
+            '{"action": "prerequisite"}',
+            '{"action": "start", "confirmed": true}',
+            "tinyhat_codex_auth",
+            "hermes_runtime.telegram_codex_auth start",
         ),
         ".agents/skills/tinyhat-plugin-skill-authoring/SKILL.md": (
             "Create, modify, or review Tinyhat plugin skills.",

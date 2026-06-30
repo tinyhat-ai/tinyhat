@@ -63,6 +63,7 @@ class HermesAdapterTests(unittest.TestCase):
         self.assertIn("tinyhat_plugin_version", ctx.tools)
         self.assertIn("tinyhat_tell_joke", ctx.tools)
         self.assertIn("tinyhat_private_secret_handoff", ctx.tools)
+        self.assertIn("tinyhat_codex_auth", ctx.tools)
         self.assertIn("tinyhat-plugin-version", ctx.commands)
         self.assertIn("tinyhat-joke", ctx.commands)
         self.assertIn("tinyhat-secret", ctx.commands)
@@ -70,10 +71,12 @@ class HermesAdapterTests(unittest.TestCase):
         self.assertIn("tinyhat-plugin-version", ctx.skills)
         self.assertIn("tinyhat-tell-joke", ctx.skills)
         self.assertIn("tinyhat-private-secret", ctx.skills)
+        self.assertIn("tinyhat-codex-auth", ctx.skills)
         self.assertIn("tinyhat-platform", ctx.skills)
         self.assertTrue(ctx.skills["tinyhat-plugin-version"].is_file())
         self.assertTrue(ctx.skills["tinyhat-tell-joke"].is_file())
         self.assertTrue(ctx.skills["tinyhat-private-secret"].is_file())
+        self.assertTrue(ctx.skills["tinyhat-codex-auth"].is_file())
         self.assertTrue(ctx.skills["tinyhat-platform"].is_file())
 
     def test_registered_commands_match_telegram_dispatch_names(self) -> None:
@@ -94,7 +97,7 @@ class HermesAdapterTests(unittest.TestCase):
 
         self.assertEqual(payload["schema"], "tinyhat_plugin_version_v1")
         self.assertEqual(payload["name"], "tinyhat")
-        self.assertEqual(payload["version"], "0.20.4")
+        self.assertEqual(payload["version"], "0.20.9")
 
     def test_context_hook_injects_for_secret_requests(self) -> None:
         ctx = FakeHermesContext()
@@ -110,6 +113,161 @@ class HermesAdapterTests(unittest.TestCase):
         self.assertIn("tinyhat_private_secret_handoff", injected["context"])
         self.assertIn("Do not ask the user to paste secrets", injected["context"])
         self.assertIn("/codex_auth", injected["context"])
+        self.assertIn("tinyhat:tinyhat-codex-auth", injected["context"])
+
+    def test_context_hook_injects_for_chatgpt_subscription_requests(self) -> None:
+        examples = (
+            "I want to connect you to my chatgpt account",
+            "I want to use my codex subscription here instead of platform credits",
+            "Please use my ChatGPT Pro plan",
+            "Switch from platform credits to my own OpenAI paid access",
+        )
+        for user_message in examples:
+            with self.subTest(user_message=user_message):
+                injected = tinyhat_context.inject_tinyhat_context(
+                    user_message=user_message,
+                    is_first_turn=False,
+                )
+                self.assertIsNotNone(injected)
+                assert injected is not None
+                self.assertIn("tinyhat:tinyhat-codex-auth", injected["context"])
+                self.assertIn("Do not ask a multiple-choice clarification", injected["context"])
+                self.assertIn("Do not call tinyhat_codex_auth for the default path", injected["context"])
+                self.assertIn("/codex_auth", injected["context"])
+                self.assertIn("on its own line", injected["context"])
+
+    def test_context_hook_injects_for_codex_device_code_confirmation(self) -> None:
+        injected = tinyhat_context.inject_tinyhat_context(
+            user_message="I enabled device code authorization for Codex",
+            is_first_turn=False,
+        )
+
+        self.assertIsNotNone(injected)
+        assert injected is not None
+        self.assertIn("tinyhat_codex_auth", injected["context"])
+        self.assertIn("/codex_auth", injected["context"])
+
+    def test_codex_auth_skill_packages_prerequisite_screenshot(self) -> None:
+        skill_md = REPO_ROOT / "skills" / "tinyhat-codex-auth" / "SKILL.md"
+        screenshot = (
+            REPO_ROOT
+            / "skills"
+            / "tinyhat-codex-auth"
+            / "assets"
+            / "chatgpt-enable-device-code-for-codex.png"
+        )
+        text = skill_md.read_text(encoding="utf-8")
+
+        self.assertTrue(screenshot.is_file())
+        self.assertGreater(screenshot.stat().st_size, 10_000)
+        self.assertIn("For common natural-language requests, do not call a tool first.", text)
+        self.assertIn("Keep `/codex_auth` on its own line", text)
+        self.assertIn("Open `chatgpt.com`", text)
+        self.assertIn("Secure sign in with ChatGPT", text)
+        self.assertIn("Enable device code authorization for Codex", text)
+        self.assertIn("Then come back here and tap:", text)
+        self.assertIn("/codex_auth", text)
+        self.assertIn("Do not call `tinyhat_codex_auth` twice", text)
+        self.assertIn("Optional Screenshot Fallback", text)
+        self.assertIn('{"action": "prerequisite"}', text)
+        self.assertIn('{"action": "start", "confirmed": true}', text)
+        self.assertIn("tinyhat_codex_auth", text)
+        self.assertIn("hermes_runtime.telegram_codex_auth start", text)
+
+    def test_codex_auth_tool_sends_prerequisite_without_starting_auth(self) -> None:
+        original_prerequisite = tools._send_codex_prerequisite
+        original_start = tools._start_runtime_codex_auth
+        start_calls = []
+        try:
+            tools._send_codex_prerequisite = lambda: {
+                "ok": True,
+                "mode": "photo",
+            }
+            tools._start_runtime_codex_auth = lambda: start_calls.append(True) or {
+                "ok": True,
+            }
+
+            payload = json.loads(tools.codex_auth({}))
+        finally:
+            tools._send_codex_prerequisite = original_prerequisite
+            tools._start_runtime_codex_auth = original_start
+
+        self.assertEqual(payload["schema"], "tinyhat_codex_auth_start_v1")
+        self.assertEqual(payload["status"], "waiting_for_confirmation")
+        self.assertIs(payload["chat_response_required"], False)
+        self.assertEqual(payload["prerequisite"]["mode"], "photo")
+        self.assertNotIn("confirmation_choice", payload["prerequisite"])
+        self.assertNotIn("message", payload)
+        self.assertIn("/codex_auth", payload["next_user_action"])
+        self.assertIn("Do not send any chat reply", payload["agent_instruction"])
+        self.assertEqual(start_calls, [])
+
+    def test_codex_auth_prerequisite_does_not_attach_reply_keyboard(self) -> None:
+        original_credentials = tools._telegram_credentials
+        original_send_photo = tools._telegram_send_photo
+        captured: dict[str, object] = {}
+        try:
+            tools._telegram_credentials = lambda: ("token", "chat")
+
+            def fake_send_photo(**kwargs):
+                captured.update(kwargs)
+                return {"ok": True}
+
+            tools._telegram_send_photo = fake_send_photo
+
+            payload = tools._send_codex_prerequisite()
+        finally:
+            tools._telegram_credentials = original_credentials
+            tools._telegram_send_photo = original_send_photo
+
+        self.assertTrue(payload["ok"])
+        self.assertNotIn("confirmation_choice", payload)
+        self.assertIn("/codex_auth", str(captured.get("caption")))
+        self.assertNotIn("reply_markup", captured)
+
+    def test_codex_auth_tool_refuses_start_without_confirmation(self) -> None:
+        original_start = tools._start_runtime_codex_auth
+        start_calls = []
+        try:
+            tools._start_runtime_codex_auth = lambda: start_calls.append(True) or {
+                "ok": True,
+            }
+
+            payload = json.loads(tools.codex_auth({"action": "start"}))
+        finally:
+            tools._start_runtime_codex_auth = original_start
+
+        self.assertEqual(payload["schema"], "tinyhat_codex_auth_start_v1")
+        self.assertEqual(payload["status"], "waiting_for_confirmation")
+        self.assertIn("Enable device code authorization", payload["message"])
+        self.assertIn("/codex_auth", payload["message"])
+        self.assertEqual(start_calls, [])
+
+    def test_codex_auth_tool_starts_after_confirmation(self) -> None:
+        original_prerequisite = tools._send_codex_prerequisite
+        original_start = tools._start_runtime_codex_auth
+        prerequisite_calls = []
+        try:
+            tools._send_codex_prerequisite = lambda: prerequisite_calls.append(True) or {
+                "ok": True,
+                "mode": "photo",
+            }
+            tools._start_runtime_codex_auth = lambda: {
+                "ok": True,
+                "returncode": 0,
+                "stdout": "auth started",
+                "stderr": "",
+            }
+
+            payload = json.loads(tools.codex_auth({"action": "start", "confirmed": True}))
+        finally:
+            tools._send_codex_prerequisite = original_prerequisite
+            tools._start_runtime_codex_auth = original_start
+
+        self.assertEqual(payload["schema"], "tinyhat_codex_auth_start_v1")
+        self.assertEqual(payload["status"], "started")
+        self.assertEqual(prerequisite_calls, [])
+        self.assertTrue(payload["auth_start"]["ok"])
 
     def test_context_hook_injects_for_env_style_secret_names(self) -> None:
         for secret_name in (

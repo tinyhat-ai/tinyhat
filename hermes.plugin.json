@@ -1,6 +1,6 @@
 {
   "schema": "tinyhat.framework-adapter.v1",
-  "version": "0.20.4",
+  "version": "0.20.9",
   "framework": {
     "name": "hermes",
     "minimum": "0.0.0"
@@ -27,6 +27,11 @@
       "purpose": "Starts a private browser-encrypted secret handoff to the assigned Computer."
     },
     {
+      "name": "tinyhat-codex-auth",
+      "path": "skills/tinyhat-codex-auth/SKILL.md",
+      "purpose": "Starts Tinyhat's OpenAI Codex / ChatGPT subscription auth flow."
+    },
+    {
       "name": "tinyhat-platform",
       "path": "skills/tinyhat-platform/SKILL.md",
       "purpose": "Explains Tinyhat-managed Hermes defaults for secrets, Codex auth, and platform boundaries."
@@ -47,6 +52,11 @@
       "name": "tinyhat_private_secret_handoff",
       "handler": "tools.private_secret_handoff",
       "skill": "tinyhat-private-secret"
+    },
+    {
+      "name": "tinyhat_codex_auth",
+      "handler": "tools.codex_auth",
+      "skill": "tinyhat-codex-auth"
     }
   ],
   "commands": [

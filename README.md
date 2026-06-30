@@ -13,7 +13,9 @@ For the first v0.20 version, this repo is deliberately small. It supports
 Hermes only, ships two proof skills, a small Tinyhat context hook, and
 now includes the first real Tinyhat platform capability: a private secret
 handoff that lets the user enter a secret in a Telegram Mini App without
-sending the plaintext to Tinyhat's servers.
+sending the plaintext to Tinyhat's servers. It also teaches the agent
+the Tinyhat-managed OpenAI Codex / ChatGPT subscription auth flow that
+is installed on each Hermes Computer.
 
 ## What This Plugin Does
 
@@ -23,10 +25,11 @@ sending the plaintext to Tinyhat's servers.
 | `__init__.py` | Hermes registration entrypoint. |
 | `hermes.plugin.json` | Tinyhat metadata for the Hermes adapter, skill, command, and release channels. |
 | `context.py` | Small Hermes `pre_llm_call` context hook for Tinyhat-sensitive turns. |
-| `tools.py` / `schemas.py` | Tinyhat tools: plugin version, joke proof, and private secret handoff. |
+| `tools.py` / `schemas.py` | Tinyhat tools: plugin version, joke proof, private secret handoff, and Codex auth start. |
 | `skills/tinyhat-tell-joke/SKILL.md` | Deterministic joke proof. |
 | `skills/tinyhat-plugin-version/SKILL.md` | Live plugin version proof. |
 | `skills/tinyhat-private-secret/SKILL.md` | Browser-encrypted secret handoff guidance. |
+| `skills/tinyhat-codex-auth/SKILL.md` | OpenAI Codex / ChatGPT subscription auth guidance. |
 | `skills/tinyhat-platform/SKILL.md` | Platform context for Tinyhat-managed Hermes agents. |
 | `docs/skill-authoring.md` | The standard for future Tinyhat skills. |
 | `.agents/skills/tinyhat-plugin-skill-authoring/SKILL.md` | Maintainer workflow for adding or changing plugin skills. |
@@ -74,6 +77,18 @@ encrypts the value with the public key, and the Computer decrypts it with
 the temporary private key. Tinyhat stores only short-lived ciphertext for
 the handoff and wipes it after completion, expiration, or failure.
 
+`tinyhat-codex-auth` teaches the agent how to start the Tinyhat-managed
+OpenAI Codex / ChatGPT subscription sign-in flow. When the user says
+"connect you to my ChatGPT account", "use my Codex subscription", or
+"switch from platform credits", the agent replies once with the ChatGPT
+Settings > Security path and the `/codex_auth` command. That slash
+command should be on its own line so it is hard to miss. It starts the
+installed Tinyhat Codex auth helper, which sends the authorization button
+and copyable code. The screenshot tool is available only when the user
+asks where the setting is or needs the visual guide. The agent should not
+send duplicate links, call the tool twice, ask the user to choose between
+unrelated interpretations, or give manual `hermes auth` instructions.
+
 `tinyhat-platform` is the operating context. It tells the agent that
 Tinyhat secrets are the default way to add credentials to Hermes and that
 Tinyhat's installed Codex auth commands should be used for OpenAI Codex
@@ -101,7 +116,7 @@ For development or manual testing, use `channels/latest` or an exact tag:
 
 ```bash
 TINYHAT_PLUGIN_REF=channels/latest
-TINYHAT_PLUGIN_REF=v0.20.4
+TINYHAT_PLUGIN_REF=v0.20.9
 ```
 
 ## Channels
