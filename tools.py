@@ -21,7 +21,8 @@ CODEX_AUTH_SCREENSHOT = (
 CODEX_AUTH_CAPTION = (
     'Before Codex sign-in can start, open chatgpt.com > Settings > '
     'Security, scroll to "Secure sign in with ChatGPT", and turn on '
-    '"Enable device code authorization for Codex". Then tap the button.'
+    '"Enable device code authorization for Codex". Then tap the confirmation '
+    "button I send next."
 )
 CODEX_AUTH_CONFIRM_BUTTON = "I enabled it - start Codex sign-in"
 TELEGRAM_ENV_CANDIDATES = (
@@ -91,7 +92,9 @@ def codex_auth(args: dict[str, Any] | None = None, **_: Any) -> str:
                     "status": "waiting_for_confirmation",
                     "message": (
                         "Ask the user to confirm they turned on Enable device "
-                        "code authorization for Codex before starting auth."
+                        "code authorization for Codex before starting auth. Use "
+                        "Hermes clarify with the confirmation choice so the button "
+                        "appears under the message, not by the keyboard."
                     ),
                 },
                 sort_keys=True,
@@ -117,10 +120,10 @@ def codex_auth(args: dict[str, Any] | None = None, **_: Any) -> str:
             "status": "waiting_for_confirmation",
             "prerequisite": prerequisite,
             "message": (
-                "I sent the ChatGPT device-code setting screenshot. Ask the "
-                "user to tap the confirmation button after Enable device "
-                "code authorization for Codex is turned on; then call this "
-                "tool with action=start and confirmed=true."
+                "I sent the ChatGPT device-code setting screenshot. Now call "
+                "Hermes clarify with one choice: "
+                f"{CODEX_AUTH_CONFIRM_BUTTON!r}. After the user taps it, call "
+                "this tool with action=start and confirmed=true."
             ),
         },
         sort_keys=True,
@@ -139,45 +142,33 @@ def _send_codex_prerequisite() -> dict[str, Any]:
             chat_id=chat_id,
             photo_path=CODEX_AUTH_SCREENSHOT,
             caption=CODEX_AUTH_CAPTION,
-            reply_markup=_confirmation_reply_markup(),
         )
         if sent.get("ok"):
             return {
                 "ok": True,
                 "mode": "photo",
-                "button_text": CODEX_AUTH_CONFIRM_BUTTON,
+                "confirmation_choice": CODEX_AUTH_CONFIRM_BUTTON,
             }
         fallback = _telegram_send_message(
             token=token,
             chat_id=chat_id,
             text=CODEX_AUTH_CAPTION,
-            reply_markup=_confirmation_reply_markup(),
         )
         return {
             "ok": bool(fallback.get("ok")),
             "mode": "text_fallback",
-            "button_text": CODEX_AUTH_CONFIRM_BUTTON,
+            "confirmation_choice": CODEX_AUTH_CONFIRM_BUTTON,
             "photo_error": _safe_telegram_error(sent),
         }
     sent = _telegram_send_message(
         token=token,
         chat_id=chat_id,
         text=CODEX_AUTH_CAPTION,
-        reply_markup=_confirmation_reply_markup(),
     )
     return {
         "ok": bool(sent.get("ok")),
         "mode": "text",
-        "button_text": CODEX_AUTH_CONFIRM_BUTTON,
-    }
-
-
-def _confirmation_reply_markup() -> dict[str, Any]:
-    return {
-        "keyboard": [[{"text": CODEX_AUTH_CONFIRM_BUTTON}]],
-        "resize_keyboard": True,
-        "one_time_keyboard": True,
-        "input_field_placeholder": "Tap after enabling Codex device auth",
+        "confirmation_choice": CODEX_AUTH_CONFIRM_BUTTON,
     }
 
 

@@ -263,6 +263,7 @@ def validate_docs(root: Path) -> None:
             "Secure sign in with ChatGPT",
             "Enable device code authorization for Codex",
             "I enabled it - start Codex sign-in",
+            "Hermes renders `clarify` choices as inline buttons",
             '{"action": "prerequisite"}',
             '{"action": "start", "confirmed": true}',
             "primary path",

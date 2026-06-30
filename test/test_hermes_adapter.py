@@ -97,7 +97,7 @@ class HermesAdapterTests(unittest.TestCase):
 
         self.assertEqual(payload["schema"], "tinyhat_plugin_version_v1")
         self.assertEqual(payload["name"], "tinyhat")
-        self.assertEqual(payload["version"], "0.20.7")
+        self.assertEqual(payload["version"], "0.20.8")
 
     def test_context_hook_injects_for_secret_requests(self) -> None:
         ctx = FakeHermesContext()
@@ -136,6 +136,7 @@ class HermesAdapterTests(unittest.TestCase):
                 self.assertIn("action=prerequisite", injected["context"])
                 self.assertIn("confirmed=true", injected["context"])
                 self.assertIn("I enabled it - start Codex sign-in", injected["context"])
+                self.assertIn("Hermes clarify", injected["context"])
 
     def test_context_hook_injects_for_codex_device_code_confirmation(self) -> None:
         injected = tinyhat_context.inject_tinyhat_context(
@@ -170,7 +171,7 @@ class HermesAdapterTests(unittest.TestCase):
         self.assertIn("I enabled it - start Codex sign-in", text)
         self.assertIn('{"action": "prerequisite"}', text)
         self.assertIn('{"action": "start", "confirmed": true}', text)
-        self.assertIn("Do not start the auth helper in the same turn.", text)
+        self.assertIn("Hermes renders `clarify` choices as inline buttons", text)
         self.assertIn("primary path", text)
         self.assertIn("tinyhat_codex_auth", text)
         self.assertIn("hermes_runtime.telegram_codex_auth start", text)
@@ -183,7 +184,7 @@ class HermesAdapterTests(unittest.TestCase):
             tools._send_codex_prerequisite = lambda: {
                 "ok": True,
                 "mode": "photo",
-                "button_text": "I enabled it - start Codex sign-in",
+                "confirmation_choice": "I enabled it - start Codex sign-in",
             }
             tools._start_runtime_codex_auth = lambda: start_calls.append(True) or {
                 "ok": True,
@@ -198,12 +199,12 @@ class HermesAdapterTests(unittest.TestCase):
         self.assertEqual(payload["status"], "waiting_for_confirmation")
         self.assertEqual(payload["prerequisite"]["mode"], "photo")
         self.assertEqual(
-            payload["prerequisite"]["button_text"],
+            payload["prerequisite"]["confirmation_choice"],
             "I enabled it - start Codex sign-in",
         )
         self.assertEqual(start_calls, [])
 
-    def test_codex_auth_prerequisite_sends_confirmation_button(self) -> None:
+    def test_codex_auth_prerequisite_does_not_attach_reply_keyboard(self) -> None:
         original_credentials = tools._telegram_credentials
         original_send_photo = tools._telegram_send_photo
         captured: dict[str, object] = {}
@@ -222,15 +223,11 @@ class HermesAdapterTests(unittest.TestCase):
             tools._telegram_send_photo = original_send_photo
 
         self.assertTrue(payload["ok"])
-        self.assertEqual(payload["button_text"], "I enabled it - start Codex sign-in")
-        reply_markup = captured["reply_markup"]
-        self.assertIsInstance(reply_markup, dict)
-        assert isinstance(reply_markup, dict)
         self.assertEqual(
-            reply_markup["keyboard"][0][0]["text"],
+            payload["confirmation_choice"],
             "I enabled it - start Codex sign-in",
         )
-        self.assertTrue(reply_markup["one_time_keyboard"])
+        self.assertNotIn("reply_markup", captured)
 
     def test_codex_auth_tool_refuses_start_without_confirmation(self) -> None:
         original_start = tools._start_runtime_codex_auth

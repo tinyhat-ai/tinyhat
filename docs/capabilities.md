@@ -40,10 +40,12 @@ access", or "switch from platform credits".
 
 The agent should load `tinyhat:tinyhat-codex-auth` and call
 `tinyhat_codex_auth`. The first call sends the ChatGPT Security
-screenshot and a confirmation button. It asks the user to open
+screenshot. It asks the user to open
 `chatgpt.com` > Settings > Security, scroll to **Secure sign in with
 ChatGPT**, turn on **Enable device code authorization for Codex**, and
-tap the button. Only after that confirmation should the agent start the
+then calls Hermes `clarify` with one confirmation choice. Hermes renders
+that choice as an inline button under the prompt message. Only after that
+confirmation should the agent start the
 Tinyhat-installed auth flow. The auth flow sends an OpenAI authorization
 button and a separate copyable device code to Telegram, waits for OpenAI
 to complete device auth on the Computer, switches Hermes to Codex auth,

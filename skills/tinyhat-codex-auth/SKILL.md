@@ -27,15 +27,29 @@ First call `tinyhat_codex_auth` with:
 {"action": "prerequisite"}
 ```
 
-The tool sends the ChatGPT device-code setting screenshot to Telegram and
-adds a confirmation button labeled:
+The tool sends the ChatGPT device-code setting screenshot to Telegram. It
+does not attach a Telegram reply keyboard.
+
+Immediately after the tool returns, call Hermes' built-in `clarify` tool
+with this one choice:
 
 ```text
 I enabled it - start Codex sign-in
 ```
 
-After that, ask the user to turn on the setting and tap the button. Stop
-there. Do not start the auth helper in the same turn.
+Use a short question such as:
+
+```text
+Turn on "Enable device code authorization for Codex" in ChatGPT Settings >
+Security, then tap the button below.
+```
+
+Hermes renders `clarify` choices as inline buttons under that prompt
+message. Do not use a Telegram reply keyboard, and do not ask the user to
+type the confirmation command.
+
+After that, stop until `clarify` returns the confirmation choice. Do not
+start the auth helper before the user taps the inline button.
 
 The tool uses this bundled screenshot:
 
@@ -48,12 +62,12 @@ with this short caption:
 ```text
 Before Codex sign-in can start, open chatgpt.com > Settings > Security,
 scroll to "Secure sign in with ChatGPT", and turn on "Enable device code
-authorization for Codex". Then tap the button.
+authorization for Codex". Then tap the confirmation button I send next.
 ```
 
 If the tool is unavailable, send that one-sentence checklist in text and
-ask the user to confirm. Do not search for the image path in chat, and do
-not start auth before the user confirms.
+use `clarify` for the confirmation. Do not search for the image path in
+chat, and do not start auth before the user confirms.
 
 The user must do this on their side:
 
@@ -69,8 +83,8 @@ disabled.
 
 ## Step 2: Start Auth After Confirmation
 
-When the user taps the confirmation button or otherwise confirms the
-setting is on, call `tinyhat_codex_auth` with:
+When `clarify` returns the confirmation choice, or when the user otherwise
+confirms the setting is on, call `tinyhat_codex_auth` with:
 
 ```json
 {"action": "start", "confirmed": true}
@@ -113,7 +127,9 @@ token, or create an OpenAI API key.
 ## Message Contract
 
 - The Tinyhat auth helper sends the button and device code itself.
-- The prerequisite tool sends the confirmation button itself.
+- The prerequisite tool sends only the screenshot/checklist.
+- The confirmation button comes from Hermes `clarify`, so it appears under
+  the prompt message instead of by the keyboard.
 - Do not start the helper until the user confirms the ChatGPT Security
   toggle is on.
 - Do not paste the raw auth URL or duplicate the device code unless the

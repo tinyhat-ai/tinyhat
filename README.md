@@ -83,11 +83,12 @@ OpenAI Codex / ChatGPT subscription sign-in flow. When the user says
 "switch from platform credits", the agent calls `tinyhat_codex_auth`.
 The first call sends the ChatGPT Security setting screenshot and asks the
 user to confirm that **Enable device code authorization for Codex** is
-on. It also sends a confirmation button so the next step is a tap, not a
-typed command. Only after that confirmation does the agent call the same
-tool again to start the installed Tinyhat Codex auth helper. The agent should not
-ask the user to choose between unrelated interpretations or give manual
-`hermes auth` instructions.
+on. The agent then uses Hermes `clarify` to show a single inline
+confirmation button under the prompt message, so the next step is a tap,
+not a typed command. Only after that confirmation does the agent call the
+same tool again to start the installed Tinyhat Codex auth helper. The
+agent should not ask the user to choose between unrelated interpretations
+or give manual `hermes auth` instructions.
 
 `tinyhat-platform` is the operating context. It tells the agent that
 Tinyhat secrets are the default way to add credentials to Hermes and that
@@ -116,7 +117,7 @@ For development or manual testing, use `channels/latest` or an exact tag:
 
 ```bash
 TINYHAT_PLUGIN_REF=channels/latest
-TINYHAT_PLUGIN_REF=v0.20.7
+TINYHAT_PLUGIN_REF=v0.20.8
 ```
 
 ## Channels
