@@ -58,9 +58,13 @@ def should_inject_tinyhat_context(user_message: str, *, is_first_turn: bool = Fa
     if is_first_turn:
         return True
     normalized = " ".join((user_message or "").lower().split())
-    if any(phrase in normalized for phrase in _CONTEXT_PHRASES):
+    normalized_for_terms = re.sub(r"[_-]+", " ", normalized)
+    if any(
+        phrase in normalized or phrase in normalized_for_terms
+        for phrase in _CONTEXT_PHRASES
+    ):
         return True
-    terms = set(re.findall(r"[a-z0-9_]+", normalized))
+    terms = set(re.findall(r"[a-z0-9]+", normalized_for_terms))
     return any(term in terms for term in _CONTEXT_TERMS)
 
 

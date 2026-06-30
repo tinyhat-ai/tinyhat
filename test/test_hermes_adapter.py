@@ -111,6 +111,22 @@ class HermesAdapterTests(unittest.TestCase):
         self.assertIn("Do not ask the user to paste secrets", injected["context"])
         self.assertIn("/codex_auth", injected["context"])
 
+    def test_context_hook_injects_for_env_style_secret_names(self) -> None:
+        for secret_name in (
+            "EXA_API_KEY",
+            "OPENROUTER_API_KEY",
+            "GITHUB_TOKEN",
+            "STRIPE_SECRET_KEY",
+            "TAVILY_API_KEY",
+            "FIRECRAWL_API_KEY",
+        ):
+            with self.subTest(secret_name=secret_name):
+                injected = tinyhat_context.inject_tinyhat_context(
+                    user_message=f"Please add {secret_name}",
+                    is_first_turn=False,
+                )
+                self.assertIsNotNone(injected)
+
     def test_context_hook_skips_unrelated_later_turns(self) -> None:
         self.assertIsNone(
             tinyhat_context.inject_tinyhat_context(
