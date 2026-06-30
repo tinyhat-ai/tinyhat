@@ -8,6 +8,9 @@ All notable changes to the Tinyhat plugin are documented here.
 
 - Add `tinyhat_codex_auth` so agents can send the ChatGPT device-code
   prerequisite reminder and start the installed Codex auth flow directly.
+- Require the agent to ask the user to enable ChatGPT Settings > Security
+  > "Enable device code authorization for Codex" and confirm before
+  starting the Codex auth helper.
 - Teach the private secret skill and tool to use meaningful env-style names
   such as `EXA_API_KEY` instead of generic placeholders like
   `TINYHAT_SECRET`.

@@ -19,8 +19,9 @@ CODEX_AUTH_SCREENSHOT = (
     / "chatgpt-enable-device-code-for-codex.png"
 )
 CODEX_AUTH_CAPTION = (
-    'Before signing in, open ChatGPT Settings > Security and turn on '
-    '"Enable device code authorization for Codex" if it is off.'
+    'Open chatgpt.com > Settings > Security, scroll to "Secure sign in '
+    'with ChatGPT", then turn on "Enable device code authorization for '
+    'Codex". Reply here when it is on.'
 )
 TELEGRAM_ENV_CANDIDATES = (
     Path.home() / ".hermes" / ".env",
@@ -78,20 +79,47 @@ def private_secret_handoff(args: dict[str, Any] | None = None, **kwargs: Any) ->
 
 
 def codex_auth(args: dict[str, Any] | None = None, **_: Any) -> str:
-    """Send the Codex device-code prerequisite image and start Tinyhat auth."""
-    _ = args
+    """Send the Codex prerequisite first; start auth after confirmation."""
+    payload = args or {}
+    action = str(payload.get("action") or "prerequisite").strip().lower()
+    if action in {"start", "link"}:
+        if payload.get("confirmed") is not True:
+            return json.dumps(
+                {
+                    "schema": "tinyhat_codex_auth_start_v1",
+                    "status": "waiting_for_confirmation",
+                    "message": (
+                        "Ask the user to confirm they turned on Enable device "
+                        "code authorization for Codex before starting auth."
+                    ),
+                },
+                sort_keys=True,
+            )
+        auth_start = _start_runtime_codex_auth()
+        return json.dumps(
+            {
+                "schema": "tinyhat_codex_auth_start_v1",
+                "status": "started" if auth_start["ok"] else "failed",
+                "auth_start": auth_start,
+                "message": (
+                    "I started OpenAI Codex auth. Use the OpenAI button and "
+                    "code from the Telegram messages."
+                ),
+            },
+            sort_keys=True,
+        )
+
     prerequisite = _send_codex_prerequisite()
-    auth_start = _start_runtime_codex_auth()
     return json.dumps(
         {
             "schema": "tinyhat_codex_auth_start_v1",
-            "status": "started" if auth_start["ok"] else "failed",
+            "status": "waiting_for_confirmation",
             "prerequisite": prerequisite,
-            "auth_start": auth_start,
             "message": (
-                "I sent the ChatGPT device-code setting reminder and started "
-                "OpenAI Codex auth. Use the OpenAI button and code from the "
-                "Telegram messages."
+                "I sent the ChatGPT device-code setting screenshot. Ask the "
+                "user to reply when Enable device code authorization for "
+                "Codex is turned on; then call this tool with action=start "
+                "and confirmed=true."
             ),
         },
         sort_keys=True,

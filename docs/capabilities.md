@@ -39,12 +39,15 @@ my ChatGPT account", "use my Codex subscription", "use my own OpenAI paid
 access", or "switch from platform credits".
 
 The agent should load `tinyhat:tinyhat-codex-auth` and call
-`tinyhat_codex_auth`. That tool sends the ChatGPT device-code setting
-reminder and starts the Tinyhat-installed auth flow. The auth flow sends
-an OpenAI authorization button and a separate copyable device code to
-Telegram, waits for OpenAI to complete device auth on the Computer,
-switches Hermes to Codex auth, and restarts the Telegram gateway. The
-agent should not ask for
+`tinyhat_codex_auth`. The first call sends the ChatGPT Security
+screenshot and asks the user to open `chatgpt.com` > Settings >
+Security, scroll to **Secure sign in with ChatGPT**, turn on **Enable
+device code authorization for Codex**, and confirm when it is on. Only
+after that confirmation should the agent start the Tinyhat-installed auth
+flow. The auth flow sends an OpenAI authorization button and a separate
+copyable device code to Telegram, waits for OpenAI to complete device
+auth on the Computer, switches Hermes to Codex auth, and restarts the
+Telegram gateway. The agent should not ask for
 `auth.json`, refresh tokens, passwords, or OpenAI API keys for this
 subscription-auth path.
 

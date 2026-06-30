@@ -15,19 +15,21 @@ as a request to start Tinyhat's Codex auth flow. Only clarify if the user
 explicitly asks for ChatGPT conversation history/data or for an OpenAI
 API key instead of subscription auth.
 
-## Start The Flow
+## Step 1: Confirm The ChatGPT Setting
 
 Do the work yourself. Do not tell the user to send `/codex_auth` as the
 primary path. That command exists for manual fallback; this skill exists
 so you can initiate the same process for the user.
 
-Call the `tinyhat_codex_auth` tool exactly once. The tool sends the
-ChatGPT device-code setting screenshot to Telegram, then starts the
-installed auth helper that sends the OpenAI button and copyable code.
-Do not try to send this screenshot manually unless the tool is missing.
+First call `tinyhat_codex_auth` with:
 
-Let the tool's Telegram messages stand. Do not send a second link or a
-second code in your own reply.
+```json
+{"action": "prerequisite"}
+```
+
+The tool sends the ChatGPT device-code setting screenshot to Telegram.
+After that, ask the user to confirm the setting is enabled. Stop there.
+Do not start the auth helper in the same turn.
 
 The tool uses this bundled screenshot:
 
@@ -38,13 +40,40 @@ skills/tinyhat-codex-auth/assets/chatgpt-enable-device-code-for-codex.png
 with this short caption:
 
 ```text
-Before the sign-in works, please check ChatGPT Settings -> Security and
-turn on "Enable device code authorization for Codex" if it is off.
+Open chatgpt.com > Settings > Security, scroll to "Secure sign in with
+ChatGPT", then turn on "Enable device code authorization for Codex".
+Reply here when it is on.
 ```
 
 If the tool is unavailable, send that one-sentence checklist in text and
-continue with the flow. Do not search for the image path in chat, and do
-not stop just because the screenshot could not be attached.
+ask the user to confirm. Do not search for the image path in chat, and do
+not start auth before the user confirms.
+
+The user must do this on their side:
+
+1. Open `chatgpt.com`.
+2. Go to Settings.
+3. Open Security.
+4. Scroll to **Secure sign in with ChatGPT**.
+5. Turn on **Enable device code authorization for Codex**.
+
+Personal accounts can usually turn this on directly. Team, Business, and
+Enterprise accounts may require a workspace admin if the toggle is
+disabled.
+
+## Step 2: Start Auth After Confirmation
+
+When the user confirms the setting is on, call `tinyhat_codex_auth` with:
+
+```json
+{"action": "start", "confirmed": true}
+```
+
+Only this second call starts the installed auth helper that sends the
+OpenAI authorization button and copyable code.
+
+Let the tool's Telegram messages stand. Do not send a second link or a
+second code in your own reply.
 
 Tinyhat installs this Telegram auth flow during Computer setup:
 
@@ -58,8 +87,9 @@ the device flow on this Computer, switches Hermes to Codex auth, and
 restarts the Telegram gateway so the next reply uses the new credential.
 
 If the `tinyhat_codex_auth` tool is unavailable, start the installed flow
-yourself. Prefer invoking the installed quick command directly if your
-interface supports that. Otherwise run the same installed runtime helper:
+yourself only after the user confirms the ChatGPT setting is on. Prefer
+invoking the installed quick command directly if your interface supports
+that. Otherwise run the same installed runtime helper:
 
 ```bash
 PYTHONPATH="${TINYHAT_RUNTIME_PREFIX:-/opt/tinyhat-hermes-runtime}:${PYTHONPATH:-}" \
@@ -76,6 +106,8 @@ token, or create an OpenAI API key.
 ## Message Contract
 
 - The Tinyhat auth helper sends the button and device code itself.
+- Do not start the helper until the user confirms the ChatGPT Security
+  toggle is on.
 - Do not paste the raw auth URL or duplicate the device code unless the
   helper explicitly reports that Telegram delivery failed.
 - The device code is copyable but temporary. It is not the OAuth token.
@@ -86,7 +118,15 @@ token, or create an OpenAI API key.
 
 ## Helpful Copy
 
-When the flow starts, a good short reply is:
+After sending the prerequisite screenshot, a good short reply is:
+
+```text
+I sent the ChatGPT setting screenshot. Please turn on "Enable device code
+authorization for Codex" in Settings > Security, then reply here when it
+is on. I will start the sign-in after that.
+```
+
+After the user confirms and the auth flow starts, a good short reply is:
 
 ```text
 I started the OpenAI Codex sign-in flow. Tap the authorization button I

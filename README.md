@@ -81,9 +81,11 @@ the handoff and wipes it after completion, expiration, or failure.
 OpenAI Codex / ChatGPT subscription sign-in flow. When the user says
 "connect you to my ChatGPT account", "use my Codex subscription", or
 "switch from platform credits", the agent calls `tinyhat_codex_auth`.
-That tool sends the ChatGPT device-code setting reminder to Telegram and
-starts the installed Tinyhat Codex auth helper. The agent should not ask
-the user to choose between unrelated interpretations or give manual
+The first call sends the ChatGPT Security setting screenshot and asks the
+user to confirm that **Enable device code authorization for Codex** is
+on. Only after that confirmation does the agent call the same tool again
+to start the installed Tinyhat Codex auth helper. The agent should not
+ask the user to choose between unrelated interpretations or give manual
 `hermes auth` instructions.
 
 `tinyhat-platform` is the operating context. It tells the agent that
@@ -113,7 +115,7 @@ For development or manual testing, use `channels/latest` or an exact tag:
 
 ```bash
 TINYHAT_PLUGIN_REF=channels/latest
-TINYHAT_PLUGIN_REF=v0.20.5
+TINYHAT_PLUGIN_REF=v0.20.6
 ```
 
 ## Channels
