@@ -3,11 +3,12 @@
 from __future__ import annotations
 
 import base64
+import os
 import re
 import shutil
 import subprocess
+import sys
 import tempfile
-import threading
 import time
 from datetime import datetime, timezone
 from pathlib import Path
@@ -18,7 +19,7 @@ from .platform import PlatformClient, build_platform_client, computer_api_path
 KEY_ALGORITHM = "RSA-OAEP-256"
 DEFAULT_EXPIRES_IN_SECONDS = 300
 SECRET_NAME_RE = re.compile(r"^[A-Z_][A-Z0-9_]{0,126}$")
-_WORKERS: set[threading.Thread] = set()
+STATE_DIR = Path.home() / ".tinyhat" / "private-secret-handoffs"
 GENERIC_SECRET_NAMES = {
     "TINYHAT_SECRET",
     "SECRET",
@@ -56,7 +57,7 @@ class SecretHandoffError(RuntimeError):
 
     def __init__(self, message: str, *, public_message: str | None = None) -> None:
         super().__init__(message)
-        self.public_message = public_message or "Private secret handoff failed."
+        self.public_message = public_message or "Could not start secure secret entry."
 
 
 def start_private_secret_handoff(
@@ -67,9 +68,7 @@ def start_private_secret_handoff(
     payload = args or {}
     description = _clean_description(payload.get("description"))
     secret_name = _resolve_secret_name(payload.get("name"), description)
-    expires_in_seconds = int(
-        payload.get("expires_in_seconds") or DEFAULT_EXPIRES_IN_SECONDS
-    )
+    expires_in_seconds = DEFAULT_EXPIRES_IN_SECONDS
 
     private_key_pem, public_key_pem = _generate_key_pair()
     client, platform_auth = build_platform_client()
@@ -83,24 +82,65 @@ def start_private_secret_handoff(
             "expires_in_seconds": expires_in_seconds,
         },
     )
-    worker = threading.Thread(
-        target=_poll_and_install_secret,
-        kwargs={
-            "client": client,
-            "platform_auth": platform_auth,
-            "handoff": handoff,
-            "private_key_pem": private_key_pem,
-        },
-        name=f"tinyhat-secret-handoff-{handoff.get('handoff_id', 'unknown')}",
-        daemon=True,
-    )
-    _WORKERS.add(worker)
-    worker.start()
+    if not handoff.get("existing_handoff"):
+        _start_worker_process(handoff, private_key_pem)
     shown_name = str(handoff.get("secret_name") or secret_name)
     return (
-        f"Tap Enter secret and paste the `{shown_name}` value within about "
-        "5 minutes. Tinyhat never sees the plaintext."
+        f"I sent the secure Enter secret button for `{shown_name}`. Tap it "
+        "within about 5 minutes and paste the value there. Tinyhat never sees "
+        "the plaintext."
     )
+
+
+def _start_worker_process(handoff: dict[str, Any], private_key_pem: str) -> None:
+    handoff_id = str(handoff.get("handoff_id") or "").strip()
+    if not handoff_id:
+        raise SecretHandoffError("Platform did not return a handoff id.")
+    key_path = _write_private_key_file(handoff_id, private_key_pem)
+    package_dir = Path(__file__).resolve().parent
+    env = os.environ.copy()
+    pythonpath = str(package_dir.parent)
+    if env.get("PYTHONPATH"):
+        pythonpath = f"{pythonpath}{os.pathsep}{env['PYTHONPATH']}"
+    env["PYTHONPATH"] = pythonpath
+    try:
+        subprocess.Popen(
+            [
+                sys.executable,
+                str(package_dir / "secret_handoff_worker.py"),
+                "--handoff-id",
+                handoff_id,
+                "--key-path",
+                str(key_path),
+            ],
+            cwd=str(package_dir.parent),
+            env=env,
+            stdin=subprocess.DEVNULL,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+            start_new_session=True,
+            close_fds=True,
+        )
+    except Exception as exc:
+        try:
+            key_path.unlink()
+        except OSError:
+            pass
+        raise SecretHandoffError(
+            "Could not start the local secret handoff worker.",
+            public_message="I could not start the secure secret saver on this Computer.",
+        ) from exc
+
+
+def _write_private_key_file(handoff_id: str, private_key_pem: str) -> Path:
+    safe_id = re.sub(r"[^A-Za-z0-9_.-]", "_", handoff_id)
+    directory = STATE_DIR / safe_id
+    directory.mkdir(parents=True, exist_ok=True)
+    directory.chmod(0o700)
+    key_path = directory / "private.pem"
+    key_path.write_text(private_key_pem, encoding="utf-8")
+    key_path.chmod(0o600)
+    return key_path
 
 
 def _poll_and_install_secret(
@@ -140,7 +180,7 @@ def _poll_and_install_secret(
             platform_auth,
             handoff_id,
             installed=False,
-            message="Secret handoff expired before a value was submitted.",
+            message="Secret entry expired before a value was submitted.",
         )
     except Exception as exc:  # pragma: no cover - worker safety net
         try:
@@ -153,9 +193,6 @@ def _poll_and_install_secret(
             )
         except Exception:
             pass
-    finally:
-        current = threading.current_thread()
-        _WORKERS.discard(current)
 
 
 def _install_submitted_secret(
@@ -294,7 +331,7 @@ def _public_failure_message(exc: BaseException) -> str:
         return exc.public_message[:500]
     if isinstance(exc, UnicodeDecodeError):
         return "The encrypted secret could not be decoded."
-    return "Private secret handoff failed."
+    return "Could not complete secure secret entry."
 
 
 def _parse_expires_at(value: Any) -> float | None:

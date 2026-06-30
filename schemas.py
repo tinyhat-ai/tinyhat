@@ -32,12 +32,6 @@ TINYHAT_PRIVATE_SECRET_HANDOFF_SCHEMA = {
             "type": "string",
             "description": "Short human reminder for what this secret is used for.",
         },
-        "expires_in_seconds": {
-            "type": "integer",
-            "description": "Optional handoff timeout. Defaults to 300 seconds.",
-            "minimum": 60,
-            "maximum": 600,
-        },
     },
     "required": ["name"],
     "additionalProperties": False,

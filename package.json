@@ -9,6 +9,7 @@
     "__init__.py",
     "platform.py",
     "secret_handoff.py",
+    "secret_handoff_worker.py",
     "schemas.py",
     "tools.py",
     "skills",

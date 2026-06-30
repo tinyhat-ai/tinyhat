@@ -4,7 +4,9 @@ from __future__ import annotations
 
 import json
 import importlib.util
+import subprocess
 import sys
+import tempfile
 import unittest
 from pathlib import Path
 
@@ -28,6 +30,7 @@ else:
     import tinyhat  # noqa: E402
 
 from tinyhat import secret_handoff, tools  # noqa: E402
+from tinyhat import secret_handoff_worker  # noqa: E402
 
 
 class FakeHermesContext:
@@ -116,32 +119,39 @@ class HermesAdapterTests(unittest.TestCase):
         fake_client = FakeClient()
         original_build = secret_handoff.build_platform_client
         original_generate = secret_handoff._generate_key_pair
-        original_worker = secret_handoff._poll_and_install_secret
+        worker_calls: list[dict] = []
+        original_worker = secret_handoff._start_worker_process
         try:
             secret_handoff.build_platform_client = lambda: (fake_client, "local_dev")
             secret_handoff._generate_key_pair = lambda: ("PRIVATE", "PUBLIC")
-            secret_handoff._poll_and_install_secret = lambda **_: None
+            secret_handoff._start_worker_process = lambda handoff, private_key_pem: worker_calls.append(
+                {"handoff": handoff, "private_key_pem": private_key_pem}
+            )
 
             reply = tools.private_secret_handoff(
                 {
                     "name": "github_token",
                     "description": "GitHub access for repository tasks",
+                    "expires_in_seconds": 600,
                 }
             )
         finally:
             secret_handoff.build_platform_client = original_build
             secret_handoff._generate_key_pair = original_generate
-            secret_handoff._poll_and_install_secret = original_worker
+            secret_handoff._start_worker_process = original_worker
 
         self.assertEqual(
             fake_client.path,
             "/hapi/v1/computers/local-dev/private-secret-handoffs/v1",
         )
         self.assertEqual(fake_client.payload["name"], "GITHUB_TOKEN")
-        self.assertIn("Tap Enter secret", reply)
+        self.assertEqual(fake_client.payload["expires_in_seconds"], 300)
+        self.assertEqual(worker_calls[0]["private_key_pem"], "PRIVATE")
+        self.assertIn("I sent the secure Enter secret button", reply)
         self.assertIn("GITHUB_TOKEN", reply)
         self.assertIn("within about 5 minutes", reply)
         self.assertIn("never sees the plaintext", reply)
+        self.assertNotIn("handoff", reply.lower())
         self.assertNotIn("Expires", reply)
         self.assertNotIn("waiting_for_user", reply)
         self.assertFalse(reply.strip().startswith("{"))
@@ -163,11 +173,11 @@ class HermesAdapterTests(unittest.TestCase):
         fake_client = FakeClient()
         original_build = secret_handoff.build_platform_client
         original_generate = secret_handoff._generate_key_pair
-        original_worker = secret_handoff._poll_and_install_secret
+        original_worker = secret_handoff._start_worker_process
         try:
             secret_handoff.build_platform_client = lambda: (fake_client, "local_dev")
             secret_handoff._generate_key_pair = lambda: ("PRIVATE", "PUBLIC")
-            secret_handoff._poll_and_install_secret = lambda **_: None
+            secret_handoff._start_worker_process = lambda *_: None
 
             reply = tools.private_secret_handoff(
                 {
@@ -178,9 +188,52 @@ class HermesAdapterTests(unittest.TestCase):
         finally:
             secret_handoff.build_platform_client = original_build
             secret_handoff._generate_key_pair = original_generate
-            secret_handoff._poll_and_install_secret = original_worker
+            secret_handoff._start_worker_process = original_worker
 
         self.assertEqual(fake_client.payload["name"], "EXA_API_KEY")
+        self.assertIn("EXA_API_KEY", reply)
+
+    def test_private_secret_handoff_does_not_start_second_worker_for_existing_pending(
+        self,
+    ) -> None:
+        class FakeClient:
+            def post_json(self, path: str, payload: dict) -> dict:
+                self.path = path
+                self.payload = payload
+                return {
+                    "handoff_id": "sh_existing",
+                    "existing_handoff": True,
+                    "status": "pending",
+                    "secret_name": payload["name"],
+                    "description": payload["description"],
+                    "expires_at": "2026-06-29T12:00:00Z",
+                    "poll_after_ms": 2000,
+                }
+
+        fake_client = FakeClient()
+        worker_calls: list[dict] = []
+        original_build = secret_handoff.build_platform_client
+        original_generate = secret_handoff._generate_key_pair
+        original_worker = secret_handoff._start_worker_process
+        try:
+            secret_handoff.build_platform_client = lambda: (fake_client, "local_dev")
+            secret_handoff._generate_key_pair = lambda: ("PRIVATE", "PUBLIC")
+            secret_handoff._start_worker_process = lambda handoff, private_key_pem: worker_calls.append(
+                {"handoff": handoff, "private_key_pem": private_key_pem}
+            )
+
+            reply = tools.private_secret_handoff(
+                {
+                    "name": "EXA_API_KEY",
+                    "description": "Exa API key for search",
+                }
+            )
+        finally:
+            secret_handoff.build_platform_client = original_build
+            secret_handoff._generate_key_pair = original_generate
+            secret_handoff._start_worker_process = original_worker
+
+        self.assertEqual(worker_calls, [])
         self.assertIn("EXA_API_KEY", reply)
 
     def test_private_secret_handoff_rejects_generic_unknown_name(self) -> None:
@@ -235,6 +288,75 @@ class HermesAdapterTests(unittest.TestCase):
         finally:
             secret_handoff._decrypt_ciphertext = original_decrypt
             secret_handoff._set_hermes_secret = original_set
+
+        self.assertEqual(fake_client.claim_payloads[-1]["installed"], False)
+        self.assertEqual(
+            fake_client.claim_payloads[-1]["message"],
+            "Hermes could not save this secret.",
+        )
+        self.assertNotIn("super-secret-value", json.dumps(fake_client.claim_payloads))
+
+    def test_worker_script_bootstraps_from_non_package_checkout(self) -> None:
+        result = subprocess.run(
+            [
+                sys.executable,
+                str(REPO_ROOT / "secret_handoff_worker.py"),
+                "--help",
+            ],
+            cwd="/tmp",
+            capture_output=True,
+            text=True,
+            timeout=10,
+            check=False,
+        )
+
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertIn("--handoff-id", result.stdout)
+
+    def test_live_worker_failure_message_is_sanitized(self) -> None:
+        class FakeClient:
+            def __init__(self) -> None:
+                self.claim_payloads: list[dict] = []
+
+            def get_json(self, path: str) -> dict:
+                return {
+                    "status": "submitted",
+                    "secret_name": "PRIVATE_TOKEN",
+                    "ciphertext_payload": {"algorithm": "RSA-OAEP-256"},
+                }
+
+            def post_json(self, path: str, payload: dict) -> dict:
+                self.claim_payloads.append(payload)
+                return {"status": "failed"}
+
+        fake_client = FakeClient()
+        original_build = secret_handoff_worker.build_platform_client
+        original_install = secret_handoff_worker._install_submitted_secret
+        try:
+            secret_handoff_worker.build_platform_client = lambda: (
+                fake_client,
+                "local_dev",
+            )
+            secret_handoff_worker._install_submitted_secret = lambda **_: (
+                _ for _ in ()
+            ).throw(
+                secret_handoff.SecretHandoffError(
+                    "worker echoed super-secret-value",
+                    public_message="Hermes could not save this secret.",
+                )
+            )
+            with tempfile.TemporaryDirectory(prefix="tinyhat-worker-test-") as temp_dir:
+                key_path = Path(temp_dir) / "private.pem"
+                key_path.write_text("PRIVATE", encoding="utf-8")
+
+                with self.assertRaises(SystemExit):
+                    secret_handoff_worker.run_worker(
+                        handoff_id="sh_test",
+                        key_path=key_path,
+                    )
+        finally:
+            secret_handoff_worker.build_platform_client = original_build
+            secret_handoff_worker._install_submitted_secret = original_install
 
         self.assertEqual(fake_client.claim_payloads[-1]["installed"], False)
         self.assertEqual(
