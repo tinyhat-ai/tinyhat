@@ -19,12 +19,12 @@ CODEX_AUTH_SCREENSHOT = (
     / "chatgpt-enable-device-code-for-codex.png"
 )
 CODEX_AUTH_CAPTION = (
-    'Before Codex sign-in can start, open chatgpt.com > Settings > '
-    'Security, scroll to "Secure sign in with ChatGPT", and turn on '
-    '"Enable device code authorization for Codex". Then tap the confirmation '
-    "button I send next."
+    "Before Codex sign-in can start:\n\n"
+    "1. Open chatgpt.com > Settings > Security.\n"
+    '2. Turn on "Enable device code authorization for Codex".\n\n'
+    "Then tap this command:\n"
+    "/codex_auth"
 )
-CODEX_AUTH_CONFIRM_BUTTON = "I enabled it - start Codex sign-in"
 TELEGRAM_ENV_CANDIDATES = (
     Path.home() / ".hermes" / ".env",
     Path("/usr/local/lib/hermes-agent/.env"),
@@ -91,10 +91,10 @@ def codex_auth(args: dict[str, Any] | None = None, **_: Any) -> str:
                     "schema": "tinyhat_codex_auth_start_v1",
                     "status": "waiting_for_confirmation",
                     "message": (
-                        "Ask the user to confirm they turned on Enable device "
-                        "code authorization for Codex before starting auth. Use "
-                        "Hermes clarify with the confirmation choice so the button "
-                        "appears under the message, not by the keyboard."
+                        "Do not start auth yet. Do not send another screenshot or "
+                        "link. Ask the user to turn on Enable device code "
+                        "authorization for Codex, then tap /codex_auth in the "
+                        "Telegram message."
                     ),
                 },
                 sort_keys=True,
@@ -118,12 +118,16 @@ def codex_auth(args: dict[str, Any] | None = None, **_: Any) -> str:
         {
             "schema": "tinyhat_codex_auth_start_v1",
             "status": "waiting_for_confirmation",
+            "chat_response_required": False,
             "prerequisite": prerequisite,
-            "message": (
-                "I sent the ChatGPT device-code setting screenshot. Now call "
-                "Hermes clarify with one choice: "
-                f"{CODEX_AUTH_CONFIRM_BUTTON!r}. After the user taps it, call "
-                "this tool with action=start and confirmed=true."
+            "next_user_action": (
+                "After enabling the ChatGPT setting, the user taps /codex_auth "
+                "in Telegram."
+            ),
+            "agent_instruction": (
+                "The user-facing Telegram message has already been sent. Do not "
+                "send any chat reply for this tool call. Do not call this tool "
+                "again unless the user explicitly confirms the setting is enabled."
             ),
         },
         sort_keys=True,
@@ -144,11 +148,7 @@ def _send_codex_prerequisite() -> dict[str, Any]:
             caption=CODEX_AUTH_CAPTION,
         )
         if sent.get("ok"):
-            return {
-                "ok": True,
-                "mode": "photo",
-                "confirmation_choice": CODEX_AUTH_CONFIRM_BUTTON,
-            }
+            return {"ok": True, "mode": "photo"}
         fallback = _telegram_send_message(
             token=token,
             chat_id=chat_id,
@@ -157,7 +157,6 @@ def _send_codex_prerequisite() -> dict[str, Any]:
         return {
             "ok": bool(fallback.get("ok")),
             "mode": "text_fallback",
-            "confirmation_choice": CODEX_AUTH_CONFIRM_BUTTON,
             "photo_error": _safe_telegram_error(sent),
         }
     sent = _telegram_send_message(
@@ -168,7 +167,6 @@ def _send_codex_prerequisite() -> dict[str, Any]:
     return {
         "ok": bool(sent.get("ok")),
         "mode": "text",
-        "confirmation_choice": CODEX_AUTH_CONFIRM_BUTTON,
     }
 
 

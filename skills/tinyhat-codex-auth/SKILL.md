@@ -15,41 +15,39 @@ as a request to start Tinyhat's Codex auth flow. Only clarify if the user
 explicitly asks for ChatGPT conversation history/data or for an OpenAI
 API key instead of subscription auth.
 
-## Step 1: Confirm The ChatGPT Setting
+## Default Flow: One Message, Then `/codex_auth`
 
-Do the work yourself. Do not tell the user to send `/codex_auth` as the
-primary path. That command exists for manual fallback; this skill exists
-so you can initiate the same process for the user.
+For common natural-language requests, do not call a tool first. Reply
+once, briefly, with the setting path and the clickable `/codex_auth`
+command.
 
-First call `tinyhat_codex_auth` with:
+Use copy like this. Keep `/codex_auth` on its own line so it is hard to
+miss:
+
+```text
+To use your Codex subscription here:
+
+1. Open chatgpt.com > Settings > Security.
+2. Turn on "Enable device code authorization for Codex".
+
+Then come back here and tap:
+
+/codex_auth
+```
+
+Do not also call `tinyhat_codex_auth` for this default path. Hermes will
+send a normal reply after a tool call, which creates duplicate messages.
+The single text reply is enough because `/codex_auth` starts the installed
+runtime helper.
+
+## Optional Screenshot Fallback
+
+If the user asks where the ChatGPT setting is, says they cannot find it,
+or asks for the screenshot, call `tinyhat_codex_auth` with:
 
 ```json
 {"action": "prerequisite"}
 ```
-
-The tool sends the ChatGPT device-code setting screenshot to Telegram. It
-does not attach a Telegram reply keyboard.
-
-Immediately after the tool returns, call Hermes' built-in `clarify` tool
-with this one choice:
-
-```text
-I enabled it - start Codex sign-in
-```
-
-Use a short question such as:
-
-```text
-Turn on "Enable device code authorization for Codex" in ChatGPT Settings >
-Security, then tap the button below.
-```
-
-Hermes renders `clarify` choices as inline buttons under that prompt
-message. Do not use a Telegram reply keyboard, and do not ask the user to
-type the confirmation command.
-
-After that, stop until `clarify` returns the confirmation choice. Do not
-start the auth helper before the user taps the inline button.
 
 The tool uses this bundled screenshot:
 
@@ -57,17 +55,20 @@ The tool uses this bundled screenshot:
 skills/tinyhat-codex-auth/assets/chatgpt-enable-device-code-for-codex.png
 ```
 
-with this short caption:
+with this short caption. Keep `/codex_auth` on its own line:
 
 ```text
-Before Codex sign-in can start, open chatgpt.com > Settings > Security,
-scroll to "Secure sign in with ChatGPT", and turn on "Enable device code
-authorization for Codex". Then tap the confirmation button I send next.
+Before Codex sign-in can start:
+
+1. Open chatgpt.com > Settings > Security.
+2. Turn on "Enable device code authorization for Codex".
+
+Then tap this command:
+/codex_auth
 ```
 
-If the tool is unavailable, send that one-sentence checklist in text and
-use `clarify` for the confirmation. Do not search for the image path in
-chat, and do not start auth before the user confirms.
+After this fallback tool returns, keep any follow-up reply as short as
+possible. Do not repeat the same link, and do not call the tool again.
 
 The user must do this on their side:
 
@@ -81,10 +82,11 @@ Personal accounts can usually turn this on directly. Team, Business, and
 Enterprise accounts may require a workspace admin if the toggle is
 disabled.
 
-## Step 2: Start Auth After Confirmation
+## Start Auth Only If The User Confirms In Chat
 
-When `clarify` returns the confirmation choice, or when the user otherwise
-confirms the setting is on, call `tinyhat_codex_auth` with:
+Normally the user starts auth by tapping `/codex_auth` in the Telegram
+message. If instead the user replies in chat that the setting is already
+enabled and asks you to continue, call `tinyhat_codex_auth` with:
 
 ```json
 {"action": "start", "confirmed": true}
@@ -127,11 +129,13 @@ token, or create an OpenAI API key.
 ## Message Contract
 
 - The Tinyhat auth helper sends the button and device code itself.
-- The prerequisite tool sends only the screenshot/checklist.
-- The confirmation button comes from Hermes `clarify`, so it appears under
-  the prompt message instead of by the keyboard.
-- Do not start the helper until the user confirms the ChatGPT Security
-  toggle is on.
+- For the default flow, do not call a tool. Send one short message with
+  the ChatGPT setting path and `/codex_auth`.
+- Use the prerequisite screenshot tool only when the user asks for help
+  finding the setting.
+- Do not call `tinyhat_codex_auth` twice during the same request.
+- Do not start the helper until the user taps `/codex_auth` or explicitly
+  confirms in chat that the ChatGPT Security toggle is on.
 - Do not paste the raw auth URL or duplicate the device code unless the
   helper explicitly reports that Telegram delivery failed.
 - The device code is copyable but temporary. It is not the OAuth token.
@@ -142,12 +146,17 @@ token, or create an OpenAI API key.
 
 ## Helpful Copy
 
-After sending the prerequisite screenshot, a good short reply is:
+For the default path, use:
 
 ```text
-I sent the ChatGPT setting screenshot. Please turn on "Enable device code
-authorization for Codex" in Settings > Security, then tap "I enabled it -
-start Codex sign-in". I will start sign-in after that.
+To use your Codex subscription here:
+
+1. Open chatgpt.com > Settings > Security.
+2. Turn on "Enable device code authorization for Codex".
+
+Then come back here and tap:
+
+/codex_auth
 ```
 
 After the user confirms and the auth flow starts, a good short reply is:

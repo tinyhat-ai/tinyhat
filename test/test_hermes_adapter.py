@@ -97,7 +97,7 @@ class HermesAdapterTests(unittest.TestCase):
 
         self.assertEqual(payload["schema"], "tinyhat_plugin_version_v1")
         self.assertEqual(payload["name"], "tinyhat")
-        self.assertEqual(payload["version"], "0.20.8")
+        self.assertEqual(payload["version"], "0.20.9")
 
     def test_context_hook_injects_for_secret_requests(self) -> None:
         ctx = FakeHermesContext()
@@ -131,23 +131,21 @@ class HermesAdapterTests(unittest.TestCase):
                 self.assertIsNotNone(injected)
                 assert injected is not None
                 self.assertIn("tinyhat:tinyhat-codex-auth", injected["context"])
-                self.assertIn("do not ask a multiple-choice clarification", injected["context"])
-                self.assertIn("tinyhat_codex_auth", injected["context"])
-                self.assertIn("action=prerequisite", injected["context"])
-                self.assertIn("confirmed=true", injected["context"])
-                self.assertIn("I enabled it - start Codex sign-in", injected["context"])
-                self.assertIn("Hermes clarify", injected["context"])
+                self.assertIn("Do not ask a multiple-choice clarification", injected["context"])
+                self.assertIn("Do not call tinyhat_codex_auth for the default path", injected["context"])
+                self.assertIn("/codex_auth", injected["context"])
+                self.assertIn("on its own line", injected["context"])
 
     def test_context_hook_injects_for_codex_device_code_confirmation(self) -> None:
         injected = tinyhat_context.inject_tinyhat_context(
-            user_message="I enabled it - start Codex sign-in",
+            user_message="I enabled device code authorization for Codex",
             is_first_turn=False,
         )
 
         self.assertIsNotNone(injected)
         assert injected is not None
         self.assertIn("tinyhat_codex_auth", injected["context"])
-        self.assertIn("confirmed=true", injected["context"])
+        self.assertIn("/codex_auth", injected["context"])
 
     def test_codex_auth_skill_packages_prerequisite_screenshot(self) -> None:
         skill_md = REPO_ROOT / "skills" / "tinyhat-codex-auth" / "SKILL.md"
@@ -162,17 +160,17 @@ class HermesAdapterTests(unittest.TestCase):
 
         self.assertTrue(screenshot.is_file())
         self.assertGreater(screenshot.stat().st_size, 10_000)
-        self.assertIn("The tool sends the ChatGPT device-code setting screenshot", text)
-        self.assertIn("Do the work yourself.", text)
-        self.assertIn("Do not tell the user to send `/codex_auth`", text)
+        self.assertIn("For common natural-language requests, do not call a tool first.", text)
+        self.assertIn("Keep `/codex_auth` on its own line", text)
         self.assertIn("Open `chatgpt.com`", text)
         self.assertIn("Secure sign in with ChatGPT", text)
         self.assertIn("Enable device code authorization for Codex", text)
-        self.assertIn("I enabled it - start Codex sign-in", text)
+        self.assertIn("Then come back here and tap:", text)
+        self.assertIn("/codex_auth", text)
+        self.assertIn("Do not call `tinyhat_codex_auth` twice", text)
+        self.assertIn("Optional Screenshot Fallback", text)
         self.assertIn('{"action": "prerequisite"}', text)
         self.assertIn('{"action": "start", "confirmed": true}', text)
-        self.assertIn("Hermes renders `clarify` choices as inline buttons", text)
-        self.assertIn("primary path", text)
         self.assertIn("tinyhat_codex_auth", text)
         self.assertIn("hermes_runtime.telegram_codex_auth start", text)
 
@@ -184,7 +182,6 @@ class HermesAdapterTests(unittest.TestCase):
             tools._send_codex_prerequisite = lambda: {
                 "ok": True,
                 "mode": "photo",
-                "confirmation_choice": "I enabled it - start Codex sign-in",
             }
             tools._start_runtime_codex_auth = lambda: start_calls.append(True) or {
                 "ok": True,
@@ -197,11 +194,12 @@ class HermesAdapterTests(unittest.TestCase):
 
         self.assertEqual(payload["schema"], "tinyhat_codex_auth_start_v1")
         self.assertEqual(payload["status"], "waiting_for_confirmation")
+        self.assertIs(payload["chat_response_required"], False)
         self.assertEqual(payload["prerequisite"]["mode"], "photo")
-        self.assertEqual(
-            payload["prerequisite"]["confirmation_choice"],
-            "I enabled it - start Codex sign-in",
-        )
+        self.assertNotIn("confirmation_choice", payload["prerequisite"])
+        self.assertNotIn("message", payload)
+        self.assertIn("/codex_auth", payload["next_user_action"])
+        self.assertIn("Do not send any chat reply", payload["agent_instruction"])
         self.assertEqual(start_calls, [])
 
     def test_codex_auth_prerequisite_does_not_attach_reply_keyboard(self) -> None:
@@ -223,10 +221,8 @@ class HermesAdapterTests(unittest.TestCase):
             tools._telegram_send_photo = original_send_photo
 
         self.assertTrue(payload["ok"])
-        self.assertEqual(
-            payload["confirmation_choice"],
-            "I enabled it - start Codex sign-in",
-        )
+        self.assertNotIn("confirmation_choice", payload)
+        self.assertIn("/codex_auth", str(captured.get("caption")))
         self.assertNotIn("reply_markup", captured)
 
     def test_codex_auth_tool_refuses_start_without_confirmation(self) -> None:
@@ -244,6 +240,7 @@ class HermesAdapterTests(unittest.TestCase):
         self.assertEqual(payload["schema"], "tinyhat_codex_auth_start_v1")
         self.assertEqual(payload["status"], "waiting_for_confirmation")
         self.assertIn("Enable device code authorization", payload["message"])
+        self.assertIn("/codex_auth", payload["message"])
         self.assertEqual(start_calls, [])
 
     def test_codex_auth_tool_starts_after_confirmation(self) -> None:
