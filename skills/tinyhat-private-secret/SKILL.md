@@ -1,6 +1,6 @@
 ---
 name: tinyhat-private-secret
-description: Start a private Tinyhat secret handoff. Use when the user asks to add, save, create, update, or connect an API key, token, password, credential, webhook secret, or other secret for this agent.
+description: Start a secure Tinyhat secret entry flow. Use when the user asks to add, save, create, update, or connect an API key, token, password, credential, webhook secret, or other secret for this agent.
 ---
 
 # Tinyhat Private Secret
@@ -8,8 +8,8 @@ description: Start a private Tinyhat secret handoff. Use when the user asks to a
 Use this when the user wants to add a secret or credential to the
 current Tinyhat-managed Computer.
 
-Never ask the user to paste the secret value in chat. Start a private
-handoff instead:
+Never ask the user to paste the secret value in chat. Start a secure
+secret entry instead:
 
 1. Pick a specific env-style name from the user's request. If the user
    says "my Exa API key", use `EXA_API_KEY`. If they say GitHub token,
@@ -18,13 +18,13 @@ handoff instead:
 2. Add a short plain-English description that helps the user remember
    why the secret exists.
 3. Call `tinyhat_private_secret_handoff` with `name` and `description`.
-4. Let the returned message stand. Tinyhat already sends the secure
-   button.
+4. Call the tool once. Let the returned message stand. Tinyhat already
+   sends the secure button.
 
 Do not use generic names such as `TINYHAT_SECRET`, `SECRET`, `API_KEY`,
 `TOKEN`, `PASSWORD`, or `CREDENTIAL`. If the provider or purpose is not
 clear enough to choose a meaningful name, ask one short clarification
-question before starting the handoff.
+question before starting secret entry.
 
 Use these common names when they match the user request:
 
@@ -41,14 +41,16 @@ Use these common names when they match the user request:
 | Telegram bot token | `TELEGRAM_BOT_TOKEN` |
 | Slack bot token | `SLACK_BOT_TOKEN` |
 
-The handoff works like a device flow. This Computer creates a one-time
+The secure entry flow works like a device flow. This Computer creates a one-time
 key pair. The Tinyhat page encrypts the secret in the user's browser
 with the public key, and this Computer decrypts it with the temporary
-private key. Tinyhat stores only encrypted ciphertext during the handoff.
+private key. Tinyhat stores only encrypted ciphertext during the short
+entry window.
 
 If the entry window expires, ask the user whether to create a new secure
 link. Do not reuse old links.
 
-Keep the chat response short. Do not render a table, exact expiration
-timestamp, status field, raw URL, JSON payload, or extra explanation. The
-button is the main action.
+Keep the chat response short. Do not render a second message with a
+button, a table, exact expiration timestamp, status field, raw URL, JSON
+payload, or extra explanation. The button that Tinyhat already sent is
+the main action.

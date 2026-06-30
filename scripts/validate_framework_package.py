@@ -125,6 +125,7 @@ def validate_hermes_adapter(root: Path) -> None:
         "tools.py",
         "platform.py",
         "secret_handoff.py",
+        "secret_handoff_worker.py",
     ):
         require((root / rel).is_file(), f"{rel} is missing")
 
@@ -201,6 +202,7 @@ def validate_fresh_surface(root: Path) -> None:
         root / "__init__.py",
         root / "platform.py",
         root / "secret_handoff.py",
+        root / "secret_handoff_worker.py",
         root / "schemas.py",
         root / "tools.py",
     ]
