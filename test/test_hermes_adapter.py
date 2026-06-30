@@ -97,7 +97,7 @@ class HermesAdapterTests(unittest.TestCase):
 
         self.assertEqual(payload["schema"], "tinyhat_plugin_version_v1")
         self.assertEqual(payload["name"], "tinyhat")
-        self.assertEqual(payload["version"], "0.20.9")
+        self.assertEqual(payload["version"], "0.20.10")
 
     def test_context_hook_injects_for_secret_requests(self) -> None:
         ctx = FakeHermesContext()
@@ -132,7 +132,8 @@ class HermesAdapterTests(unittest.TestCase):
                 assert injected is not None
                 self.assertIn("tinyhat:tinyhat-codex-auth", injected["context"])
                 self.assertIn("Do not ask a multiple-choice clarification", injected["context"])
-                self.assertIn("Do not call tinyhat_codex_auth for the default path", injected["context"])
+                self.assertIn("call tinyhat_codex_auth once with action=prerequisite", injected["context"])
+                self.assertIn("Do not send an extra text reply", injected["context"])
                 self.assertIn("/codex_auth", injected["context"])
                 self.assertIn("on its own line", injected["context"])
 
@@ -160,7 +161,9 @@ class HermesAdapterTests(unittest.TestCase):
 
         self.assertTrue(screenshot.is_file())
         self.assertGreater(screenshot.stat().st_size, 10_000)
-        self.assertIn("For common natural-language requests, do not call a tool first.", text)
+        self.assertIn("For common natural-language requests, call `tinyhat_codex_auth` once", text)
+        self.assertIn('{"action": "prerequisite"}', text)
+        self.assertIn("caption is the user-facing reply.", text)
         self.assertIn("Keep `/codex_auth` on its own line", text)
         self.assertIn("Open `chatgpt.com`", text)
         self.assertIn("Secure sign in with ChatGPT", text)
@@ -168,8 +171,7 @@ class HermesAdapterTests(unittest.TestCase):
         self.assertIn("Then come back here and tap:", text)
         self.assertIn("/codex_auth", text)
         self.assertIn("Do not call `tinyhat_codex_auth` twice", text)
-        self.assertIn("Optional Screenshot Fallback", text)
-        self.assertIn('{"action": "prerequisite"}', text)
+        self.assertIn("Do not send an extra normal chat reply", text)
         self.assertIn('{"action": "start", "confirmed": true}', text)
         self.assertIn("tinyhat_codex_auth", text)
         self.assertIn("hermes_runtime.telegram_codex_auth start", text)

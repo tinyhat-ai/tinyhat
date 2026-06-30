@@ -38,17 +38,18 @@ This capability is used when the user says something like "connect you to
 my ChatGPT account", "use my Codex subscription", "use my own OpenAI paid
 access", or "switch from platform credits".
 
-The agent should load `tinyhat:tinyhat-codex-auth` and reply once with
-the ChatGPT Settings > Security path, then put `/codex_auth` on its own
-line. The user opens `chatgpt.com` > Settings > Security, scrolls to **Secure sign in with
-ChatGPT**, turns on **Enable device code authorization for Codex**, and
-then taps `/codex_auth` in the same Telegram chat. That command starts
-the Tinyhat-installed auth flow. The auth flow sends an OpenAI
+The agent should load `tinyhat:tinyhat-codex-auth` and call
+`tinyhat_codex_auth` once with `{"action": "prerequisite"}`. The helper
+sends the ChatGPT Settings > Security screenshot and puts `/codex_auth`
+on its own line. The user opens `chatgpt.com` > Settings > Security,
+scrolls to **Secure sign in with ChatGPT**, turns on **Enable device code
+authorization for Codex**, and then taps `/codex_auth` in the same
+Telegram chat. That command starts the Tinyhat-installed auth flow. The
+auth flow sends an OpenAI
 authorization button and a separate copyable device code to Telegram,
 waits for OpenAI to complete device auth on the Computer, switches
-Hermes to Codex auth, and restarts the Telegram gateway. The screenshot
-tool is only for users who ask where the setting is. The agent should
-not send duplicate links, call the auth tool twice, or ask for
+Hermes to Codex auth, and restarts the Telegram gateway. The agent should
+not send duplicate text replies, call the auth tool twice, or ask for
 `auth.json`, refresh tokens, passwords, or OpenAI API keys for this
 subscription-auth path.
 

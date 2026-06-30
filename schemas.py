@@ -45,10 +45,10 @@ TINYHAT_PRIVATE_SECRET_HANDOFF_SCHEMA = {
 TINYHAT_CODEX_AUTH_SCHEMA = {
     "type": "object",
     "description": (
-        "Optional Codex-auth helper for Tinyhat Telegram. Do not call this for "
-        "a plain natural-language request to use a Codex subscription; reply "
-        "with the ChatGPT Settings > Security path and /codex_auth instead. "
-        "Use prerequisite only when the user asks where the ChatGPT setting is. "
+        "Tinyhat Codex-auth helper for Telegram. Use prerequisite for a "
+        "plain natural-language request to use a Codex subscription; it sends "
+        "the ChatGPT Settings > Security screenshot and /codex_auth instruction "
+        "without starting auth. "
         "Use start only after the user explicitly confirms the setting is on."
     ),
     "properties": {
@@ -56,7 +56,7 @@ TINYHAT_CODEX_AUTH_SCHEMA = {
             "type": "string",
             "enum": ["prerequisite", "start"],
             "description": (
-                "Use prerequisite only for the optional screenshot fallback. "
+                "Use prerequisite for the default screenshot guide. "
                 "Use start only after the user confirms they enabled "
                 "device-code authorization for Codex."
             ),

@@ -15,14 +15,22 @@ as a request to start Tinyhat's Codex auth flow. Only clarify if the user
 explicitly asks for ChatGPT conversation history/data or for an OpenAI
 API key instead of subscription auth.
 
-## Default Flow: One Message, Then `/codex_auth`
+## Default Flow: Screenshot, Then `/codex_auth`
 
-For common natural-language requests, do not call a tool first. Reply
-once, briefly, with the setting path and the clickable `/codex_auth`
-command.
+For common natural-language requests, call `tinyhat_codex_auth` once
+with:
 
-Use copy like this. Keep `/codex_auth` on its own line so it is hard to
-miss:
+```json
+{"action": "prerequisite"}
+```
+
+This sends the screenshot that shows where the ChatGPT Security setting
+lives, with a short caption and the clickable `/codex_auth` command.
+After the tool call, do not send an extra normal chat reply. The photo
+caption is the user-facing reply.
+
+The tool caption uses copy like this. Keep `/codex_auth` on its own line
+so it is hard to miss:
 
 ```text
 To use your Codex subscription here:
@@ -35,40 +43,15 @@ Then come back here and tap:
 /codex_auth
 ```
 
-Do not also call `tinyhat_codex_auth` for this default path. Hermes will
-send a normal reply after a tool call, which creates duplicate messages.
-The single text reply is enough because `/codex_auth` starts the installed
-runtime helper.
-
-## Optional Screenshot Fallback
-
-If the user asks where the ChatGPT setting is, says they cannot find it,
-or asks for the screenshot, call `tinyhat_codex_auth` with:
-
-```json
-{"action": "prerequisite"}
-```
-
-The tool uses this bundled screenshot:
+The tool sends this bundled screenshot with that caption:
 
 ```text
 skills/tinyhat-codex-auth/assets/chatgpt-enable-device-code-for-codex.png
 ```
 
-with this short caption. Keep `/codex_auth` on its own line:
-
-```text
-Before Codex sign-in can start:
-
-1. Open chatgpt.com > Settings > Security.
-2. Turn on "Enable device code authorization for Codex".
-
-Then tap this command:
-/codex_auth
-```
-
-After this fallback tool returns, keep any follow-up reply as short as
-possible. Do not repeat the same link, and do not call the tool again.
+After this prerequisite tool returns, do not send a follow-up reply unless
+Telegram delivery failed and the tool explicitly says a reply is needed.
+Do not repeat the same link, and do not call the tool again.
 
 The user must do this on their side:
 
@@ -129,10 +112,9 @@ token, or create an OpenAI API key.
 ## Message Contract
 
 - The Tinyhat auth helper sends the button and device code itself.
-- For the default flow, do not call a tool. Send one short message with
-  the ChatGPT setting path and `/codex_auth`.
-- Use the prerequisite screenshot tool only when the user asks for help
-  finding the setting.
+- For the default flow, call `tinyhat_codex_auth` once with
+  `{"action": "prerequisite"}`. Let the screenshot caption stand.
+- Do not send an extra normal chat reply after the prerequisite tool.
 - Do not call `tinyhat_codex_auth` twice during the same request.
 - Do not start the helper until the user taps `/codex_auth` or explicitly
   confirms in chat that the ChatGPT Security toggle is on.
@@ -146,7 +128,7 @@ token, or create an OpenAI API key.
 
 ## Helpful Copy
 
-For the default path, use:
+The default screenshot caption should say:
 
 ```text
 To use your Codex subscription here:

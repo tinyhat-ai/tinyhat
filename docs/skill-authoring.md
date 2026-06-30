@@ -96,10 +96,11 @@ to add or save an API key, token, password, or credential.
 `tinyhat-codex-auth` is the default way to connect a Tinyhat-managed
 Hermes agent to the user's OpenAI Codex / ChatGPT subscription. It should
 trigger for common user wording such as "connect my ChatGPT account" or
-"use my Codex subscription". It should reply once with the ChatGPT
-Settings > Security path and put `/codex_auth` on its own line. Use the
-screenshot helper only when the user asks where the setting is. The skill
-should not send duplicate links or start the helper twice.
+"use my Codex subscription". It should call `tinyhat_codex_auth` once
+with `{"action": "prerequisite"}` so the user receives the ChatGPT
+Settings > Security screenshot and `/codex_auth` on its own line. The
+skill should not send an extra text reply, duplicate links, or start the
+helper twice.
 
 `tinyhat-platform` is the compact operating map for Tinyhat-managed
 Hermes agents. It explains secrets, Codex auth commands, usage limit
