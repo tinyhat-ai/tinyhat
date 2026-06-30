@@ -249,15 +249,12 @@ def _telegram_send_message(
     token: str,
     chat_id: str,
     text: str,
-    reply_markup: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     payload: dict[str, Any] = {
         "chat_id": chat_id,
         "text": text[:3900],
         "disable_web_page_preview": "true",
     }
-    if reply_markup:
-        payload["reply_markup"] = json.dumps(reply_markup)
     body = parse.urlencode(payload).encode("utf-8")
     return _telegram_post(
         token=token,
@@ -273,7 +270,6 @@ def _telegram_send_photo(
     chat_id: str,
     photo_path: Path,
     caption: str,
-    reply_markup: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     boundary = "tinyhat_codex_auth_boundary"
     photo = photo_path.read_bytes()
@@ -289,8 +285,6 @@ def _telegram_send_photo(
         + photo
         + b"\r\n",
     ]
-    if reply_markup:
-        parts.append(_multipart_field(boundary, "reply_markup", json.dumps(reply_markup)))
     parts.append(f"--{boundary}--\r\n".encode("utf-8"))
     return _telegram_post(
         token=token,
