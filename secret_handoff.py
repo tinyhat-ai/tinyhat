@@ -20,6 +20,7 @@ KEY_ALGORITHM = "RSA-OAEP-256"
 DEFAULT_EXPIRES_IN_SECONDS = 300
 SECRET_NAME_RE = re.compile(r"^[A-Z_][A-Z0-9_]{0,126}$")
 STATE_DIR = Path.home() / ".tinyhat" / "private-secret-handoffs"
+GATEWAY_RELOAD_LOG_NAME = "hermes-gateway.log"
 GENERIC_SECRET_NAMES = {
     "TINYHAT_SECRET",
     "SECRET",
@@ -212,6 +213,7 @@ def _install_submitted_secret(
         _set_hermes_secret(secret_name, plaintext)
     finally:
         plaintext = ""
+    _reload_hermes_gateway_after_secret()
     _claim_handoff(client, platform_auth, handoff_id, installed=True)
 
 
@@ -310,6 +312,195 @@ def _set_hermes_secret(secret_name: str, value: str) -> None:
             "Hermes config set failed.",
             public_message="Hermes could not save this secret.",
         )
+
+
+def _reload_hermes_gateway_after_secret() -> dict[str, Any]:
+    """Restart Hermes messaging so newly saved env values are live immediately."""
+    hermes = shutil.which("hermes")
+    if not hermes:
+        raise SecretHandoffError(
+            "Hermes CLI was not found while reloading the gateway.",
+            public_message=(
+                "Secret saved, but I could not reload Hermes. Send /restart "
+                "before using it."
+            ),
+        )
+
+    status_before = _run_gateway_command([hermes, "gateway", "status"], timeout=45)
+    stop = _run_gateway_command([hermes, "gateway", "stop"], timeout=60)
+    status_after_stop = _run_gateway_command(
+        [hermes, "gateway", "status"],
+        timeout=45,
+    )
+    start = _run_gateway_command([hermes, "gateway", "start"], timeout=180)
+    status_after_start = _run_gateway_command(
+        [hermes, "gateway", "status"],
+        timeout=45,
+    )
+
+    foreground = None
+    if _gateway_status_is_healthy(status_after_stop) or _gateway_needs_foreground_run(
+        start=start,
+        status=status_after_start,
+    ):
+        foreground = _start_gateway_foreground(hermes)
+        status_after_start = _run_gateway_command(
+            [hermes, "gateway", "status"],
+            timeout=45,
+        )
+
+    foreground_log = (
+        Path(str(foreground.get("log_path")))
+        if isinstance(foreground, dict) and foreground.get("log_path")
+        else None
+    )
+    adapter_failure = _gateway_log_has_adapter_failure(foreground_log)
+    healthy = _gateway_status_is_healthy(status_after_start) and not adapter_failure
+    result = {
+        "schema": "tinyhat_secret_hermes_reload_v1",
+        "healthy": healthy,
+        "adapter_ready": not adapter_failure,
+        "status_before": _compact_gateway_process(status_before),
+        "stop": _compact_gateway_process(stop),
+        "status_after_stop": _compact_gateway_process(status_after_stop),
+        "start": _compact_gateway_process(start),
+        "foreground": foreground,
+        "status_after": _compact_gateway_process(status_after_start),
+    }
+    if not healthy:
+        raise SecretHandoffError(
+            f"Hermes gateway reload failed: {result}",
+            public_message=(
+                "Secret saved, but I could not reload Hermes. Send /restart "
+                "before using it."
+            ),
+        )
+    return result
+
+
+def _run_gateway_command(command: list[str], *, timeout: int) -> dict[str, Any]:
+    started_at = time.monotonic()
+    try:
+        result = subprocess.run(
+            command,
+            capture_output=True,
+            text=True,
+            timeout=timeout,
+            check=False,
+        )
+        duration_ms = int((time.monotonic() - started_at) * 1000)
+        return {
+            "ok": result.returncode == 0,
+            "returncode": result.returncode,
+            "timed_out": False,
+            "duration_ms": duration_ms,
+            "stdout": str(result.stdout or "")[:4000],
+            "stderr": str(result.stderr or "")[:4000],
+        }
+    except subprocess.TimeoutExpired as exc:
+        duration_ms = int((time.monotonic() - started_at) * 1000)
+        stdout = exc.stdout.decode("utf-8", "replace") if isinstance(exc.stdout, bytes) else exc.stdout
+        stderr = exc.stderr.decode("utf-8", "replace") if isinstance(exc.stderr, bytes) else exc.stderr
+        return {
+            "ok": False,
+            "returncode": None,
+            "timed_out": True,
+            "duration_ms": duration_ms,
+            "stdout": str(stdout or "")[:4000],
+            "stderr": str(stderr or "")[:4000],
+        }
+
+
+def _compact_gateway_process(result: dict[str, Any] | None) -> dict[str, Any] | None:
+    if not isinstance(result, dict):
+        return None
+    return {
+        "ok": bool(result.get("ok")),
+        "returncode": result.get("returncode"),
+        "timed_out": bool(result.get("timed_out")),
+        "duration_ms": result.get("duration_ms"),
+        "stdout": str(result.get("stdout") or "")[:1000],
+        "stderr": str(result.get("stderr") or "")[:1000],
+    }
+
+
+def _gateway_process_text(result: dict[str, Any] | None) -> str:
+    if not isinstance(result, dict):
+        return ""
+    return f"{result.get('stdout') or ''}\n{result.get('stderr') or ''}".lower()
+
+
+def _gateway_status_is_healthy(status: dict[str, Any] | None) -> bool:
+    if not isinstance(status, dict) or not status.get("ok"):
+        return False
+    text = _gateway_process_text(status)
+    if "not running" in text or "gateway is not running" in text:
+        return False
+    return True
+
+
+def _gateway_needs_foreground_run(
+    *,
+    start: dict[str, Any],
+    status: dict[str, Any],
+) -> bool:
+    text = f"{_gateway_process_text(start)}\n{_gateway_process_text(status)}"
+    if "not applicable inside a docker container" in text:
+        return True
+    if "run the gateway directly" in text:
+        return True
+    return not _gateway_status_is_healthy(status)
+
+
+def _gateway_log_path() -> Path:
+    state_dir = os.getenv("TINYHAT_RUNTIME_STATE_DIR")
+    if state_dir:
+        return Path(state_dir) / GATEWAY_RELOAD_LOG_NAME
+    return Path.home() / ".tinyhat" / GATEWAY_RELOAD_LOG_NAME
+
+
+def _gateway_log_has_adapter_failure(path: Path | None) -> bool:
+    if path is None:
+        return False
+    try:
+        text = path.read_text(encoding="utf-8", errors="replace")[-8000:].lower()
+    except OSError:
+        return False
+    needles = (
+        "platform 'telegram' requirements not met",
+        "adapter creation failed",
+        "no adapter available for telegram",
+    )
+    return any(needle in text for needle in needles)
+
+
+def _start_gateway_foreground(hermes: str) -> dict[str, Any]:
+    log_path = _gateway_log_path()
+    log_path.parent.mkdir(parents=True, exist_ok=True)
+    with log_path.open("ab") as log_file:
+        process = subprocess.Popen(
+            [
+                hermes,
+                "gateway",
+                "run",
+                "--replace",
+                "--force",
+                "--accept-hooks",
+            ],
+            stdin=subprocess.DEVNULL,
+            stdout=log_file,
+            stderr=log_file,
+            start_new_session=True,
+        )
+    time.sleep(2)
+    returncode = process.poll()
+    return {
+        "mode": "foreground_detached",
+        "pid": process.pid,
+        "started": returncode is None,
+        "returncode": returncode,
+        "log_path": str(log_path),
+    }
 
 
 def _run(command: list[str], *, text: bool = True) -> str | bytes:

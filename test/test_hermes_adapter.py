@@ -97,7 +97,7 @@ class HermesAdapterTests(unittest.TestCase):
 
         self.assertEqual(payload["schema"], "tinyhat_plugin_version_v1")
         self.assertEqual(payload["name"], "tinyhat")
-        self.assertEqual(payload["version"], "0.20.10")
+        self.assertEqual(payload["version"], "0.20.11")
 
     def test_context_hook_injects_for_secret_requests(self) -> None:
         ctx = FakeHermesContext()
@@ -525,6 +525,108 @@ class HermesAdapterTests(unittest.TestCase):
         self.assertEqual(
             fake_client.claim_payloads[-1]["message"],
             "Hermes could not save this secret.",
+        )
+        self.assertNotIn("super-secret-value", json.dumps(fake_client.claim_payloads))
+
+    def test_worker_reloads_hermes_before_claiming_secret_saved(self) -> None:
+        class FakeClient:
+            def __init__(self) -> None:
+                self.claim_payloads: list[dict] = []
+
+            def post_json(self, path: str, payload: dict) -> dict:
+                self.claim_payloads.append(payload)
+                return {"status": "claimed"}
+
+        calls: list[str] = []
+        original_decrypt = secret_handoff._decrypt_ciphertext
+        original_set = secret_handoff._set_hermes_secret
+        original_reload = secret_handoff._reload_hermes_gateway_after_secret
+        fake_client = FakeClient()
+        try:
+            secret_handoff._decrypt_ciphertext = lambda *_: "super-secret-value"
+            secret_handoff._set_hermes_secret = lambda *_: calls.append("set")
+            secret_handoff._reload_hermes_gateway_after_secret = lambda: calls.append(
+                "reload"
+            )
+
+            secret_handoff._install_submitted_secret(
+                client=fake_client,
+                platform_auth="local_dev",
+                handoff_id="sh_test",
+                private_key_pem="PRIVATE",
+                state={
+                    "secret_name": "EXA_API_KEY",
+                    "ciphertext_payload": {
+                        "algorithm": "RSA-OAEP-256",
+                        "ciphertext_b64": "ignored",
+                    },
+                },
+            )
+        finally:
+            secret_handoff._decrypt_ciphertext = original_decrypt
+            secret_handoff._set_hermes_secret = original_set
+            secret_handoff._reload_hermes_gateway_after_secret = original_reload
+
+        self.assertEqual(calls, ["set", "reload"])
+        self.assertEqual(fake_client.claim_payloads[-1]["installed"], True)
+
+    def test_worker_does_not_claim_success_when_reload_fails(self) -> None:
+        class FakeClient:
+            def __init__(self) -> None:
+                self.claim_payloads: list[dict] = []
+
+            def get_json(self, path: str) -> dict:
+                return {
+                    "status": "submitted",
+                    "secret_name": "EXA_API_KEY",
+                    "ciphertext_payload": {
+                        "algorithm": "RSA-OAEP-256",
+                        "ciphertext_b64": "ignored",
+                    },
+                }
+
+            def post_json(self, path: str, payload: dict) -> dict:
+                self.claim_payloads.append(payload)
+                return {"status": "failed"}
+
+        fake_client = FakeClient()
+        original_decrypt = secret_handoff._decrypt_ciphertext
+        original_set = secret_handoff._set_hermes_secret
+        original_reload = secret_handoff._reload_hermes_gateway_after_secret
+        try:
+            secret_handoff._decrypt_ciphertext = lambda *_: "super-secret-value"
+            secret_handoff._set_hermes_secret = lambda *_: None
+            secret_handoff._reload_hermes_gateway_after_secret = lambda: (
+                _ for _ in ()
+            ).throw(
+                secret_handoff.SecretHandoffError(
+                    "reload output mentioned super-secret-value",
+                    public_message=(
+                        "Secret saved, but I could not reload Hermes. Send /restart "
+                        "before using it."
+                    ),
+                )
+            )
+
+            secret_handoff._poll_and_install_secret(
+                client=fake_client,
+                platform_auth="local_dev",
+                handoff={
+                    "handoff_id": "sh_test",
+                    "expires_at": "2999-01-01T00:00:00Z",
+                    "poll_after_ms": 1,
+                },
+                private_key_pem="PRIVATE",
+            )
+        finally:
+            secret_handoff._decrypt_ciphertext = original_decrypt
+            secret_handoff._set_hermes_secret = original_set
+            secret_handoff._reload_hermes_gateway_after_secret = original_reload
+
+        self.assertEqual(fake_client.claim_payloads[-1]["installed"], False)
+        self.assertEqual(
+            fake_client.claim_payloads[-1]["message"],
+            "Secret saved, but I could not reload Hermes. Send /restart before using it.",
         )
         self.assertNotIn("super-secret-value", json.dumps(fake_client.claim_payloads))
 

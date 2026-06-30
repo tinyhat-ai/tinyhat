@@ -11,6 +11,8 @@ All notable changes to the Tinyhat plugin are documented here.
 - Route natural-language Codex subscription requests to the screenshot
   prerequisite helper by default, so the user sees the ChatGPT Settings >
   Security visual guide and `/codex_auth` without duplicate text replies.
+- Reload Hermes after private secrets are saved so new env values are
+  available to the next agent tool call without manual shell sourcing.
 - Teach the private secret skill and tool to use meaningful env-style names
   such as `EXA_API_KEY` instead of generic placeholders like
   `TINYHAT_SECRET`.

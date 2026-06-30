@@ -115,7 +115,7 @@ For development or manual testing, use `channels/latest` or an exact tag:
 
 ```bash
 TINYHAT_PLUGIN_REF=channels/latest
-TINYHAT_PLUGIN_REF=v0.20.10
+TINYHAT_PLUGIN_REF=v0.20.11
 ```
 
 ## Channels
