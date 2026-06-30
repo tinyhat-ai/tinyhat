@@ -373,16 +373,17 @@ def _reload_hermes_gateway_after_secret() -> dict[str, Any]:
     recovery_start = None
     recovery_status = None
     if not healthy:
+        recovery_log_offset = _gateway_log_size(foreground_log) or foreground_log_offset
         recovery_start = _run_gateway_command([hermes, "gateway", "start"], timeout=60)
         recovery_status = _wait_for_healthy_gateway(
             hermes,
             timeout_seconds=12,
             log_path=foreground_log,
-            log_start_offset=foreground_log_offset,
+            log_start_offset=recovery_log_offset,
         )
         adapter_failure = _gateway_log_has_adapter_failure(
             foreground_log,
-            since_byte=foreground_log_offset,
+            since_byte=recovery_log_offset,
         )
         healthy = _gateway_status_is_healthy(recovery_status) and not adapter_failure
 
@@ -511,6 +512,15 @@ def _gateway_log_path() -> Path:
     return Path.home() / ".tinyhat" / GATEWAY_RELOAD_LOG_NAME
 
 
+def _gateway_log_size(path: Path | None) -> int:
+    if path is None:
+        return 0
+    try:
+        return path.stat().st_size
+    except OSError:
+        return 0
+
+
 def _gateway_log_has_adapter_failure(path: Path | None, *, since_byte: int = 0) -> bool:
     if path is None:
         return False
@@ -532,10 +542,7 @@ def _gateway_log_has_adapter_failure(path: Path | None, *, since_byte: int = 0) 
 def _start_gateway_foreground(hermes: str) -> dict[str, Any]:
     log_path = _gateway_log_path()
     log_path.parent.mkdir(parents=True, exist_ok=True)
-    try:
-        log_start_offset = log_path.stat().st_size
-    except OSError:
-        log_start_offset = 0
+    log_start_offset = _gateway_log_size(log_path)
     with log_path.open("ab") as log_file:
         process = subprocess.Popen(
             [
