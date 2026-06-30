@@ -5,7 +5,7 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any
 
-from . import schemas, tools
+from . import context, schemas, tools
 
 
 def _joke_command_handler(raw_args: str = "") -> str:
@@ -21,7 +21,12 @@ def _plugin_version_command_handler(raw_args: str = "") -> str:
 
 def _private_secret_command_handler(raw_args: str = "") -> str:
     parts = raw_args.strip().split(maxsplit=1)
-    name = parts[0].strip() if parts else "TINYHAT_SECRET"
+    if not parts:
+        return (
+            "Tell me the specific secret name, for example "
+            "/tinyhat_secret EXA_API_KEY Exa API key for search."
+        )
+    name = parts[0].strip()
     description = parts[1].strip() if len(parts) > 1 else None
     return tools.private_secret_handoff(
         {"name": name, "description": description},
@@ -59,6 +64,7 @@ def register(ctx: Any) -> None:
         schema=schemas.TINYHAT_PRIVATE_SECRET_HANDOFF_SCHEMA,
         handler=tools.private_secret_handoff,
     )
+    ctx.register_hook("pre_llm_call", context.inject_tinyhat_context)
     # Hermes registers plugin slash commands by their canonical names, then
     # Telegram shows them with underscores and maps inbound underscores back to
     # hyphens before dispatch.

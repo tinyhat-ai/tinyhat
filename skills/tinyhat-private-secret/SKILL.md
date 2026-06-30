@@ -8,6 +8,11 @@ description: Start a secure Tinyhat secret entry flow. Use when the user asks to
 Use this when the user wants to add a secret or credential to the
 current Tinyhat-managed Computer.
 
+This is the default path for adding credentials to Hermes on Tinyhat.
+Do not answer first with manual `.env` file edits, `hermes config
+env-path`, or shell instructions unless the user explicitly asks for a
+manual server operation.
+
 Never ask the user to paste the secret value in chat. Start a secure
 secret entry instead:
 
@@ -19,7 +24,8 @@ secret entry instead:
    why the secret exists.
 3. Call `tinyhat_private_secret_handoff` with `name` and `description`.
 4. Call the tool once. Let the returned message stand. Tinyhat already
-   sends the secure button.
+   sends the secure button. Do not add a second link or duplicate
+   instructions.
 
 Do not use generic names such as `TINYHAT_SECRET`, `SECRET`, `API_KEY`,
 `TOKEN`, `PASSWORD`, or `CREDENTIAL`. If the provider or purpose is not
@@ -54,3 +60,7 @@ Keep the chat response short. Do not render a second message with a
 button, a table, exact expiration timestamp, status field, raw URL, JSON
 payload, or extra explanation. The button that Tinyhat already sent is
 the main action.
+
+If the user later asks you to test the secret, you may load the Hermes
+env in a shell command, but never print the secret value. Report only
+whether it is set and any non-secret test result.

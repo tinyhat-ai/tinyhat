@@ -24,6 +24,8 @@ a fresh Hermes-only start.
 - `skills/tinyhat-tell-joke/SKILL.md`: deterministic joke proof.
 - `skills/tinyhat-plugin-version/SKILL.md`: live plugin version proof.
 - `skills/tinyhat-private-secret/SKILL.md`: private Mini App secret handoff.
+- `skills/tinyhat-platform/SKILL.md`: Tinyhat-managed Hermes operating context.
+- `context.py`: small keyword-gated Hermes `pre_llm_call` context hook.
 - `.agents/skills/tinyhat-plugin-skill-authoring/SKILL.md`: maintainer
   workflow for adding or changing plugin skills.
 

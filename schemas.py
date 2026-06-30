@@ -19,6 +19,11 @@ TINYHAT_TELL_JOKE_SCHEMA = {
 
 TINYHAT_PRIVATE_SECRET_HANDOFF_SCHEMA = {
     "type": "object",
+    "description": (
+        "Default Tinyhat way to add API keys, tokens, passwords, webhook secrets, "
+        "or other credentials to this Hermes Computer. Use this instead of telling "
+        "the user to edit .env files or paste secret values in chat."
+    ),
     "properties": {
         "name": {
             "type": "string",

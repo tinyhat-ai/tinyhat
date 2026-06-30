@@ -37,6 +37,9 @@ description: Tell a short Tinyhat wiring-test joke when the user asks for proof 
 - For credentials, require meaningful env-style names. Use
   `EXA_API_KEY`, `GITHUB_TOKEN`, or `STRIPE_SECRET_KEY`; never use
   `TINYHAT_SECRET`, `SECRET`, `API_KEY`, or `TOKEN`.
+- For Tinyhat-managed Hermes behavior that should be visible before a
+  specific skill loads, use a short `pre_llm_call` context hook and keep
+  the longer playbook in a skill.
 - Add or update tests when changing a skill's tool contract, naming
   behavior, security wording, or framework adapter registration.
 
@@ -66,6 +69,12 @@ user can recognize later without seeing the value.
 If the provider or purpose is ambiguous, ask one short clarification
 question before creating the handoff.
 
+## Tinyhat Platform Context
+
+Use `pre_llm_call` only for short operating context that should be visible
+before a specific Tinyhat skill is loaded. Keep the detailed instructions
+inside skills so the plugin stays readable and token efficient.
+
 ## Current Skills
 
 `tinyhat-tell-joke` is intentionally small. It proves the plugin is
@@ -74,3 +83,11 @@ installed before we add real Tinyhat platform capabilities.
 `tinyhat-plugin-version` proves which plugin version Hermes is actually
 running. Use it for update tests so we do not confuse admin metadata with
 the live plugin code loaded in an agent session.
+
+`tinyhat-private-secret` is the default way to add credentials to Hermes.
+It should be triggered before generic `.env` advice whenever a user asks
+to add or save an API key, token, password, or credential.
+
+`tinyhat-platform` is the compact operating map for Tinyhat-managed
+Hermes agents. It explains secrets, Codex auth commands, usage limit
+commands, and the runtime/plugin/platform boundary.
