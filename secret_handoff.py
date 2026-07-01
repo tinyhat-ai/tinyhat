@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import base64
+import json
 import os
 import re
 import shlex
@@ -213,7 +214,19 @@ def _install_submitted_secret(
         _set_hermes_secret(secret_name, plaintext)
     finally:
         plaintext = ""
-    _claim_handoff(client, platform_auth, handoff_id, installed=True)
+    _send_secret_available_notice(secret_name)
+    restart_message = None
+    try:
+        _restart_gateway_after_secret()
+    except Exception as exc:
+        restart_message = _public_failure_message(exc)
+    _claim_handoff(
+        client,
+        platform_auth,
+        handoff_id,
+        installed=True,
+        message=restart_message,
+    )
 
 
 def _claim_handoff(
@@ -312,6 +325,99 @@ def _set_hermes_secret(secret_name: str, value: str) -> None:
             "Hermes config could not save this secret.",
             public_message="Hermes could not save this secret.",
         ) from exc
+
+
+def _send_secret_available_notice(secret_name: str) -> dict[str, Any]:
+    try:
+        from .tools import _telegram_credentials, _telegram_send_message
+
+        token, chat_id = _telegram_credentials()
+        sent = _telegram_send_message(
+            token=token,
+            chat_id=chat_id,
+            text=(
+                f"{secret_name} is saved. I'm restarting my Telegram gateway "
+                "now so Hermes can load this secret before the next message."
+            ),
+        )
+        return {"sent": bool(sent.get("ok")), "ok": bool(sent.get("ok"))}
+    except Exception as exc:
+        return {"sent": False, "ok": False, "error": str(exc)[:200]}
+
+
+def _restart_gateway_after_secret() -> dict[str, Any]:
+    hermes = shutil.which("hermes")
+    if not hermes:
+        raise SecretHandoffError(
+            "Hermes CLI was not found.",
+            public_message=(
+                "Hermes saved the secret, but I could not restart the gateway "
+                "to make it available yet."
+            ),
+        )
+    runtime_prefix = os.getenv("TINYHAT_RUNTIME_PREFIX", "/opt/tinyhat-hermes-runtime")
+    env = os.environ.copy()
+    env["PYTHONPATH"] = (
+        f"{runtime_prefix}{os.pathsep}{env['PYTHONPATH']}"
+        if env.get("PYTHONPATH")
+        else runtime_prefix
+    )
+    # This worker already runs inside the plugin interpreter; PYTHONPATH points it
+    # at the separately-installed runtime package that owns gateway lifecycle.
+    script = (
+        "import asyncio, json, sys\n"
+        "from pathlib import Path\n"
+        "from hermes_runtime.commands.configure_telegram import _run_gateway\n"
+        "result = asyncio.run(_run_gateway(Path(sys.argv[1])))\n"
+        "print(json.dumps(result, sort_keys=True))\n"
+    )
+    try:
+        completed = subprocess.run(
+            [sys.executable, "-c", script, hermes],
+            capture_output=True,
+            text=True,
+            timeout=90,
+            check=False,
+            env=env,
+        )
+    except (OSError, subprocess.TimeoutExpired) as exc:
+        raise SecretHandoffError(
+            "Hermes gateway restart failed after saving a secret.",
+            public_message=(
+                "Hermes saved the secret, but I could not restart the gateway "
+                "to make it available yet."
+            ),
+        ) from exc
+    if completed.returncode != 0:
+        error_text = (
+            completed.stderr or completed.stdout or "gateway restart failed"
+        ).strip()[:500]
+        raise SecretHandoffError(
+            error_text,
+            public_message=(
+                "Hermes saved the secret, but I could not restart the gateway "
+                "to make it available yet."
+            ),
+        )
+    try:
+        payload = json.loads(completed.stdout or "{}")
+    except json.JSONDecodeError as exc:
+        raise SecretHandoffError(
+            "Hermes gateway restart returned invalid JSON.",
+            public_message=(
+                "Hermes saved the secret, but I could not confirm the gateway "
+                "restart."
+            ),
+        ) from exc
+    if not isinstance(payload, dict) or not payload.get("healthy"):
+        raise SecretHandoffError(
+            "Hermes gateway did not report healthy after secret save.",
+            public_message=(
+                "Hermes saved the secret, but I could not confirm the gateway "
+                "restart."
+            ),
+        )
+    return payload
 
 
 def _can_save_with_hermes_config_set(secret_name: str) -> bool:

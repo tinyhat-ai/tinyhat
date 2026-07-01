@@ -529,6 +529,226 @@ class HermesAdapterTests(unittest.TestCase):
         )
         self.assertNotIn("super-secret-value", json.dumps(fake_client.claim_payloads))
 
+    def test_private_secret_install_notifies_and_restarts_before_claim(self) -> None:
+        class FakeClient:
+            def __init__(self) -> None:
+                self.claim_payloads: list[dict] = []
+
+            def post_json(self, path: str, payload: dict) -> dict:
+                events.append(("claim", payload.get("installed")))
+                self.claim_payloads.append(payload)
+                return {"status": "claimed"}
+
+        events: list[tuple[str, object]] = []
+        fake_client = FakeClient()
+        original_decrypt = secret_handoff._decrypt_ciphertext
+        original_set = secret_handoff._set_hermes_secret
+        original_notice = secret_handoff._send_secret_available_notice
+        original_restart = secret_handoff._restart_gateway_after_secret
+        try:
+            secret_handoff._decrypt_ciphertext = lambda *_: "super-secret-value"
+            secret_handoff._set_hermes_secret = lambda name, value: events.append(
+                ("set", name)
+            )
+            secret_handoff._send_secret_available_notice = lambda name: events.append(
+                ("notice", name)
+            ) or {"sent": True, "ok": True}
+            secret_handoff._restart_gateway_after_secret = lambda: events.append(
+                ("restart", True)
+            ) or {"healthy": True}
+
+            secret_handoff._install_submitted_secret(
+                client=fake_client,
+                platform_auth="local_dev",
+                handoff_id="sh_test",
+                private_key_pem="PRIVATE",
+                state={
+                    "secret_name": "EXA_API_KEY",
+                    "ciphertext_payload": {"algorithm": "RSA-OAEP-256"},
+                },
+            )
+        finally:
+            secret_handoff._decrypt_ciphertext = original_decrypt
+            secret_handoff._set_hermes_secret = original_set
+            secret_handoff._send_secret_available_notice = original_notice
+            secret_handoff._restart_gateway_after_secret = original_restart
+
+        self.assertEqual(
+            events,
+            [
+                ("set", "EXA_API_KEY"),
+                ("notice", "EXA_API_KEY"),
+                ("restart", True),
+                ("claim", True),
+            ],
+        )
+        self.assertEqual(
+            fake_client.claim_payloads[-1],
+            {"installed": True, "message": None},
+        )
+        self.assertNotIn("super-secret-value", json.dumps(fake_client.claim_payloads))
+
+    def test_private_secret_install_claims_installed_when_restart_fails(self) -> None:
+        class FakeClient:
+            def __init__(self) -> None:
+                self.claim_payloads: list[dict] = []
+
+            def post_json(self, path: str, payload: dict) -> dict:
+                self.claim_payloads.append(payload)
+                return {"status": "claimed"}
+
+        fake_client = FakeClient()
+        original_decrypt = secret_handoff._decrypt_ciphertext
+        original_set = secret_handoff._set_hermes_secret
+        original_notice = secret_handoff._send_secret_available_notice
+        original_restart = secret_handoff._restart_gateway_after_secret
+        try:
+            secret_handoff._decrypt_ciphertext = lambda *_: "super-secret-value"
+            secret_handoff._set_hermes_secret = lambda *_: None
+            secret_handoff._send_secret_available_notice = lambda *_: {
+                "sent": True,
+                "ok": True,
+            }
+            secret_handoff._restart_gateway_after_secret = lambda: (
+                (_ for _ in ()).throw(
+                    secret_handoff.SecretHandoffError(
+                        "raw failure super-secret-value",
+                        public_message=(
+                            "Hermes saved the secret, but I could not restart "
+                            "the gateway to make it available yet."
+                        ),
+                    )
+                )
+            )
+
+            secret_handoff._install_submitted_secret(
+                client=fake_client,
+                platform_auth="local_dev",
+                handoff_id="sh_test",
+                private_key_pem="PRIVATE",
+                state={
+                    "secret_name": "EXA_API_KEY",
+                    "ciphertext_payload": {"algorithm": "RSA-OAEP-256"},
+                },
+            )
+        finally:
+            secret_handoff._decrypt_ciphertext = original_decrypt
+            secret_handoff._set_hermes_secret = original_set
+            secret_handoff._send_secret_available_notice = original_notice
+            secret_handoff._restart_gateway_after_secret = original_restart
+
+        self.assertEqual(fake_client.claim_payloads[-1]["installed"], True)
+        self.assertEqual(
+            fake_client.claim_payloads[-1]["message"],
+            "Hermes saved the secret, but I could not restart "
+            "the gateway to make it available yet.",
+        )
+        self.assertNotIn("super-secret-value", json.dumps(fake_client.claim_payloads))
+
+    def test_private_secret_restart_gateway_subprocess_contract(self) -> None:
+        original_which = secret_handoff.shutil.which
+        original_run = secret_handoff.subprocess.run
+        calls: list[dict] = []
+
+        def fake_run(args, **kwargs):
+            calls.append({"args": args, **kwargs})
+            return subprocess.CompletedProcess(
+                args=args,
+                returncode=0,
+                stdout='{"healthy": true, "phase": "started"}',
+                stderr="",
+            )
+
+        try:
+            secret_handoff.shutil.which = lambda name: "/usr/bin/hermes"
+            secret_handoff.subprocess.run = fake_run
+
+            result = secret_handoff._restart_gateway_after_secret()
+        finally:
+            secret_handoff.shutil.which = original_which
+            secret_handoff.subprocess.run = original_run
+
+        self.assertEqual(result["phase"], "started")
+        self.assertEqual(calls[0]["args"][0], sys.executable)
+        self.assertIn(
+            "/opt/tinyhat-hermes-runtime",
+            calls[0]["env"].get("PYTHONPATH", ""),
+        )
+
+    def test_private_secret_restart_gateway_rejects_bad_subprocess_results(self) -> None:
+        original_which = secret_handoff.shutil.which
+        original_run = secret_handoff.subprocess.run
+
+        def assert_restart_error(completed: subprocess.CompletedProcess) -> None:
+            secret_handoff.subprocess.run = lambda *_, **__: completed
+            with self.assertRaises(secret_handoff.SecretHandoffError) as raised:
+                secret_handoff._restart_gateway_after_secret()
+            self.assertTrue(raised.exception.public_message)
+            self.assertIn("Hermes saved the secret", raised.exception.public_message)
+
+        try:
+            secret_handoff.shutil.which = lambda name: "/usr/bin/hermes"
+            assert_restart_error(
+                subprocess.CompletedProcess(
+                    args=["hermes"],
+                    returncode=1,
+                    stdout="",
+                    stderr="gateway failed",
+                )
+            )
+            assert_restart_error(
+                subprocess.CompletedProcess(
+                    args=["hermes"],
+                    returncode=0,
+                    stdout="not-json",
+                    stderr="",
+                )
+            )
+            assert_restart_error(
+                subprocess.CompletedProcess(
+                    args=["hermes"],
+                    returncode=0,
+                    stdout='{"healthy": false}',
+                    stderr="",
+                )
+            )
+        finally:
+            secret_handoff.shutil.which = original_which
+            secret_handoff.subprocess.run = original_run
+
+    def test_private_secret_notice_is_plain_text_and_best_effort(self) -> None:
+        original_credentials = tools._telegram_credentials
+        original_send = tools._telegram_send_message
+        sent_messages: list[str] = []
+
+        try:
+            tools._telegram_credentials = lambda: ("token", "chat")
+            tools._telegram_send_message = lambda **kwargs: sent_messages.append(
+                kwargs["text"]
+            ) or {"ok": True}
+
+            result = secret_handoff._send_secret_available_notice("EXA_API_KEY")
+        finally:
+            tools._telegram_credentials = original_credentials
+            tools._telegram_send_message = original_send
+
+        self.assertEqual(result, {"sent": True, "ok": True})
+        self.assertIn("EXA_API_KEY is saved.", sent_messages[-1])
+        self.assertNotIn("`", sent_messages[-1])
+
+        original_credentials = tools._telegram_credentials
+        try:
+            tools._telegram_credentials = lambda: (_ for _ in ()).throw(
+                RuntimeError("telegram unavailable")
+            )
+
+            failed = secret_handoff._send_secret_available_notice("EXA_API_KEY")
+        finally:
+            tools._telegram_credentials = original_credentials
+
+        self.assertEqual(failed["sent"], False)
+        self.assertEqual(failed["ok"], False)
+
     def test_worker_script_bootstraps_from_non_package_checkout(self) -> None:
         result = subprocess.run(
             [

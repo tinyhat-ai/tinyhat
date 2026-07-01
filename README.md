@@ -75,7 +75,10 @@ to save an API key, token, password, or credential, the agent calls
 pair, the user enters the value in a Telegram Mini App, the browser
 encrypts the value with the public key, and the Computer decrypts it with
 the temporary private key. Tinyhat stores only short-lived ciphertext for
-the handoff and wipes it after completion, expiration, or failure.
+the handoff and wipes it after completion, expiration, or failure. After
+the Computer saves the secret locally, the plugin sends a short Telegram
+notice and restarts the Hermes gateway so Hermes reloads the updated env value
+before the next message.
 
 `tinyhat-codex-auth` teaches the agent how to start the Tinyhat-managed
 OpenAI Codex / ChatGPT subscription sign-in flow. When the user says

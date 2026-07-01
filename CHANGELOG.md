@@ -14,6 +14,9 @@ All notable changes to the Tinyhat plugin are documented here.
 - Teach the private secret skill and tool to use meaningful env-style names
   such as `EXA_API_KEY` instead of generic placeholders like
   `TINYHAT_SECRET`.
+- Restart the Hermes gateway after a private secret is saved, with a short
+  Telegram notice first, so Hermes reloads the saved env value before the next
+  message.
 - Add a repo-local Tinyhat plugin skill-authoring skill and expand the
   public skill standard for future plugin capabilities.
 - Bump the fresh Hermes plugin package to `0.20.3` so managed Computers can
