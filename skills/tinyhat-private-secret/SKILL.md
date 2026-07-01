@@ -51,7 +51,9 @@ The secure entry flow works like a device flow. This Computer creates a one-time
 key pair. The Tinyhat page encrypts the secret in the user's browser
 with the public key, and this Computer decrypts it with the temporary
 private key. Tinyhat stores only encrypted ciphertext during the short
-entry window.
+entry window. After saving the secret, Tinyhat refreshes Hermes' terminal tool
+snapshots and restarts the gateway so the value is available for the next user
+message without asking the user to reload `.env` manually.
 
 If the entry window expires, ask the user whether to create a new secure
 link. Do not reuse old links.
@@ -61,6 +63,5 @@ button, a table, exact expiration timestamp, status field, raw URL, JSON
 payload, or extra explanation. The button that Tinyhat already sent is
 the main action.
 
-If the user later asks you to test the secret, you may load the Hermes
-env in a shell command, but never print the secret value. Report only
-whether it is set and any non-secret test result.
+If the user later asks you to test the secret, do not print the secret
+value. Report only whether it is set and any non-secret test result.

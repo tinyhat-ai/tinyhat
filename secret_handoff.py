@@ -17,6 +17,7 @@ from pathlib import Path
 from typing import Any
 
 from .platform import PlatformClient, build_platform_client, computer_api_path
+from .terminal_env_hook import install_terminal_env_reload_hook
 
 KEY_ALGORITHM = "RSA-OAEP-256"
 DEFAULT_EXPIRES_IN_SECONDS = 300
@@ -318,13 +319,16 @@ def _set_hermes_secret(secret_name: str, value: str) -> None:
     try:
         if _can_save_with_hermes_config_set(secret_name):
             _run([hermes, "config", "set", secret_name, value], redactions=(value,))
-            return
-        _save_hermes_env_value(hermes, secret_name, value)
+        else:
+            _save_hermes_env_value(hermes, secret_name, value)
     except SecretHandoffError as exc:
         raise SecretHandoffError(
             "Hermes config could not save this secret.",
             public_message="Hermes could not save this secret.",
         ) from exc
+    install_terminal_env_reload_hook()
+    _reload_hermes_env_current_process(hermes, secret_name)
+    _refresh_hermes_terminal_snapshots(secret_name, value)
 
 
 def _send_secret_available_notice(secret_name: str) -> dict[str, Any]:
@@ -336,13 +340,80 @@ def _send_secret_available_notice(secret_name: str) -> dict[str, Any]:
             token=token,
             chat_id=chat_id,
             text=(
-                f"{secret_name} is saved. I'm restarting my Telegram gateway "
-                "now so Hermes can load this secret before the next message."
+                f"{secret_name} is saved. I'm refreshing my tools and restarting "
+                "my Telegram gateway now so your next message can use it."
             ),
         )
         return {"sent": bool(sent.get("ok")), "ok": bool(sent.get("ok"))}
     except Exception as exc:
         return {"sent": False, "ok": False, "error": str(exc)[:200]}
+
+
+def _refresh_hermes_terminal_snapshots(
+    secret_name: str,
+    value: str,
+    *,
+    directories: list[Path] | None = None,
+) -> dict[str, Any]:
+    """Patch Hermes terminal session snapshots with a newly-saved secret.
+
+    The private-secret worker is a separate process from the long-running
+    gateway. Existing terminal tool environments persist exported variables in
+    hermes-snap-*.sh files, so update those files directly. This mirrors what
+    a manual `source ~/.hermes/.env` command would do inside the terminal tool.
+    """
+    if not SECRET_NAME_RE.fullmatch(secret_name):
+        raise SecretHandoffError("Invalid secret name for terminal refresh.")
+    candidates: list[Path] = directories if directories is not None else []
+    if directories is None:
+        for name in ("TMPDIR", "TMP", "TEMP"):
+            raw = os.getenv(name)
+            if raw:
+                path = Path(raw).expanduser()
+                if path.is_absolute() and path not in candidates:
+                    candidates.append(path)
+        for path in (Path(tempfile.gettempdir()), Path("/tmp")):
+            if path not in candidates:
+                candidates.append(path)
+
+    assignment = f"export {secret_name}={shlex.quote(value)}"
+    pattern = re.compile(
+        rf"^(?:declare -x|export)\s+{re.escape(secret_name)}(?:=|\b)"
+    )
+    refreshed: list[str] = []
+    errors: list[str] = []
+    for directory in candidates:
+        try:
+            snapshot_paths = sorted(directory.glob("hermes-snap-*.sh"))
+        except OSError as exc:
+            errors.append(f"{directory}: {exc}")
+            continue
+        for snapshot_path in snapshot_paths:
+            try:
+                lines = snapshot_path.read_text(encoding="utf-8").splitlines()
+                next_lines = [line for line in lines if not pattern.match(line.strip())]
+                next_lines.append(assignment)
+                tmp_path = snapshot_path.with_name(
+                    f"{snapshot_path.name}.tmp.{os.getpid()}"
+                )
+                tmp_path.write_text(
+                    "\n".join(next_lines).rstrip() + "\n",
+                    encoding="utf-8",
+                )
+                try:
+                    tmp_path.chmod(snapshot_path.stat().st_mode & 0o777)
+                except OSError:
+                    tmp_path.chmod(0o600)
+                tmp_path.replace(snapshot_path)
+                refreshed.append(str(snapshot_path))
+            except OSError as exc:
+                errors.append(f"{snapshot_path}: {exc}")
+    return {
+        "ok": not errors,
+        "count": len(refreshed),
+        "snapshots": refreshed,
+        "errors": errors[:5],
+    }
 
 
 def _restart_gateway_after_secret() -> dict[str, Any]:
@@ -362,21 +433,26 @@ def _restart_gateway_after_secret() -> dict[str, Any]:
         if env.get("PYTHONPATH")
         else runtime_prefix
     )
-    # This worker already runs inside the plugin interpreter; PYTHONPATH points it
-    # at the separately-installed runtime package that owns gateway lifecycle.
     script = (
-        "import asyncio, json, sys\n"
-        "from pathlib import Path\n"
-        "from hermes_runtime.commands.configure_telegram import _run_gateway\n"
-        "result = asyncio.run(_run_gateway(Path(sys.argv[1])))\n"
-        "print(json.dumps(result, sort_keys=True))\n"
+        "import asyncio, json\n"
+        "from types import SimpleNamespace\n"
+        "from hermes_runtime.commands import start_hermes, stop_hermes\n"
+        "async def main():\n"
+        "    ctx = SimpleNamespace()\n"
+        "    stop = await stop_hermes.run(ctx, {'kind': 'stop_hermes', "
+        "'spec': {'reason': 'private_secret_saved'}})\n"
+        "    start = await start_hermes.run(ctx, {'kind': 'start_hermes', "
+        "'spec': {'reason': 'private_secret_saved'}})\n"
+        "    return {'healthy': bool(start.get('healthy')), 'stop': stop, "
+        "'start': start}\n"
+        "print(json.dumps(asyncio.run(main()), sort_keys=True))\n"
     )
     try:
         completed = subprocess.run(
-            [sys.executable, "-c", script, hermes],
+            [sys.executable, "-c", script],
             capture_output=True,
             text=True,
-            timeout=90,
+            timeout=120,
             check=False,
             env=env,
         )
@@ -419,7 +495,6 @@ def _restart_gateway_after_secret() -> dict[str, Any]:
         )
     return payload
 
-
 def _can_save_with_hermes_config_set(secret_name: str) -> bool:
     return (
         secret_name.endswith(("_API_KEY", "_TOKEN"))
@@ -430,6 +505,86 @@ def _can_save_with_hermes_config_set(secret_name: str) -> bool:
             "SUDO_PASSWORD",
         }
     )
+
+
+def _reload_hermes_env_current_process(hermes: str, secret_name: str) -> None:
+    loader_error: Exception | None = None
+    try:
+        from hermes_cli.config import reload_env
+
+        reload_env()
+    except Exception as exc:  # pragma: no cover - depends on Hermes install shape
+        loader_error = exc
+    if secret_name in os.environ:
+        return
+
+    env_path = _hermes_env_path(hermes)
+    value = _read_env_value(env_path, secret_name)
+    if value is not None:
+        os.environ[secret_name] = value
+        return
+
+    message = "Hermes env reload did not make this secret available."
+    if loader_error is not None:
+        raise SecretHandoffError(
+            message,
+            public_message=(
+                "Hermes saved the secret, but I could not reload it into "
+                "the running agent yet."
+            ),
+        ) from loader_error
+    raise SecretHandoffError(
+        message,
+        public_message=(
+            "Hermes saved the secret, but I could not reload it into "
+            "the running agent yet."
+        ),
+    )
+
+
+def _hermes_env_path(hermes: str) -> Path:
+    explicit = os.getenv("HERMES_ENV_FILE")
+    if explicit:
+        return Path(explicit).expanduser()
+    try:
+        completed = subprocess.run(
+            [hermes, "config", "env-path"],
+            capture_output=True,
+            text=True,
+            timeout=10,
+            check=False,
+        )
+        if completed.returncode == 0 and completed.stdout.strip():
+            return Path(completed.stdout.strip()).expanduser()
+    except (OSError, subprocess.TimeoutExpired):
+        pass
+    return Path.home() / ".hermes" / ".env"
+
+
+def _read_env_value(path: Path, secret_name: str) -> str | None:
+    try:
+        lines = path.read_text(encoding="utf-8").splitlines()
+    except OSError:
+        return None
+    for line in reversed(lines):
+        clean = line.strip()
+        if not clean or clean.startswith("#") or "=" not in clean:
+            continue
+        key, raw_value = clean.split("=", 1)
+        if key.strip() != secret_name:
+            continue
+        return _parse_env_value(raw_value.strip())
+    return None
+
+
+def _parse_env_value(raw_value: str) -> str:
+    if len(raw_value) >= 2 and raw_value[0] == raw_value[-1]:
+        quote = raw_value[0]
+        if quote == "'":
+            return raw_value[1:-1]
+        if quote == '"':
+            return raw_value[1:-1].replace('\\"', '"').replace("\\\\", "\\")
+    return raw_value.split(" #", 1)[0].strip()
 
 
 def _save_hermes_env_value(hermes: str, secret_name: str, value: str) -> None:

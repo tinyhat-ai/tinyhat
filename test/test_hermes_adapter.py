@@ -529,7 +529,7 @@ class HermesAdapterTests(unittest.TestCase):
         )
         self.assertNotIn("super-secret-value", json.dumps(fake_client.claim_payloads))
 
-    def test_private_secret_install_notifies_and_restarts_before_claim(self) -> None:
+    def test_private_secret_install_notifies_before_claim(self) -> None:
         class FakeClient:
             def __init__(self) -> None:
                 self.claim_payloads: list[dict] = []
@@ -588,64 +588,35 @@ class HermesAdapterTests(unittest.TestCase):
         )
         self.assertNotIn("super-secret-value", json.dumps(fake_client.claim_payloads))
 
-    def test_private_secret_install_claims_installed_when_restart_fails(self) -> None:
-        class FakeClient:
-            def __init__(self) -> None:
-                self.claim_payloads: list[dict] = []
-
-            def post_json(self, path: str, payload: dict) -> dict:
-                self.claim_payloads.append(payload)
-                return {"status": "claimed"}
-
-        fake_client = FakeClient()
-        original_decrypt = secret_handoff._decrypt_ciphertext
-        original_set = secret_handoff._set_hermes_secret
-        original_notice = secret_handoff._send_secret_available_notice
-        original_restart = secret_handoff._restart_gateway_after_secret
-        try:
-            secret_handoff._decrypt_ciphertext = lambda *_: "super-secret-value"
-            secret_handoff._set_hermes_secret = lambda *_: None
-            secret_handoff._send_secret_available_notice = lambda *_: {
-                "sent": True,
-                "ok": True,
-            }
-            secret_handoff._restart_gateway_after_secret = lambda: (
-                (_ for _ in ()).throw(
-                    secret_handoff.SecretHandoffError(
-                        "raw failure super-secret-value",
-                        public_message=(
-                            "Hermes saved the secret, but I could not restart "
-                            "the gateway to make it available yet."
-                        ),
-                    )
+    def test_private_secret_refresh_updates_terminal_snapshots(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="tinyhat-snapshot-test-") as temp_dir:
+            snapshot = Path(temp_dir) / "hermes-snap-test.sh"
+            snapshot.write_text(
+                "\n".join(
+                    [
+                        'declare -x EXA_API_KEY="old-secret"',
+                        'export OTHER_SECRET="keep-me"',
+                    ]
                 )
+                + "\n",
+                encoding="utf-8",
             )
 
-            secret_handoff._install_submitted_secret(
-                client=fake_client,
-                platform_auth="local_dev",
-                handoff_id="sh_test",
-                private_key_pem="PRIVATE",
-                state={
-                    "secret_name": "EXA_API_KEY",
-                    "ciphertext_payload": {"algorithm": "RSA-OAEP-256"},
-                },
+            result = secret_handoff._refresh_hermes_terminal_snapshots(
+                "EXA_API_KEY",
+                "new secret value",
+                directories=[Path(temp_dir)],
             )
-        finally:
-            secret_handoff._decrypt_ciphertext = original_decrypt
-            secret_handoff._set_hermes_secret = original_set
-            secret_handoff._send_secret_available_notice = original_notice
-            secret_handoff._restart_gateway_after_secret = original_restart
 
-        self.assertEqual(fake_client.claim_payloads[-1]["installed"], True)
-        self.assertEqual(
-            fake_client.claim_payloads[-1]["message"],
-            "Hermes saved the secret, but I could not restart "
-            "the gateway to make it available yet.",
-        )
-        self.assertNotIn("super-secret-value", json.dumps(fake_client.claim_payloads))
+            text = snapshot.read_text(encoding="utf-8")
 
-    def test_private_secret_restart_gateway_subprocess_contract(self) -> None:
+        self.assertEqual(result["count"], 1)
+        self.assertTrue(result["ok"])
+        self.assertNotIn("old-secret", text)
+        self.assertIn('export OTHER_SECRET="keep-me"', text)
+        self.assertIn("export EXA_API_KEY='new secret value'", text)
+
+    def test_private_secret_restart_gateway_uses_runtime_stop_start(self) -> None:
         original_which = secret_handoff.shutil.which
         original_run = secret_handoff.subprocess.run
         calls: list[dict] = []
@@ -655,7 +626,7 @@ class HermesAdapterTests(unittest.TestCase):
             return subprocess.CompletedProcess(
                 args=args,
                 returncode=0,
-                stdout='{"healthy": true, "phase": "started"}',
+                stdout='{"healthy": true, "start": {"healthy": true}, "stop": {}}',
                 stderr="",
             )
 
@@ -668,8 +639,11 @@ class HermesAdapterTests(unittest.TestCase):
             secret_handoff.shutil.which = original_which
             secret_handoff.subprocess.run = original_run
 
-        self.assertEqual(result["phase"], "started")
+        self.assertTrue(result["healthy"])
         self.assertEqual(calls[0]["args"][0], sys.executable)
+        script = calls[0]["args"][2]
+        self.assertIn("stop_hermes.run", script)
+        self.assertIn("start_hermes.run", script)
         self.assertIn(
             "/opt/tinyhat-hermes-runtime",
             calls[0]["env"].get("PYTHONPATH", ""),
@@ -690,7 +664,7 @@ class HermesAdapterTests(unittest.TestCase):
             secret_handoff.shutil.which = lambda name: "/usr/bin/hermes"
             assert_restart_error(
                 subprocess.CompletedProcess(
-                    args=["hermes"],
+                    args=["python"],
                     returncode=1,
                     stdout="",
                     stderr="gateway failed",
@@ -698,7 +672,7 @@ class HermesAdapterTests(unittest.TestCase):
             )
             assert_restart_error(
                 subprocess.CompletedProcess(
-                    args=["hermes"],
+                    args=["python"],
                     returncode=0,
                     stdout="not-json",
                     stderr="",
@@ -706,7 +680,7 @@ class HermesAdapterTests(unittest.TestCase):
             )
             assert_restart_error(
                 subprocess.CompletedProcess(
-                    args=["hermes"],
+                    args=["python"],
                     returncode=0,
                     stdout='{"healthy": false}',
                     stderr="",
@@ -818,7 +792,7 @@ class HermesAdapterTests(unittest.TestCase):
         )
         self.assertNotIn("super-secret-value", json.dumps(fake_client.claim_payloads))
 
-    def test_private_secret_save_uses_hermes_config_for_next_process_reload(self) -> None:
+    def test_private_secret_save_reloads_current_process_from_hermes_config(self) -> None:
         original_secret = os.environ.get("EXA_API_KEY")
         try:
             os.environ.pop("EXA_API_KEY", None)
@@ -867,6 +841,7 @@ path.chmod(0o600)
                 worker_env = dict(os.environ)
                 worker_env.update(
                     {
+                        "HOME": str(temp_root / "home"),
                         "HERMES_ENV_FILE": str(env_file),
                         "PATH": f"{bin_dir}{os.pathsep}{worker_env.get('PATH', '')}",
                         "PYTHONPATH": str(temp_root),
@@ -877,8 +852,11 @@ path.chmod(0o600)
                         sys.executable,
                         "-c",
                         (
+                            "import os; "
                             "from tinyhat.secret_handoff import _set_hermes_secret; "
-                            "_set_hermes_secret('EXA_API_KEY', 'test-secret-value')"
+                            "_set_hermes_secret('EXA_API_KEY', 'test-secret-value'); "
+                            "print('set' if os.environ.get('EXA_API_KEY') "
+                            "== 'test-secret-value' else 'missing')"
                         ),
                     ],
                     cwd="/tmp",
@@ -891,41 +869,14 @@ path.chmod(0o600)
 
                 self.assertEqual(worker.returncode, 0, worker.stderr)
                 self.assertNotIn("test-secret-value", worker.stdout + worker.stderr)
+                self.assertEqual(worker.stdout.strip(), "set")
                 self.assertNotEqual(os.environ.get("EXA_API_KEY"), "test-secret-value")
                 self.assertIn('EXA_API_KEY="test-secret-value"', env_file.read_text())
-
-                reloader = subprocess.run(
-                    [
-                        sys.executable,
-                        "-c",
-                        """
-import os
-from pathlib import Path
-
-path = Path(os.environ["HERMES_ENV_FILE"])
-for line in path.read_text(encoding="utf-8").splitlines():
-    clean = line.strip()
-    if not clean or clean.startswith("#") or "=" not in clean:
-        continue
-    key, raw = clean.split("=", 1)
-    value = raw.strip()
-    if len(value) >= 2 and value[0] == value[-1] and value.startswith(("'", '"')):
-        value = value[1:-1]
-    os.environ[key.strip()] = value.replace('\\\\"', '"').replace("\\\\\\\\", "\\\\")
-print("set" if os.environ.get("EXA_API_KEY") == "test-secret-value" else "missing")
-""",
-                    ],
-                    cwd="/tmp",
-                    env={
-                        "HERMES_ENV_FILE": str(env_file),
-                    },
-                    capture_output=True,
-                    text=True,
-                    timeout=10,
-                    check=False,
+                config_file = temp_root / "home" / ".hermes" / "config.yaml"
+                self.assertIn(
+                    "terminal-env.sh",
+                    config_file.read_text(encoding="utf-8"),
                 )
-                self.assertEqual(reloader.returncode, 0, reloader.stderr)
-                self.assertEqual(reloader.stdout.strip(), "set")
         finally:
             if original_secret is None:
                 os.environ.pop("EXA_API_KEY", None)
@@ -977,6 +928,7 @@ path.chmod(0o600)
                 worker_env = dict(os.environ)
                 worker_env.update(
                     {
+                        "HOME": str(temp_root / "home"),
                         "HERMES_ENV_FILE": str(env_file),
                         "PATH": f"{bin_dir}{os.pathsep}{worker_env.get('PATH', '')}",
                         "PYTHONPATH": str(temp_root),
@@ -987,8 +939,12 @@ path.chmod(0o600)
                         sys.executable,
                         "-c",
                         (
+                            "import os; "
                             "from tinyhat.secret_handoff import _set_hermes_secret; "
-                            "_set_hermes_secret('STRIPE_SECRET_KEY', 'test-secret-value')"
+                            "_set_hermes_secret('STRIPE_SECRET_KEY', "
+                            "'test-secret-value'); "
+                            "print('set' if os.environ.get('STRIPE_SECRET_KEY') "
+                            "== 'test-secret-value' else 'missing')"
                         ),
                     ],
                     cwd="/tmp",
@@ -1001,6 +957,7 @@ path.chmod(0o600)
 
                 self.assertEqual(worker.returncode, 0, worker.stderr)
                 self.assertNotIn("test-secret-value", worker.stdout + worker.stderr)
+                self.assertEqual(worker.stdout.strip(), "set")
                 self.assertNotEqual(
                     os.environ.get("STRIPE_SECRET_KEY"),
                     "test-secret-value",
@@ -1009,39 +966,11 @@ path.chmod(0o600)
                     'STRIPE_SECRET_KEY="test-secret-value"',
                     env_file.read_text(encoding="utf-8"),
                 )
-
-                reloader = subprocess.run(
-                    [
-                        sys.executable,
-                        "-c",
-                        """
-import os
-from pathlib import Path
-
-path = Path(os.environ["HERMES_ENV_FILE"])
-for line in path.read_text(encoding="utf-8").splitlines():
-    clean = line.strip()
-    if not clean or clean.startswith("#") or "=" not in clean:
-        continue
-    key, raw = clean.split("=", 1)
-    value = raw.strip()
-    if len(value) >= 2 and value[0] == value[-1] and value.startswith(("'", '"')):
-        value = value[1:-1]
-    os.environ[key.strip()] = value.replace('\\\\"', '"').replace("\\\\\\\\", "\\\\")
-print("set" if os.environ.get("STRIPE_SECRET_KEY") == "test-secret-value" else "missing")
-""",
-                    ],
-                    cwd="/tmp",
-                    env={
-                        "HERMES_ENV_FILE": str(env_file),
-                    },
-                    capture_output=True,
-                    text=True,
-                    timeout=10,
-                    check=False,
+                config_file = temp_root / "home" / ".hermes" / "config.yaml"
+                self.assertIn(
+                    "terminal-env.sh",
+                    config_file.read_text(encoding="utf-8"),
                 )
-                self.assertEqual(reloader.returncode, 0, reloader.stderr)
-                self.assertEqual(reloader.stdout.strip(), "set")
         finally:
             if original_secret is None:
                 os.environ.pop("STRIPE_SECRET_KEY", None)
