@@ -17,7 +17,6 @@ from pathlib import Path
 from typing import Any
 
 from .platform import PlatformClient, build_platform_client, computer_api_path
-from .terminal_env_hook import install_terminal_env_reload_hook
 
 KEY_ALGORITHM = "RSA-OAEP-256"
 DEFAULT_EXPIRES_IN_SECONDS = 300
@@ -326,9 +325,10 @@ def _set_hermes_secret(secret_name: str, value: str) -> None:
             "Hermes config could not save this secret.",
             public_message="Hermes could not save this secret.",
         ) from exc
-    install_terminal_env_reload_hook()
-    _reload_hermes_env_current_process(hermes, secret_name)
-    _refresh_hermes_terminal_snapshots(secret_name, value)
+    try:
+        _reload_hermes_env_current_process(hermes, secret_name)
+    except Exception:
+        pass
 
 
 def _send_secret_available_notice(secret_name: str) -> dict[str, Any]:
@@ -347,73 +347,6 @@ def _send_secret_available_notice(secret_name: str) -> dict[str, Any]:
         return {"sent": bool(sent.get("ok")), "ok": bool(sent.get("ok"))}
     except Exception as exc:
         return {"sent": False, "ok": False, "error": str(exc)[:200]}
-
-
-def _refresh_hermes_terminal_snapshots(
-    secret_name: str,
-    value: str,
-    *,
-    directories: list[Path] | None = None,
-) -> dict[str, Any]:
-    """Patch Hermes terminal session snapshots with a newly-saved secret.
-
-    The private-secret worker is a separate process from the long-running
-    gateway. Existing terminal tool environments persist exported variables in
-    hermes-snap-*.sh files, so update those files directly. This mirrors what
-    a manual `source ~/.hermes/.env` command would do inside the terminal tool.
-    """
-    if not SECRET_NAME_RE.fullmatch(secret_name):
-        raise SecretHandoffError("Invalid secret name for terminal refresh.")
-    candidates: list[Path] = directories if directories is not None else []
-    if directories is None:
-        for name in ("TMPDIR", "TMP", "TEMP"):
-            raw = os.getenv(name)
-            if raw:
-                path = Path(raw).expanduser()
-                if path.is_absolute() and path not in candidates:
-                    candidates.append(path)
-        for path in (Path(tempfile.gettempdir()), Path("/tmp")):
-            if path not in candidates:
-                candidates.append(path)
-
-    assignment = f"export {secret_name}={shlex.quote(value)}"
-    pattern = re.compile(
-        rf"^(?:declare -x|export)\s+{re.escape(secret_name)}(?:=|\b)"
-    )
-    refreshed: list[str] = []
-    errors: list[str] = []
-    for directory in candidates:
-        try:
-            snapshot_paths = sorted(directory.glob("hermes-snap-*.sh"))
-        except OSError as exc:
-            errors.append(f"{directory}: {exc}")
-            continue
-        for snapshot_path in snapshot_paths:
-            try:
-                lines = snapshot_path.read_text(encoding="utf-8").splitlines()
-                next_lines = [line for line in lines if not pattern.match(line.strip())]
-                next_lines.append(assignment)
-                tmp_path = snapshot_path.with_name(
-                    f"{snapshot_path.name}.tmp.{os.getpid()}"
-                )
-                tmp_path.write_text(
-                    "\n".join(next_lines).rstrip() + "\n",
-                    encoding="utf-8",
-                )
-                try:
-                    tmp_path.chmod(snapshot_path.stat().st_mode & 0o777)
-                except OSError:
-                    tmp_path.chmod(0o600)
-                tmp_path.replace(snapshot_path)
-                refreshed.append(str(snapshot_path))
-            except OSError as exc:
-                errors.append(f"{snapshot_path}: {exc}")
-    return {
-        "ok": not errors,
-        "count": len(refreshed),
-        "snapshots": refreshed,
-        "errors": errors[:5],
-    }
 
 
 def _restart_gateway_after_secret() -> dict[str, Any]:
@@ -507,7 +440,13 @@ def _can_save_with_hermes_config_set(secret_name: str) -> bool:
     )
 
 
-def _reload_hermes_env_current_process(hermes: str, secret_name: str) -> None:
+def _reload_hermes_env_current_process(hermes: str, secret_name: str) -> dict[str, Any]:
+    """Best-effort reload for the short-lived worker process.
+
+    The worker exits after claiming the handoff, so this reload is diagnostic
+    only. A failed worker-local reload must not turn a successful secret write
+    into an install failure; the runtime restart owns the durable reload path.
+    """
     loader_error: Exception | None = None
     try:
         from hermes_cli.config import reload_env
@@ -516,30 +455,18 @@ def _reload_hermes_env_current_process(hermes: str, secret_name: str) -> None:
     except Exception as exc:  # pragma: no cover - depends on Hermes install shape
         loader_error = exc
     if secret_name in os.environ:
-        return
+        return {"ok": True, "source": "hermes_cli.config.reload_env"}
 
     env_path = _hermes_env_path(hermes)
     value = _read_env_value(env_path, secret_name)
     if value is not None:
         os.environ[secret_name] = value
-        return
+        return {"ok": True, "source": str(env_path)}
 
     message = "Hermes env reload did not make this secret available."
     if loader_error is not None:
-        raise SecretHandoffError(
-            message,
-            public_message=(
-                "Hermes saved the secret, but I could not reload it into "
-                "the running agent yet."
-            ),
-        ) from loader_error
-    raise SecretHandoffError(
-        message,
-        public_message=(
-            "Hermes saved the secret, but I could not reload it into "
-            "the running agent yet."
-        ),
-    )
+        return {"ok": False, "error": message, "loader_error": str(loader_error)[:200]}
+    return {"ok": False, "error": message}
 
 
 def _hermes_env_path(hermes: str) -> Path:

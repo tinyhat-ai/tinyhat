@@ -588,33 +588,31 @@ class HermesAdapterTests(unittest.TestCase):
         )
         self.assertNotIn("super-secret-value", json.dumps(fake_client.claim_payloads))
 
-    def test_private_secret_refresh_updates_terminal_snapshots(self) -> None:
-        with tempfile.TemporaryDirectory(prefix="tinyhat-snapshot-test-") as temp_dir:
-            snapshot = Path(temp_dir) / "hermes-snap-test.sh"
-            snapshot.write_text(
-                "\n".join(
-                    [
-                        'declare -x EXA_API_KEY="old-secret"',
-                        'export OTHER_SECRET="keep-me"',
-                    ]
-                )
-                + "\n",
-                encoding="utf-8",
+    def test_private_secret_save_ignores_worker_reload_failure(self) -> None:
+        original_which = secret_handoff.shutil.which
+        original_run = secret_handoff._run
+        original_reload = secret_handoff._reload_hermes_env_current_process
+        calls: list[dict[str, object]] = []
+
+        try:
+            secret_handoff.shutil.which = lambda name: (
+                "/usr/bin/hermes" if name == "hermes" else None
+            )
+            secret_handoff._run = lambda args, **kwargs: calls.append(
+                {"args": args, **kwargs}
+            )
+            secret_handoff._reload_hermes_env_current_process = (
+                lambda *_: (_ for _ in ()).throw(RuntimeError("reload failed"))
             )
 
-            result = secret_handoff._refresh_hermes_terminal_snapshots(
-                "EXA_API_KEY",
-                "new secret value",
-                directories=[Path(temp_dir)],
-            )
+            secret_handoff._set_hermes_secret("EXA_API_KEY", "super-secret-value")
+        finally:
+            secret_handoff.shutil.which = original_which
+            secret_handoff._run = original_run
+            secret_handoff._reload_hermes_env_current_process = original_reload
 
-            text = snapshot.read_text(encoding="utf-8")
-
-        self.assertEqual(result["count"], 1)
-        self.assertTrue(result["ok"])
-        self.assertNotIn("old-secret", text)
-        self.assertIn('export OTHER_SECRET="keep-me"', text)
-        self.assertIn("export EXA_API_KEY='new secret value'", text)
+        self.assertEqual(calls[0]["args"][:3], ["/usr/bin/hermes", "config", "set"])
+        self.assertEqual(calls[0]["redactions"], ("super-secret-value",))
 
     def test_private_secret_restart_gateway_uses_runtime_stop_start(self) -> None:
         original_which = secret_handoff.shutil.which
@@ -872,11 +870,6 @@ path.chmod(0o600)
                 self.assertEqual(worker.stdout.strip(), "set")
                 self.assertNotEqual(os.environ.get("EXA_API_KEY"), "test-secret-value")
                 self.assertIn('EXA_API_KEY="test-secret-value"', env_file.read_text())
-                config_file = temp_root / "home" / ".hermes" / "config.yaml"
-                self.assertIn(
-                    "terminal-env.sh",
-                    config_file.read_text(encoding="utf-8"),
-                )
         finally:
             if original_secret is None:
                 os.environ.pop("EXA_API_KEY", None)
@@ -965,11 +958,6 @@ path.chmod(0o600)
                 self.assertIn(
                     'STRIPE_SECRET_KEY="test-secret-value"',
                     env_file.read_text(encoding="utf-8"),
-                )
-                config_file = temp_root / "home" / ".hermes" / "config.yaml"
-                self.assertIn(
-                    "terminal-env.sh",
-                    config_file.read_text(encoding="utf-8"),
                 )
         finally:
             if original_secret is None:

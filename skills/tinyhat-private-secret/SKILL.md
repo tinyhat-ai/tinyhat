@@ -51,9 +51,9 @@ The secure entry flow works like a device flow. This Computer creates a one-time
 key pair. The Tinyhat page encrypts the secret in the user's browser
 with the public key, and this Computer decrypts it with the temporary
 private key. Tinyhat stores only encrypted ciphertext during the short
-entry window. After saving the secret, Tinyhat refreshes Hermes' terminal tool
-snapshots and restarts the gateway so the value is available for the next user
-message without asking the user to reload `.env` manually.
+entry window. After saving the secret, Tinyhat restarts the gateway through the
+runtime so the value is available for the next user message without asking the
+user to reload `.env` manually.
 
 If the entry window expires, ask the user whether to create a new secure
 link. Do not reuse old links.
