@@ -428,6 +428,7 @@ def _restart_gateway_after_secret() -> dict[str, Any]:
         )
     return payload
 
+
 def _can_save_with_hermes_config_set(secret_name: str) -> bool:
     return (
         secret_name.endswith(("_API_KEY", "_TOKEN"))
