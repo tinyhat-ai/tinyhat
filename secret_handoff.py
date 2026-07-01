@@ -215,8 +215,18 @@ def _install_submitted_secret(
     finally:
         plaintext = ""
     _send_secret_available_notice(secret_name)
-    _restart_gateway_after_secret()
-    _claim_handoff(client, platform_auth, handoff_id, installed=True)
+    restart_message = None
+    try:
+        _restart_gateway_after_secret()
+    except Exception as exc:
+        restart_message = _public_failure_message(exc)
+    _claim_handoff(
+        client,
+        platform_auth,
+        handoff_id,
+        installed=True,
+        message=restart_message,
+    )
 
 
 def _claim_handoff(
@@ -326,7 +336,7 @@ def _send_secret_available_notice(secret_name: str) -> dict[str, Any]:
             token=token,
             chat_id=chat_id,
             text=(
-                f"`{secret_name}` is saved. I'm restarting my Telegram gateway "
+                f"{secret_name} is saved. I'm restarting my Telegram gateway "
                 "now so Hermes can load this secret before the next message."
             ),
         )
@@ -352,6 +362,8 @@ def _restart_gateway_after_secret() -> dict[str, Any]:
         if env.get("PYTHONPATH")
         else runtime_prefix
     )
+    # This worker already runs inside the plugin interpreter; PYTHONPATH points it
+    # at the separately-installed runtime package that owns gateway lifecycle.
     script = (
         "import asyncio, json, sys\n"
         "from pathlib import Path\n"
