@@ -529,6 +529,65 @@ class HermesAdapterTests(unittest.TestCase):
         )
         self.assertNotIn("super-secret-value", json.dumps(fake_client.claim_payloads))
 
+    def test_private_secret_install_notifies_and_restarts_before_claim(self) -> None:
+        class FakeClient:
+            def __init__(self) -> None:
+                self.claim_payloads: list[dict] = []
+
+            def post_json(self, path: str, payload: dict) -> dict:
+                events.append(("claim", payload.get("installed")))
+                self.claim_payloads.append(payload)
+                return {"status": "claimed"}
+
+        events: list[tuple[str, object]] = []
+        fake_client = FakeClient()
+        original_decrypt = secret_handoff._decrypt_ciphertext
+        original_set = secret_handoff._set_hermes_secret
+        original_notice = secret_handoff._send_secret_available_notice
+        original_restart = secret_handoff._restart_gateway_after_secret
+        try:
+            secret_handoff._decrypt_ciphertext = lambda *_: "super-secret-value"
+            secret_handoff._set_hermes_secret = lambda name, value: events.append(
+                ("set", name)
+            )
+            secret_handoff._send_secret_available_notice = lambda name: events.append(
+                ("notice", name)
+            ) or {"sent": True, "ok": True}
+            secret_handoff._restart_gateway_after_secret = lambda: events.append(
+                ("restart", True)
+            ) or {"healthy": True}
+
+            secret_handoff._install_submitted_secret(
+                client=fake_client,
+                platform_auth="local_dev",
+                handoff_id="sh_test",
+                private_key_pem="PRIVATE",
+                state={
+                    "secret_name": "EXA_API_KEY",
+                    "ciphertext_payload": {"algorithm": "RSA-OAEP-256"},
+                },
+            )
+        finally:
+            secret_handoff._decrypt_ciphertext = original_decrypt
+            secret_handoff._set_hermes_secret = original_set
+            secret_handoff._send_secret_available_notice = original_notice
+            secret_handoff._restart_gateway_after_secret = original_restart
+
+        self.assertEqual(
+            events,
+            [
+                ("set", "EXA_API_KEY"),
+                ("notice", "EXA_API_KEY"),
+                ("restart", True),
+                ("claim", True),
+            ],
+        )
+        self.assertEqual(
+            fake_client.claim_payloads[-1],
+            {"installed": True, "message": None},
+        )
+        self.assertNotIn("super-secret-value", json.dumps(fake_client.claim_payloads))
+
     def test_worker_script_bootstraps_from_non_package_checkout(self) -> None:
         result = subprocess.run(
             [
