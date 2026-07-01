@@ -77,8 +77,10 @@ encrypts the value with the public key, and the Computer decrypts it with
 the temporary private key. Tinyhat stores only short-lived ciphertext for
 the handoff and wipes it after completion, expiration, or failure. After
 the Computer saves the secret locally, the plugin sends a short Telegram
-notice and restarts the Hermes gateway so Hermes reloads the updated env value
-before the next message.
+notice and restarts the Hermes gateway through the installed runtime stop/start
+commands so the updated env value is available before the next message. The
+runtime owns the durable Hermes terminal env hook and env-file reload during
+gateway startup.
 
 `tinyhat-codex-auth` teaches the agent how to start the Tinyhat-managed
 OpenAI Codex / ChatGPT subscription sign-in flow. When the user says
