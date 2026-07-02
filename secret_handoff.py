@@ -214,6 +214,7 @@ def _install_submitted_secret(
         _set_hermes_secret(secret_name, plaintext)
     finally:
         plaintext = ""
+    _register_terminal_env_secret(secret_name)
     _send_secret_available_notice(secret_name)
     restart_message = None
     try:
@@ -329,6 +330,48 @@ def _set_hermes_secret(secret_name: str, value: str) -> None:
         _reload_hermes_env_current_process(hermes, secret_name)
     except Exception:
         pass
+
+
+def _register_terminal_env_secret(secret_name: str) -> dict[str, Any]:
+    """Ask the Tinyhat runtime to expose this secret to Hermes terminals.
+
+    Hermes owns the security boundary for terminal/code subprocess env values.
+    The runtime receives only the secret name, records Hermes terminal config,
+    and maintains Tinyhat-managed local-terminal aliases for names that Hermes
+    otherwise protects as provider/tool credentials. Best effort: registration
+    must not fail saving the secret for Hermes' main-process tools.
+    """
+    runtime_prefix = os.getenv("TINYHAT_RUNTIME_PREFIX", "/opt/tinyhat-hermes-runtime")
+    env = os.environ.copy()
+    env["PYTHONPATH"] = (
+        f"{runtime_prefix}{os.pathsep}{env['PYTHONPATH']}"
+        if env.get("PYTHONPATH")
+        else runtime_prefix
+    )
+    try:
+        completed = subprocess.run(
+            [
+                sys.executable,
+                "-m",
+                "hermes_runtime.terminal_env_passthrough",
+                "register",
+                secret_name,
+            ],
+            capture_output=True,
+            text=True,
+            timeout=30,
+            check=False,
+            env=env,
+        )
+    except (OSError, subprocess.TimeoutExpired) as exc:
+        return {"ok": False, "error": str(exc)[:200]}
+    if completed.returncode != 0:
+        return {
+            "ok": False,
+            "error": (completed.stderr or completed.stdout or "register failed")
+            .strip()[:200],
+        }
+    return {"ok": True}
 
 
 def _send_secret_available_notice(secret_name: str) -> dict[str, Any]:

@@ -6,6 +6,12 @@ All notable changes to the Tinyhat plugin are documented here.
 
 ### Changed
 
+- Register private-handoff secret names with the Tinyhat runtime's Hermes
+  terminal env helper after saving. The runtime records the saved name and
+  maintains Hermes local-terminal aliases so the secret is available to
+  exec/shell subprocesses after gateway reload (requires the alias-capable
+  runtime from tinyloophub/tinyhat--runtimes--hermes#68 or a later promoted
+  runtime release; best effort on older runtimes).
 - Add `tinyhat_codex_auth` so agents can send the ChatGPT device-code
   prerequisite reminder and start the installed Codex auth flow directly.
 - Route natural-language Codex subscription requests to the screenshot
