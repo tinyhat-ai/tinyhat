@@ -79,8 +79,9 @@ the handoff and wipes it after completion, expiration, or failure. After
 the Computer saves the secret locally, the plugin sends a short Telegram
 notice and restarts the Hermes gateway through the installed runtime stop/start
 commands so the updated env value is available before the next message. The
-runtime reloads Hermes env files during gateway startup and uses Hermes'
-documented terminal env passthrough config only for names Hermes allows.
+runtime reloads Hermes env files during gateway startup and records
+Tinyhat-managed terminal aliases for the saved names, so exec/shell
+subprocesses can use the secret without Tinyhat storing or returning the value.
 
 `tinyhat-codex-auth` teaches the agent how to start the Tinyhat-managed
 OpenAI Codex / ChatGPT subscription sign-in flow. When the user says
