@@ -214,6 +214,7 @@ def _install_submitted_secret(
         _set_hermes_secret(secret_name, plaintext)
     finally:
         plaintext = ""
+    _register_terminal_env_secret(secret_name)
     _send_secret_available_notice(secret_name)
     restart_message = None
     try:
@@ -329,6 +330,47 @@ def _set_hermes_secret(secret_name: str, value: str) -> None:
         _reload_hermes_env_current_process(hermes, secret_name)
     except Exception:
         pass
+
+
+def _register_terminal_env_secret(secret_name: str) -> dict[str, Any]:
+    """Mark this name for terminal-session export via the Tinyhat runtime.
+
+    Hermes strips its own tool credentials from terminal subprocess
+    environments, so the runtime's login-shell hook exports only names
+    registered here (values stay in Hermes' env files). Best effort: an old
+    runtime without the module must not fail the save.
+    """
+    runtime_prefix = os.getenv("TINYHAT_RUNTIME_PREFIX", "/opt/tinyhat-hermes-runtime")
+    env = os.environ.copy()
+    env["PYTHONPATH"] = (
+        f"{runtime_prefix}{os.pathsep}{env['PYTHONPATH']}"
+        if env.get("PYTHONPATH")
+        else runtime_prefix
+    )
+    try:
+        completed = subprocess.run(
+            [
+                sys.executable,
+                "-m",
+                "hermes_runtime.terminal_env_export",
+                "register",
+                secret_name,
+            ],
+            capture_output=True,
+            text=True,
+            timeout=30,
+            check=False,
+            env=env,
+        )
+    except (OSError, subprocess.TimeoutExpired) as exc:
+        return {"ok": False, "error": str(exc)[:200]}
+    if completed.returncode != 0:
+        return {
+            "ok": False,
+            "error": (completed.stderr or completed.stdout or "register failed")
+            .strip()[:200],
+        }
+    return {"ok": True}
 
 
 def _send_secret_available_notice(secret_name: str) -> dict[str, Any]:

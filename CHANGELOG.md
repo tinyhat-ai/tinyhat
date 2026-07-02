@@ -6,6 +6,10 @@ All notable changes to the Tinyhat plugin are documented here.
 
 ### Changed
 
+- Register private-handoff secret names with the Tinyhat runtime's terminal
+  env export manifest after saving, so the agent's exec/shell sessions see
+  the new secret without a manual env reload (requires runtime >= 0.0.27;
+  best effort on older runtimes).
 - Add `tinyhat_codex_auth` so agents can send the ChatGPT device-code
   prerequisite reminder and start the installed Codex auth flow directly.
 - Route natural-language Codex subscription requests to the screenshot

@@ -98,7 +98,7 @@ class HermesAdapterTests(unittest.TestCase):
 
         self.assertEqual(payload["schema"], "tinyhat_plugin_version_v1")
         self.assertEqual(payload["name"], "tinyhat")
-        self.assertEqual(payload["version"], "0.20.10")
+        self.assertEqual(payload["version"], "0.20.11")
 
     def test_context_hook_injects_for_secret_requests(self) -> None:
         ctx = FakeHermesContext()
@@ -543,6 +543,7 @@ class HermesAdapterTests(unittest.TestCase):
         fake_client = FakeClient()
         original_decrypt = secret_handoff._decrypt_ciphertext
         original_set = secret_handoff._set_hermes_secret
+        original_register = secret_handoff._register_terminal_env_secret
         original_notice = secret_handoff._send_secret_available_notice
         original_restart = secret_handoff._restart_gateway_after_secret
         try:
@@ -550,6 +551,9 @@ class HermesAdapterTests(unittest.TestCase):
             secret_handoff._set_hermes_secret = lambda name, value: events.append(
                 ("set", name)
             )
+            secret_handoff._register_terminal_env_secret = lambda name: events.append(
+                ("register", name)
+            ) or {"ok": True}
             secret_handoff._send_secret_available_notice = lambda name: events.append(
                 ("notice", name)
             ) or {"sent": True, "ok": True}
@@ -570,6 +574,7 @@ class HermesAdapterTests(unittest.TestCase):
         finally:
             secret_handoff._decrypt_ciphertext = original_decrypt
             secret_handoff._set_hermes_secret = original_set
+            secret_handoff._register_terminal_env_secret = original_register
             secret_handoff._send_secret_available_notice = original_notice
             secret_handoff._restart_gateway_after_secret = original_restart
 
@@ -577,6 +582,7 @@ class HermesAdapterTests(unittest.TestCase):
             events,
             [
                 ("set", "EXA_API_KEY"),
+                ("register", "EXA_API_KEY"),
                 ("notice", "EXA_API_KEY"),
                 ("restart", True),
                 ("claim", True),
@@ -613,6 +619,51 @@ class HermesAdapterTests(unittest.TestCase):
 
         self.assertEqual(calls[0]["args"][:3], ["/usr/bin/hermes", "config", "set"])
         self.assertEqual(calls[0]["redactions"], ("super-secret-value",))
+
+    def test_register_terminal_env_secret_calls_runtime_module(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            runtime_prefix = Path(tmp) / "runtime"
+            package = runtime_prefix / "hermes_runtime"
+            package.mkdir(parents=True)
+            (package / "__init__.py").write_text("", encoding="utf-8")
+            marker = Path(tmp) / "register-call.json"
+            (package / "terminal_env_export.py").write_text(
+                "import json, pathlib, sys\n"
+                f"pathlib.Path({str(marker)!r}).write_text("
+                "json.dumps(sys.argv[1:]), encoding='utf-8')\n"
+                "print(json.dumps({'added': True}))\n",
+                encoding="utf-8",
+            )
+            original_prefix = os.environ.get("TINYHAT_RUNTIME_PREFIX")
+            os.environ["TINYHAT_RUNTIME_PREFIX"] = str(runtime_prefix)
+            try:
+                result = secret_handoff._register_terminal_env_secret("EXA_API_KEY")
+            finally:
+                if original_prefix is None:
+                    os.environ.pop("TINYHAT_RUNTIME_PREFIX", None)
+                else:
+                    os.environ["TINYHAT_RUNTIME_PREFIX"] = original_prefix
+
+            self.assertTrue(result["ok"])
+            self.assertEqual(
+                json.loads(marker.read_text(encoding="utf-8")),
+                ["register", "EXA_API_KEY"],
+            )
+
+    def test_register_terminal_env_secret_is_best_effort_without_runtime(self) -> None:
+        original_prefix = os.environ.get("TINYHAT_RUNTIME_PREFIX")
+        with tempfile.TemporaryDirectory() as tmp:
+            os.environ["TINYHAT_RUNTIME_PREFIX"] = str(Path(tmp) / "missing")
+            try:
+                result = secret_handoff._register_terminal_env_secret("EXA_API_KEY")
+            finally:
+                if original_prefix is None:
+                    os.environ.pop("TINYHAT_RUNTIME_PREFIX", None)
+                else:
+                    os.environ["TINYHAT_RUNTIME_PREFIX"] = original_prefix
+
+        self.assertFalse(result["ok"])
+        self.assertTrue(result["error"])
 
     def test_private_secret_restart_gateway_uses_runtime_stop_start(self) -> None:
         original_which = secret_handoff.shutil.which
