@@ -627,7 +627,7 @@ class HermesAdapterTests(unittest.TestCase):
             package.mkdir(parents=True)
             (package / "__init__.py").write_text("", encoding="utf-8")
             marker = Path(tmp) / "register-call.json"
-            (package / "terminal_env_export.py").write_text(
+            (package / "terminal_env_passthrough.py").write_text(
                 "import json, pathlib, sys\n"
                 f"pathlib.Path({str(marker)!r}).write_text("
                 "json.dumps(sys.argv[1:]), encoding='utf-8')\n"
