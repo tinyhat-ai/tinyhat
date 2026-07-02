@@ -333,12 +333,12 @@ def _set_hermes_secret(secret_name: str, value: str) -> None:
 
 
 def _register_terminal_env_secret(secret_name: str) -> dict[str, Any]:
-    """Ask the Tinyhat runtime to register Hermes terminal passthrough.
+    """Ask the Tinyhat runtime to expose this secret to Hermes terminals.
 
     Hermes owns the security boundary for terminal/code subprocess env values.
-    The runtime records only names in Hermes' documented
-    ``terminal.env_passthrough`` config, and Hermes may refuse provider/tool
-    credentials such as ``EXA_API_KEY``. Best effort: passthrough registration
+    The runtime receives only the secret name, records Hermes terminal config,
+    and maintains Tinyhat-managed local-terminal aliases for names that Hermes
+    otherwise protects as provider/tool credentials. Best effort: registration
     must not fail saving the secret for Hermes' main-process tools.
     """
     runtime_prefix = os.getenv("TINYHAT_RUNTIME_PREFIX", "/opt/tinyhat-hermes-runtime")
