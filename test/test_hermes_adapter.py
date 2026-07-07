@@ -125,7 +125,7 @@ class HermesAdapterTests(unittest.TestCase):
 
         self.assertEqual(payload["schema"], "tinyhat_plugin_version_v1")
         self.assertEqual(payload["name"], "tinyhat")
-        self.assertEqual(payload["version"], "0.20.11")
+        self.assertEqual(payload["version"], "0.20.12")
 
     def test_context_hook_injects_for_secret_requests(self) -> None:
         ctx = FakeHermesContext()
