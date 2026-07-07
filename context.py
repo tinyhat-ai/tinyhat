@@ -11,7 +11,10 @@ TINYHAT_CONTEXT = """Tinyhat context: this Hermes agent runs on a Tinyhat-manage
 - Choose meaningful env-style names such as EXA_API_KEY, OPENROUTER_API_KEY, GITHUB_TOKEN, or STRIPE_SECRET_KEY. Never use TINYHAT_SECRET for a known provider.
 - When the user asks to connect ChatGPT, OpenAI, Codex, ChatGPT Plus/Pro/Team, a paid ChatGPT account, their Codex subscription, or to stop using Tinyhat/platform credits, load tinyhat:tinyhat-codex-auth and call tinyhat_codex_auth once with action=prerequisite. That sends the ChatGPT Settings > Security screenshot and /codex_auth instruction on its own line. Do not send an extra text reply after that tool call. Do not ask a multiple-choice clarification unless they explicitly ask for ChatGPT history/data or an OpenAI API key.
 - For OpenAI Codex auth status, recent auth output, or usage limits, prefer tinyhat_codex_auth with action=status, action=log, or action=limits. The auth flow sends the Telegram button and copyable device code after the ChatGPT Security setting is confirmed; do not ask for auth.json, refresh tokens, passwords, or raw OAuth tokens.
-- Load tinyhat:tinyhat-platform, tinyhat:tinyhat-private-secret, tinyhat:tinyhat-codex-auth, or tinyhat:tinyhat-plugin-version when you need the longer Tinyhat playbook."""
+- If skill_view or skills_list omits Tinyhat plugin skills, call tinyhat_skill_catalog and retry with qualified names such as tinyhat:tinyhat-codex-auth.
+- If this Computer reports update_available=true or target_ref_changed for the Tinyhat plugin, load tinyhat:tinyhat-plugin-update and use tinyhat_plugin_update with action=status before applying updates. Only call action=update after the user/operator asks to update, and use restart_gateway=true when the live Telegram gateway should reload the new plugin commands.
+- For Tinyhat QA or Slack-style bug reports that mention words like restart, reload, update, or gateway, do not use terminal/curl just to post the text. Use a native Slack/reporting tool if available, or return the report in chat.
+- Load tinyhat:tinyhat-platform, tinyhat:tinyhat-private-secret, tinyhat:tinyhat-codex-auth, tinyhat:tinyhat-plugin-update, tinyhat:tinyhat-skill-catalog, or tinyhat:tinyhat-plugin-version when you need the longer Tinyhat playbook."""
 
 _CONTEXT_PHRASES = (
     "api key",
@@ -37,6 +40,12 @@ _CONTEXT_PHRASES = (
     "usage limits",
     "sign in",
     "device code authorization",
+    "bug report",
+    "plugin update",
+    "qa report",
+    "skills_list",
+    "skill_view",
+    "slack report",
     "start codex sign-in",
     "start codex sign in",
     "secure sign in",
@@ -64,7 +73,9 @@ _CONTEXT_TERMS = (
     "auth",
     "login",
     "settings",
+    "gateway",
     "tinyhat",
+    "update",
 )
 
 

@@ -6,6 +6,10 @@ All notable changes to the Tinyhat plugin are documented here.
 
 ### Changed
 
+- Bump the fresh Hermes plugin package to `0.20.13`, add
+  `tinyhat_skill_catalog` for plugin-qualified skill discovery, and add
+  `tinyhat_plugin_update` so agents can check/apply stale installed plugin
+  channels through runtime commands instead of ad hoc shell snippets.
 - Bump the fresh Hermes plugin package to `0.20.12` after tightening the
   agent-facing tool schemas and self-correcting error payloads.
 - Register private-handoff secret names with the Tinyhat runtime's Hermes

@@ -63,21 +63,27 @@ class HermesAdapterTests(unittest.TestCase):
 
         self.assertIn("tinyhat_plugin_version", ctx.tools)
         self.assertIn("tinyhat_tell_joke", ctx.tools)
+        self.assertIn("tinyhat_skill_catalog", ctx.tools)
         self.assertIn("tinyhat_private_secret_handoff", ctx.tools)
         self.assertIn("tinyhat_codex_auth", ctx.tools)
+        self.assertIn("tinyhat_plugin_update", ctx.tools)
         self.assertIn("tinyhat-plugin-version", ctx.commands)
         self.assertIn("tinyhat-joke", ctx.commands)
         self.assertIn("tinyhat-secret", ctx.commands)
         self.assertIn("pre_llm_call", ctx.hooks)
         self.assertIn("tinyhat-plugin-version", ctx.skills)
         self.assertIn("tinyhat-tell-joke", ctx.skills)
+        self.assertIn("tinyhat-skill-catalog", ctx.skills)
         self.assertIn("tinyhat-private-secret", ctx.skills)
         self.assertIn("tinyhat-codex-auth", ctx.skills)
+        self.assertIn("tinyhat-plugin-update", ctx.skills)
         self.assertIn("tinyhat-platform", ctx.skills)
         self.assertTrue(ctx.skills["tinyhat-plugin-version"].is_file())
         self.assertTrue(ctx.skills["tinyhat-tell-joke"].is_file())
+        self.assertTrue(ctx.skills["tinyhat-skill-catalog"].is_file())
         self.assertTrue(ctx.skills["tinyhat-private-secret"].is_file())
         self.assertTrue(ctx.skills["tinyhat-codex-auth"].is_file())
+        self.assertTrue(ctx.skills["tinyhat-plugin-update"].is_file())
         self.assertTrue(ctx.skills["tinyhat-platform"].is_file())
 
     def test_registered_commands_match_telegram_dispatch_names(self) -> None:
@@ -98,6 +104,8 @@ class HermesAdapterTests(unittest.TestCase):
         self.assertEqual(schemas.TINYHAT_PLUGIN_VERSION_SCHEMA["required"], [])
         self.assertEqual(schemas.TINYHAT_TELL_JOKE_SCHEMA["properties"], {})
         self.assertEqual(schemas.TINYHAT_TELL_JOKE_SCHEMA["required"], [])
+        self.assertEqual(schemas.TINYHAT_SKILL_CATALOG_SCHEMA["properties"], {})
+        self.assertEqual(schemas.TINYHAT_SKILL_CATALOG_SCHEMA["required"], [])
 
         secret_schema = schemas.TINYHAT_PRIVATE_SECRET_HANDOFF_SCHEMA
         self.assertEqual(secret_schema["required"], ["name", "description"])
@@ -120,12 +128,37 @@ class HermesAdapterTests(unittest.TestCase):
         self.assertNotIn("env_var", secret_schema["properties"])
         self.assertNotIn("key_name", secret_schema["properties"])
 
+        update_schema = schemas.TINYHAT_PLUGIN_UPDATE_SCHEMA
+        self.assertEqual(update_schema["required"], ["action"])
+        self.assertFalse(update_schema["additionalProperties"])
+        self.assertEqual(update_schema["properties"]["action"]["enum"], ["status", "update"])
+        self.assertIn("confirmed", update_schema["properties"])
+        self.assertIn("restart_gateway", update_schema["properties"])
+
     def test_plugin_version_returns_live_manifest_version(self) -> None:
         payload = json.loads(tools.plugin_version())
 
         self.assertEqual(payload["schema"], "tinyhat_plugin_version_v1")
         self.assertEqual(payload["name"], "tinyhat")
-        self.assertEqual(payload["version"], "0.20.12")
+        self.assertEqual(payload["version"], "0.20.13")
+
+    def test_skill_catalog_lists_qualified_names_and_aliases(self) -> None:
+        payload = json.loads(tools.skill_catalog())
+
+        self.assertEqual(payload["schema"], "tinyhat_skill_catalog_v1")
+        self.assertEqual(payload["plugin"]["name"], "tinyhat")
+        self.assertEqual(payload["plugin"]["version"], "0.20.13")
+        by_name = {skill["name"]: skill for skill in payload["skills"]}
+        self.assertEqual(
+            by_name["tinyhat-codex-auth"]["qualified_name"],
+            "tinyhat:tinyhat-codex-auth",
+        )
+        self.assertIn("tinyhat-codex-auth", by_name["tinyhat-codex-auth"]["aliases"])
+        self.assertEqual(
+            by_name["tinyhat-plugin-update"]["qualified_name"],
+            "tinyhat:tinyhat-plugin-update",
+        )
+        self.assertIn("qualified names", payload["lookup_rule"])
 
     def test_context_hook_injects_for_secret_requests(self) -> None:
         ctx = FakeHermesContext()
@@ -175,6 +208,39 @@ class HermesAdapterTests(unittest.TestCase):
         assert injected is not None
         self.assertIn("tinyhat_codex_auth", injected["context"])
         self.assertIn("/codex_auth", injected["context"])
+
+    def test_context_hook_injects_for_plugin_update_requests(self) -> None:
+        injected = tinyhat_context.inject_tinyhat_context(
+            user_message="Plugin update check says target_ref_changed",
+            is_first_turn=False,
+        )
+
+        self.assertIsNotNone(injected)
+        assert injected is not None
+        self.assertIn("tinyhat_plugin_update", injected["context"])
+        self.assertIn("action=status", injected["context"])
+        self.assertIn("restart_gateway=true", injected["context"])
+
+    def test_context_hook_injects_for_skill_lookup_failures(self) -> None:
+        injected = tinyhat_context.inject_tinyhat_context(
+            user_message='skill_view(name="tinyhat-codex-auth") failed',
+            is_first_turn=False,
+        )
+
+        self.assertIsNotNone(injected)
+        assert injected is not None
+        self.assertIn("tinyhat_skill_catalog", injected["context"])
+        self.assertIn("tinyhat:tinyhat-codex-auth", injected["context"])
+
+    def test_context_hook_injects_for_tinyhat_qa_reports(self) -> None:
+        injected = tinyhat_context.inject_tinyhat_context(
+            user_message="Post this Slack report about a gateway restart bug",
+            is_first_turn=False,
+        )
+
+        self.assertIsNotNone(injected)
+        assert injected is not None
+        self.assertIn("do not use terminal/curl just to post the text", injected["context"])
 
     def test_codex_auth_skill_packages_prerequisite_screenshot(self) -> None:
         skill_md = REPO_ROOT / "skills" / "tinyhat-codex-auth" / "SKILL.md"
@@ -349,6 +415,118 @@ class HermesAdapterTests(unittest.TestCase):
         self.assertIn("telegram_codex_auth status", calls[0])
         self.assertIn("telegram_codex_auth log", calls[1])
         self.assertIn("codex_limits telegram", calls[2])
+
+    def test_plugin_update_missing_action_error_is_actionable(self) -> None:
+        payload = json.loads(tools.plugin_update({}))
+
+        self.assertEqual(payload["schema"], "tinyhat_tool_error_v1")
+        self.assertEqual(payload["tool"], "tinyhat_plugin_update")
+        self.assertEqual(payload["status"], "error")
+        self.assertEqual(payload["error"], "missing_required_parameter")
+        self.assertEqual(payload["missing"], ["action"])
+        self.assertEqual(payload["example_call"], {"action": "status"})
+
+    def test_plugin_update_status_uses_runtime_status_command(self) -> None:
+        original_run = tools._run_runtime_json_command
+        calls: list[str] = []
+        try:
+            tools._run_runtime_json_command = lambda kind, **_: calls.append(kind) or {
+                "ok": True,
+                "command": kind,
+                "result": {"update_available": True, "decision": "target_ref_changed"},
+                "process": {"ok": True},
+                "parse_error": None,
+            }
+
+            payload = json.loads(tools.plugin_update({"action": "status"}))
+        finally:
+            tools._run_runtime_json_command = original_run
+
+        self.assertEqual(calls, ["tinyhat_plugin_status"])
+        self.assertEqual(payload["schema"], "tinyhat_plugin_update_action_v1")
+        self.assertEqual(payload["action"], "status")
+        self.assertEqual(payload["status"], "ok")
+        self.assertIn("update_available", payload["result"]["result"])
+        self.assertIn("action=update", payload["next_action"])
+
+    def test_plugin_update_requires_confirmation_before_apply(self) -> None:
+        original_run = tools._run_runtime_json_command
+        calls: list[str] = []
+        try:
+            tools._run_runtime_json_command = lambda kind, **_: calls.append(kind) or {
+                "ok": True,
+                "command": kind,
+                "result": {},
+                "process": {"ok": True},
+                "parse_error": None,
+            }
+
+            payload = json.loads(tools.plugin_update({"action": "update"}))
+        finally:
+            tools._run_runtime_json_command = original_run
+
+        self.assertEqual(payload["schema"], "tinyhat_tool_error_v1")
+        self.assertEqual(payload["error"], "confirmation_required")
+        self.assertEqual(calls, [])
+
+    def test_plugin_update_can_apply_and_restart_gateway(self) -> None:
+        original_run = tools._run_runtime_json_command
+        calls: list[str] = []
+        try:
+            tools._run_runtime_json_command = lambda kind, **_: calls.append(kind) or {
+                "ok": True,
+                "command": kind,
+                "result": {"kind": kind, "healthy": True},
+                "process": {"ok": True},
+                "parse_error": None,
+            }
+
+            payload = json.loads(
+                tools.plugin_update(
+                    {
+                        "action": "update",
+                        "confirmed": True,
+                        "restart_gateway": True,
+                    }
+                )
+            )
+        finally:
+            tools._run_runtime_json_command = original_run
+
+        self.assertEqual(calls, ["update_tinyhat_plugin", "stop_hermes", "start_hermes"])
+        self.assertEqual(payload["schema"], "tinyhat_plugin_update_action_v1")
+        self.assertEqual(payload["status"], "ok")
+        self.assertTrue(payload["restart_gateway"]["requested"])
+
+    def test_plugin_update_fails_if_gateway_stop_fails(self) -> None:
+        original_run = tools._run_runtime_json_command
+        results = {
+            "update_tinyhat_plugin": {"ok": True},
+            "stop_hermes": {"ok": False},
+            "start_hermes": {"ok": True},
+        }
+        try:
+            tools._run_runtime_json_command = lambda kind, **_: {
+                "ok": results[kind]["ok"],
+                "command": kind,
+                "result": {},
+                "process": {"ok": results[kind]["ok"]},
+                "parse_error": None,
+            }
+
+            payload = json.loads(
+                tools.plugin_update(
+                    {
+                        "action": "update",
+                        "confirmed": True,
+                        "restart_gateway": True,
+                    }
+                )
+            )
+        finally:
+            tools._run_runtime_json_command = original_run
+
+        self.assertEqual(payload["status"], "failed")
 
     def test_context_hook_injects_for_env_style_secret_names(self) -> None:
         for secret_name in (

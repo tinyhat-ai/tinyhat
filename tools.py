@@ -31,13 +31,19 @@ TELEGRAM_ENV_CANDIDATES = (
     Path("/usr/local/lib/hermes-agent/.env"),
 )
 CODEX_AUTH_ACTIONS = ("prerequisite", "start", "status", "log", "limits")
+PLUGIN_UPDATE_ACTIONS = ("status", "update")
 RUNTIME_OUTPUT_LIMIT = 1200
+RUNTIME_JSON_OUTPUT_LIMIT = 12000
+
+
+def _plugin_manifest() -> dict[str, Any]:
+    manifest_path = Path(__file__).resolve().parent / "hermes.plugin.json"
+    return json.loads(manifest_path.read_text(encoding="utf-8"))
 
 
 def plugin_version_payload() -> dict[str, str]:
     """Return the version of the Tinyhat plugin code currently loaded."""
-    manifest_path = Path(__file__).resolve().parent / "hermes.plugin.json"
-    manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+    manifest = _plugin_manifest()
     version = str(manifest.get("version") or "unknown").strip() or "unknown"
     return {
         "schema": "tinyhat_plugin_version_v1",
@@ -50,6 +56,51 @@ def plugin_version(args: dict[str, Any] | None = None, **_: Any) -> str:
     """Hermes tool handler for reporting the loaded Tinyhat plugin version."""
     _ = args
     return json.dumps(plugin_version_payload(), sort_keys=True)
+
+
+def skill_catalog_payload() -> dict[str, Any]:
+    """Return Tinyhat plugin skill names in qualified and alias forms."""
+    manifest = _plugin_manifest()
+    version = str(manifest.get("version") or "unknown").strip() or "unknown"
+    skills: list[dict[str, Any]] = []
+    for entry in manifest.get("skills") or []:
+        if not isinstance(entry, dict):
+            continue
+        raw_name = str(entry.get("name") or "").strip()
+        if not raw_name:
+            continue
+        qualified_name = str(entry.get("qualified_name") or f"tinyhat:{raw_name}")
+        aliases = entry.get("aliases")
+        if not isinstance(aliases, list):
+            aliases = [raw_name]
+        alias_names = [str(alias).strip() for alias in aliases if str(alias).strip()]
+        if raw_name not in alias_names:
+            alias_names.insert(0, raw_name)
+        skills.append(
+            {
+                "name": raw_name,
+                "qualified_name": qualified_name,
+                "aliases": alias_names,
+                "path": entry.get("path"),
+                "purpose": entry.get("purpose"),
+            }
+        )
+    return {
+        "schema": "tinyhat_skill_catalog_v1",
+        "plugin": {"name": "tinyhat", "version": version},
+        "skills": skills,
+        "lookup_rule": (
+            "Prefer qualified names like tinyhat:tinyhat-codex-auth. If an "
+            "unqualified skill_view lookup fails, retry the matching "
+            "qualified_name from this catalog."
+        ),
+    }
+
+
+def skill_catalog(args: dict[str, Any] | None = None, **_: Any) -> str:
+    """Hermes tool handler for reporting Tinyhat skill discovery metadata."""
+    _ = args
+    return json.dumps(skill_catalog_payload(), sort_keys=True)
 
 
 def joke_text(topic: str | None = None) -> str:
@@ -162,6 +213,97 @@ def codex_auth(args: dict[str, Any] | None = None, **_: Any) -> str:
         sort_keys=True,
     )
 
+
+def plugin_update(args: dict[str, Any] | None = None, **_: Any) -> str:
+    """Check or apply the Tinyhat plugin update through runtime commands."""
+    payload = args if isinstance(args, dict) else {}
+    raw_action = payload.get("action")
+    if not isinstance(raw_action, str) or not raw_action.strip():
+        return tool_error_json(
+            tool="tinyhat_plugin_update",
+            error_name="missing_required_parameter",
+            message="Call tinyhat_plugin_update with action='status' or action='update'.",
+            missing=["action"],
+            example_call={"action": "status"},
+        )
+
+    action = raw_action.strip().lower()
+    if action not in PLUGIN_UPDATE_ACTIONS:
+        return tool_error_json(
+            tool="tinyhat_plugin_update",
+            error_name="invalid_parameter",
+            message=(
+                "Unsupported tinyhat_plugin_update action. Use one of: "
+                + ", ".join(PLUGIN_UPDATE_ACTIONS)
+                + "."
+            ),
+            expected={"action": list(PLUGIN_UPDATE_ACTIONS)},
+            example_call={"action": "status"},
+        )
+
+    if action == "status":
+        result = _run_runtime_json_command("tinyhat_plugin_status")
+        return json.dumps(
+            {
+                "schema": "tinyhat_plugin_update_action_v1",
+                "action": "status",
+                "status": "ok" if result["ok"] else "failed",
+                "result": result,
+                "next_action": (
+                    "If update_available is true and the user/operator wants "
+                    "the current channel applied, call tinyhat_plugin_update "
+                    "with action=update, confirmed=true, and restart_gateway=true."
+                ),
+            },
+            sort_keys=True,
+        )
+
+    if payload.get("confirmed") is not True:
+        return tool_error_json(
+            tool="tinyhat_plugin_update",
+            error_name="confirmation_required",
+            message=(
+                "Do not update the Tinyhat plugin yet. Ask the user/operator "
+                "to confirm applying the configured plugin channel to this Computer."
+            ),
+            example_call={
+                "action": "update",
+                "confirmed": True,
+                "restart_gateway": True,
+            },
+        )
+
+    update = _run_runtime_json_command("update_tinyhat_plugin", timeout_seconds=360)
+    restart: dict[str, Any] = {"requested": False}
+    if payload.get("restart_gateway") is True:
+        restart = {
+            "requested": True,
+            "stop": _run_runtime_json_command("stop_hermes", timeout_seconds=120),
+            "start": _run_runtime_json_command("start_hermes", timeout_seconds=240),
+        }
+    return json.dumps(
+        {
+            "schema": "tinyhat_plugin_update_action_v1",
+            "action": "update",
+            "status": "ok"
+            if update["ok"]
+            and (
+                not restart["requested"]
+                or (restart["stop"]["ok"] and restart["start"]["ok"])
+            )
+            else "failed",
+            "update": update,
+            "restart_gateway": restart,
+            "message": (
+                "Tinyhat plugin update path ran through the installed runtime. "
+                "If restart_gateway was true, the Hermes gateway stop/start "
+                "path was used so long-running agent commands can reload."
+            ),
+        },
+        sort_keys=True,
+    )
+
+
 def _send_codex_prerequisite() -> dict[str, Any]:
     """Deliver the prerequisite image through Telegram when possible."""
     try:
@@ -234,7 +376,52 @@ def _codex_auth_runtime_action(action: str) -> str:
     )
 
 
-def _run_runtime_command(script: str, *, timeout_seconds: int = 15) -> dict[str, Any]:
+def _run_runtime_json_command(kind: str, *, timeout_seconds: int = 60) -> dict[str, Any]:
+    command_json = json.dumps({"kind": kind, "spec": {}})
+    script = (
+        'PYTHONPATH="${TINYHAT_RUNTIME_PREFIX:-/opt/tinyhat-hermes-runtime}:'
+        '${PYTHONPATH:-}" python3 - <<\'PY\'\n'
+        "import asyncio\n"
+        "import json\n"
+        "from types import SimpleNamespace\n"
+        "from hermes_runtime.commands import run_command\n\n"
+        "async def main():\n"
+        f"    command = json.loads({command_json!r})\n"
+        "    result = await run_command(SimpleNamespace(), command)\n"
+        "    print(json.dumps(result, sort_keys=True))\n\n"
+        "asyncio.run(main())\n"
+        "PY"
+    )
+    process = _run_runtime_command(
+        script,
+        timeout_seconds=timeout_seconds,
+        output_limit=RUNTIME_JSON_OUTPUT_LIMIT,
+    )
+    parsed: Any = None
+    parse_error: str | None = None
+    if process["ok"]:
+        try:
+            parsed = json.loads(process.get("stdout") or "{}")
+        except json.JSONDecodeError as exc:
+            parse_error = str(exc)
+    compact_process = dict(process)
+    if parsed is not None:
+        compact_process["stdout"] = ""
+    return {
+        "ok": bool(process["ok"] and parsed is not None),
+        "command": kind,
+        "result": parsed,
+        "process": compact_process,
+        "parse_error": parse_error,
+    }
+
+
+def _run_runtime_command(
+    script: str,
+    *,
+    timeout_seconds: int = 15,
+    output_limit: int = RUNTIME_OUTPUT_LIMIT,
+) -> dict[str, Any]:
     try:
         completed = subprocess.run(
             ["bash", "-lc", script],
@@ -250,8 +437,8 @@ def _run_runtime_command(script: str, *, timeout_seconds: int = 15) -> dict[str,
     return {
         "ok": completed.returncode == 0,
         "returncode": completed.returncode,
-        "stdout": stdout[-RUNTIME_OUTPUT_LIMIT:],
-        "stderr": stderr[-RUNTIME_OUTPUT_LIMIT:],
+        "stdout": stdout[-output_limit:],
+        "stderr": stderr[-output_limit:],
     }
 
 

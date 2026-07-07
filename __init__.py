@@ -59,6 +59,12 @@ def register(ctx: Any) -> None:
         handler=tools.tell_joke,
     )
     ctx.register_tool(
+        name="tinyhat_skill_catalog",
+        toolset="tinyhat",
+        schema=schemas.TINYHAT_SKILL_CATALOG_SCHEMA,
+        handler=tools.skill_catalog,
+    )
+    ctx.register_tool(
         name="tinyhat_private_secret_handoff",
         toolset="tinyhat",
         schema=schemas.TINYHAT_PRIVATE_SECRET_HANDOFF_SCHEMA,
@@ -69,6 +75,12 @@ def register(ctx: Any) -> None:
         toolset="tinyhat",
         schema=schemas.TINYHAT_CODEX_AUTH_SCHEMA,
         handler=tools.codex_auth,
+    )
+    ctx.register_tool(
+        name="tinyhat_plugin_update",
+        toolset="tinyhat",
+        schema=schemas.TINYHAT_PLUGIN_UPDATE_SCHEMA,
+        handler=tools.plugin_update,
     )
     ctx.register_hook("pre_llm_call", context.inject_tinyhat_context)
     # Hermes registers plugin slash commands by their canonical names, then

@@ -23,8 +23,10 @@ a fresh Hermes-only start.
 - `tools.py`, `schemas.py`, `platform.py`, and `secret_handoff.py`: tiny public tool surface.
 - `skills/tinyhat-tell-joke/SKILL.md`: deterministic joke proof.
 - `skills/tinyhat-plugin-version/SKILL.md`: live plugin version proof.
+- `skills/tinyhat-skill-catalog/SKILL.md`: plugin-qualified skill discovery.
 - `skills/tinyhat-private-secret/SKILL.md`: private Mini App secret handoff.
 - `skills/tinyhat-codex-auth/SKILL.md`: OpenAI Codex / ChatGPT subscription auth flow guidance.
+- `skills/tinyhat-plugin-update/SKILL.md`: installed plugin channel update guidance.
 - `skills/tinyhat-platform/SKILL.md`: Tinyhat-managed Hermes operating context.
 - `context.py`: small keyword-gated Hermes `pre_llm_call` context hook.
 - `.agents/skills/tinyhat-plugin-skill-authoring/SKILL.md`: maintainer

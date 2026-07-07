@@ -13,8 +13,10 @@ VERSION_SHAPE = re.compile(r"^\d+\.\d+\.\d+$")
 REQUIRED_TOOLS = [
     "tinyhat_plugin_version",
     "tinyhat_tell_joke",
+    "tinyhat_skill_catalog",
     "tinyhat_private_secret_handoff",
     "tinyhat_codex_auth",
+    "tinyhat_plugin_update",
 ]
 REQUIRED_COMMANDS = [
     "tinyhat-joke",
@@ -24,8 +26,10 @@ REQUIRED_COMMANDS = [
 REQUIRED_SKILLS = [
     "tinyhat-plugin-version",
     "tinyhat-tell-joke",
+    "tinyhat-skill-catalog",
     "tinyhat-private-secret",
     "tinyhat-codex-auth",
+    "tinyhat-plugin-update",
     "tinyhat-platform",
 ]
 FORBIDDEN_PATHS = (
@@ -165,8 +169,10 @@ def validate_hermes_adapter(root: Path) -> None:
     expected_skill_paths = {
         "tinyhat-plugin-version": "skills/tinyhat-plugin-version/SKILL.md",
         "tinyhat-tell-joke": "skills/tinyhat-tell-joke/SKILL.md",
+        "tinyhat-skill-catalog": "skills/tinyhat-skill-catalog/SKILL.md",
         "tinyhat-private-secret": "skills/tinyhat-private-secret/SKILL.md",
         "tinyhat-codex-auth": "skills/tinyhat-codex-auth/SKILL.md",
+        "tinyhat-plugin-update": "skills/tinyhat-plugin-update/SKILL.md",
         "tinyhat-platform": "skills/tinyhat-platform/SKILL.md",
     }
     for skill in skills:
@@ -180,6 +186,13 @@ def validate_hermes_adapter(root: Path) -> None:
             (root / str(skill.get("path"))).is_file(),
             f"{name} proof skill missing",
         )
+        require(
+            skill.get("qualified_name") == f"tinyhat:{name}",
+            f"{name} qualified_name drift",
+        )
+        aliases = skill.get("aliases")
+        require(isinstance(aliases, list), f"{name} aliases must be a list")
+        require(name in aliases, f"{name} aliases must include the unqualified name")
 
     tools = hermes.get("tools")
     require(isinstance(tools, list), "hermes.plugin.json tools must be a list")
@@ -241,8 +254,10 @@ def validate_docs(root: Path) -> None:
             "Hermes only",
             "tinyhat-tell-joke",
             "tinyhat-plugin-version",
+            "tinyhat-skill-catalog",
             "tinyhat-private-secret",
             "tinyhat-codex-auth",
+            "tinyhat-plugin-update",
             "tinyhat-platform",
             "pre_llm_call",
             "channels/lts",
@@ -254,6 +269,18 @@ def validate_docs(root: Path) -> None:
             "Secret Naming Standard",
             "Tinyhat Platform Context",
             "tinyhat-codex-auth",
+            "tinyhat-skill-catalog",
+            "tinyhat-plugin-update",
+        ),
+        "skills/tinyhat-platform/SKILL.md": (
+            "tinyhat_skill_catalog",
+            "tinyhat_plugin_update",
+            "Reporting Tinyhat Bugs",
+        ),
+        "docs/capabilities.md": (
+            "tinyhat_skill_catalog",
+            "tinyhat_plugin_update",
+            "Plugin Update And Skill Discovery",
         ),
         "skills/tinyhat-codex-auth/SKILL.md": (
             "For common natural-language requests, call `tinyhat_codex_auth` once",

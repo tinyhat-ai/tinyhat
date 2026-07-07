@@ -89,6 +89,11 @@ installed before we add real Tinyhat platform capabilities.
 running. Use it for update tests so we do not confuse admin metadata with
 the live plugin code loaded in an agent session.
 
+`tinyhat-skill-catalog` lists the plugin-qualified skill names for Tinyhat
+skills. Use it when `skills_list`, `available_skills`, or unqualified
+`skill_view` cannot find a Tinyhat plugin skill. It should steer the agent
+to retry with names like `tinyhat:tinyhat-codex-auth`.
+
 `tinyhat-private-secret` is the default way to add credentials to Hermes.
 It should be triggered before generic `.env` advice whenever a user asks
 to add or save an API key, token, password, or credential.
@@ -103,6 +108,12 @@ skill should not send an extra text reply, duplicate links, or start the
 helper twice. It may use `{"action": "status"}`, `{"action": "log"}`, or
 `{"action": "limits"}` for follow-up inspection.
 
+`tinyhat-plugin-update` checks and applies the configured plugin channel
+through installed runtime commands. It should start with
+`{"action": "status"}` and require explicit user/operator confirmation
+before `{"action": "update", "confirmed": true, "restart_gateway": true}`.
+
 `tinyhat-platform` is the compact operating map for Tinyhat-managed
 Hermes agents. It explains secrets, Codex auth commands, usage limit
-commands, and the runtime/plugin/platform boundary.
+commands, skill discovery, plugin updates, reporting guidance, and the
+runtime/plugin/platform boundary.
