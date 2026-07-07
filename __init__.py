@@ -27,7 +27,7 @@ def _private_secret_command_handler(raw_args: str = "") -> str:
             "/tinyhat_secret EXA_API_KEY Exa API key for search."
         )
     name = parts[0].strip()
-    description = parts[1].strip() if len(parts) > 1 else None
+    description = parts[1].strip() if len(parts) > 1 else f"{name} credential"
     return tools.private_secret_handoff(
         {"name": name, "description": description},
     )

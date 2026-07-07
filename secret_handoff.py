@@ -22,6 +22,11 @@ KEY_ALGORITHM = "RSA-OAEP-256"
 DEFAULT_EXPIRES_IN_SECONDS = 300
 SECRET_NAME_RE = re.compile(r"^[A-Z_][A-Z0-9_]{0,126}$")
 STATE_DIR = Path.home() / ".tinyhat" / "private-secret-handoffs"
+SECRET_NAME_ALIASES = ("name", "secret_name", "env_var", "key_name")
+PRIVATE_SECRET_EXAMPLE_CALL = {
+    "name": "EXA_API_KEY",
+    "description": "Exa API key for web search and research tools.",
+}
 GENERIC_SECRET_NAMES = {
     "TINYHAT_SECRET",
     "SECRET",
@@ -67,9 +72,28 @@ def start_private_secret_handoff(
     **_: Any,
 ) -> str:
     """Hermes tool handler that starts one private secret handoff."""
-    payload = args or {}
+    payload = args if isinstance(args, dict) else {}
+    raw_secret_name = _first_payload_value(payload, SECRET_NAME_ALIASES)
     description = _clean_description(payload.get("description"))
-    secret_name = _resolve_secret_name(payload.get("name"), description)
+    missing = []
+    if not str(raw_secret_name or "").strip():
+        missing.append("name")
+    if not description:
+        missing.append("description")
+    if missing:
+        return _tool_error_json(
+            tool="tinyhat_private_secret_handoff",
+            error_name="missing_required_parameter",
+            message=(
+                "Call tinyhat_private_secret_handoff with a specific env-style "
+                "secret name and a short description. Do not ask the user to "
+                "paste the secret in chat."
+            ),
+            missing=missing,
+            example_call=PRIVATE_SECRET_EXAMPLE_CALL,
+        )
+
+    secret_name = _resolve_secret_name(raw_secret_name, description)
     expires_in_seconds = DEFAULT_EXPIRES_IN_SECONDS
 
     private_key_pem, public_key_pem = _generate_key_pair()
@@ -92,6 +116,36 @@ def start_private_secret_handoff(
         "within about 5 minutes and paste the value there. Tinyhat never sees "
         "the plaintext."
     )
+
+
+def _first_payload_value(payload: dict[str, Any], keys: tuple[str, ...]) -> Any:
+    for key in keys:
+        value = payload.get(key)
+        if str(value or "").strip():
+            return value
+    return None
+
+
+def _tool_error_json(
+    *,
+    tool: str,
+    error_name: str,
+    message: str,
+    missing: list[str] | None = None,
+    example_call: dict[str, Any] | None = None,
+) -> str:
+    payload: dict[str, Any] = {
+        "schema": "tinyhat_tool_error_v1",
+        "tool": tool,
+        "status": "error",
+        "error": error_name,
+        "message": message,
+    }
+    if missing:
+        payload["missing"] = missing
+    if example_call:
+        payload["example_call"] = example_call
+    return json.dumps(payload, sort_keys=True)
 
 
 def _start_worker_process(handoff: dict[str, Any], private_key_pem: str) -> None:

@@ -7,7 +7,7 @@ The current capability list is intentionally small.
 | `tinyhat_plugin_version` | Available now | Proves which Tinyhat plugin version Hermes has loaded for the live agent. |
 | `tinyhat_tell_joke` | Available now | Proves Hermes loaded the Tinyhat plugin and can call a plugin tool. |
 | `tinyhat_private_secret_handoff` | Available now | Lets a user enter a secret in a Telegram Mini App while Tinyhat stores only short-lived ciphertext. |
-| `tinyhat-codex-auth` skill | Available now | Teaches the agent to start the Tinyhat-installed OpenAI Codex / ChatGPT subscription auth flow. |
+| `tinyhat-codex-auth` skill | Available now | Teaches the agent to start and inspect the Tinyhat-installed OpenAI Codex / ChatGPT subscription auth flow. |
 | `pre_llm_call` context | Available now | Gives Hermes a short Tinyhat operating reminder on first turn and Tinyhat-sensitive requests. |
 
 Each capability should be visible in this document, represented by a small
@@ -49,9 +49,11 @@ auth flow sends an OpenAI
 authorization button and a separate copyable device code to Telegram,
 waits for OpenAI to complete device auth on the Computer, switches
 Hermes to Codex auth, and restarts the Telegram gateway. The agent should
-not send duplicate text replies, call the auth tool twice, or ask for
-`auth.json`, refresh tokens, passwords, or OpenAI API keys for this
-subscription-auth path.
+not send duplicate text replies, call the prerequisite action twice, or
+ask for `auth.json`, refresh tokens, passwords, or OpenAI API keys for
+this subscription-auth path. For follow-up inspection, the same tool
+accepts `{"action": "status"}`, `{"action": "log"}`, or
+`{"action": "limits"}` and returns bounded runtime output.
 
 ## Capability Rules
 

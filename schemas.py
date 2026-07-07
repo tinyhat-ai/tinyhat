@@ -3,17 +3,14 @@
 TINYHAT_PLUGIN_VERSION_SCHEMA = {
     "type": "object",
     "properties": {},
+    "required": [],
     "additionalProperties": False,
 }
 
 TINYHAT_TELL_JOKE_SCHEMA = {
     "type": "object",
-    "properties": {
-        "topic": {
-            "type": "string",
-            "description": "Optional topic to gently include in the joke.",
-        }
-    },
+    "properties": {},
+    "required": [],
     "additionalProperties": False,
 }
 
@@ -28,17 +25,21 @@ TINYHAT_PRIVATE_SECRET_HANDOFF_SCHEMA = {
         "name": {
             "type": "string",
             "description": (
-                "Specific env-style secret name chosen from the user request, "
-                "for example EXA_API_KEY for an Exa API key. Never use "
-                "generic placeholders such as TINYHAT_SECRET, SECRET, API_KEY, or TOKEN."
+                "Required env-style secret name, for example EXA_API_KEY, "
+                "OPENROUTER_API_KEY, GITHUB_TOKEN, or STRIPE_SECRET_KEY. "
+                "Never use generic placeholders such as TINYHAT_SECRET, "
+                "SECRET, API_KEY, or TOKEN."
             ),
         },
         "description": {
             "type": "string",
-            "description": "Short human reminder for what this secret is used for.",
+            "description": (
+                "Required short human-readable description of what this "
+                "secret is used for."
+            ),
         },
     },
-    "required": ["name"],
+    "required": ["name", "description"],
     "additionalProperties": False,
 }
 
@@ -54,11 +55,13 @@ TINYHAT_CODEX_AUTH_SCHEMA = {
     "properties": {
         "action": {
             "type": "string",
-            "enum": ["prerequisite", "start"],
+            "enum": ["prerequisite", "start", "status", "log", "limits"],
             "description": (
-                "Use prerequisite for the default screenshot guide. "
-                "Use start only after the user confirms they enabled "
-                "device-code authorization for Codex."
+                "Use prerequisite first for natural-language requests to "
+                "connect ChatGPT/Codex. Use start only after the user "
+                "confirms the ChatGPT Security setting is enabled. Use "
+                "status, log, or limits for installed Codex auth inspection "
+                "flows."
             ),
         },
         "confirmed": {
@@ -69,5 +72,6 @@ TINYHAT_CODEX_AUTH_SCHEMA = {
             ),
         },
     },
+    "required": ["action"],
     "additionalProperties": False,
 }
