@@ -64,10 +64,12 @@ Do not paste raw auth URLs unless the Tinyhat command reports that
 Telegram delivery failed.
 
 Do not ask for `auth.json`, passwords, refresh tokens, API keys, or
-OAuth tokens. After the user signs in, use `/codex_auth_status` if you
-need proof, and `/codex_limits` if they ask about remaining limits. If
-the `tinyhat_codex_auth` tool is available, prefer its `status`, `log`,
-and `limits` actions over telling the user to run those commands.
+OAuth tokens. After the user signs in, use `tinyhat_codex_auth` with
+`{"action": "status"}` if you need proof, `{"action": "log"}` for
+recent auth output, and `{"action": "limits"}` if they ask about
+remaining limits. Only fall back to `/codex_auth_status`,
+`/codex_auth_log`, or `/codex_limits` when the tool is unavailable or
+reports that the runtime command could not be delivered.
 
 ## Boundary
 

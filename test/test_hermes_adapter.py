@@ -116,6 +116,9 @@ class HermesAdapterTests(unittest.TestCase):
             ["prerequisite", "start", "status", "log", "limits"],
         )
         self.assertIn("confirmed", codex_schema["properties"])
+        self.assertNotIn("secret_name", secret_schema["properties"])
+        self.assertNotIn("env_var", secret_schema["properties"])
+        self.assertNotIn("key_name", secret_schema["properties"])
 
     def test_plugin_version_returns_live_manifest_version(self) -> None:
         payload = json.loads(tools.plugin_version())
@@ -480,42 +483,36 @@ class HermesAdapterTests(unittest.TestCase):
         self.assertNotIn("waiting_for_user", reply)
         self.assertFalse(reply.strip().startswith("{"))
 
-    def test_private_secret_handoff_accepts_secret_name_alias(self) -> None:
-        class FakeClient:
-            def post_json(self, path: str, payload: dict) -> dict:
-                self.path = path
-                self.payload = payload
-                return {
-                    "handoff_id": "sh_alias",
-                    "status": "pending",
-                    "secret_name": payload["name"],
-                    "description": payload["description"],
-                    "expires_at": "2026-06-29T12:00:00Z",
-                    "poll_after_ms": 2000,
-                }
-
-        fake_client = FakeClient()
-        original_build = secret_handoff.build_platform_client
-        original_generate = secret_handoff._generate_key_pair
-        original_worker = secret_handoff._start_worker_process
-        try:
-            secret_handoff.build_platform_client = lambda: (fake_client, "local_dev")
-            secret_handoff._generate_key_pair = lambda: ("PRIVATE", "PUBLIC")
-            secret_handoff._start_worker_process = lambda *_: None
-
-            reply = tools.private_secret_handoff(
+    def test_private_secret_handoff_rejects_secret_name_alias(self) -> None:
+        payload = json.loads(
+            tools.private_secret_handoff(
                 {
                     "secret_name": "EXA_API_KEY",
                     "description": "Exa API key for search research",
                 }
             )
-        finally:
-            secret_handoff.build_platform_client = original_build
-            secret_handoff._generate_key_pair = original_generate
-            secret_handoff._start_worker_process = original_worker
+        )
 
-        self.assertEqual(fake_client.payload["name"], "EXA_API_KEY")
-        self.assertIn("EXA_API_KEY", reply)
+        self.assertEqual(payload["schema"], "tinyhat_tool_error_v1")
+        self.assertEqual(payload["error"], "missing_required_parameter")
+        self.assertEqual(payload["missing"], ["name"])
+        self.assertEqual(
+            payload["example_call"],
+            {
+                "name": "EXA_API_KEY",
+                "description": "Exa API key for web search and research tools.",
+            },
+        )
+
+    def test_context_prefers_codex_auth_tool_actions(self) -> None:
+        self.assertIn(
+            "prefer tinyhat_codex_auth with action=status",
+            tinyhat_context.TINYHAT_CONTEXT,
+        )
+        self.assertNotIn(
+            "prefer the Tinyhat-installed /codex_auth",
+            tinyhat_context.TINYHAT_CONTEXT,
+        )
 
     def test_private_secret_handoff_infers_name_from_user_wording(self) -> None:
         class FakeClient:

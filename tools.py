@@ -10,6 +10,7 @@ from typing import Any
 from urllib import error, parse, request
 
 from .secret_handoff import start_private_secret_handoff
+from .tool_errors import tool_error_json
 
 CODEX_AUTH_SCREENSHOT = (
     Path(__file__).resolve().parent
@@ -87,7 +88,7 @@ def codex_auth(args: dict[str, Any] | None = None, **_: Any) -> str:
     payload = args if isinstance(args, dict) else {}
     raw_action = payload.get("action")
     if not isinstance(raw_action, str) or not raw_action.strip():
-        return _tool_error_json(
+        return tool_error_json(
             tool="tinyhat_codex_auth",
             error_name="missing_required_parameter",
             message=(
@@ -100,7 +101,7 @@ def codex_auth(args: dict[str, Any] | None = None, **_: Any) -> str:
 
     action = raw_action.strip().lower()
     if action not in CODEX_AUTH_ACTIONS:
-        return _tool_error_json(
+        return tool_error_json(
             tool="tinyhat_codex_auth",
             error_name="invalid_parameter",
             message=(
@@ -114,7 +115,7 @@ def codex_auth(args: dict[str, Any] | None = None, **_: Any) -> str:
 
     if action == "start":
         if payload.get("confirmed") is not True:
-            return _tool_error_json(
+            return tool_error_json(
                 tool="tinyhat_codex_auth",
                 error_name="confirmation_required",
                 message=(
@@ -161,32 +162,6 @@ def codex_auth(args: dict[str, Any] | None = None, **_: Any) -> str:
         sort_keys=True,
     )
 
-
-def _tool_error_json(
-    *,
-    tool: str,
-    error_name: str,
-    message: str,
-    missing: list[str] | None = None,
-    expected: dict[str, Any] | None = None,
-    example_call: dict[str, Any] | None = None,
-) -> str:
-    payload: dict[str, Any] = {
-        "schema": "tinyhat_tool_error_v1",
-        "tool": tool,
-        "status": "error",
-        "error": error_name,
-        "message": message,
-    }
-    if missing:
-        payload["missing"] = missing
-    if expected:
-        payload["expected"] = expected
-    if example_call:
-        payload["example_call"] = example_call
-    return json.dumps(payload, sort_keys=True)
-
-
 def _send_codex_prerequisite() -> dict[str, Any]:
     """Deliver the prerequisite image through Telegram when possible."""
     try:
@@ -232,27 +207,21 @@ def _start_runtime_codex_auth() -> dict[str, Any]:
 
 
 def _codex_auth_runtime_action(action: str) -> str:
-    if action in {"status", "log"}:
-        script = (
+    scripts = {
+        "status": (
             'PYTHONPATH="${TINYHAT_RUNTIME_PREFIX:-/opt/tinyhat-hermes-runtime}:'
-            f'${{PYTHONPATH:-}}" python3 -m hermes_runtime.telegram_codex_auth {action}'
-        )
-    elif action == "limits":
-        script = (
+            '${PYTHONPATH:-}" python3 -m hermes_runtime.telegram_codex_auth status'
+        ),
+        "log": (
+            'PYTHONPATH="${TINYHAT_RUNTIME_PREFIX:-/opt/tinyhat-hermes-runtime}:'
+            '${PYTHONPATH:-}" python3 -m hermes_runtime.telegram_codex_auth log'
+        ),
+        "limits": (
             'PYTHONPATH="${TINYHAT_RUNTIME_PREFIX:-/opt/tinyhat-hermes-runtime}:'
             '${PYTHONPATH:-}" python3 -m hermes_runtime.codex_limits telegram'
-        )
-    else:
-        return _tool_error_json(
-            tool="tinyhat_codex_auth",
-            error_name="invalid_parameter",
-            message=(
-                "Unsupported tinyhat_codex_auth runtime action. Use status, "
-                "log, or limits."
-            ),
-            expected={"action": ["status", "log", "limits"]},
-            example_call={"action": "status"},
-        )
+        ),
+    }
+    script = scripts[action]
     result = _run_runtime_command(script)
     return json.dumps(
         {
