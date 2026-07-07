@@ -100,7 +100,8 @@ trigger for common user wording such as "connect my ChatGPT account" or
 with `{"action": "prerequisite"}` so the user receives the ChatGPT
 Settings > Security screenshot and `/codex_auth` on its own line. The
 skill should not send an extra text reply, duplicate links, or start the
-helper twice.
+helper twice. It may use `{"action": "status"}`, `{"action": "log"}`, or
+`{"action": "limits"}` for follow-up inspection.
 
 `tinyhat-platform` is the compact operating map for Tinyhat-managed
 Hermes agents. It explains secrets, Codex auth commands, usage limit

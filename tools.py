@@ -10,6 +10,7 @@ from typing import Any
 from urllib import error, parse, request
 
 from .secret_handoff import start_private_secret_handoff
+from .tool_errors import tool_error_json
 
 CODEX_AUTH_SCREENSHOT = (
     Path(__file__).resolve().parent
@@ -29,6 +30,8 @@ TELEGRAM_ENV_CANDIDATES = (
     Path.home() / ".hermes" / ".env",
     Path("/usr/local/lib/hermes-agent/.env"),
 )
+CODEX_AUTH_ACTIONS = ("prerequisite", "start", "status", "log", "limits")
+RUNTIME_OUTPUT_LIMIT = 1200
 
 
 def plugin_version_payload() -> dict[str, str]:
@@ -82,22 +85,46 @@ def private_secret_handoff(args: dict[str, Any] | None = None, **kwargs: Any) ->
 
 def codex_auth(args: dict[str, Any] | None = None, **_: Any) -> str:
     """Send the Codex prerequisite first; start auth after confirmation."""
-    payload = args or {}
-    action = str(payload.get("action") or "prerequisite").strip().lower()
+    payload = args if isinstance(args, dict) else {}
+    raw_action = payload.get("action")
+    if not isinstance(raw_action, str) or not raw_action.strip():
+        return tool_error_json(
+            tool="tinyhat_codex_auth",
+            error_name="missing_required_parameter",
+            message=(
+                "Call tinyhat_codex_auth with action='prerequisite' for "
+                "initial ChatGPT/Codex subscription setup."
+            ),
+            missing=["action"],
+            example_call={"action": "prerequisite"},
+        )
+
+    action = raw_action.strip().lower()
+    if action not in CODEX_AUTH_ACTIONS:
+        return tool_error_json(
+            tool="tinyhat_codex_auth",
+            error_name="invalid_parameter",
+            message=(
+                "Unsupported tinyhat_codex_auth action. Use one of: "
+                + ", ".join(CODEX_AUTH_ACTIONS)
+                + "."
+            ),
+            expected={"action": list(CODEX_AUTH_ACTIONS)},
+            example_call={"action": "prerequisite"},
+        )
+
     if action == "start":
         if payload.get("confirmed") is not True:
-            return json.dumps(
-                {
-                    "schema": "tinyhat_codex_auth_start_v1",
-                    "status": "waiting_for_confirmation",
-                    "message": (
-                        "Do not start auth yet. Do not send another screenshot or "
-                        "link. Ask the user to turn on Enable device code "
-                        "authorization for Codex, then tap /codex_auth in the "
-                        "Telegram message."
-                    ),
-                },
-                sort_keys=True,
+            return tool_error_json(
+                tool="tinyhat_codex_auth",
+                error_name="confirmation_required",
+                message=(
+                    "Do not start auth yet. Ask the user to turn on Enable "
+                    "device code authorization for Codex, then either tap "
+                    "/codex_auth in Telegram or explicitly confirm the setting "
+                    "is enabled."
+                ),
+                example_call={"action": "start", "confirmed": True},
             )
         auth_start = _start_runtime_codex_auth()
         return json.dumps(
@@ -112,6 +139,8 @@ def codex_auth(args: dict[str, Any] | None = None, **_: Any) -> str:
             },
             sort_keys=True,
         )
+    if action in {"status", "log", "limits"}:
+        return _codex_auth_runtime_action(action)
 
     prerequisite = _send_codex_prerequisite()
     return json.dumps(
@@ -132,7 +161,6 @@ def codex_auth(args: dict[str, Any] | None = None, **_: Any) -> str:
         },
         sort_keys=True,
     )
-
 
 def _send_codex_prerequisite() -> dict[str, Any]:
     """Deliver the prerequisite image through Telegram when possible."""
@@ -175,13 +203,45 @@ def _start_runtime_codex_auth() -> dict[str, Any]:
         'PYTHONPATH="${TINYHAT_RUNTIME_PREFIX:-/opt/tinyhat-hermes-runtime}:'
         '${PYTHONPATH:-}" python3 -m hermes_runtime.telegram_codex_auth start'
     )
+    return _run_runtime_command(script)
+
+
+def _codex_auth_runtime_action(action: str) -> str:
+    scripts = {
+        "status": (
+            'PYTHONPATH="${TINYHAT_RUNTIME_PREFIX:-/opt/tinyhat-hermes-runtime}:'
+            '${PYTHONPATH:-}" python3 -m hermes_runtime.telegram_codex_auth status'
+        ),
+        "log": (
+            'PYTHONPATH="${TINYHAT_RUNTIME_PREFIX:-/opt/tinyhat-hermes-runtime}:'
+            '${PYTHONPATH:-}" python3 -m hermes_runtime.telegram_codex_auth log'
+        ),
+        "limits": (
+            'PYTHONPATH="${TINYHAT_RUNTIME_PREFIX:-/opt/tinyhat-hermes-runtime}:'
+            '${PYTHONPATH:-}" python3 -m hermes_runtime.codex_limits telegram'
+        ),
+    }
+    script = scripts[action]
+    result = _run_runtime_command(script)
+    return json.dumps(
+        {
+            "schema": "tinyhat_codex_auth_action_v1",
+            "action": action,
+            "status": "ok" if result["ok"] else "failed",
+            "result": result,
+        },
+        sort_keys=True,
+    )
+
+
+def _run_runtime_command(script: str, *, timeout_seconds: int = 15) -> dict[str, Any]:
     try:
         completed = subprocess.run(
             ["bash", "-lc", script],
             check=False,
             capture_output=True,
             text=True,
-            timeout=15,
+            timeout=timeout_seconds,
         )
     except (OSError, subprocess.TimeoutExpired) as exc:
         return {"ok": False, "error": str(exc)}
@@ -190,8 +250,8 @@ def _start_runtime_codex_auth() -> dict[str, Any]:
     return {
         "ok": completed.returncode == 0,
         "returncode": completed.returncode,
-        "stdout": stdout[-1200:],
-        "stderr": stderr[-1200:],
+        "stdout": stdout[-RUNTIME_OUTPUT_LIMIT:],
+        "stderr": stderr[-RUNTIME_OUTPUT_LIMIT:],
     }
 
 

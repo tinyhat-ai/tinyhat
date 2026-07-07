@@ -8,8 +8,12 @@ description: Tell a short Tinyhat wiring-test joke. Use when the user asks for a
 Use this as the smallest possible Tinyhat plugin proof.
 
 When the user asks for a joke or asks whether the Tinyhat plugin is
-available, call the `tinyhat_tell_joke` tool. Pass a short `topic` only
-when the user gave one.
+available, call the `tinyhat_tell_joke` tool with an empty argument
+object:
+
+```json
+{}
+```
 
 Keep the response short. The point is not comedy; the point is proving
 that a framework can discover this shared skill and call its adapter

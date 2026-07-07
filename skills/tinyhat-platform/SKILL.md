@@ -17,9 +17,9 @@ Use this as the default routing map:
 | Ask which Tinyhat plugin is running | Call `tinyhat_plugin_version`. |
 | Check that the Tinyhat plugin exists | Call `tinyhat_tell_joke` or `tinyhat_plugin_version`. |
 | Connect ChatGPT / OpenAI Codex auth or use the user's OpenAI paid access | Load `tinyhat:tinyhat-codex-auth`; call `tinyhat_codex_auth` once with `{"action": "prerequisite"}` so it sends the screenshot and `/codex_auth`. Do not send an extra text reply. |
-| Check Codex auth | Use `/codex_auth_status`. |
-| Inspect recent Codex auth output | Use `/codex_auth_log`. |
-| Show Codex usage limits | Use `/codex_limits`. |
+| Check Codex auth | Call `tinyhat_codex_auth` with `{"action": "status"}`. |
+| Inspect recent Codex auth output | Call `tinyhat_codex_auth` with `{"action": "log"}`. |
+| Show Codex usage limits | Call `tinyhat_codex_auth` with `{"action": "limits"}`. |
 
 ## Secrets
 
@@ -64,8 +64,12 @@ Do not paste raw auth URLs unless the Tinyhat command reports that
 Telegram delivery failed.
 
 Do not ask for `auth.json`, passwords, refresh tokens, API keys, or
-OAuth tokens. After the user signs in, use `/codex_auth_status` if you
-need proof, and `/codex_limits` if they ask about remaining limits.
+OAuth tokens. After the user signs in, use `tinyhat_codex_auth` with
+`{"action": "status"}` if you need proof, `{"action": "log"}` for
+recent auth output, and `{"action": "limits"}` if they ask about
+remaining limits. Only fall back to `/codex_auth_status`,
+`/codex_auth_log`, or `/codex_limits` when the tool is unavailable or
+reports that the runtime command could not be delivered.
 
 ## Boundary
 

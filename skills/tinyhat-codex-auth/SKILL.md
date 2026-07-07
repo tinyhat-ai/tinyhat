@@ -121,10 +121,13 @@ token, or create an OpenAI API key.
 - Do not paste the raw auth URL or duplicate the device code unless the
   helper explicitly reports that Telegram delivery failed.
 - The device code is copyable but temporary. It is not the OAuth token.
-- If the user says they signed in, use `/codex_auth_status` to verify.
-- If they ask about remaining limits, use `/codex_limits`.
-- If the flow fails or seems stuck, use `/codex_auth_log` and surface the
-  bounded non-secret error. Do not guess.
+- If the user says they signed in, call `tinyhat_codex_auth` with
+  `{"action": "status"}` to verify.
+- If they ask about remaining limits, call `tinyhat_codex_auth` with
+  `{"action": "limits"}`.
+- If the flow fails or seems stuck, call `tinyhat_codex_auth` with
+  `{"action": "log"}` and surface the bounded non-secret error. Do not
+  guess.
 
 ## Helpful Copy
 

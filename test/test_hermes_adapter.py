@@ -30,7 +30,7 @@ if REPO_ROOT.name != "tinyhat":
 else:
     import tinyhat  # noqa: E402
 
-from tinyhat import secret_handoff, tools  # noqa: E402
+from tinyhat import schemas, secret_handoff, tools  # noqa: E402
 from tinyhat import context as tinyhat_context  # noqa: E402
 from tinyhat import secret_handoff_worker  # noqa: E402
 
@@ -92,6 +92,33 @@ class HermesAdapterTests(unittest.TestCase):
         ):
             hermes_dispatch_name = telegram_name.replace("_", "-")
             self.assertIn(hermes_dispatch_name, ctx.commands)
+
+    def test_registered_tool_schemas_are_agent_actionable(self) -> None:
+        self.assertEqual(schemas.TINYHAT_PLUGIN_VERSION_SCHEMA["properties"], {})
+        self.assertEqual(schemas.TINYHAT_PLUGIN_VERSION_SCHEMA["required"], [])
+        self.assertEqual(schemas.TINYHAT_TELL_JOKE_SCHEMA["properties"], {})
+        self.assertEqual(schemas.TINYHAT_TELL_JOKE_SCHEMA["required"], [])
+
+        secret_schema = schemas.TINYHAT_PRIVATE_SECRET_HANDOFF_SCHEMA
+        self.assertEqual(secret_schema["required"], ["name", "description"])
+        self.assertFalse(secret_schema["additionalProperties"])
+        self.assertIn("EXA_API_KEY", secret_schema["properties"]["name"]["description"])
+        self.assertIn(
+            "human-readable",
+            secret_schema["properties"]["description"]["description"],
+        )
+
+        codex_schema = schemas.TINYHAT_CODEX_AUTH_SCHEMA
+        self.assertEqual(codex_schema["required"], ["action"])
+        self.assertFalse(codex_schema["additionalProperties"])
+        self.assertEqual(
+            codex_schema["properties"]["action"]["enum"],
+            ["prerequisite", "start", "status", "log", "limits"],
+        )
+        self.assertIn("confirmed", codex_schema["properties"])
+        self.assertNotIn("secret_name", secret_schema["properties"])
+        self.assertNotIn("env_var", secret_schema["properties"])
+        self.assertNotIn("key_name", secret_schema["properties"])
 
     def test_plugin_version_returns_live_manifest_version(self) -> None:
         payload = json.loads(tools.plugin_version())
@@ -190,7 +217,7 @@ class HermesAdapterTests(unittest.TestCase):
                 "ok": True,
             }
 
-            payload = json.loads(tools.codex_auth({}))
+            payload = json.loads(tools.codex_auth({"action": "prerequisite"}))
         finally:
             tools._send_codex_prerequisite = original_prerequisite
             tools._start_runtime_codex_auth = original_start
@@ -204,6 +231,26 @@ class HermesAdapterTests(unittest.TestCase):
         self.assertIn("/codex_auth", payload["next_user_action"])
         self.assertIn("Do not send any chat reply", payload["agent_instruction"])
         self.assertEqual(start_calls, [])
+
+    def test_codex_auth_missing_action_error_is_actionable(self) -> None:
+        payload = json.loads(tools.codex_auth({}))
+
+        self.assertEqual(payload["schema"], "tinyhat_tool_error_v1")
+        self.assertEqual(payload["tool"], "tinyhat_codex_auth")
+        self.assertEqual(payload["status"], "error")
+        self.assertEqual(payload["error"], "missing_required_parameter")
+        self.assertEqual(payload["missing"], ["action"])
+        self.assertEqual(payload["example_call"], {"action": "prerequisite"})
+
+    def test_codex_auth_rejects_unknown_action_with_enum(self) -> None:
+        payload = json.loads(tools.codex_auth({"action": "launch"}))
+
+        self.assertEqual(payload["schema"], "tinyhat_tool_error_v1")
+        self.assertEqual(payload["error"], "invalid_parameter")
+        self.assertEqual(
+            payload["expected"]["action"],
+            ["prerequisite", "start", "status", "log", "limits"],
+        )
 
     def test_codex_auth_prerequisite_does_not_attach_reply_keyboard(self) -> None:
         original_credentials = tools._telegram_credentials
@@ -240,10 +287,15 @@ class HermesAdapterTests(unittest.TestCase):
         finally:
             tools._start_runtime_codex_auth = original_start
 
-        self.assertEqual(payload["schema"], "tinyhat_codex_auth_start_v1")
-        self.assertEqual(payload["status"], "waiting_for_confirmation")
+        self.assertEqual(payload["schema"], "tinyhat_tool_error_v1")
+        self.assertEqual(payload["status"], "error")
+        self.assertEqual(payload["error"], "confirmation_required")
         self.assertIn("Enable device code authorization", payload["message"])
         self.assertIn("/codex_auth", payload["message"])
+        self.assertEqual(
+            payload["example_call"],
+            {"action": "start", "confirmed": True},
+        )
         self.assertEqual(start_calls, [])
 
     def test_codex_auth_tool_starts_after_confirmation(self) -> None:
@@ -271,6 +323,32 @@ class HermesAdapterTests(unittest.TestCase):
         self.assertEqual(payload["status"], "started")
         self.assertEqual(prerequisite_calls, [])
         self.assertTrue(payload["auth_start"]["ok"])
+
+    def test_codex_auth_runtime_inspection_actions(self) -> None:
+        original_run = tools._run_runtime_command
+        calls: list[str] = []
+        try:
+            tools._run_runtime_command = lambda script, **_: calls.append(script) or {
+                "ok": True,
+                "returncode": 0,
+                "stdout": "runtime output",
+                "stderr": "",
+            }
+
+            status_payload = json.loads(tools.codex_auth({"action": "status"}))
+            log_payload = json.loads(tools.codex_auth({"action": "log"}))
+            limits_payload = json.loads(tools.codex_auth({"action": "limits"}))
+        finally:
+            tools._run_runtime_command = original_run
+
+        self.assertEqual(status_payload["schema"], "tinyhat_codex_auth_action_v1")
+        self.assertEqual(status_payload["action"], "status")
+        self.assertEqual(status_payload["status"], "ok")
+        self.assertEqual(log_payload["action"], "log")
+        self.assertEqual(limits_payload["action"], "limits")
+        self.assertIn("telegram_codex_auth status", calls[0])
+        self.assertIn("telegram_codex_auth log", calls[1])
+        self.assertIn("codex_limits telegram", calls[2])
 
     def test_context_hook_injects_for_env_style_secret_names(self) -> None:
         for secret_name in (
@@ -326,6 +404,22 @@ class HermesAdapterTests(unittest.TestCase):
 
         self.assertEqual(payload["schema"], "tinyhat_tell_joke_v1")
         self.assertIn("Hermes", payload["joke"])
+
+    def test_private_secret_handoff_missing_params_error_is_actionable(self) -> None:
+        payload = json.loads(tools.private_secret_handoff({}))
+
+        self.assertEqual(payload["schema"], "tinyhat_tool_error_v1")
+        self.assertEqual(payload["tool"], "tinyhat_private_secret_handoff")
+        self.assertEqual(payload["status"], "error")
+        self.assertEqual(payload["error"], "missing_required_parameter")
+        self.assertEqual(payload["missing"], ["name", "description"])
+        self.assertEqual(
+            payload["example_call"],
+            {
+                "name": "EXA_API_KEY",
+                "description": "Exa API key for web search and research tools.",
+            },
+        )
 
     def test_private_secret_handoff_returns_readable_confirmation(self) -> None:
         class FakeClient:
@@ -388,6 +482,37 @@ class HermesAdapterTests(unittest.TestCase):
         self.assertNotIn("Expires", reply)
         self.assertNotIn("waiting_for_user", reply)
         self.assertFalse(reply.strip().startswith("{"))
+
+    def test_private_secret_handoff_rejects_secret_name_alias(self) -> None:
+        payload = json.loads(
+            tools.private_secret_handoff(
+                {
+                    "secret_name": "EXA_API_KEY",
+                    "description": "Exa API key for search research",
+                }
+            )
+        )
+
+        self.assertEqual(payload["schema"], "tinyhat_tool_error_v1")
+        self.assertEqual(payload["error"], "missing_required_parameter")
+        self.assertEqual(payload["missing"], ["name"])
+        self.assertEqual(
+            payload["example_call"],
+            {
+                "name": "EXA_API_KEY",
+                "description": "Exa API key for web search and research tools.",
+            },
+        )
+
+    def test_context_prefers_codex_auth_tool_actions(self) -> None:
+        self.assertIn(
+            "prefer tinyhat_codex_auth with action=status",
+            tinyhat_context.TINYHAT_CONTEXT,
+        )
+        self.assertNotIn(
+            "prefer the Tinyhat-installed /codex_auth",
+            tinyhat_context.TINYHAT_CONTEXT,
+        )
 
     def test_private_secret_handoff_infers_name_from_user_wording(self) -> None:
         class FakeClient:

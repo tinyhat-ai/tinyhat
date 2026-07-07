@@ -25,7 +25,7 @@ is installed on each Hermes Computer.
 | `__init__.py` | Hermes registration entrypoint. |
 | `hermes.plugin.json` | Tinyhat metadata for the Hermes adapter, skill, command, and release channels. |
 | `context.py` | Small Hermes `pre_llm_call` context hook for Tinyhat-sensitive turns. |
-| `tools.py` / `schemas.py` | Tinyhat tools: plugin version, joke proof, private secret handoff, and Codex auth start. |
+| `tools.py` / `schemas.py` | Tinyhat tools: plugin version, joke proof, private secret handoff, and Codex auth setup/status helpers. |
 | `skills/tinyhat-tell-joke/SKILL.md` | Deterministic joke proof. |
 | `skills/tinyhat-plugin-version/SKILL.md` | Live plugin version proof. |
 | `skills/tinyhat-private-secret/SKILL.md` | Browser-encrypted secret handoff guidance. |
@@ -83,16 +83,19 @@ runtime reloads Hermes env files during gateway startup and records
 Tinyhat-managed terminal aliases for the saved names, so exec/shell
 subprocesses can use the secret without Tinyhat storing or returning the value.
 
-`tinyhat-codex-auth` teaches the agent how to start the Tinyhat-managed
-OpenAI Codex / ChatGPT subscription sign-in flow. When the user says
-"connect you to my ChatGPT account", "use my Codex subscription", or
-"switch from platform credits", the agent calls the Codex auth helper
-once. The helper sends the ChatGPT Settings > Security screenshot with
-the `/codex_auth` command on its own line so it is hard to miss. That
-slash command starts the installed Tinyhat Codex auth helper, which sends
-the authorization button and copyable code. The agent should not send a
-duplicate text reply, call the tool twice, ask the user to choose between
-unrelated interpretations, or give manual `hermes auth` instructions.
+`tinyhat-codex-auth` teaches the agent how to start and inspect the
+Tinyhat-managed OpenAI Codex / ChatGPT subscription sign-in flow. When
+the user says "connect you to my ChatGPT account", "use my Codex
+subscription", or "switch from platform credits", the agent calls
+`tinyhat_codex_auth` with `{"action": "prerequisite"}`. The helper sends
+the ChatGPT Settings > Security screenshot with the `/codex_auth`
+command on its own line so it is hard to miss. That slash command starts
+the installed Tinyhat Codex auth helper, which sends the authorization
+button and copyable code. The same tool also exposes `status`, `log`, and
+`limits` actions for bounded inspection. The agent should not send a
+duplicate text reply, call the prerequisite tool twice, ask the user to
+choose between unrelated interpretations, or give manual `hermes auth`
+instructions.
 
 `tinyhat-platform` is the operating context. It tells the agent that
 Tinyhat secrets are the default way to add credentials to Hermes and that
