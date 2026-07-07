@@ -6,6 +6,8 @@ All notable changes to the Tinyhat plugin are documented here.
 
 ### Changed
 
+- Bump the fresh Hermes plugin package to `0.20.12` after tightening the
+  agent-facing tool schemas and self-correcting error payloads.
 - Register private-handoff secret names with the Tinyhat runtime's Hermes
   terminal env helper after saving. The runtime records the saved name and
   maintains Hermes local-terminal aliases so the secret is available to
