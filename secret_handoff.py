@@ -23,6 +23,19 @@ KEY_ALGORITHM = "RSA-OAEP-256"
 DEFAULT_EXPIRES_IN_SECONDS = 300
 SECRET_NAME_RE = re.compile(r"^[A-Z_][A-Z0-9_]{0,126}$")
 STATE_DIR = Path.home() / ".tinyhat" / "private-secret-handoffs"
+WORKER_SYSTEMD_ENV_KEYS = (
+    "HOME",
+    "PATH",
+    "PYTHONPATH",
+    "HERMES_BIN",
+    "HERMES_ENV_FILE",
+    "TINYHAT_RUNTIME_PREFIX",
+    "TINYHAT_PLATFORM_URL",
+    "TINYHAT_LOCAL_DEV_TOKEN",
+    "TINYHAT_COMPUTER_TOKEN_AUDIENCE",
+)
+HANDOFF_OUTCOME_GATEWAY_READY = "installed_gateway_ready"
+HANDOFF_OUTCOME_GATEWAY_RESTART_FAILED = "installed_gateway_restart_failed"
 PRIVATE_SECRET_EXAMPLE_CALL = {
     "name": "EXA_API_KEY",
     "description": "Exa API key for web search and research tools.",
@@ -129,22 +142,18 @@ def _start_worker_process(handoff: dict[str, Any], private_key_pem: str) -> None
         pythonpath = f"{pythonpath}{os.pathsep}{env['PYTHONPATH']}"
     env["PYTHONPATH"] = pythonpath
     try:
-        subprocess.Popen(
-            [
-                sys.executable,
-                str(package_dir / "secret_handoff_worker.py"),
-                "--handoff-id",
-                handoff_id,
-                "--key-path",
-                str(key_path),
-            ],
-            cwd=str(package_dir.parent),
+        if _start_worker_with_systemd(
+            handoff_id=handoff_id,
+            key_path=key_path,
+            package_dir=package_dir,
             env=env,
-            stdin=subprocess.DEVNULL,
-            stdout=subprocess.DEVNULL,
-            stderr=subprocess.DEVNULL,
-            start_new_session=True,
-            close_fds=True,
+        ):
+            return
+        _start_worker_with_popen(
+            handoff_id=handoff_id,
+            key_path=key_path,
+            package_dir=package_dir,
+            env=env,
         )
     except Exception as exc:
         try:
@@ -155,6 +164,88 @@ def _start_worker_process(handoff: dict[str, Any], private_key_pem: str) -> None
             "Could not start the local secret handoff worker.",
             public_message="I could not start the secure secret saver on this Computer.",
         ) from exc
+
+
+def _start_worker_with_systemd(
+    *,
+    handoff_id: str,
+    key_path: Path,
+    package_dir: Path,
+    env: dict[str, str],
+) -> bool:
+    systemd_run = shutil.which("systemd-run")
+    if not systemd_run:
+        return False
+    safe_id = re.sub(r"[^A-Za-z0-9_.-]", "-", handoff_id).strip("-")[:48] or "secret"
+    command = [
+        systemd_run,
+        "--user",
+        "--collect",
+        "--quiet",
+        f"--unit=tinyhat-secret-handoff-{safe_id}",
+    ]
+    for key in WORKER_SYSTEMD_ENV_KEYS:
+        if key in env:
+            command.append(f"--setenv={key}={env[key]}")
+    command.extend(
+        [
+            sys.executable,
+            str(package_dir / "secret_handoff_worker.py"),
+            "--handoff-id",
+            handoff_id,
+            "--key-path",
+            str(key_path),
+        ]
+    )
+    try:
+        completed = subprocess.run(
+            command,
+            cwd=str(package_dir.parent),
+            capture_output=True,
+            text=True,
+            timeout=15,
+            check=False,
+        )
+    except (OSError, subprocess.TimeoutExpired) as exc:
+        raise SecretHandoffError(
+            "Could not start the survivor secret handoff worker.",
+            public_message="I could not start the secure secret saver on this Computer.",
+        ) from exc
+    if completed.returncode != 0:
+        detail = (completed.stderr or completed.stdout or "systemd-run failed").strip()
+        raise SecretHandoffError(
+            detail[:500],
+            public_message="I could not start the secure secret saver on this Computer.",
+        )
+    return True
+
+
+def _start_worker_with_popen(
+    *,
+    handoff_id: str,
+    key_path: Path,
+    package_dir: Path,
+    env: dict[str, str],
+) -> None:
+    # start_new_session is only a fallback for non-systemd local environments.
+    # On installed Computers, systemd-run above is the survivor boundary.
+    subprocess.Popen(
+        [
+            sys.executable,
+            str(package_dir / "secret_handoff_worker.py"),
+            "--handoff-id",
+            handoff_id,
+            "--key-path",
+            str(key_path),
+        ],
+        cwd=str(package_dir.parent),
+        env=env,
+        stdin=subprocess.DEVNULL,
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.DEVNULL,
+        start_new_session=True,
+        close_fds=True,
+    )
 
 
 def _write_private_key_file(handoff_id: str, private_key_pem: str) -> Path:
@@ -240,16 +331,30 @@ def _install_submitted_secret(
     _register_terminal_env_secret(secret_name)
     _send_secret_available_notice(secret_name)
     restart_message = None
+    gateway_ready = False
+    outcome = HANDOFF_OUTCOME_GATEWAY_RESTART_FAILED
     try:
-        _restart_gateway_after_secret()
+        restart_result = _restart_gateway_after_secret()
+        gateway_ready = bool(restart_result.get("healthy"))
+        if gateway_ready:
+            outcome = HANDOFF_OUTCOME_GATEWAY_READY
+            _send_secret_gateway_ready_notice(secret_name)
+        else:
+            restart_message = (
+                "Hermes saved the secret, but I could not confirm the gateway restart."
+            )
+            _send_secret_gateway_restart_failed_notice(secret_name, restart_message)
     except Exception as exc:
         restart_message = _public_failure_message(exc)
+        _send_secret_gateway_restart_failed_notice(secret_name, restart_message)
     _claim_handoff(
         client,
         platform_auth,
         handoff_id,
         installed=True,
         message=restart_message,
+        gateway_ready=gateway_ready,
+        outcome=outcome,
     )
 
 
@@ -260,13 +365,20 @@ def _claim_handoff(
     *,
     installed: bool,
     message: str | None = None,
+    gateway_ready: bool | None = None,
+    outcome: str | None = None,
 ) -> None:
+    payload: dict[str, Any] = {"installed": installed, "message": message}
+    if gateway_ready is not None:
+        payload["gateway_ready"] = gateway_ready
+    if outcome:
+        payload["outcome"] = outcome
     client.post_json(
         computer_api_path(
             platform_auth,
             f"private-secret-handoffs/v1/{handoff_id}/claim",
         ),
-        {"installed": installed, "message": message},
+        payload,
     )
 
 
@@ -398,6 +510,39 @@ def _register_terminal_env_secret(secret_name: str) -> dict[str, Any]:
 
 
 def _send_secret_available_notice(secret_name: str) -> dict[str, Any]:
+    return _send_secret_notice(
+        (
+            f"{secret_name} is saved. I'm refreshing my tools and restarting "
+            "my Telegram gateway now."
+        )
+    )
+
+
+def _send_secret_gateway_ready_notice(secret_name: str) -> dict[str, Any]:
+    return _send_secret_notice(
+        (
+            f"{secret_name} is ready. My Telegram gateway is back, so your next "
+            "message can use it."
+        )
+    )
+
+
+def _send_secret_gateway_restart_failed_notice(
+    secret_name: str,
+    message: str | None,
+) -> dict[str, Any]:
+    detail = message or (
+        "Hermes saved the secret, but I could not confirm the gateway restart."
+    )
+    return _send_secret_notice(
+        (
+            f"{secret_name} is saved, but I could not confirm my Telegram "
+            f"gateway is back. {detail}"
+        )
+    )
+
+
+def _send_secret_notice(text: str) -> dict[str, Any]:
     try:
         from .tools import _telegram_credentials, _telegram_send_message
 
@@ -405,10 +550,7 @@ def _send_secret_available_notice(secret_name: str) -> dict[str, Any]:
         sent = _telegram_send_message(
             token=token,
             chat_id=chat_id,
-            text=(
-                f"{secret_name} is saved. I'm refreshing my tools and restarting "
-                "my Telegram gateway now so your next message can use it."
-            ),
+            text=text,
         )
         return {"sent": bool(sent.get("ok")), "ok": bool(sent.get("ok"))}
     except Exception as exc:

@@ -86,10 +86,12 @@ encrypts the value with the public key, and the Computer decrypts it with
 the temporary private key. Tinyhat stores only short-lived ciphertext for
 the handoff and wipes it after completion, expiration, or failure. After
 the Computer saves the secret locally, the plugin sends a short Telegram
-notice and restarts the Hermes gateway through the installed runtime stop/start
-commands so the updated env value is available before the next message. The
-runtime reloads Hermes env files during gateway startup and records
-Tinyhat-managed terminal aliases for the saved names, so exec/shell
+notice, runs the saver in a survivor worker outside the Telegram gateway
+service when systemd is available, and restarts the Hermes gateway through the
+installed runtime. The claim reports whether gateway readiness was confirmed;
+if not, Tinyhat records a restart failure instead of treating the secret save
+as fully healthy. The runtime reloads Hermes env files during gateway startup
+and records Tinyhat-managed terminal aliases for the saved names, so exec/shell
 subprocesses can use the secret without Tinyhat storing or returning the value.
 
 `tinyhat-codex-auth` teaches the agent how to start and inspect the

@@ -848,6 +848,7 @@ class HermesAdapterTests(unittest.TestCase):
         original_set = secret_handoff._set_hermes_secret
         original_register = secret_handoff._register_terminal_env_secret
         original_notice = secret_handoff._send_secret_available_notice
+        original_ready_notice = secret_handoff._send_secret_gateway_ready_notice
         original_restart = secret_handoff._restart_gateway_after_secret
         try:
             secret_handoff._decrypt_ciphertext = lambda *_: "super-secret-value"
@@ -860,6 +861,10 @@ class HermesAdapterTests(unittest.TestCase):
             secret_handoff._send_secret_available_notice = lambda name: events.append(
                 ("notice", name)
             ) or {"sent": True, "ok": True}
+            secret_handoff._send_secret_gateway_ready_notice = (
+                lambda name: events.append(("ready_notice", name))
+                or {"sent": True, "ok": True}
+            )
             secret_handoff._restart_gateway_after_secret = lambda: events.append(
                 ("restart", True)
             ) or {"healthy": True}
@@ -879,6 +884,7 @@ class HermesAdapterTests(unittest.TestCase):
             secret_handoff._set_hermes_secret = original_set
             secret_handoff._register_terminal_env_secret = original_register
             secret_handoff._send_secret_available_notice = original_notice
+            secret_handoff._send_secret_gateway_ready_notice = original_ready_notice
             secret_handoff._restart_gateway_after_secret = original_restart
 
         self.assertEqual(
@@ -888,14 +894,148 @@ class HermesAdapterTests(unittest.TestCase):
                 ("register", "EXA_API_KEY"),
                 ("notice", "EXA_API_KEY"),
                 ("restart", True),
+                ("ready_notice", "EXA_API_KEY"),
                 ("claim", True),
             ],
         )
         self.assertEqual(
             fake_client.claim_payloads[-1],
-            {"installed": True, "message": None},
+            {
+                "installed": True,
+                "message": None,
+                "gateway_ready": True,
+                "outcome": "installed_gateway_ready",
+            },
         )
         self.assertNotIn("super-secret-value", json.dumps(fake_client.claim_payloads))
+
+    def test_private_secret_install_reports_gateway_failure(self) -> None:
+        class FakeClient:
+            def __init__(self) -> None:
+                self.claim_payloads: list[dict] = []
+
+            def post_json(self, path: str, payload: dict) -> dict:
+                events.append(("claim", payload.get("gateway_ready")))
+                self.claim_payloads.append(payload)
+                return {"status": "failed"}
+
+        events: list[tuple[str, object]] = []
+        fake_client = FakeClient()
+        original_decrypt = secret_handoff._decrypt_ciphertext
+        original_set = secret_handoff._set_hermes_secret
+        original_register = secret_handoff._register_terminal_env_secret
+        original_notice = secret_handoff._send_secret_available_notice
+        original_failure_notice = (
+            secret_handoff._send_secret_gateway_restart_failed_notice
+        )
+        original_restart = secret_handoff._restart_gateway_after_secret
+        try:
+            secret_handoff._decrypt_ciphertext = lambda *_: "super-secret-value"
+            secret_handoff._set_hermes_secret = lambda name, value: events.append(
+                ("set", name)
+            )
+            secret_handoff._register_terminal_env_secret = lambda name: events.append(
+                ("register", name)
+            ) or {"ok": True}
+            secret_handoff._send_secret_available_notice = lambda name: events.append(
+                ("notice", name)
+            ) or {"sent": True, "ok": True}
+            secret_handoff._send_secret_gateway_restart_failed_notice = (
+                lambda name, message: events.append(("failure_notice", message))
+                or {"sent": True, "ok": True}
+            )
+            secret_handoff._restart_gateway_after_secret = lambda: (
+                _ for _ in ()
+            ).throw(
+                secret_handoff.SecretHandoffError(
+                    "gateway echoed super-secret-value",
+                    public_message=(
+                        "Hermes saved the secret, but I could not confirm "
+                        "the gateway restart."
+                    ),
+                )
+            )
+
+            secret_handoff._install_submitted_secret(
+                client=fake_client,
+                platform_auth="local_dev",
+                handoff_id="sh_test",
+                private_key_pem="PRIVATE",
+                state={
+                    "secret_name": "EXA_API_KEY",
+                    "ciphertext_payload": {"algorithm": "RSA-OAEP-256"},
+                },
+            )
+        finally:
+            secret_handoff._decrypt_ciphertext = original_decrypt
+            secret_handoff._set_hermes_secret = original_set
+            secret_handoff._register_terminal_env_secret = original_register
+            secret_handoff._send_secret_available_notice = original_notice
+            secret_handoff._send_secret_gateway_restart_failed_notice = (
+                original_failure_notice
+            )
+            secret_handoff._restart_gateway_after_secret = original_restart
+
+        self.assertEqual(events[-2][0], "failure_notice")
+        self.assertEqual(events[-1], ("claim", False))
+        self.assertEqual(
+            fake_client.claim_payloads[-1],
+            {
+                "installed": True,
+                "message": (
+                    "Hermes saved the secret, but I could not confirm "
+                    "the gateway restart."
+                ),
+                "gateway_ready": False,
+                "outcome": "installed_gateway_restart_failed",
+            },
+        )
+        self.assertNotIn("super-secret-value", json.dumps(fake_client.claim_payloads))
+
+    def test_private_secret_worker_prefers_systemd_survivor_unit(self) -> None:
+        original_which = secret_handoff.shutil.which
+        original_run = secret_handoff.subprocess.run
+        commands: list[dict[str, object]] = []
+
+        def fake_run(args, **kwargs):
+            commands.append({"args": args, **kwargs})
+            return subprocess.CompletedProcess(args=args, returncode=0, stdout="", stderr="")
+
+        with tempfile.TemporaryDirectory() as tmp:
+            key_path = Path(tmp) / "private.pem"
+            key_path.write_text("PRIVATE", encoding="utf-8")
+            package_dir = Path(tmp) / "tinyhat"
+            package_dir.mkdir()
+            env = {
+                "PATH": "/usr/bin",
+                "PYTHONPATH": "/tmp/pkg",
+                "TINYHAT_PLATFORM_URL": "http://localhost:8000",
+                "TINYHAT_LOCAL_DEV_TOKEN": "dev-token",
+            }
+            try:
+                secret_handoff.shutil.which = lambda name: (
+                    "/usr/bin/systemd-run" if name == "systemd-run" else None
+                )
+                secret_handoff.subprocess.run = fake_run
+
+                started = secret_handoff._start_worker_with_systemd(
+                    handoff_id="sh_test",
+                    key_path=key_path,
+                    package_dir=package_dir,
+                    env=env,
+                )
+            finally:
+                secret_handoff.shutil.which = original_which
+                secret_handoff.subprocess.run = original_run
+
+        self.assertTrue(started)
+        args = commands[0]["args"]
+        self.assertIn("--user", args)
+        self.assertIn("--collect", args)
+        self.assertIn("--setenv=TINYHAT_PLATFORM_URL=http://localhost:8000", args)
+        self.assertIn("--setenv=TINYHAT_LOCAL_DEV_TOKEN=dev-token", args)
+        self.assertEqual(args[-4], "--handoff-id")
+        self.assertEqual(args[-3], "sh_test")
 
     def test_private_secret_save_ignores_worker_reload_failure(self) -> None:
         original_which = secret_handoff.shutil.which
