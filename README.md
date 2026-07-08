@@ -85,12 +85,17 @@ pair, the user enters the value in a Telegram Mini App, the browser
 encrypts the value with the public key, and the Computer decrypts it with
 the temporary private key. Tinyhat stores only short-lived ciphertext for
 the handoff and wipes it after completion, expiration, or failure. After
-the Computer saves the secret locally, the plugin sends a short Telegram
-notice and restarts the Hermes gateway through the installed runtime stop/start
-commands so the updated env value is available before the next message. The
-runtime reloads Hermes env files during gateway startup and records
-Tinyhat-managed terminal aliases for the saved names, so exec/shell
-subprocesses can use the secret without Tinyhat storing or returning the value.
+the Computer saves the secret locally, the saver worker registers the name
+for terminal env passthrough, sends one short Telegram notice, and claims
+the handoff with `outcome="installed_restart_pending"`. The Tinyhat
+platform then queues the runtime's one-shot gateway restart and sends the
+final ready-or-failed confirmation after that restart command settles —
+the worker never stops, starts, or restarts the gateway itself. The worker
+still runs outside the Telegram gateway service (a transient systemd unit
+when available) as defense in depth. The runtime reloads Hermes env files
+during gateway startup and records Tinyhat-managed terminal aliases for
+the saved names, so exec/shell subprocesses can use the secret without
+Tinyhat storing or returning the value.
 
 `tinyhat-codex-auth` teaches the agent how to start and inspect the
 Tinyhat-managed OpenAI Codex / ChatGPT subscription sign-in flow. When
