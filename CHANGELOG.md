@@ -6,6 +6,8 @@ All notable changes to the Tinyhat plugin are documented here.
 
 ### Changed
 
+- Bump the fresh Hermes plugin package to `0.20.14` for the
+  private-secret handoff survivor/queued-gateway-restart fix.
 - Bump the fresh Hermes plugin package to `0.20.13`, add
   `tinyhat_skill_catalog` for plugin-qualified skill discovery, and add
   `tinyhat_plugin_update` so agents can check/apply stale installed plugin
