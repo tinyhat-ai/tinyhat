@@ -29,6 +29,8 @@ WORKER_SYSTEMD_ENV_KEYS = (
     "PYTHONPATH",
     "HERMES_BIN",
     "HERMES_ENV_FILE",
+    "HERMES_PROJECT_DIR",
+    "TINYHAT_HERMES_HOME",
     "TINYHAT_RUNTIME_PREFIX",
     "TINYHAT_PLATFORM_URL",
     "TINYHAT_LOCAL_DEV_TOKEN",
@@ -373,13 +375,25 @@ def _claim_handoff(
         payload["gateway_ready"] = gateway_ready
     if outcome:
         payload["outcome"] = outcome
-    client.post_json(
-        computer_api_path(
-            platform_auth,
-            f"private-secret-handoffs/v1/{handoff_id}/claim",
-        ),
-        payload,
+    path = computer_api_path(
+        platform_auth,
+        f"private-secret-handoffs/v1/{handoff_id}/claim",
     )
+    try:
+        client.post_json(path, payload)
+        return
+    except Exception:
+        if gateway_ready is None and not outcome:
+            raise
+
+    client.post_json(
+        path,
+        _legacy_claim_payload(installed=installed, message=message),
+    )
+
+
+def _legacy_claim_payload(*, installed: bool, message: str | None) -> dict[str, Any]:
+    return {"installed": installed, "message": message}
 
 
 def _generate_key_pair() -> tuple[str, str]:

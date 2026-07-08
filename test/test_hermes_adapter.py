@@ -909,6 +909,44 @@ class HermesAdapterTests(unittest.TestCase):
         )
         self.assertNotIn("super-secret-value", json.dumps(fake_client.claim_payloads))
 
+    def test_private_secret_claim_retries_legacy_payload_for_old_platform(self) -> None:
+        class FakeClient:
+            def __init__(self) -> None:
+                self.claim_payloads: list[dict] = []
+
+            def post_json(self, path: str, payload: dict) -> dict:
+                self.claim_payloads.append(payload)
+                if "gateway_ready" in payload:
+                    raise RuntimeError("unexpected field: gateway_ready")
+                return {"status": "claimed"}
+
+        fake_client = FakeClient()
+        secret_handoff._claim_handoff(
+            fake_client,
+            "local_dev",
+            "sh_test",
+            installed=True,
+            message=None,
+            gateway_ready=True,
+            outcome=secret_handoff.HANDOFF_OUTCOME_GATEWAY_READY,
+        )
+
+        self.assertEqual(
+            fake_client.claim_payloads,
+            [
+                {
+                    "installed": True,
+                    "message": None,
+                    "gateway_ready": True,
+                    "outcome": "installed_gateway_ready",
+                },
+                {
+                    "installed": True,
+                    "message": None,
+                },
+            ],
+        )
+
     def test_private_secret_install_reports_gateway_failure(self) -> None:
         class FakeClient:
             def __init__(self) -> None:
@@ -1009,6 +1047,8 @@ class HermesAdapterTests(unittest.TestCase):
             env = {
                 "PATH": "/usr/bin",
                 "PYTHONPATH": "/tmp/pkg",
+                "HERMES_PROJECT_DIR": "/home/tinyhat/project",
+                "TINYHAT_HERMES_HOME": "/home/tinyhat/.hermes",
                 "TINYHAT_PLATFORM_URL": "http://localhost:8000",
                 "TINYHAT_LOCAL_DEV_TOKEN": "dev-token",
             }
@@ -1032,6 +1072,8 @@ class HermesAdapterTests(unittest.TestCase):
         args = commands[0]["args"]
         self.assertIn("--user", args)
         self.assertIn("--collect", args)
+        self.assertIn("--setenv=HERMES_PROJECT_DIR=/home/tinyhat/project", args)
+        self.assertIn("--setenv=TINYHAT_HERMES_HOME=/home/tinyhat/.hermes", args)
         self.assertIn("--setenv=TINYHAT_PLATFORM_URL=http://localhost:8000", args)
         self.assertIn("--setenv=TINYHAT_LOCAL_DEV_TOKEN=dev-token", args)
         self.assertEqual(args[-4], "--handoff-id")
