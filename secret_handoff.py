@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import base64
-import json
 import os
 import re
 import shlex
@@ -23,6 +22,20 @@ KEY_ALGORITHM = "RSA-OAEP-256"
 DEFAULT_EXPIRES_IN_SECONDS = 300
 SECRET_NAME_RE = re.compile(r"^[A-Z_][A-Z0-9_]{0,126}$")
 STATE_DIR = Path.home() / ".tinyhat" / "private-secret-handoffs"
+WORKER_SYSTEMD_ENV_KEYS = (
+    "HOME",
+    "PATH",
+    "PYTHONPATH",
+    "HERMES_BIN",
+    "HERMES_ENV_FILE",
+    "HERMES_PROJECT_DIR",
+    "TINYHAT_HERMES_HOME",
+    "TINYHAT_RUNTIME_PREFIX",
+    "TINYHAT_PLATFORM_URL",
+    "TINYHAT_LOCAL_DEV_TOKEN",
+    "TINYHAT_COMPUTER_TOKEN_AUDIENCE",
+)
+HANDOFF_OUTCOME_RESTART_PENDING = "installed_restart_pending"
 PRIVATE_SECRET_EXAMPLE_CALL = {
     "name": "EXA_API_KEY",
     "description": "Exa API key for web search and research tools.",
@@ -129,22 +142,18 @@ def _start_worker_process(handoff: dict[str, Any], private_key_pem: str) -> None
         pythonpath = f"{pythonpath}{os.pathsep}{env['PYTHONPATH']}"
     env["PYTHONPATH"] = pythonpath
     try:
-        subprocess.Popen(
-            [
-                sys.executable,
-                str(package_dir / "secret_handoff_worker.py"),
-                "--handoff-id",
-                handoff_id,
-                "--key-path",
-                str(key_path),
-            ],
-            cwd=str(package_dir.parent),
+        if _start_worker_with_systemd(
+            handoff_id=handoff_id,
+            key_path=key_path,
+            package_dir=package_dir,
             env=env,
-            stdin=subprocess.DEVNULL,
-            stdout=subprocess.DEVNULL,
-            stderr=subprocess.DEVNULL,
-            start_new_session=True,
-            close_fds=True,
+        ):
+            return
+        _start_worker_with_popen(
+            handoff_id=handoff_id,
+            key_path=key_path,
+            package_dir=package_dir,
+            env=env,
         )
     except Exception as exc:
         try:
@@ -155,6 +164,93 @@ def _start_worker_process(handoff: dict[str, Any], private_key_pem: str) -> None
             "Could not start the local secret handoff worker.",
             public_message="I could not start the secure secret saver on this Computer.",
         ) from exc
+
+
+def _start_worker_with_systemd(
+    *,
+    handoff_id: str,
+    key_path: Path,
+    package_dir: Path,
+    env: dict[str, str],
+) -> bool:
+    systemd_run = shutil.which("systemd-run")
+    if not systemd_run:
+        return False
+    safe_id = re.sub(r"[^A-Za-z0-9_.-]", "-", handoff_id).strip("-")[:48] or "secret"
+    command = [
+        systemd_run,
+        "--user",
+        "--collect",
+        "--quiet",
+        f"--unit=tinyhat-secret-handoff-{safe_id}",
+    ]
+    for key in WORKER_SYSTEMD_ENV_KEYS:
+        if key in env:
+            command.append(f"--setenv={key}={env[key]}")
+    command.extend(
+        [
+            sys.executable,
+            str(package_dir / "secret_handoff_worker.py"),
+            "--handoff-id",
+            handoff_id,
+            "--key-path",
+            str(key_path),
+        ]
+    )
+    try:
+        completed = subprocess.run(
+            command,
+            cwd=str(package_dir.parent),
+            capture_output=True,
+            text=True,
+            timeout=15,
+            check=False,
+        )
+    except (OSError, subprocess.TimeoutExpired) as exc:
+        _log_worker_spawn_fallback(str(exc)[:500])
+        return False
+    if completed.returncode != 0:
+        detail = (completed.stderr or completed.stdout or "systemd-run failed").strip()
+        _log_worker_spawn_fallback(detail[:500])
+        return False
+    return True
+
+
+def _log_worker_spawn_fallback(detail: str) -> None:
+    print(
+        "tinyhat-secret-handoff: systemd-run worker spawn failed, "
+        f"falling back to a detached process: {detail}",
+        file=sys.stderr,
+    )
+
+
+def _start_worker_with_popen(
+    *,
+    handoff_id: str,
+    key_path: Path,
+    package_dir: Path,
+    env: dict[str, str],
+) -> None:
+    # Fallback when systemd-run is unavailable or fails. The worker never
+    # stops or starts the gateway, so escaping the gateway control group via
+    # systemd-run above is defense in depth, not load-bearing.
+    subprocess.Popen(
+        [
+            sys.executable,
+            str(package_dir / "secret_handoff_worker.py"),
+            "--handoff-id",
+            handoff_id,
+            "--key-path",
+            str(key_path),
+        ],
+        cwd=str(package_dir.parent),
+        env=env,
+        stdin=subprocess.DEVNULL,
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.DEVNULL,
+        start_new_session=True,
+        close_fds=True,
+    )
 
 
 def _write_private_key_file(handoff_id: str, private_key_pem: str) -> Path:
@@ -239,17 +335,17 @@ def _install_submitted_secret(
         plaintext = ""
     _register_terminal_env_secret(secret_name)
     _send_secret_available_notice(secret_name)
-    restart_message = None
-    try:
-        _restart_gateway_after_secret()
-    except Exception as exc:
-        restart_message = _public_failure_message(exc)
+    # The platform owns the gateway restart: on this claim it queues the
+    # runtime's one-shot restart command and sends the final ready-or-failed
+    # confirmation after that command settles. The worker never stops,
+    # starts, or restarts the gateway.
     _claim_handoff(
         client,
         platform_auth,
         handoff_id,
         installed=True,
-        message=restart_message,
+        message=None,
+        outcome=HANDOFF_OUTCOME_RESTART_PENDING,
     )
 
 
@@ -260,14 +356,33 @@ def _claim_handoff(
     *,
     installed: bool,
     message: str | None = None,
+    gateway_ready: bool | None = None,
+    outcome: str | None = None,
 ) -> None:
-    client.post_json(
-        computer_api_path(
-            platform_auth,
-            f"private-secret-handoffs/v1/{handoff_id}/claim",
-        ),
-        {"installed": installed, "message": message},
+    payload: dict[str, Any] = {"installed": installed, "message": message}
+    if gateway_ready is not None:
+        payload["gateway_ready"] = gateway_ready
+    if outcome:
+        payload["outcome"] = outcome
+    path = computer_api_path(
+        platform_auth,
+        f"private-secret-handoffs/v1/{handoff_id}/claim",
     )
+    try:
+        client.post_json(path, payload)
+        return
+    except Exception:
+        if gateway_ready is None and not outcome:
+            raise
+
+    client.post_json(
+        path,
+        _legacy_claim_payload(installed=installed, message=message),
+    )
+
+
+def _legacy_claim_payload(*, installed: bool, message: str | None) -> dict[str, Any]:
+    return {"installed": installed, "message": message}
 
 
 def _generate_key_pair() -> tuple[str, str]:
@@ -398,6 +513,15 @@ def _register_terminal_env_secret(secret_name: str) -> dict[str, Any]:
 
 
 def _send_secret_available_notice(secret_name: str) -> dict[str, Any]:
+    return _send_secret_notice(
+        (
+            f"{secret_name} is saved. The platform is refreshing my Telegram "
+            "gateway now — I will confirm when it is ready."
+        )
+    )
+
+
+def _send_secret_notice(text: str) -> dict[str, Any]:
     try:
         from .tools import _telegram_credentials, _telegram_send_message
 
@@ -405,94 +529,11 @@ def _send_secret_available_notice(secret_name: str) -> dict[str, Any]:
         sent = _telegram_send_message(
             token=token,
             chat_id=chat_id,
-            text=(
-                f"{secret_name} is saved. I'm refreshing my tools and restarting "
-                "my Telegram gateway now so your next message can use it."
-            ),
+            text=text,
         )
         return {"sent": bool(sent.get("ok")), "ok": bool(sent.get("ok"))}
     except Exception as exc:
         return {"sent": False, "ok": False, "error": str(exc)[:200]}
-
-
-def _restart_gateway_after_secret() -> dict[str, Any]:
-    hermes = shutil.which("hermes")
-    if not hermes:
-        raise SecretHandoffError(
-            "Hermes CLI was not found.",
-            public_message=(
-                "Hermes saved the secret, but I could not restart the gateway "
-                "to make it available yet."
-            ),
-        )
-    runtime_prefix = os.getenv("TINYHAT_RUNTIME_PREFIX", "/opt/tinyhat-hermes-runtime")
-    env = os.environ.copy()
-    env["PYTHONPATH"] = (
-        f"{runtime_prefix}{os.pathsep}{env['PYTHONPATH']}"
-        if env.get("PYTHONPATH")
-        else runtime_prefix
-    )
-    script = (
-        "import asyncio, json\n"
-        "from types import SimpleNamespace\n"
-        "from hermes_runtime.commands import start_hermes, stop_hermes\n"
-        "async def main():\n"
-        "    ctx = SimpleNamespace()\n"
-        "    stop = await stop_hermes.run(ctx, {'kind': 'stop_hermes', "
-        "'spec': {'reason': 'private_secret_saved'}})\n"
-        "    start = await start_hermes.run(ctx, {'kind': 'start_hermes', "
-        "'spec': {'reason': 'private_secret_saved'}})\n"
-        "    return {'healthy': bool(start.get('healthy')), 'stop': stop, "
-        "'start': start}\n"
-        "print(json.dumps(asyncio.run(main()), sort_keys=True))\n"
-    )
-    try:
-        completed = subprocess.run(
-            [sys.executable, "-c", script],
-            capture_output=True,
-            text=True,
-            timeout=120,
-            check=False,
-            env=env,
-        )
-    except (OSError, subprocess.TimeoutExpired) as exc:
-        raise SecretHandoffError(
-            "Hermes gateway restart failed after saving a secret.",
-            public_message=(
-                "Hermes saved the secret, but I could not restart the gateway "
-                "to make it available yet."
-            ),
-        ) from exc
-    if completed.returncode != 0:
-        error_text = (
-            completed.stderr or completed.stdout or "gateway restart failed"
-        ).strip()[:500]
-        raise SecretHandoffError(
-            error_text,
-            public_message=(
-                "Hermes saved the secret, but I could not restart the gateway "
-                "to make it available yet."
-            ),
-        )
-    try:
-        payload = json.loads(completed.stdout or "{}")
-    except json.JSONDecodeError as exc:
-        raise SecretHandoffError(
-            "Hermes gateway restart returned invalid JSON.",
-            public_message=(
-                "Hermes saved the secret, but I could not confirm the gateway "
-                "restart."
-            ),
-        ) from exc
-    if not isinstance(payload, dict) or not payload.get("healthy"):
-        raise SecretHandoffError(
-            "Hermes gateway did not report healthy after secret save.",
-            public_message=(
-                "Hermes saved the secret, but I could not confirm the gateway "
-                "restart."
-            ),
-        )
-    return payload
 
 
 def _can_save_with_hermes_config_set(secret_name: str) -> bool:

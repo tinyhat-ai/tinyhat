@@ -10,6 +10,18 @@ All notable changes to the Tinyhat plugin are documented here.
   `tinyhat_skill_catalog` for plugin-qualified skill discovery, and add
   `tinyhat_plugin_update` so agents can check/apply stale installed plugin
   channels through runtime commands instead of ad hoc shell snippets.
+- Stop restarting the Hermes gateway from the private-secret saver worker.
+  After a secret is saved, the worker registers env passthrough, sends one
+  honest Telegram notice, and claims the handoff with
+  `outcome="installed_restart_pending"`; the Tinyhat platform queues the
+  runtime's one-shot gateway restart and sends the final ready-or-failed
+  confirmation after that command settles. Workers still prefer transient
+  systemd survivor units (now defense in depth, not load-bearing) and fall
+  back to a detached process when `systemd-run` is missing or fails.
+  Deploy order: this plugin version requires a platform that queues the
+  gateway restart when it receives the claim — deploy the platform change
+  first, otherwise saved secrets do not reach a running gateway until a
+  manual heal.
 - Bump the fresh Hermes plugin package to `0.20.12` after tightening the
   agent-facing tool schemas and self-correcting error payloads.
 - Register private-handoff secret names with the Tinyhat runtime's Hermes
@@ -26,9 +38,8 @@ All notable changes to the Tinyhat plugin are documented here.
 - Teach the private secret skill and tool to use meaningful env-style names
   such as `EXA_API_KEY` instead of generic placeholders like
   `TINYHAT_SECRET`.
-- Restart the gateway with the runtime stop/start commands after a private
-  secret is saved, with a short Telegram notice first, so the runtime can load
-  the env value before the next message.
+- Restart the gateway after a private secret is saved, with a short Telegram
+  notice first, so the runtime can load the env value before the next message.
 - Add a repo-local Tinyhat plugin skill-authoring skill and expand the
   public skill standard for future plugin capabilities.
 - Bump the fresh Hermes plugin package to `0.20.3` so managed Computers can
