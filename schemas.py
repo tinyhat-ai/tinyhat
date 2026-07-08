@@ -14,6 +14,18 @@ TINYHAT_TELL_JOKE_SCHEMA = {
     "additionalProperties": False,
 }
 
+TINYHAT_SKILL_CATALOG_SCHEMA = {
+    "type": "object",
+    "description": (
+        "Lists Tinyhat plugin skills with their plugin-qualified names and "
+        "unqualified aliases. Use this when Hermes skill lookup/listing does "
+        "not show Tinyhat plugin skills clearly."
+    ),
+    "properties": {},
+    "required": [],
+    "additionalProperties": False,
+}
+
 TINYHAT_PRIVATE_SECRET_HANDOFF_SCHEMA = {
     "type": "object",
     "description": (
@@ -69,6 +81,43 @@ TINYHAT_CODEX_AUTH_SCHEMA = {
             "description": (
                 "Set true with action=start only after the user confirms the "
                 "ChatGPT Security toggle is on."
+            ),
+        },
+    },
+    "required": ["action"],
+    "additionalProperties": False,
+}
+
+TINYHAT_PLUGIN_UPDATE_SCHEMA = {
+    "type": "object",
+    "description": (
+        "Checks or applies the installed Tinyhat plugin update from the "
+        "configured channel, usually channels/lts. Use status first when the "
+        "agent may be running older plugin schemas."
+    ),
+    "properties": {
+        "action": {
+            "type": "string",
+            "enum": ["status", "update"],
+            "description": (
+                "Use status to compare the installed plugin with the target "
+                "channel. Use update only after the user/operator asks to "
+                "apply the plugin update."
+            ),
+        },
+        "confirmed": {
+            "type": "boolean",
+            "description": (
+                "Set true with action=update only after the user/operator "
+                "has asked to update the Tinyhat plugin on this Computer."
+            ),
+        },
+        "restart_gateway": {
+            "type": "boolean",
+            "description": (
+                "With action=update, set true when the Hermes Telegram "
+                "gateway should be stopped and started after a plugin change "
+                "so long-running commands/tools reload."
             ),
         },
     },

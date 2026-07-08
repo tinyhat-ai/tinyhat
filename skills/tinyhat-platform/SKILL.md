@@ -16,6 +16,9 @@ Use this as the default routing map:
 | Add or save an API key, token, password, webhook secret, or credential | Call `tinyhat_private_secret_handoff` once. |
 | Ask which Tinyhat plugin is running | Call `tinyhat_plugin_version`. |
 | Check that the Tinyhat plugin exists | Call `tinyhat_tell_joke` or `tinyhat_plugin_version`. |
+| Find a Tinyhat plugin skill after `skills_list`, `available_skills`, or unqualified `skill_view` fails | Call `tinyhat_skill_catalog`; retry with the returned `tinyhat:<skill-name>` qualified name. |
+| Check whether this Computer is behind `channels/lts` or `channels/latest` | Call `tinyhat_plugin_update` with `{"action": "status"}`. |
+| Apply a plugin channel update the user/operator asked for | Call `tinyhat_plugin_update` with `{"action": "update", "confirmed": true, "restart_gateway": true}`. |
 | Connect ChatGPT / OpenAI Codex auth or use the user's OpenAI paid access | Load `tinyhat:tinyhat-codex-auth`; call `tinyhat_codex_auth` once with `{"action": "prerequisite"}` so it sends the screenshot and `/codex_auth`. Do not send an extra text reply. |
 | Check Codex auth | Call `tinyhat_codex_auth` with `{"action": "status"}`. |
 | Inspect recent Codex auth output | Call `tinyhat_codex_auth` with `{"action": "log"}`. |
@@ -70,6 +73,38 @@ recent auth output, and `{"action": "limits"}` if they ask about
 remaining limits. Only fall back to `/codex_auth_status`,
 `/codex_auth_log`, or `/codex_limits` when the tool is unavailable or
 reports that the runtime command could not be delivered.
+
+## Plugin Updates And Skill Discovery
+
+If the live plugin appears older than `channels/lts` or `channels/latest`,
+or a runtime status report says `update_available=true` or
+`decision=target_ref_changed`, start with:
+
+```json
+{"action": "status"}
+```
+
+for `tinyhat_plugin_update`. Apply the update only after the user or
+operator asks for it:
+
+```json
+{"action": "update", "confirmed": true, "restart_gateway": true}
+```
+
+This route uses the installed runtime's plugin status, update, stop, and
+start commands. Do not invent a shell command for plugin updates.
+
+If a Tinyhat skill lookup fails with an unqualified name, call
+`tinyhat_skill_catalog` and retry with the returned qualified name, for
+example `tinyhat:tinyhat-codex-auth`.
+
+## Reporting Tinyhat Bugs
+
+When asked to write or post a Tinyhat QA report that mentions words like
+restart, reload, gateway, or update, do not use an arbitrary terminal or
+curl command just to carry that text. Return the report in chat or use a
+native Slack/reporting tool when one is available. Terminal command guards
+can confuse report text with shell intent.
 
 ## Boundary
 
