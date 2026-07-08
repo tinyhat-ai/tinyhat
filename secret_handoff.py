@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import base64
-import json
 import os
 import re
 import shlex
@@ -36,8 +35,7 @@ WORKER_SYSTEMD_ENV_KEYS = (
     "TINYHAT_LOCAL_DEV_TOKEN",
     "TINYHAT_COMPUTER_TOKEN_AUDIENCE",
 )
-HANDOFF_OUTCOME_GATEWAY_READY = "installed_gateway_ready"
-HANDOFF_OUTCOME_GATEWAY_RESTART_FAILED = "installed_gateway_restart_failed"
+HANDOFF_OUTCOME_RESTART_PENDING = "installed_restart_pending"
 PRIVATE_SECRET_EXAMPLE_CALL = {
     "name": "EXA_API_KEY",
     "description": "Exa API key for web search and research tools.",
@@ -209,17 +207,21 @@ def _start_worker_with_systemd(
             check=False,
         )
     except (OSError, subprocess.TimeoutExpired) as exc:
-        raise SecretHandoffError(
-            "Could not start the survivor secret handoff worker.",
-            public_message="I could not start the secure secret saver on this Computer.",
-        ) from exc
+        _log_worker_spawn_fallback(str(exc)[:500])
+        return False
     if completed.returncode != 0:
         detail = (completed.stderr or completed.stdout or "systemd-run failed").strip()
-        raise SecretHandoffError(
-            detail[:500],
-            public_message="I could not start the secure secret saver on this Computer.",
-        )
+        _log_worker_spawn_fallback(detail[:500])
+        return False
     return True
+
+
+def _log_worker_spawn_fallback(detail: str) -> None:
+    print(
+        "tinyhat-secret-handoff: systemd-run worker spawn failed, "
+        f"falling back to a detached process: {detail}",
+        file=sys.stderr,
+    )
 
 
 def _start_worker_with_popen(
@@ -229,8 +231,9 @@ def _start_worker_with_popen(
     package_dir: Path,
     env: dict[str, str],
 ) -> None:
-    # start_new_session is only a fallback for non-systemd local environments.
-    # On installed Computers, systemd-run above is the survivor boundary.
+    # Fallback when systemd-run is unavailable or fails. The worker never
+    # stops or starts the gateway, so escaping the gateway control group via
+    # systemd-run above is defense in depth, not load-bearing.
     subprocess.Popen(
         [
             sys.executable,
@@ -332,31 +335,17 @@ def _install_submitted_secret(
         plaintext = ""
     _register_terminal_env_secret(secret_name)
     _send_secret_available_notice(secret_name)
-    restart_message = None
-    gateway_ready = False
-    outcome = HANDOFF_OUTCOME_GATEWAY_RESTART_FAILED
-    try:
-        restart_result = _restart_gateway_after_secret()
-        gateway_ready = bool(restart_result.get("healthy"))
-        if gateway_ready:
-            outcome = HANDOFF_OUTCOME_GATEWAY_READY
-            _send_secret_gateway_ready_notice(secret_name)
-        else:
-            restart_message = (
-                "Hermes saved the secret, but I could not confirm the gateway restart."
-            )
-            _send_secret_gateway_restart_failed_notice(secret_name, restart_message)
-    except Exception as exc:
-        restart_message = _public_failure_message(exc)
-        _send_secret_gateway_restart_failed_notice(secret_name, restart_message)
+    # The platform owns the gateway restart: on this claim it queues the
+    # runtime's one-shot restart command and sends the final ready-or-failed
+    # confirmation after that command settles. The worker never stops,
+    # starts, or restarts the gateway.
     _claim_handoff(
         client,
         platform_auth,
         handoff_id,
         installed=True,
-        message=restart_message,
-        gateway_ready=gateway_ready,
-        outcome=outcome,
+        message=None,
+        outcome=HANDOFF_OUTCOME_RESTART_PENDING,
     )
 
 
@@ -526,32 +515,8 @@ def _register_terminal_env_secret(secret_name: str) -> dict[str, Any]:
 def _send_secret_available_notice(secret_name: str) -> dict[str, Any]:
     return _send_secret_notice(
         (
-            f"{secret_name} is saved. I'm refreshing my tools and restarting "
-            "my Telegram gateway now."
-        )
-    )
-
-
-def _send_secret_gateway_ready_notice(secret_name: str) -> dict[str, Any]:
-    return _send_secret_notice(
-        (
-            f"{secret_name} is ready. My Telegram gateway is back, so your next "
-            "message can use it."
-        )
-    )
-
-
-def _send_secret_gateway_restart_failed_notice(
-    secret_name: str,
-    message: str | None,
-) -> dict[str, Any]:
-    detail = message or (
-        "Hermes saved the secret, but I could not confirm the gateway restart."
-    )
-    return _send_secret_notice(
-        (
-            f"{secret_name} is saved, but I could not confirm my Telegram "
-            f"gateway is back. {detail}"
+            f"{secret_name} is saved. The platform is refreshing my Telegram "
+            "gateway now — I will confirm when it is ready."
         )
     )
 
@@ -569,86 +534,6 @@ def _send_secret_notice(text: str) -> dict[str, Any]:
         return {"sent": bool(sent.get("ok")), "ok": bool(sent.get("ok"))}
     except Exception as exc:
         return {"sent": False, "ok": False, "error": str(exc)[:200]}
-
-
-def _restart_gateway_after_secret() -> dict[str, Any]:
-    hermes = shutil.which("hermes")
-    if not hermes:
-        raise SecretHandoffError(
-            "Hermes CLI was not found.",
-            public_message=(
-                "Hermes saved the secret, but I could not restart the gateway "
-                "to make it available yet."
-            ),
-        )
-    runtime_prefix = os.getenv("TINYHAT_RUNTIME_PREFIX", "/opt/tinyhat-hermes-runtime")
-    env = os.environ.copy()
-    env["PYTHONPATH"] = (
-        f"{runtime_prefix}{os.pathsep}{env['PYTHONPATH']}"
-        if env.get("PYTHONPATH")
-        else runtime_prefix
-    )
-    script = (
-        "import asyncio, json\n"
-        "from types import SimpleNamespace\n"
-        "from hermes_runtime.commands import start_hermes, stop_hermes\n"
-        "async def main():\n"
-        "    ctx = SimpleNamespace()\n"
-        "    stop = await stop_hermes.run(ctx, {'kind': 'stop_hermes', "
-        "'spec': {'reason': 'private_secret_saved'}})\n"
-        "    start = await start_hermes.run(ctx, {'kind': 'start_hermes', "
-        "'spec': {'reason': 'private_secret_saved'}})\n"
-        "    return {'healthy': bool(start.get('healthy')), 'stop': stop, "
-        "'start': start}\n"
-        "print(json.dumps(asyncio.run(main()), sort_keys=True))\n"
-    )
-    try:
-        completed = subprocess.run(
-            [sys.executable, "-c", script],
-            capture_output=True,
-            text=True,
-            timeout=120,
-            check=False,
-            env=env,
-        )
-    except (OSError, subprocess.TimeoutExpired) as exc:
-        raise SecretHandoffError(
-            "Hermes gateway restart failed after saving a secret.",
-            public_message=(
-                "Hermes saved the secret, but I could not restart the gateway "
-                "to make it available yet."
-            ),
-        ) from exc
-    if completed.returncode != 0:
-        error_text = (
-            completed.stderr or completed.stdout or "gateway restart failed"
-        ).strip()[:500]
-        raise SecretHandoffError(
-            error_text,
-            public_message=(
-                "Hermes saved the secret, but I could not restart the gateway "
-                "to make it available yet."
-            ),
-        )
-    try:
-        payload = json.loads(completed.stdout or "{}")
-    except json.JSONDecodeError as exc:
-        raise SecretHandoffError(
-            "Hermes gateway restart returned invalid JSON.",
-            public_message=(
-                "Hermes saved the secret, but I could not confirm the gateway "
-                "restart."
-            ),
-        ) from exc
-    if not isinstance(payload, dict) or not payload.get("healthy"):
-        raise SecretHandoffError(
-            "Hermes gateway did not report healthy after secret save.",
-            public_message=(
-                "Hermes saved the secret, but I could not confirm the gateway "
-                "restart."
-            ),
-        )
-    return payload
 
 
 def _can_save_with_hermes_config_set(secret_name: str) -> bool:

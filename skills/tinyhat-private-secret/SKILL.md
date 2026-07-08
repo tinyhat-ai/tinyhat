@@ -51,9 +51,10 @@ The secure entry flow works like a device flow. This Computer creates a one-time
 key pair. The Tinyhat page encrypts the secret in the user's browser
 with the public key, and this Computer decrypts it with the temporary
 private key. Tinyhat stores only encrypted ciphertext during the short
-entry window. After saving the secret, the Computer refreshes the gateway from
-a survivor worker when systemd is available, confirms gateway readiness, and
-reports a visible restart failure if the gateway does not come back cleanly.
+entry window. After saving the secret, the Computer reports the install to
+the Tinyhat platform, which restarts the Telegram gateway and sends the
+final confirmation once the gateway is back. The Computer never restarts
+the gateway itself.
 
 If the entry window expires, ask the user whether to create a new secure
 link. Do not reuse old links.

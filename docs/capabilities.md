@@ -25,9 +25,10 @@ The agent must not ask for the secret in chat. Instead, it calls
 pair, the Mini App encrypts the entered value with the public key, and the
 Computer decrypts the submitted ciphertext with the temporary private key.
 Tinyhat stores only ciphertext during the short handoff window.
-After save, the Computer uses a survivor worker for the gateway refresh when
-systemd is available and claims either confirmed gateway readiness or a visible
-gateway restart failure.
+After save, the worker reports the install to the platform with
+`outcome="installed_restart_pending"`; the platform queues the runtime's
+one-shot gateway restart and sends the final ready-or-failed confirmation
+after that restart settles. The worker never restarts the gateway itself.
 
 ## Tinyhat Platform Context
 
