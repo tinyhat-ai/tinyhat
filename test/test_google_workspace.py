@@ -992,28 +992,6 @@ class GoogleWorkspaceTests(unittest.TestCase):
             )
             self.assertEqual(notices, ["superseded"])
 
-    def test_disconnect_prevents_prior_worker_from_installing(self) -> None:
-        client = PollingClient([])
-        handoff = self._worker_handoff(client=client)
-        with (
-            tempfile.TemporaryDirectory() as tmp,
-            self._patched_state(Path(tmp)),
-            self._captured_notices() as notices,
-            mock.patch.object(
-                workspace,
-                "build_platform_client",
-                return_value=(client, "local_dev"),
-            ),
-        ):
-            self._activate_handoff()
-            result = workspace._disconnect_payload()
-            workspace._poll_and_install(handoff)
-
-            self.assertEqual(result["status"], "disconnected_locally")
-            self.assertFalse(workspace.CREDENTIALS_PATH.exists())
-            self.assertEqual(client.posts[-1][1]["installed"], False)
-            self.assertEqual(notices, ["superseded"])
-
     def test_ready_worker_saves_before_claim_without_returning_credentials(self) -> None:
         events: list[str] = []
         notice_states: list[str] = []
@@ -1666,13 +1644,21 @@ class GoogleWorkspaceTests(unittest.TestCase):
             saved = workspace._normalize_credentials(credential_envelope())
             workspace._atomic_save_credentials(saved)
             intent = self._disconnect_intent(client=client, credentials=saved)
+            old_handoff_client = PollingClient([])
+            old_handoff = self._worker_handoff(client=old_handoff_client)
+            self._activate_handoff()
             self._activate_disconnect_intent(intent)
 
-            outcome = workspace._poll_disconnect_intent(intent)
+            with self._captured_notices() as notices:
+                outcome = workspace._poll_disconnect_intent(intent)
+                workspace._poll_and_install(old_handoff)
 
             self.assertEqual(outcome, "disconnected")
             self.assertFalse(workspace.CREDENTIALS_PATH.exists())
             self.assertFalse(workspace.ACTIVE_DISCONNECT_PATH.exists())
+            self.assertFalse(workspace.ACTIVE_HANDOFF_PATH.exists())
+            self.assertEqual(old_handoff_client.posts[-1][1]["installed"], False)
+            self.assertEqual(notices, ["superseded"])
             complete_payloads = [
                 payload for path, payload in client.posts if path.endswith("/complete")
             ]
@@ -2722,52 +2708,6 @@ class GoogleWorkspaceTests(unittest.TestCase):
 
             self.assertEqual(result["status"], "waiting_for_user")
             self.assertFalse(workspace.ACTIVE_DISCONNECT_PATH.exists())
-
-    def test_confirmed_disconnect_is_local_only_and_updates_platform_metadata(self) -> None:
-        client = PollingClient([])
-        with (
-            tempfile.TemporaryDirectory() as tmp,
-            self._patched_state(Path(tmp)),
-            mock.patch.object(
-                workspace,
-                "build_platform_client",
-                return_value=(client, "local_dev"),
-            ),
-        ):
-            workspace._atomic_save_credentials(
-                workspace._normalize_credentials(credential_envelope())
-            )
-            result = workspace._disconnect_payload()
-
-            self.assertEqual(result["status"], "disconnected_locally")
-            self.assertEqual(result["revocation"], "not_attempted")
-            self.assertTrue(result["platform_metadata_updated"])
-            self.assertFalse(workspace.CREDENTIALS_PATH.exists())
-            self.assertTrue(client.posts[-1][0].endswith("/google-workspace-oauth/v1/disconnect"))
-            self.assertEqual(client.posts[-1][1], {})
-            self.assertIn("other Tinyhat Computers remain connected", result["message"])
-
-    def test_disconnect_remains_successful_when_platform_metadata_update_fails(self) -> None:
-        with (
-            tempfile.TemporaryDirectory() as tmp,
-            self._patched_state(Path(tmp)),
-            mock.patch.object(
-                workspace,
-                "build_platform_client",
-                side_effect=RuntimeError("platform unavailable"),
-            ),
-        ):
-            workspace._atomic_save_credentials(
-                workspace._normalize_credentials(credential_envelope())
-            )
-            result = workspace._disconnect_payload()
-
-            self.assertEqual(result["status"], "disconnected_locally")
-            self.assertEqual(result["revocation"], "not_attempted")
-            self.assertFalse(result["platform_metadata_updated"])
-            self.assertFalse(workspace.CREDENTIALS_PATH.exists())
-            self.assertIn("local disconnect is complete", result["message"])
-            self.assertNotIn("google_account_remediation_url", result)
 
     def test_detached_worker_cleans_one_time_state(self) -> None:
         client = PollingClient([{"terminal_state": "cancelled"}])

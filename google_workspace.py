@@ -2709,64 +2709,6 @@ def _status_payload() -> dict[str, Any]:
     }
 
 
-def _disconnect_payload() -> dict[str, Any]:
-    deletion_failed = False
-    # The lock makes marker cancellation, scratch cleanup, and credential
-    # deletion one ordered transition. Any prior worker must acquire this same
-    # lock and match the marker immediately before installing.
-    with _lifecycle_lock():
-        ACTIVE_DISCONNECT_PATH.unlink(missing_ok=True)
-        _cancel_pending_handoffs_for_disconnect_locked()
-        try:
-            _delete_credentials_locked()
-        except OSError:
-            deletion_failed = True
-    if deletion_failed:
-        return {
-            "schema": "tinyhat_google_workspace_action_v1",
-            "action": "disconnect",
-            "status": "failed",
-            "connected": True,
-            "revocation": "not_attempted",
-            "platform_metadata_updated": False,
-            "message": "The local Google credentials could not be removed safely.",
-        }
-    platform_metadata_updated = False
-    try:
-        client, platform_auth = build_platform_client()
-        client.post_json(
-            computer_api_path(
-                platform_auth,
-                f"{GOOGLE_WORKSPACE_API_SUFFIX}/disconnect",
-            ),
-            {},
-        )
-        platform_metadata_updated = True
-    except Exception:
-        pass
-    metadata_message = (
-        "Tinyhat's connection metadata was updated."
-        if platform_metadata_updated
-        else (
-            "Tinyhat's connection metadata could not be updated, but the local "
-            "disconnect is complete."
-        )
-    )
-    return {
-        "schema": "tinyhat_google_workspace_action_v1",
-        "action": "disconnect",
-        "status": "disconnected_locally",
-        "connected": False,
-        "revocation": "not_attempted",
-        "platform_metadata_updated": platform_metadata_updated,
-        "message": (
-            "Google Workspace credentials were removed from this Computer only. "
-            "Tinyhat did not revoke the shared Google OAuth grant, so other "
-            f"Tinyhat Computers remain connected. {metadata_message}"
-        ),
-    }
-
-
 def _claim_handoff(
     *,
     client: PlatformClient,

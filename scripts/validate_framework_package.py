@@ -405,7 +405,6 @@ def validate_google_workspace_contract(root: Path) -> None:
         "_retry_disconnect_completion(",
         "_resume_retained_disconnect_workers()",
         "record_completion_receipt=record_completion_receipt",
-        'f"{GOOGLE_WORKSPACE_API_SUFFIX}/disconnect"',
         "_wipe_invalid_credentials_and_pending_handoffs_locked()",
     )
     for phrase in required:
@@ -414,6 +413,7 @@ def validate_google_workspace_contract(root: Path) -> None:
         '"authorization_url": authorization_url',
         "GOOGLE_REVOCATION_URI",
         "def _revoke_google_token",
+        "def _disconnect_payload",
     )
     for phrase in forbidden:
         require(phrase not in text, f"google_workspace.py retained forbidden contract: {phrase}")
