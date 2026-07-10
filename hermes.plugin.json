@@ -40,6 +40,20 @@
       "purpose": "Starts a private browser-encrypted secret handoff to the assigned Computer."
     },
     {
+      "name": "tinyhat-google-workspace",
+      "qualified_name": "tinyhat:tinyhat-google-workspace",
+      "aliases": ["tinyhat-google-workspace"],
+      "path": "skills/tinyhat-google-workspace/SKILL.md",
+      "purpose": "Connects, upgrades, or starts the two-stage local disconnect ceremony for a Google Workspace account."
+    },
+    {
+      "name": "tinyhat-google-workspace-app-manager",
+      "qualified_name": "tinyhat:tinyhat-google-workspace-app-manager",
+      "aliases": ["tinyhat-google-workspace-app-manager"],
+      "path": "skills/tinyhat-google-workspace-app-manager/SKILL.md",
+      "purpose": "Installs and verifies the pinned Google Workspace CLI app and official operation skills after approval."
+    },
+    {
       "name": "tinyhat-codex-auth",
       "qualified_name": "tinyhat:tinyhat-codex-auth",
       "aliases": ["tinyhat-codex-auth"],
@@ -81,6 +95,21 @@
       "name": "tinyhat_private_secret_handoff",
       "handler": "tools.private_secret_handoff",
       "skill": "tinyhat-private-secret"
+    },
+    {
+      "name": "tinyhat_google_workspace",
+      "handler": "tools.google_workspace",
+      "skill": "tinyhat-google-workspace"
+    },
+    {
+      "name": "tinyhat_google_workspace_app",
+      "handler": "tools.google_workspace_app",
+      "skill": "tinyhat-google-workspace"
+    },
+    {
+      "name": "tinyhat_google_workspace_app_manager",
+      "handler": "tools.google_workspace_app_manager",
+      "skill": "tinyhat-google-workspace-app-manager"
     },
     {
       "name": "tinyhat_codex_auth",

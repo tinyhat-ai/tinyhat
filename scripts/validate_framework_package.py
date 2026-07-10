@@ -8,13 +8,16 @@ import re
 import sys
 from pathlib import Path
 
-
 VERSION_SHAPE = re.compile(r"^\d+\.\d+\.\d+$")
+CODEX_SCREENSHOT_MIN_BYTES = 10_000
 REQUIRED_TOOLS = [
     "tinyhat_plugin_version",
     "tinyhat_tell_joke",
     "tinyhat_skill_catalog",
     "tinyhat_private_secret_handoff",
+    "tinyhat_google_workspace",
+    "tinyhat_google_workspace_app",
+    "tinyhat_google_workspace_app_manager",
     "tinyhat_codex_auth",
     "tinyhat_plugin_update",
 ]
@@ -28,6 +31,8 @@ REQUIRED_SKILLS = [
     "tinyhat-tell-joke",
     "tinyhat-skill-catalog",
     "tinyhat-private-secret",
+    "tinyhat-google-workspace",
+    "tinyhat-google-workspace-app-manager",
     "tinyhat-codex-auth",
     "tinyhat-plugin-update",
     "tinyhat-platform",
@@ -38,9 +43,7 @@ FORBIDDEN_PATHS = (
     ".claude",
     "roadmap",
 )
-FORBIDDEN_TEXT = (
-    "CLAUDE_PLUGIN_DATA",
-)
+FORBIDDEN_TEXT = ("CLAUDE_PLUGIN_DATA",)
 
 
 def fail(message: str) -> None:
@@ -130,6 +133,11 @@ def validate_hermes_adapter(root: Path) -> None:
         "schemas.py",
         "tools.py",
         "platform.py",
+        "google_workspace.py",
+        "google_workspace_app.py",
+        "google_workspace_app_manager.py",
+        "google_workspace_disconnect_worker.py",
+        "google_workspace_worker.py",
         "secret_handoff.py",
         "secret_handoff_worker.py",
     ):
@@ -143,7 +151,10 @@ def validate_hermes_adapter(root: Path) -> None:
         / "chatgpt-enable-device-code-for-codex.png"
     )
     require(codex_screenshot.is_file(), "Codex auth prerequisite screenshot is missing")
-    require(codex_screenshot.stat().st_size > 10_000, "Codex auth screenshot looks empty")
+    require(
+        codex_screenshot.stat().st_size > CODEX_SCREENSHOT_MIN_BYTES,
+        "Codex auth screenshot looks empty",
+    )
 
     entrypoint = hermes.get("entrypoint")
     require(isinstance(entrypoint, dict), "entrypoint must be an object")
@@ -171,6 +182,10 @@ def validate_hermes_adapter(root: Path) -> None:
         "tinyhat-tell-joke": "skills/tinyhat-tell-joke/SKILL.md",
         "tinyhat-skill-catalog": "skills/tinyhat-skill-catalog/SKILL.md",
         "tinyhat-private-secret": "skills/tinyhat-private-secret/SKILL.md",
+        "tinyhat-google-workspace": "skills/tinyhat-google-workspace/SKILL.md",
+        "tinyhat-google-workspace-app-manager": (
+            "skills/tinyhat-google-workspace-app-manager/SKILL.md"
+        ),
         "tinyhat-codex-auth": "skills/tinyhat-codex-auth/SKILL.md",
         "tinyhat-plugin-update": "skills/tinyhat-plugin-update/SKILL.md",
         "tinyhat-platform": "skills/tinyhat-platform/SKILL.md",
@@ -229,6 +244,11 @@ def validate_fresh_surface(root: Path) -> None:
         root / "__init__.py",
         root / "platform.py",
         root / "context.py",
+        root / "google_workspace.py",
+        root / "google_workspace_app.py",
+        root / "google_workspace_app_manager.py",
+        root / "google_workspace_disconnect_worker.py",
+        root / "google_workspace_worker.py",
         root / "secret_handoff.py",
         root / "secret_handoff_worker.py",
         root / "schemas.py",
@@ -256,6 +276,9 @@ def validate_docs(root: Path) -> None:
             "tinyhat-plugin-version",
             "tinyhat-skill-catalog",
             "tinyhat-private-secret",
+            "tinyhat-google-workspace",
+            "tinyhat_google_workspace_app",
+            "tinyhat_google_workspace_app_manager",
             "tinyhat-codex-auth",
             "tinyhat-plugin-update",
             "tinyhat-platform",
@@ -270,17 +293,56 @@ def validate_docs(root: Path) -> None:
             "Tinyhat Platform Context",
             "tinyhat-codex-auth",
             "tinyhat-skill-catalog",
+            "tinyhat_google_workspace_app",
+            "tinyhat_google_workspace_app_manager",
             "tinyhat-plugin-update",
         ),
         "skills/tinyhat-platform/SKILL.md": (
             "tinyhat_skill_catalog",
             "tinyhat_plugin_update",
+            "tinyhat_google_workspace_app",
+            "tinyhat_google_workspace_app_manager",
+            "gws auth",
             "Reporting Tinyhat Bugs",
         ),
         "docs/capabilities.md": (
             "tinyhat_skill_catalog",
             "tinyhat_plugin_update",
+            "tinyhat_google_workspace",
+            "tinyhat_google_workspace_app",
+            "tinyhat_google_workspace_app_manager",
             "Plugin Update And Skill Discovery",
+        ),
+        "skills/tinyhat-google-workspace/SKILL.md": (
+            "existing Google account",
+            "Connect my Google Workspace",
+            "google_workspace_readonly_v1",
+            "read-only Gmail, Calendar, and Drive",
+            "native Telegram inline button",
+            "Never print, paste, repeat",
+            "does not revoke the shared Google",
+            "tinyhat_google_workspace",
+            "tinyhat_google_workspace_app",
+            "matching installed official gws",
+            "Never claim that only Gmail is exposed",
+            "Never ask for a Google Cloud",
+            "gws auth",
+            "any second OAuth flow",
+            '{"action": "connect"}',
+            '{"action": "status"}',
+            '{"action": "disconnect"}',
+            "never call",
+            '"confirmed": true',
+            "exactly one **Revoke this Computer\u2019s access**",
+            "**Confirm revoke** and **Cancel**",
+            "Do not change the runtime",
+        ),
+        "skills/tinyhat-google-workspace-app-manager/SKILL.md": (
+            "tinyhat_google_workspace_app_manager",
+            '"action": "install", "confirmed": true',
+            "Linux x86_64 and aarch64",
+            "never run `gws auth`",
+            "root-only quarantine",
         ),
         "skills/tinyhat-codex-auth/SKILL.md": (
             "For common natural-language requests, call `tinyhat_codex_auth` once",
@@ -314,12 +376,109 @@ def validate_docs(root: Path) -> None:
             require(phrase in text, f"{rel} missing phrase: {phrase}")
 
 
+def validate_google_workspace_contract(root: Path) -> None:
+    text = (root / "google_workspace.py").read_text(encoding="utf-8")
+    required = (
+        'GOOGLE_READONLY_CAPABILITY_BUNDLE = "google_workspace_readonly_v1"',
+        'GOOGLE_GMAIL_SEND_CAPABILITY_BUNDLE = "google_workspace_gmail_send_v1"',
+        'GOOGLE_WORKSPACE_PROFILE_GMAIL_SEND = "gmail_send"',
+        'GOOGLE_REQUESTED_SERVICES = ("identity", "gmail", "calendar", "drive")',
+        '"https://www.googleapis.com/auth/gmail.readonly"',
+        '"https://www.googleapis.com/auth/calendar.readonly"',
+        '"https://www.googleapis.com/auth/drive.readonly"',
+        '"https://www.googleapis.com/auth/gmail.send"',
+        '"requested_services": list(requested_profile.services)',
+        '"requested_scopes": list(requested_profile.scopes)',
+        '"button_sent": True',
+        "_send_google_connect_button(authorization_url)",
+        "_start_disconnect_intent()",
+        "_start_disconnect_worker_process(",
+        'f"{GOOGLE_WORKSPACE_DISCONNECT_INTENTS_SUFFIX}/{intent.intent_id}/activate"',
+        'f"{GOOGLE_WORKSPACE_DISCONNECT_INTENTS_SUFFIX}/{intent.intent_id}/poll"',
+        'f"{GOOGLE_WORKSPACE_DISCONNECT_INTENTS_SUFFIX}/{intent.intent_id}/claim"',
+        'f"{GOOGLE_WORKSPACE_DISCONNECT_INTENTS_SUFFIX}/{intent.intent_id}/complete"',
+        "GOOGLE_WORKSPACE_DISCONNECT_COMPLETION_RECEIPT_SCHEMA",
+        "_write_disconnect_completion_receipt(",
+        "_load_disconnect_completion_receipt(",
+        "_resume_delete_pending_receipt(",
+        "_retry_disconnect_completion(",
+        "_resume_retained_disconnect_workers()",
+        "record_completion_receipt=record_completion_receipt",
+        'f"{GOOGLE_WORKSPACE_API_SUFFIX}/disconnect"',
+        "_wipe_invalid_credentials_and_pending_handoffs_locked()",
+    )
+    for phrase in required:
+        require(phrase in text, f"google_workspace.py missing contract: {phrase}")
+    forbidden = (
+        '"authorization_url": authorization_url',
+        "GOOGLE_REVOCATION_URI",
+        "def _revoke_google_token",
+    )
+    for phrase in forbidden:
+        require(phrase not in text, f"google_workspace.py retained forbidden contract: {phrase}")
+
+    app_text = (root / "google_workspace_app.py").read_text(encoding="utf-8")
+    for phrase in (
+        'APP_NAME = "gws"',
+        "load_verified_google_workspace_credentials",
+        "refresh_verified_google_workspace_credentials",
+        '"GOOGLE_WORKSPACE_CLI_TOKEN": access_token',
+        "ALLOWED_ROOT_COMMANDS",
+        "verified_managed_gws_binary",
+        "pass_fds=",
+        "start_new_session=True",
+        '"--page-all"',
+        '"--output"',
+        '"--upload"',
+        '"--attach"',
+        '"--draft"',
+        '"--sanitize"',
+        '"content_is_untrusted": True',
+    ):
+        require(phrase in app_text, f"google_workspace_app.py missing contract: {phrase}")
+    for phrase in (
+        "oauth2.googleapis.com/token",
+        "shutil.which",
+        "shell=True",
+        'Path.home() / ".local"',
+    ):
+        require(
+            phrase.lower() not in app_text.lower(),
+            f"google_workspace_app.py retained forbidden contract: {phrase}",
+        )
+
+    manager_text = (root / "google_workspace_app_manager.py").read_text(encoding="utf-8")
+    for phrase in (
+        'PINNED_GWS_VERSION = "0.22.5"',
+        '"de78ecdbd2f1a84cca0063a7ecbc440240fc14b6ebccbb17f4646b792a8c5c1f"',
+        '"ab59c4bab4e7848740ba8cc3ef186152dab90121c45835b49bd1bf2a5c259b86"',
+        '"94490295d9580e1e88574e715a0a162991747d12d62f8c7b8dcc8268b6c1cea0"',
+        '"b68337faf1436fb2b3a287207cd57fef784a20fb4ab4f2429e51c4e0cfa0b50b"',
+        'BINARY_PATH = INSTALL_ROOT / "bin" / "gws"',
+        "verified_managed_gws_binary",
+        "tarfile.open",
+        "_HttpsOnlyRedirectHandler",
+        "_transactional_install",
+        "managed_app_lock",
+        "_sealed_executable_copy",
+        "_recover_interrupted_install",
+        "partially_uninstalled",
+    ):
+        require(phrase in manager_text, f"google_workspace_app_manager.py missing: {phrase}")
+    for phrase in ("subprocess", "shell=True", "npm install", "curl "):
+        require(
+            phrase not in manager_text,
+            f"google_workspace_app_manager.py retained forbidden contract: {phrase}",
+        )
+
+
 def main() -> int:
     root = repo_root()
     version = validate_versions(root)
     validate_hermes_adapter(root)
     validate_fresh_surface(root)
     validate_docs(root)
+    validate_google_workspace_contract(root)
     print(f"framework-package: ok (version {version})")
     return 0
 
