@@ -202,9 +202,11 @@ class PollingClient:
     def __init__(self, states: list[dict[str, object]], *, binding: str = "assignment-binding-123"):
         self.states = list(states)
         self.binding = binding
+        self.gets: list[str] = []
         self.posts: list[tuple[str, dict[str, object]]] = []
 
     def get_json(self, path: str) -> dict[str, object]:
+        self.gets.append(path)
         if path.endswith("/assignment-binding"):
             return {"tinyhat_assignment_binding": self.binding}
         if not self.states:
@@ -232,6 +234,9 @@ class GoogleWorkspaceTests(unittest.TestCase):
         with contextlib.ExitStack() as stack:
             for name, value in paths.items():
                 stack.enter_context(mock.patch.object(workspace, name, value))
+            stack.enter_context(
+                mock.patch.object(workspace, "_context_assignment_check_cache", {})
+            )
             yield
 
     def _worker_handoff(
@@ -1389,7 +1394,7 @@ class GoogleWorkspaceTests(unittest.TestCase):
     def test_pre_llm_hook_checks_assignment_before_context(self) -> None:
         with mock.patch.object(
             tinyhat_context,
-            "remove_credentials_if_assignment_changed",
+            "remove_credentials_if_assignment_changed_for_context",
             return_value="not_present",
         ) as cleanup:
             result = tinyhat_context.inject_tinyhat_context(
@@ -1401,10 +1406,131 @@ class GoogleWorkspaceTests(unittest.TestCase):
         self.assertIn("existing Google account", result["context"])
         self.assertIn("read-only Gmail, Calendar, and Drive", result["context"])
 
+    def test_irrelevant_pre_llm_turn_skips_assignment_network_check(self) -> None:
+        with mock.patch.object(
+            tinyhat_context,
+            "remove_credentials_if_assignment_changed_for_context",
+        ) as cleanup:
+            result = tinyhat_context.inject_tinyhat_context(
+                user_message="What is two plus two?",
+                is_first_turn=False,
+            )
+
+        self.assertIsNone(result)
+        cleanup.assert_not_called()
+
+    def test_context_assignment_match_is_briefly_cached_but_use_is_not(self) -> None:
+        client = PollingClient([])
+        with (
+            tempfile.TemporaryDirectory() as tmp,
+            self._patched_state(Path(tmp)),
+            mock.patch.object(
+                workspace,
+                "build_platform_client",
+                return_value=(client, "local_dev"),
+            ) as build_client,
+            mock.patch.object(workspace.time, "monotonic", side_effect=[100.0, 101.0]),
+        ):
+            workspace._atomic_save_credentials(
+                workspace._normalize_credentials(credential_envelope())
+            )
+
+            first = tinyhat_context.inject_tinyhat_context(
+                user_message="Connect my Google account",
+                is_first_turn=False,
+            )
+            second = tinyhat_context.inject_tinyhat_context(
+                user_message="Check my Google connection",
+                is_first_turn=False,
+            )
+            credentials, verification = workspace._verified_credentials()
+
+        self.assertIsNotNone(first)
+        self.assertIsNotNone(second)
+        self.assertEqual(verification, "match")
+        self.assertEqual(credentials["email"], "owner@example.com")
+        self.assertEqual(len(client.gets), 2)
+        self.assertEqual(
+            build_client.call_args_list,
+            [
+                mock.call(
+                    timeout_seconds=workspace.CONTEXT_ASSIGNMENT_CHECK_TIMEOUT_SECONDS
+                ),
+                mock.call(),
+            ],
+        )
+
+    def test_context_assignment_cache_expires_after_short_ttl(self) -> None:
+        client = PollingClient([])
+        with (
+            tempfile.TemporaryDirectory() as tmp,
+            self._patched_state(Path(tmp)),
+            mock.patch.object(
+                workspace,
+                "build_platform_client",
+                return_value=(client, "local_dev"),
+            ) as build_client,
+            mock.patch.object(
+                workspace.time,
+                "monotonic",
+                side_effect=[100.0, 100.5, 131.0],
+            ),
+        ):
+            workspace._atomic_save_credentials(
+                workspace._normalize_credentials(credential_envelope())
+            )
+
+            self.assertEqual(
+                workspace.remove_credentials_if_assignment_changed_for_context(),
+                "match",
+            )
+            self.assertEqual(
+                workspace.remove_credentials_if_assignment_changed_for_context(),
+                "match",
+            )
+            self.assertEqual(
+                workspace.remove_credentials_if_assignment_changed_for_context(),
+                "match",
+            )
+
+        self.assertEqual(len(client.gets), 2)
+        self.assertEqual(build_client.call_count, 2)
+        for call in build_client.call_args_list:
+            self.assertEqual(
+                call,
+                mock.call(
+                    timeout_seconds=workspace.CONTEXT_ASSIGNMENT_CHECK_TIMEOUT_SECONDS
+                ),
+            )
+
+    def test_context_assignment_check_does_not_cache_replaced_binding(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp, self._patched_state(Path(tmp)):
+            workspace._atomic_save_credentials(
+                workspace._normalize_credentials(credential_envelope())
+            )
+            replacement = credential_envelope()
+            replacement["tinyhat_assignment_binding"] = "replacement-binding-456"
+
+            def replace_during_check(**_kwargs):
+                workspace._atomic_save_credentials(
+                    workspace._normalize_credentials(replacement)
+                )
+                return "match"
+
+            with mock.patch.object(
+                workspace,
+                "remove_credentials_if_assignment_changed",
+                side_effect=replace_during_check,
+            ):
+                result = workspace.remove_credentials_if_assignment_changed_for_context()
+
+            self.assertEqual(result, "retry")
+            self.assertEqual(workspace._context_assignment_check_cache, {})
+
     def test_connect_google_workspace_phrase_injects_connection_route(self) -> None:
         with mock.patch.object(
             tinyhat_context,
-            "remove_credentials_if_assignment_changed",
+            "remove_credentials_if_assignment_changed_for_context",
             return_value="not_present",
         ):
             result = tinyhat_context.inject_tinyhat_context(
@@ -1423,7 +1549,7 @@ class GoogleWorkspaceTests(unittest.TestCase):
     def test_revoke_google_phrase_injects_button_owned_disconnect_route(self) -> None:
         with mock.patch.object(
             tinyhat_context,
-            "remove_credentials_if_assignment_changed",
+            "remove_credentials_if_assignment_changed_for_context",
             return_value="match",
         ):
             result = tinyhat_context.inject_tinyhat_context(

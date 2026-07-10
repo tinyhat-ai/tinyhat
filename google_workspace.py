@@ -19,6 +19,7 @@ import stat
 import subprocess
 import sys
 import tempfile
+import threading
 import time
 from collections.abc import Callable, Iterator
 from dataclasses import dataclass
@@ -82,10 +83,13 @@ DISCONNECT_AUTO_RESUME_LIMIT = 8
 DISCONNECT_ORPHAN_SWEEP_GRACE_SECONDS = 5 * 60
 DISCONNECT_ORPHAN_SWEEP_SCAN_LIMIT = 32
 DISCONNECT_ORPHAN_SWEEP_DELETE_LIMIT = 8
+CONTEXT_ASSIGNMENT_CHECK_TTL_SECONDS = 30.0
+CONTEXT_ASSIGNMENT_CHECK_TIMEOUT_SECONDS = 2
 AUTHORIZATION_URL_MAX_LENGTH = 16_384
 PUBLIC_CLIENT_ID_MAX_LENGTH = 512
 GOOGLE_TOKEN_VALUE_MAX_LENGTH = 16_384
 GOOGLE_TOKEN_EXPIRY_MAX_LENGTH = 64
+OWNER_ONLY_FILE_MODE = 0o600
 HANDOFF_ID_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_.-]{0,127}$")
 DISCONNECT_OWNER_TOKEN_RE = re.compile(r"^[A-Za-z0-9_-]{32,256}$")
 DISCONNECT_GENERATION_RE = re.compile(r"^[0-9a-f]{64}$")
@@ -103,6 +107,10 @@ WORKER_SYSTEMD_ENV_KEYS = (
     "TINYHAT_PLATFORM_URL",
     "TINYHAT_COMPUTER_TOKEN_AUDIENCE",
 )
+_context_assignment_check_cache: dict[
+    str, tuple[tuple[int, int, int, int, str], float]
+] = {}
+_context_assignment_check_cache_lock = threading.Lock()
 
 
 class GoogleWorkspaceError(RuntimeError):
@@ -2505,7 +2513,7 @@ def _wipe_invalid_credentials_and_pending_handoffs() -> str:
     return "retry" if result == "valid" else result
 
 
-def remove_credentials_if_assignment_changed() -> str:
+def remove_credentials_if_assignment_changed(*, timeout_seconds: int | None = None) -> str:
     """Remove stale local credentials after an authoritative assignment change.
 
     This is intentionally cheap when no credential entry exists. A platform
@@ -2519,7 +2527,10 @@ def remove_credentials_if_assignment_changed() -> str:
         return local_status
     saved_binding = str(credentials["tinyhat_assignment_binding"])
     try:
-        client, platform_auth = build_platform_client()
+        client_kwargs = (
+            {} if timeout_seconds is None else {"timeout_seconds": timeout_seconds}
+        )
+        client, platform_auth = build_platform_client(**client_kwargs)
         current_binding = _fetch_assignment_binding(
             client=client,
             platform_auth=platform_auth,
@@ -2529,6 +2540,88 @@ def remove_credentials_if_assignment_changed() -> str:
     if hmac.compare_digest(saved_binding, current_binding):
         return "match"
     return _remove_credentials_for_stale_binding(saved_binding)
+
+
+def _context_assignment_cache_key(
+    credentials: dict[str, Any],
+) -> tuple[int, int, int, int, str] | None:
+    try:
+        entry = os.lstat(CREDENTIALS_PATH)
+    except OSError:
+        return None
+    if (
+        not stat.S_ISREG(entry.st_mode)
+        or entry.st_uid != os.getuid()
+        or entry.st_nlink != 1
+        or stat.S_IMODE(entry.st_mode) != OWNER_ONLY_FILE_MODE
+    ):
+        return None
+    return (
+        entry.st_dev,
+        entry.st_ino,
+        entry.st_mtime_ns,
+        entry.st_size,
+        str(credentials.get("tinyhat_assignment_binding") or ""),
+    )
+
+
+def _clear_context_assignment_check_cache() -> None:
+    with _context_assignment_check_cache_lock:
+        _context_assignment_check_cache.clear()
+
+
+def remove_credentials_if_assignment_changed_for_context() -> str:  # noqa: PLR0911
+    """Best-effort eager cleanup without adding one long GET to every LLM turn.
+
+    Only a recent positive assignment match is cached. Every credential
+    consumer still performs the strict uncached verification before using a
+    token, so this cache can delay eager cleanup but cannot authorize access.
+    """
+    local_status, credentials = _local_credentials_for_binding_check()
+    if local_status == "invalid":
+        _clear_context_assignment_check_cache()
+        return _wipe_invalid_credentials_and_pending_handoffs()
+    if credentials is None:
+        _clear_context_assignment_check_cache()
+        return local_status
+    cache_key = _context_assignment_cache_key(credentials)
+    if cache_key is None:
+        _clear_context_assignment_check_cache()
+        return "unavailable"
+    now = time.monotonic()
+    with _context_assignment_check_cache_lock:
+        cached = _context_assignment_check_cache.get("assignment")
+        if cached is not None and cached[0] == cache_key and cached[1] > now:
+            return "match"
+    result = remove_credentials_if_assignment_changed(
+        timeout_seconds=CONTEXT_ASSIGNMENT_CHECK_TIMEOUT_SECONDS,
+    )
+    if result != "match":
+        _clear_context_assignment_check_cache()
+        return result
+    current_status, current_credentials = _local_credentials_for_binding_check()
+    current_key = (
+        _context_assignment_cache_key(current_credentials)
+        if current_status == "present" and current_credentials is not None
+        else None
+    )
+    current_binding = (
+        str(current_credentials.get("tinyhat_assignment_binding") or "")
+        if current_credentials is not None
+        else ""
+    )
+    if current_key is None or not hmac.compare_digest(
+        current_binding,
+        str(credentials["tinyhat_assignment_binding"]),
+    ):
+        _clear_context_assignment_check_cache()
+        return "retry"
+    with _context_assignment_check_cache_lock:
+        _context_assignment_check_cache["assignment"] = (
+            current_key,
+            now + CONTEXT_ASSIGNMENT_CHECK_TTL_SECONDS,
+        )
+    return "match"
 
 
 def _local_credentials_for_binding_check() -> tuple[str, dict[str, Any] | None]:

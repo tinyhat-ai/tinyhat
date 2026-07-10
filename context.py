@@ -5,7 +5,7 @@ from __future__ import annotations
 import re
 from typing import Any
 
-from .google_workspace import remove_credentials_if_assignment_changed
+from .google_workspace import remove_credentials_if_assignment_changed_for_context
 
 TINYHAT_CONTEXT = """Tinyhat context: this Hermes agent runs on a Tinyhat-managed Computer.
 - For API keys, tokens, passwords, webhook secrets, or credentials, use tinyhat_private_secret_handoff by default. Do not ask the user to paste secrets in chat and do not lead with manual .env editing unless the user explicitly asks for manual server operations.
@@ -131,15 +131,16 @@ def inject_tinyhat_context(  # noqa: PLR0913
 ) -> dict[str, str] | None:
     """Hermes pre_llm_call hook that adds compact Tinyhat context when useful."""
     _ = (session_id, conversation_history, model, platform)
+    if not should_inject_tinyhat_context(user_message, is_first_turn=is_first_turn):
+        return None
     # This helper returns before any network call when no Google credential
-    # entry exists. On reassignment it removes stale credentials before the
-    # agent can act; on platform outage it leaves the file but all consumers
-    # still fail closed during assignment verification.
+    # entry exists and caches only a recent positive assignment match. On
+    # reassignment it removes stale credentials before the agent can act; on
+    # platform outage it leaves the file but all consumers still fail closed
+    # during their own uncached assignment verification.
     try:
-        assignment_cleanup = remove_credentials_if_assignment_changed()
+        assignment_cleanup = remove_credentials_if_assignment_changed_for_context()
     except Exception:
         assignment_cleanup = "unavailable"
     _ = assignment_cleanup
-    if not should_inject_tinyhat_context(user_message, is_first_turn=is_first_turn):
-        return None
     return {"context": TINYHAT_CONTEXT}
