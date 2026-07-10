@@ -14,6 +14,11 @@ Hermes only, ships a compact set of packaged skills, a small Tinyhat
 context hook, and now includes the first real Tinyhat platform capability:
 a private secret handoff that lets the user enter a secret in a Telegram
 Mini App without sending the plaintext to Tinyhat's servers. It also
+connects an existing Google identity to a Computer without asking the user for
+a Google Cloud project, OAuth client, secret, or SSH access. The default
+profile includes identity plus read-only Gmail, Calendar, and Drive access.
+After separate confirmation, a named least-privilege upgrade can add Gmail
+sending without enabling Gmail draft management. It
 teaches the agent the Tinyhat-managed OpenAI Codex / ChatGPT subscription
 auth flow that is installed on each Hermes Computer.
 
@@ -25,11 +30,16 @@ auth flow that is installed on each Hermes Computer.
 | `__init__.py` | Hermes registration entrypoint. |
 | `hermes.plugin.json` | Tinyhat metadata for the Hermes adapter, skill, command, and release channels. |
 | `context.py` | Small Hermes `pre_llm_call` context hook for Tinyhat-sensitive turns. |
-| `tools.py` / `schemas.py` | Tinyhat tools: plugin version, joke proof, skill catalog, private secret handoff, Codex auth setup/status helpers, and plugin update helper. |
+| `tools.py` / `schemas.py` | Tinyhat tools: plugin version, joke proof, skill catalog, private secret handoff, Google identity connection, Codex auth setup/status helpers, and plugin update helper. |
+| `google_workspace.py` / `google_workspace_worker.py` | Platform-authored Google OAuth handoff, one-time RSA credential delivery, permission-protected local save, assignment-safe status, and disconnect flow. |
+| `google_workspace_app.py` | Bounded credential bridge to the manifest-verified, root-owned managed `gws` app. |
+| `google_workspace_app_manager.py` | Confirmed install/status/uninstall for pinned official `gws` Linux artifacts and operation skills. |
 | `skills/tinyhat-tell-joke/SKILL.md` | Deterministic joke proof. |
 | `skills/tinyhat-plugin-version/SKILL.md` | Live plugin version proof. |
 | `skills/tinyhat-skill-catalog/SKILL.md` | Skill discovery guidance for plugin-qualified Tinyhat skill names. |
 | `skills/tinyhat-private-secret/SKILL.md` | Browser-encrypted secret handoff guidance. |
+| `skills/tinyhat-google-workspace/SKILL.md` | Existing-account Google identity connection guidance. |
+| `skills/tinyhat-google-workspace-app-manager/SKILL.md` | Approval-gated managed `gws` installation guidance. |
 | `skills/tinyhat-codex-auth/SKILL.md` | OpenAI Codex / ChatGPT subscription auth guidance. |
 | `skills/tinyhat-plugin-update/SKILL.md` | Channel update guidance for stale installed plugin checkouts. |
 | `skills/tinyhat-platform/SKILL.md` | Platform context for Tinyhat-managed Hermes agents. |
@@ -47,7 +57,16 @@ Tinyhat managed Computers call Tinyhat platform APIs through the runtime's
 attested Computer identity. That identity lets the platform know which
 Computer, agent, user, and account are involved.
 
-This plugin does not mint identity. It does not store tokens. It does not
+This plugin does not mint identity. The Tinyhat platform owns one central Google
+Web OAuth client and callback, validates the fixed capability bundle, exchanges
+the one-time code, and encrypts the resulting credential envelope to the
+Computer's one-time RSA public key. The plugin stores credentials only after the
+assigned Computer decrypts and revalidates that envelope. It never prints or
+returns the code, private key, or tokens. The platform handles tokens transiently
+and retains only short-lived ciphertext for the handoff. The local
+credential JSON file is not
+application-encrypted at rest: it is protected by a `0700` owner directory and
+`0600` owner-only file permissions. It does not
 call private platform APIs directly from random shell snippets. Its job is
 to teach the agent how to use named Tinyhat capabilities that the runtime
 and platform make available.
@@ -96,6 +115,108 @@ when available) as defense in depth. The runtime reloads Hermes env files
 during gateway startup and records Tinyhat-managed terminal aliases for
 the saved names, so exec/shell subprocesses can use the secret without
 Tinyhat storing or returning the value.
+
+`tinyhat-google-workspace` connects this Computer to an existing Google
+Workspace account. The Computer creates a fresh RSA keypair and asks the
+platform for the default `google_workspace_readonly_v1` bundle: services
+`identity`, `gmail`, `calendar`, and `drive`, with basic identity plus the
+official Gmail, Calendar, and Drive read-only scopes. These values come from
+trusted plugin code, not agent or user input. The platform returns its Google
+sign-in URL to the plugin, which places it only inside a native Telegram inline
+button labeled **Connect Google**. The tool never returns a plain authorization
+link. The user supplies only their existing Google account; they never provide a
+Google Cloud project, OAuth client, or secret.
+
+Google posts the code to Tinyhat's fixed HTTPS callback. The platform validates
+state, exchanges the code through its central Web OAuth client, verifies the
+identity and exact scopes, and RSA-encrypts the credential envelope to the
+Computer's one-time public key. A detached plugin worker polls terminal handoff
+state, decrypts a ready envelope, revalidates assignment and the accepted bundle,
+and atomically saves tokens under the Computer user's permission-protected
+Tinyhat state directory. Cancelled, failed, expired, and superseded attempts stop
+with fixed safe outcomes. The worker and status path revalidate the credential's
+current Computer assignment. An owner-only active-generation marker plus one
+local lifecycle lock ensures that reconnect or disconnect supersedes older
+workers. Invalid owner-only credential entries and pending handoffs are wiped
+together under that lock. Status exposes only identity metadata.
+
+When the user asks to revoke the connection, the agent calls
+`tinyhat_google_workspace` once with `{"action": "disconnect"}`. The tool
+starts a short-lived, assignment-bound request and sends an initial Telegram
+`web_app` message with exactly one **Revoke this Computer’s access** button. It
+returns no action URL, token, or intent identifier to the model, and the agent
+sends no duplicate reply. The model never passes or claims `confirmed: true`
+for disconnect.
+
+The first authenticated tap edits that same Telegram message to show final
+**Confirm revoke** and **Cancel** buttons. Either final choice
+removes the buttons. Cancel preserves the local credential and connection
+metadata. Confirm wakes a generation-bound Computer worker, which deletes only
+the matching local credential under the lifecycle lock and then reports the
+result so the platform can mark this Computer disconnected. A stale confirmation
+cannot delete credentials installed by a later reconnect.
+
+This ceremony revokes Tinyhat access on this Computer only. It does not call
+Google's token-revocation endpoint or revoke the provider grant in the shared
+development OAuth project. Other Tinyhat Computers are unaffected, and the
+plugin must never claim that the Google account's provider grant was revoked.
+
+This first delivery grants identity plus read-only Gmail, Calendar, and Drive
+permissions by default. If a connected user asks to send Gmail, the agent first
+asks for permission to upgrade the same connection, then calls the lifecycle
+tool with the named `gmail_send` profile. That fixed
+`google_workspace_gmail_send_v1` bundle adds only `gmail.send` to the baseline.
+It does not add restricted `gmail.compose`, so Gmail draft management remains
+deferred. A cancelled, failed, or expired upgrade leaves the existing local
+credential untouched; a valid encrypted expanded credential replaces it
+atomically. Permission-upgrade confirmation never counts as confirmation to
+send an actual email.
+
+The authentication plugin does not implement mail, event, or file operations.
+Those semantics live in verified official `gws` service skills and the external
+managed `gws` app.
+
+`tinyhat_google_workspace_app` is a generic credential bridge. It accepts only
+bounded opaque argv from a gws skill, verifies the Computer assignment, refreshes
+through the platform broker when needed, and injects the access token only into
+one isolated, root-owned `gws` child process. The bridge accepts only
+`/opt/tinyhat/bin/gws` when the app manager's root-only manifest matches the
+hardcoded version, architecture, source, mode, and SHA-256. It never passes the refresh token,
+client secret, credential file, executable, environment, or working directory
+from agent input. The bridge blocks the complete `gws auth` namespace,
+setup/login/export credential flows, file-I/O and external-sanitization flags,
+persistent server mode, and unbounded pagination. Output and execution time are
+hard-bounded, access-token values are defensively redacted, and every result is
+marked as untrusted external content.
+
+`tinyhat_google_workspace_app_manager` is the reproducible install path. It
+supports pinned official Linux x86_64 and aarch64 release archives, verifies
+hardcoded archive and extracted-binary SHA-256 values, rejects unsafe archive
+entries, and transactionally installs the binary plus verified official Gmail,
+Calendar, and Drive operation skills. Install and uninstall require explicit
+approval. Uninstall removes unchanged files recorded in its root-only manifest,
+moves modified managed files out of active paths into root-only quarantine, and
+leaves unmanaged files untouched. The installed Tinyhat
+`gws-shared` shim overrides upstream auth setup: the agent uses the existing
+Tinyhat token bridge and never runs `gws auth`.
+
+Current security boundary: Hermes, plugin tools, and terminal commands run as
+uid 0 on the Computer, the same owner that can read the `0600` Google credential
+file. The managed bridge prevents ordinary tool output, argv, inherited-env,
+path-replacement, and modified-skill leakage, but it cannot protect a token from
+a malicious root-running agent process that reads files or process memory/env
+directly. Privilege-separating credential custody and the app broker is future
+production hardening. Likewise, a write `confirmation_id` deterministically
+binds one approval workflow to unchanged argv, but is not cryptographic proof of
+human presence; the explicit current user instruction or confirmation remains
+the authorization for this development flow.
+
+The user never supplies a Google Cloud project, OAuth client, client secret,
+credentials JSON, app password, `gcloud` login, or second OAuth flow. If access
+needs reauthorization, it goes through Tinyhat again. The same boundary can add
+separately reviewed named bundles and external app integrations later without
+changing the runtime. The disconnect ceremony also stays inside the existing
+plugin-and-platform boundary; it adds no runtime callback or command.
 
 `tinyhat-codex-auth` teaches the agent how to start and inspect the
 Tinyhat-managed OpenAI Codex / ChatGPT subscription sign-in flow. When

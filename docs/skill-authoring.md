@@ -45,6 +45,13 @@ description: Tell a short Tinyhat wiring-test joke when the user asks for proof 
   "connect you to my ChatGPT account", "use my Codex subscription", and
   "switch from platform credits" so Hermes can load the right playbook
   before it answers with generic model-provider advice.
+- When a tool sends its own native Telegram action message, tell the agent not
+  to send a duplicate reply. Keep action URLs, tokens, and intent identifiers
+  out of tool output and skill examples.
+- For destructive actions confirmed by a platform-authenticated user surface,
+  do not let the model manufacture confirmation with `confirmed: true`. State
+  which final choices are shown, require every terminal outcome to remove its
+  buttons, and document what cancellation preserves.
 - Add or update tests when changing a skill's tool contract, naming
   behavior, security wording, or framework adapter registration.
 
@@ -97,6 +104,45 @@ to retry with names like `tinyhat:tinyhat-codex-auth`.
 `tinyhat-private-secret` is the default way to add credentials to Hermes.
 It should be triggered before generic `.env` advice whenever a user asks
 to add or save an API key, token, password, or credential.
+
+`tinyhat-google-workspace` is the default way to connect an existing Google
+Workspace account. The default profile grants identity plus read-only Gmail,
+Calendar, and Drive access. A separately confirmed named `gmail_send` profile
+adds only Gmail send permission; it does not add Gmail draft management. The skill calls
+`tinyhat_google_workspace` instead of
+asking for Google Cloud setup, OAuth values, SSH access, or a manual credential
+file. The plugin requests a fixed reviewed bundle and places the platform-authored
+Google URL only inside a native Telegram **Connect Google** button. Tool output
+and agent replies must never expose a plain authorization link. The platform
+owns the central Web OAuth client, callback, exchange,
+identity validation, and RSA-encrypted credential delivery; the Computer keeps
+the one-time private key and stores the decrypted credentials locally.
+The auth skill does not contain Gmail, Calendar, or Drive operations. It routes
+connected service requests to a verified official gws service skill, which
+supplies opaque argv to `tinyhat_google_workspace_app`. The generic bridge owns
+credential injection, process bounds, and redaction; the gws skill owns command
+semantics. Never send users into `gws auth`, Google Cloud setup, credentials JSON,
+or a second OAuth flow.
+
+For revoke or disconnect requests, the skill calls
+`tinyhat_google_workspace` with `{"action": "disconnect"}` once. The tool sends
+an initial native Telegram `web_app` message with exactly one **Revoke this
+Computer’s access** button, and the agent sends no duplicate reply, exposes no
+action URL, and never passes or claims `confirmed: true`. The first authenticated
+tap edits the same message to final **Confirm revoke** and **Cancel** buttons.
+Either result removes the buttons.
+Cancel preserves credentials. Confirm lets a generation-bound worker delete
+only the matching local credential before the platform marks that Computer
+disconnected. The skill must describe this as local-only Tinyhat revocation,
+not revocation of Google's shared provider grant; other Computers are
+unaffected.
+
+If the managed gws app or operation skill is absent, route to
+`tinyhat-google-workspace-app-manager`. Explain the pinned integration and ask
+before install or uninstall; never mutate the Computer automatically. Official
+operation skills must use the Tinyhat shared shim and token bridge even when
+their upstream text mentions authentication setup. The skill calls
+`tinyhat_google_workspace_app_manager` only after that approval.
 
 `tinyhat-codex-auth` is the default way to connect a Tinyhat-managed
 Hermes agent to the user's OpenAI Codex / ChatGPT subscription. It should
