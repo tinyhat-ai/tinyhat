@@ -16,6 +16,9 @@ from pathlib import Path
 from unittest import mock
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
+PARENT = REPO_ROOT.parent
+sys.path.insert(0, str(PARENT))
+
 if REPO_ROOT.name != "tinyhat":
     spec = importlib.util.spec_from_file_location(
         "tinyhat",
@@ -27,6 +30,8 @@ if REPO_ROOT.name != "tinyhat":
     tinyhat = importlib.util.module_from_spec(spec)
     sys.modules["tinyhat"] = tinyhat
     spec.loader.exec_module(tinyhat)
+else:
+    import tinyhat  # type: ignore[no-redef]
 
 from tinyhat import google_workspace_app_manager as manager  # noqa: E402
 from tinyhat import schemas, tools  # noqa: E402
