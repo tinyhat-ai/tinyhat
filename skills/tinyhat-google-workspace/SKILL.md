@@ -20,6 +20,12 @@ This covers requests such as **Connect my Google Workspace** as well as
   disconnect. In particular, never call
   `{"action": "disconnect", "confirmed": true}`.
 
+An explicit **Connect Google** request always calls `{"action": "connect"}`;
+do not replace it with a status check. If you did check status first and it
+returns `not_connected` or `invalid`, call `{"action": "connect"}` in the same
+turn. Never tell the user that an earlier button is usable after status says no
+connection or active sign-in link exists.
+
 The user needs only their existing Google account. Never ask for a Google Cloud
 project, OAuth client ID, client secret, credentials JSON, app password,
 authorization code, raw token, `gcloud`, `gws auth`, or any second OAuth flow.

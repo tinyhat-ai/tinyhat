@@ -2676,6 +2676,17 @@ def _status_payload() -> dict[str, Any]:
             "action": "status",
             "status": "not_connected",
             "connected": False,
+            "connect_required": True,
+            "message": (
+                "No Google Workspace connection or active sign-in link exists on this "
+                "Computer. If the user asked to connect, call tinyhat_google_workspace "
+                "with action='connect' now and wait for the newly sent button. Do not "
+                "reuse or claim that an earlier Connect Google button is still usable."
+            ),
+            "recommended_tool_call": {
+                "tool": "tinyhat_google_workspace",
+                "arguments": {"action": "connect"},
+            },
         }
     profile = _profile_for_capability_bundle(credentials["capability_bundle"])
     return {

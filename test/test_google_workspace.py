@@ -1389,6 +1389,23 @@ class GoogleWorkspaceTests(unittest.TestCase):
             self.assertFalse(result["connected"])
             self.assertTrue(workspace.CREDENTIALS_PATH.exists())
 
+    def test_not_connected_status_requires_a_fresh_connect_action(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp, self._patched_state(Path(tmp)):
+            result = workspace._status_payload()
+
+        self.assertEqual(result["status"], "not_connected")
+        self.assertFalse(result["connected"])
+        self.assertTrue(result["connect_required"])
+        self.assertEqual(
+            result["recommended_tool_call"],
+            {
+                "tool": "tinyhat_google_workspace",
+                "arguments": {"action": "connect"},
+            },
+        )
+        self.assertIn("call tinyhat_google_workspace with action='connect' now", result["message"])
+        self.assertIn("Do not reuse", result["message"])
+
     def test_pre_llm_hook_checks_assignment_before_context(self) -> None:
         with mock.patch.object(
             tinyhat_context,
@@ -1416,6 +1433,8 @@ class GoogleWorkspaceTests(unittest.TestCase):
             )
 
         self.assertIn("tinyhat_google_workspace with action=connect", result["context"])
+        self.assertIn("Never substitute action=status", result["context"])
+        self.assertIn("never claim an earlier button is still usable", result["context"])
         self.assertIn("native Connect Google Telegram button", result["context"])
         self.assertIn(
             "Never paste, repeat, or return a plain authorization link", result["context"]
