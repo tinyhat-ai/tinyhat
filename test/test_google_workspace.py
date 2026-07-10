@@ -261,6 +261,7 @@ class GoogleWorkspaceTests(unittest.TestCase):
         credentials: dict[str, object],
         intent_id: str = "gwd_test123",
         owner_token: str = "disconnect-owner-token-value-1234567890",
+        expires_at: str | None = None,
     ) -> workspace.GoogleWorkspaceDisconnectIntent:
         normalized = workspace._normalize_saved_credentials(dict(credentials))
         generation = workspace._credential_generation(
@@ -273,7 +274,8 @@ class GoogleWorkspaceTests(unittest.TestCase):
             intent_id=intent_id,
             owner_token=owner_token,
             credential_generation=generation,
-            expires_at=(datetime.now(timezone.utc) + timedelta(minutes=5)).isoformat(),
+            expires_at=expires_at
+            or (datetime.now(timezone.utc) + timedelta(minutes=5)).isoformat(),
             poll_after_ms=1000,
         )
 
@@ -2288,6 +2290,133 @@ class GoogleWorkspaceTests(unittest.TestCase):
 
             self.assertFalse(result["connected"])
             auto_resume.assert_called_once_with()
+
+    def test_later_plugin_use_sweeps_expired_receiptless_disconnect_state(self) -> None:
+        client = DisconnectClient()
+        expired_at = (datetime.now(timezone.utc) - timedelta(minutes=6)).isoformat()
+        with tempfile.TemporaryDirectory() as tmp, self._patched_state(Path(tmp)):
+            saved = workspace._normalize_credentials(credential_envelope())
+            intent = self._disconnect_intent(
+                client=client,
+                credentials=saved,
+                expires_at=expired_at,
+            )
+            state_path = workspace._write_disconnect_worker_state(
+                intent=intent,
+                credential_generation=intent.credential_generation,
+            )
+            self._activate_disconnect_intent(intent)
+
+            with mock.patch.object(
+                workspace,
+                "_start_disconnect_worker_process",
+            ) as start_worker:
+                started = workspace._resume_retained_disconnect_workers()
+
+            self.assertEqual(started, 0)
+            start_worker.assert_not_called()
+            self.assertFalse(state_path.parent.exists())
+            self.assertFalse(workspace.ACTIVE_DISCONNECT_PATH.exists())
+
+    def test_orphan_sweep_preserves_unexpired_or_receipted_disconnect_state(self) -> None:
+        client = DisconnectClient()
+        expired_at = (datetime.now(timezone.utc) - timedelta(minutes=6)).isoformat()
+        with tempfile.TemporaryDirectory() as tmp, self._patched_state(Path(tmp)):
+            saved = workspace._normalize_credentials(credential_envelope())
+            unexpired = self._disconnect_intent(
+                client=client,
+                credentials=saved,
+                intent_id="gwd_unexpired123",
+            )
+            unexpired_path = workspace._write_disconnect_worker_state(
+                intent=unexpired,
+                credential_generation=unexpired.credential_generation,
+            )
+            receipted = self._disconnect_intent(
+                client=client,
+                credentials=saved,
+                intent_id="gwd_receipted123",
+                expires_at=expired_at,
+            )
+            receipted_path = workspace._write_disconnect_worker_state(
+                intent=receipted,
+                credential_generation=receipted.credential_generation,
+            )
+            workspace._write_disconnect_completion_receipt(
+                intent=receipted,
+                state_path=receipted_path,
+                phase="completion_pending",
+                outcome="disconnected",
+                error_code=None,
+            )
+
+            with mock.patch.object(
+                workspace,
+                "_start_disconnect_worker_process",
+            ) as start_worker:
+                started = workspace._resume_retained_disconnect_workers()
+
+            self.assertEqual(started, 1)
+            self.assertTrue(unexpired_path.parent.exists())
+            self.assertTrue(receipted_path.parent.exists())
+            start_worker.assert_called_once_with(
+                intent_id=receipted.intent_id,
+                state_path=receipted_path,
+            )
+
+    def test_orphan_sweep_is_bounded_and_skips_unsafe_state(self) -> None:
+        client = DisconnectClient()
+        expired_at = (datetime.now(timezone.utc) - timedelta(minutes=6)).isoformat()
+        with tempfile.TemporaryDirectory() as tmp, self._patched_state(Path(tmp)):
+            saved = workspace._normalize_credentials(credential_envelope())
+            paths: list[Path] = []
+            for index in range(workspace.DISCONNECT_ORPHAN_SWEEP_DELETE_LIMIT + 2):
+                intent = self._disconnect_intent(
+                    client=client,
+                    credentials=saved,
+                    intent_id=f"gwd_sweep{index:03d}",
+                    expires_at=expired_at,
+                )
+                paths.append(
+                    workspace._write_disconnect_worker_state(
+                        intent=intent,
+                        credential_generation=intent.credential_generation,
+                    )
+                )
+
+            unsafe = self._disconnect_intent(
+                client=client,
+                credentials=saved,
+                intent_id="gwd_unsafe123",
+                expires_at=expired_at,
+            )
+            unsafe_path = workspace._write_disconnect_worker_state(
+                intent=unsafe,
+                credential_generation=unsafe.credential_generation,
+            )
+            unsafe_path.parent.chmod(0o755)
+            malformed = self._disconnect_intent(
+                client=client,
+                credentials=saved,
+                intent_id="gwd_malformed123",
+                expires_at=expired_at,
+            )
+            malformed_path = workspace._write_disconnect_worker_state(
+                intent=malformed,
+                credential_generation=malformed.credential_generation,
+            )
+            malformed_path.write_text("{}", encoding="utf-8")
+            malformed_path.chmod(0o600)
+
+            started = workspace._resume_retained_disconnect_workers()
+
+            self.assertEqual(started, 0)
+            self.assertEqual(
+                sum(path.parent.exists() for path in paths),
+                2,
+            )
+            self.assertTrue(unsafe_path.parent.exists())
+            self.assertTrue(malformed_path.parent.exists())
 
     def test_disconnect_worker_cleans_state_when_platform_setup_fails(self) -> None:
         client = DisconnectClient()

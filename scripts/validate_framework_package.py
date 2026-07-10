@@ -403,6 +403,7 @@ def validate_google_workspace_contract(root: Path) -> None:
         "_load_disconnect_completion_receipt(",
         "_resume_delete_pending_receipt(",
         "_retry_disconnect_completion(",
+        "_sweep_expired_receiptless_disconnect_state(",
         "_resume_retained_disconnect_workers()",
         "record_completion_receipt=record_completion_receipt",
         "_wipe_invalid_credentials_and_pending_handoffs_locked()",

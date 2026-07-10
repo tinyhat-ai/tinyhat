@@ -79,6 +79,9 @@ DISCONNECT_WORKER_READY_POLL_SECONDS = 0.05
 DISCONNECT_COMPLETION_RETRY_SECONDS = 60 * 60
 DISCONNECT_COMPLETION_MAX_RETRY_DELAY_SECONDS = 30.0
 DISCONNECT_AUTO_RESUME_LIMIT = 8
+DISCONNECT_ORPHAN_SWEEP_GRACE_SECONDS = 5 * 60
+DISCONNECT_ORPHAN_SWEEP_SCAN_LIMIT = 32
+DISCONNECT_ORPHAN_SWEEP_DELETE_LIMIT = 8
 AUTHORIZATION_URL_MAX_LENGTH = 16_384
 PUBLIC_CLIENT_ID_MAX_LENGTH = 512
 GOOGLE_TOKEN_VALUE_MAX_LENGTH = 16_384
@@ -804,13 +807,9 @@ def _write_disconnect_worker_state(
     return state_path
 
 
-def _load_disconnect_worker_intent(
-    *,
-    intent_id: str,
-    state_path: Path,
-    client: PlatformClient,
-    platform_auth: str,
-) -> GoogleWorkspaceDisconnectIntent:
+def _validated_disconnect_worker_state(
+    *, intent_id: str, state_path: Path
+) -> dict[str, Any]:
     clean_intent_id = _validated_handoff_id(intent_id)
     expected_path = DISCONNECTS_DIR / clean_intent_id / "intent.json"
     if state_path != expected_path or state_path.parent.parent != DISCONNECTS_DIR:
@@ -836,17 +835,37 @@ def _load_disconnect_worker_intent(
     generation = str(value.get("credential_generation") or "").strip()
     if DISCONNECT_GENERATION_RE.fullmatch(generation) is None:
         raise GoogleWorkspaceError("Google disconnect worker generation is invalid.")
-    return GoogleWorkspaceDisconnectIntent(
-        client=client,
-        platform_auth=platform_auth,
-        intent_id=clean_intent_id,
-        owner_token=_validated_disconnect_owner_token(value.get("owner_token")),
-        credential_generation=generation,
-        expires_at=_validated_disconnect_expires_at(
+    return {
+        "intent_id": clean_intent_id,
+        "owner_token": _validated_disconnect_owner_token(value.get("owner_token")),
+        "credential_generation": generation,
+        "expires_at": _validated_disconnect_expires_at(
             value.get("expires_at"),
             require_future=False,
         ),
-        poll_after_ms=_poll_after_ms(value.get("poll_after_ms")),
+        "poll_after_ms": _poll_after_ms(value.get("poll_after_ms")),
+    }
+
+
+def _load_disconnect_worker_intent(
+    *,
+    intent_id: str,
+    state_path: Path,
+    client: PlatformClient,
+    platform_auth: str,
+) -> GoogleWorkspaceDisconnectIntent:
+    value = _validated_disconnect_worker_state(
+        intent_id=intent_id,
+        state_path=state_path,
+    )
+    return GoogleWorkspaceDisconnectIntent(
+        client=client,
+        platform_auth=platform_auth,
+        intent_id=value["intent_id"],
+        owner_token=value["owner_token"],
+        credential_generation=value["credential_generation"],
+        expires_at=value["expires_at"],
+        poll_after_ms=value["poll_after_ms"],
     )
 
 
@@ -1538,8 +1557,62 @@ def _cleanup_disconnect_worker_state(state_path: Path) -> None:
         shutil.rmtree(state_path.parent)
 
 
-def _resume_retained_disconnect_workers() -> int:
-    """Boundedly restart owner-only completion receipts on later plugin use."""
+def _sweep_expired_receiptless_disconnect_state(  # noqa: PLR0911
+    *, intent_id: str, state_path: Path
+) -> bool:
+    """Delete one expired owner-only scratch entry that cannot resume safely."""
+    receipt_path = state_path.parent / "completion-receipt.json"
+    if os.path.lexists(receipt_path):
+        return False
+    try:
+        value = _validated_disconnect_worker_state(
+            intent_id=intent_id,
+            state_path=state_path,
+        )
+        deadline = datetime.fromisoformat(
+            str(value["expires_at"]).replace("Z", "+00:00")
+        ).timestamp()
+    except (GoogleWorkspaceError, OSError, ValueError):
+        return False
+    if time.time() <= deadline + DISCONNECT_ORPHAN_SWEEP_GRACE_SECONDS:
+        return False
+
+    with _lifecycle_lock():
+        if os.path.lexists(receipt_path):
+            return False
+        try:
+            parent_stat = os.lstat(DISCONNECTS_DIR)
+            directory_stat = os.lstat(state_path.parent)
+            value = _validated_disconnect_worker_state(
+                intent_id=intent_id,
+                state_path=state_path,
+            )
+            deadline = datetime.fromisoformat(
+                str(value["expires_at"]).replace("Z", "+00:00")
+            ).timestamp()
+        except (GoogleWorkspaceError, OSError, ValueError):
+            return False
+        if (
+            not stat.S_ISDIR(parent_stat.st_mode)
+            or parent_stat.st_uid != os.getuid()
+            or stat.S_IMODE(parent_stat.st_mode) & 0o077
+            or not stat.S_ISDIR(directory_stat.st_mode)
+            or directory_stat.st_uid != os.getuid()
+            or stat.S_IMODE(directory_stat.st_mode) & 0o077
+            or time.time() <= deadline + DISCONNECT_ORPHAN_SWEEP_GRACE_SECONDS
+        ):
+            return False
+        _remove_active_disconnect_marker_if_matches(
+            intent_id=str(value["intent_id"]),
+            owner_token=str(value["owner_token"]),
+            credential_generation=str(value["credential_generation"]),
+        )
+        _cleanup_disconnect_worker_state(state_path)
+    return not os.path.lexists(state_path.parent)
+
+
+def _resume_retained_disconnect_workers() -> int:  # noqa: PLR0912
+    """Boundedly sweep orphan scratch and resume durable completion receipts."""
     try:
         parent_stat = os.lstat(DISCONNECTS_DIR)
         children = sorted(DISCONNECTS_DIR.iterdir(), key=lambda path: path.name)
@@ -1551,6 +1624,31 @@ def _resume_retained_disconnect_workers() -> int:
         or stat.S_IMODE(parent_stat.st_mode) & 0o077
     ):
         return 0
+    candidates = children[:DISCONNECT_ORPHAN_SWEEP_SCAN_LIMIT]
+    swept = 0
+    for directory in candidates:
+        if swept >= DISCONNECT_ORPHAN_SWEEP_DELETE_LIMIT:
+            break
+        try:
+            intent_id = _validated_handoff_id(directory.name)
+            directory_stat = os.lstat(directory)
+        except (GoogleWorkspaceError, OSError):
+            continue
+        if (
+            not stat.S_ISDIR(directory_stat.st_mode)
+            or directory_stat.st_uid != os.getuid()
+            or stat.S_IMODE(directory_stat.st_mode) & 0o077
+        ):
+            continue
+        state_path = directory / "intent.json"
+        if not os.path.lexists(state_path):
+            continue
+        if _sweep_expired_receiptless_disconnect_state(
+            intent_id=intent_id,
+            state_path=state_path,
+        ):
+            swept += 1
+
     started = 0
     for directory in children:
         if started >= DISCONNECT_AUTO_RESUME_LIMIT:
