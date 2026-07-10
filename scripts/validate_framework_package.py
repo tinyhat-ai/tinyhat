@@ -3,6 +3,7 @@
 
 from __future__ import annotations
 
+import hashlib
 import json
 import re
 import sys
@@ -454,6 +455,7 @@ def validate_google_workspace_contract(root: Path) -> None:
         '"ab59c4bab4e7848740ba8cc3ef186152dab90121c45835b49bd1bf2a5c259b86"',
         '"94490295d9580e1e88574e715a0a162991747d12d62f8c7b8dcc8268b6c1cea0"',
         '"b68337faf1436fb2b3a287207cd57fef784a20fb4ab4f2429e51c4e0cfa0b50b"',
+        '"9679052ece7c05ff3f05fb5f00c0437b460fade67631b60f279e445f5b5fd63e"',
         'BINARY_PATH = INSTALL_ROOT / "bin" / "gws"',
         "verified_managed_gws_binary",
         "tarfile.open",
@@ -470,6 +472,20 @@ def validate_google_workspace_contract(root: Path) -> None:
             phrase not in manager_text,
             f"google_workspace_app_manager.py retained forbidden contract: {phrase}",
         )
+    shared_skill = (
+        root
+        / "skills"
+        / "tinyhat-google-workspace"
+        / "assets"
+        / "gws-shared"
+        / "SKILL.md"
+    )
+    require(shared_skill.is_file(), "packaged gws-shared skill is missing")
+    require(
+        hashlib.sha256(shared_skill.read_bytes()).hexdigest()
+        == "9679052ece7c05ff3f05fb5f00c0437b460fade67631b60f279e445f5b5fd63e",
+        "packaged gws-shared skill does not match its hardcoded integrity pin",
+    )
 
 
 def main() -> int:

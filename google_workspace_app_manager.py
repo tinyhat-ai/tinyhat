@@ -57,7 +57,7 @@ PINNED_OFFICIAL_SKILLS = {
     "gws-drive": "d37fad56bb9547d2e169bfd04fbf1f4a377281456765c6243f092f32c973cdac",
 }
 TINYHAT_SHARED_SKILL_SHA256 = (
-    "cbbc7fbc2fe9f4fa759754eeef9f34da1661d777cec60ac2ba6f73228fc44948"
+    "9679052ece7c05ff3f05fb5f00c0437b460fade67631b60f279e445f5b5fd63e"
 )
 TINYHAT_SHARED_SKILL_SOURCE = (
     Path(__file__).resolve().parent

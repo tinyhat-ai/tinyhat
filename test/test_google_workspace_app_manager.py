@@ -61,6 +61,12 @@ def archive_with(entries: list[tuple[str, bytes, str]]) -> bytes:
 
 
 class GoogleWorkspaceAppManagerTests(unittest.TestCase):
+    def test_packaged_shared_skill_matches_hardcoded_hash(self) -> None:
+        self.assertEqual(
+            sha(manager.TINYHAT_SHARED_SKILL_SOURCE.read_bytes()),
+            manager.TINYHAT_SHARED_SKILL_SHA256,
+        )
+
     @contextmanager
     def configured_manager(self):
         binary = b"fake-pinned-gws"
