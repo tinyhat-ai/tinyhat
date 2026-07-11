@@ -30,7 +30,7 @@ a fresh Hermes-only start.
 - `skills/tinyhat-skill-catalog/SKILL.md`: plugin-qualified skill discovery.
 - `skills/tinyhat-private-secret/SKILL.md`: private Mini App secret handoff.
 - `skills/tinyhat-google-workspace/SKILL.md`: Google Workspace connection and named permission upgrades.
-- `skills/tinyhat-google-workspace-app-manager/SKILL.md`: confirmed pinned gws app and operation-skill manager.
+- `skills/tinyhat-google-workspace-app-manager/SKILL.md`: confirmed pinned gws binary manager; Hermes supplies operation guidance.
 - `skills/tinyhat-codex-auth/SKILL.md`: OpenAI Codex / ChatGPT subscription auth flow guidance.
 - `skills/tinyhat-plugin-update/SKILL.md`: installed plugin channel update guidance.
 - `skills/tinyhat-platform/SKILL.md`: Tinyhat-managed Hermes operating context.

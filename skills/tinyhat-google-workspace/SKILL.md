@@ -1,6 +1,6 @@
 ---
 name: tinyhat-google-workspace
-description: Connect, upgrade, check, disconnect, or use this Tinyhat Computer's Google Workspace connection through the managed gws app and official operation skills. Use for "Connect Google", Google sign-in, Gmail, Calendar, Drive, sending email, or other Google Workspace requests.
+description: Connect, upgrade, check, disconnect, or use this Tinyhat Computer's Google Workspace connection through Hermes's native Google Workspace skill and Tinyhat's managed gws bridge. Use for "Connect Google", Google sign-in, Gmail, Calendar, Drive, sending email, or other Google Workspace requests.
 ---
 
 # Tinyhat Google Workspace
@@ -29,15 +29,17 @@ connection or active sign-in link exists.
 The user needs only their existing Google account. Never ask for a Google Cloud
 project, OAuth client ID, client secret, credentials JSON, app password,
 authorization code, raw token, `gcloud`, `gws auth`, or any second OAuth flow.
-Do not load or follow Hermes' built-in Google Workspace OAuth setup. Tinyhat owns
-the central Web OAuth client, callback, encrypted credential delivery, and
-refresh broker.
+Hermes's built-in `google-workspace` skill remains the operation guide, but its
+OAuth setup is replaced on Tinyhat Computers. Never run that skill's `setup.py`,
+`google_api.py`, or `gws_bridge.py`: those paths require a Computer-owned client
+secret or credential file. Tinyhat owns the central Web OAuth client, callback,
+encrypted credential delivery, refresh broker, and bounded execution adapter.
 
 The default `workspace_readonly` profile maps to the fixed
 `google_workspace_readonly_v1` bundle: identity plus read-only Gmail, Calendar, and Drive.
-The authentication plugin does not implement those services. Their
-commands and response interpretation belong to the pinned managed `gws` app
-and its official service-specific skills.
+The authentication plugin does not implement those services. Operation intent
+and response interpretation come from Hermes's bundled `google-workspace`
+skill; the pinned managed `gws` app performs the API call.
 
 If a connected user asks to send or write Gmail and status does not include
 `https://www.googleapis.com/auth/gmail.send`:
@@ -65,15 +67,17 @@ For any Gmail, Calendar, Drive, or other supported Workspace request:
    state is not already known.
 2. If disconnected, call the Tinyhat connect action. Do not start another auth
    flow.
-3. If the managed app or matching official operation skill is unavailable, say
-   that Tinyhat can install the pinned Google Workspace CLI integration and ask
+3. If the managed app is unavailable, say that Tinyhat can install the pinned
+   Google Workspace CLI integration and ask
    for approval. Do not install automatically. Only after approval call
    `tinyhat_google_workspace_app_manager` with
    `{"action": "install", "confirmed": true}`.
-4. Load the matching installed official gws operation skill. Let that skill
-   construct the service-specific argv; do not invent service operations in
-   this authentication skill. Tinyhat's context overrides any upstream auth
-   setup text: never run `gws auth` and never request another OAuth setup.
+4. Load Hermes's bundled `google-workspace` skill for the operation semantics
+   and user-facing contract. Ignore its setup/auth/check instructions and do not
+   execute its scripts. Use `gws schema` through the bridge when exact raw API
+   argv is needed; do not invent service operations in this authentication
+   skill. Tinyhat's context overrides upstream auth text: never run `gws auth`
+   and never request another OAuth setup.
 5. Pass only that bounded argv to `tinyhat_google_workspace_app`, for example
    `{"argv": ["schema", "service.resource.method"], "effect": "read"}` for generic discovery.
    Do not include the `gws` executable itself.

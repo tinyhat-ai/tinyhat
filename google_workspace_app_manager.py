@@ -45,9 +45,9 @@ PINNED_AARCH64_ARCHIVE_SHA256 = (
 PINNED_AARCH64_BINARY_SHA256 = (
     "b68337faf1436fb2b3a287207cd57fef784a20fb4ab4f2429e51c4e0cfa0b50b"
 )
-OFFICIAL_SKILL_BASE_URL = (
-    "https://raw.githubusercontent.com/googleworkspace/cli/v0.22.5/skills"
-)
+# Retained only so manifests written by plugin 0.21.0 remain trusted and can be
+# retired safely. New installs manage the executable only and reuse Hermes's
+# bundled ``google-workspace`` skill for operation guidance.
 PINNED_OFFICIAL_SKILLS = {
     "gws-calendar": "2be9bcdd12a425169c79473c4e56200715e4a3b6c04ed2988839b12ce8aea6b8",
     "gws-calendar-agenda": "df3a57f21738db339095055e543c5d9a2f1bff807504966f3bcb95ab7687f97a",
@@ -58,14 +58,6 @@ PINNED_OFFICIAL_SKILLS = {
 }
 TINYHAT_SHARED_SKILL_SHA256 = (
     "9679052ece7c05ff3f05fb5f00c0437b460fade67631b60f279e445f5b5fd63e"
-)
-TINYHAT_SHARED_SKILL_SOURCE = (
-    Path(__file__).resolve().parent
-    / "skills"
-    / "tinyhat-google-workspace"
-    / "assets"
-    / "gws-shared"
-    / "SKILL.md"
 )
 INSTALL_ROOT = Path("/opt/tinyhat")
 BINARY_PATH = INSTALL_ROOT / "bin" / "gws"
@@ -189,7 +181,7 @@ def google_workspace_app_manager(
             example_call={"action": "status"},
         )
     if action in {"install", "uninstall"} and payload.get("confirmed") is not True:
-        verb = "install the pinned Google Workspace CLI and official operation skills"
+        verb = "install the pinned Google Workspace CLI"
         if action == "uninstall":
             verb = "remove only unchanged files installed by Tinyhat"
         return tool_error_json(
@@ -368,8 +360,8 @@ def _managed_app_status_locked(artifact: GwsReleaseArtifact) -> dict[str, Any]:
             "managed": False,
             "version": PINNED_GWS_VERSION,
             "architecture": artifact.architecture,
-            "unmanaged_components_present": any(
-                path.exists() or path.is_symlink() for path in targets.values()
+            "unmanaged_components_present": (
+                BINARY_PATH.exists() or BINARY_PATH.is_symlink()
             ),
         }
     records = _validate_manifest(manifest, artifact=artifact)
@@ -377,24 +369,25 @@ def _managed_app_status_locked(artifact: GwsReleaseArtifact) -> dict[str, Any]:
         component: _file_matches_record(targets[component], record)
         for component, record in records.items()
     }
-    missing_components = sorted(set(targets) - set(records))
-    changed = sorted(
-        [component for component, matches in component_status.items() if not matches]
-        + missing_components
+    binary_ready = component_status.get("gws", False)
+    legacy_components = sorted(component for component in records if component != "gws")
+    legacy_changed = sorted(
+        component
+        for component in legacy_components
+        if not component_status.get(component, False)
     )
     return {
         "schema": MANAGER_SCHEMA,
         "action": "status",
-        "status": "installed" if not changed else "integrity_mismatch",
+        "status": "installed" if binary_ready else "integrity_mismatch",
         "managed": True,
         "version": manifest["version"],
         "architecture": artifact.architecture,
-        "binary_ready": component_status.get("gws", False),
-        "skills_ready": all(
-            component_status.get(f"skill:{name}", False)
-            for name in [*PINNED_OFFICIAL_SKILLS, "gws-shared"]
-        ),
-        "changed_components": changed,
+        "binary_ready": binary_ready,
+        "operation_skill": "google-workspace",
+        "legacy_components": legacy_components,
+        "legacy_changed_components": legacy_changed,
+        "changed_components": [] if binary_ready else ["gws"],
     }
 
 
@@ -413,41 +406,16 @@ def _install_managed_app_locked(artifact: GwsReleaseArtifact) -> dict[str, Any]:
     payloads = [
         ManagedPayload("gws", BINARY_PATH, binary, 0o755, artifact.archive_url)
     ]
-    for name, expected_hash in PINNED_OFFICIAL_SKILLS.items():
-        url = f"{OFFICIAL_SKILL_BASE_URL}/{name}/SKILL.md"
-        content = _download_bytes(url, max_bytes=MAX_SKILL_BYTES)
-        _require_sha256(content, expected_hash, label=name)
-        payloads.append(
-            ManagedPayload(
-                f"skill:{name}",
-                HERMES_SKILLS_ROOT / name / "SKILL.md",
-                content,
-                0o644,
-                url,
-            )
-        )
-    try:
-        shared = TINYHAT_SHARED_SKILL_SOURCE.read_bytes()
-    except OSError as exc:
-        raise GoogleWorkspaceAppManagerError(
-            "package_invalid", "The Tinyhat gws integration shim is unavailable."
-        ) from exc
-    _require_sha256(shared, TINYHAT_SHARED_SKILL_SHA256, label="gws-shared")
-    payloads.append(
-        ManagedPayload(
-            "skill:gws-shared",
-            HERMES_SKILLS_ROOT / "gws-shared" / "SKILL.md",
-            shared,
-            0o644,
-            "tinyhat-plugin:gws-shared",
-        )
-    )
 
     existing = _read_manifest(optional=True)
     records = (
         _validate_manifest(existing, artifact=artifact) if existing is not None else {}
     )
-    _preflight_install(payloads, records)
+    _preflight_install(
+        payloads,
+        {"gws": records["gws"]} if "gws" in records else {},
+    )
+    retired, quarantined = _retire_legacy_skill_components(records)
     installed_at = datetime.now(timezone.utc).isoformat()
     manifest = {
         "schema": MANIFEST_SCHEMA,
@@ -475,12 +443,44 @@ def _install_managed_app_locked(artifact: GwsReleaseArtifact) -> dict[str, Any]:
         "version": PINNED_GWS_VERSION,
         "architecture": artifact.architecture,
         "binary_ready": True,
-        "installed_skills": sorted([*PINNED_OFFICIAL_SKILLS, "gws-shared"]),
+        "operation_skill": "google-workspace",
+        "retired_legacy_components": retired,
+        "quarantined_legacy_components": quarantined,
         "message": (
-            "The pinned Google Workspace CLI and verified operation skills are ready. "
-            "Use Tinyhat's token bridge; never run gws auth."
+            "The pinned Google Workspace CLI is ready for Hermes's native Google "
+            "Workspace skill. Use Tinyhat's token bridge; never run gws auth."
         ),
     }
+
+
+def _retire_legacy_skill_components(
+    records: dict[str, dict[str, Any]],
+) -> tuple[list[str], list[str]]:
+    """Remove obsolete manager-owned skills before writing a binary-only manifest."""
+    targets = _managed_targets()
+    retired: list[str] = []
+    quarantined: list[str] = []
+    for component, record in records.items():
+        if not component.startswith("skill:"):
+            continue
+        path = targets[component]
+        if not path.exists() and not path.is_symlink():
+            retired.append(component)
+            continue
+        _verify_managed_directory(path.parent, mode=0o755)
+        if _file_matches_record(path, record):
+            path.unlink()
+            retired.append(component)
+            with contextlib.suppress(OSError):
+                path.parent.rmdir()
+            continue
+        if not _quarantine_modified_component(component=component, path=path):
+            raise GoogleWorkspaceAppManagerError(
+                "modified_component",
+                "An obsolete managed Google Workspace skill could not be preserved safely.",
+            )
+        quarantined.append(component)
+    return sorted(retired), sorted(quarantined)
 
 
 def uninstall_managed_app() -> dict[str, Any]:
@@ -572,19 +572,11 @@ def verified_managed_gws_binary() -> Iterator[ManagedGwsBinary]:
     with managed_app_lock(exclusive=False):
         manifest = _read_manifest(optional=False)
         records = _validate_manifest(manifest, artifact=artifact)
-        targets = _managed_targets()
-        if any(
-            not _file_matches_record(targets[component], record)
-            for component, record in records.items()
-        ):
+        record = records.get("gws")
+        if record is None or not _file_matches_record(BINARY_PATH, record):
             raise GoogleWorkspaceAppManagerError(
                 "app_unavailable",
-                "The managed gws app or an operation skill failed integrity checks.",
-            )
-        record = records.get("gws")
-        if record is None:
-            raise GoogleWorkspaceAppManagerError(
-                "app_unavailable", "The managed gws binary is not installed."
+                "The managed gws app failed its integrity check.",
             )
         try:
             source_fd = os.open(
@@ -998,7 +990,6 @@ def _required_directories(payloads: list[ManagedPayload]) -> list[tuple[Path, in
         (INSTALL_ROOT, 0o755),
         (BINARY_PATH.parent, 0o755),
         (STATE_DIR, 0o700),
-        (HERMES_SKILLS_ROOT, 0o755),
         *[(item.path.parent, 0o755) for item in payloads if item.component.startswith("skill:")],
     ]:
         if directory not in seen:
@@ -1125,7 +1116,8 @@ def _validate_manifest(
     )
     component_names = set(value["components"])
     is_partial = value.get("state") == "partially_uninstalled"
-    if (not is_partial and component_names != set(expected_records)) or (
+    complete_component_sets = ({"gws"}, set(expected_records))
+    if (not is_partial and component_names not in complete_component_sets) or (
         is_partial and not component_names.issubset(expected_records)
     ):
         raise GoogleWorkspaceAppManagerError(
@@ -1155,11 +1147,12 @@ def _expected_manifest_records(
         raise GoogleWorkspaceAppManagerError(
             "package_invalid", "The current managed gws release is not trusted."
         )
-    return _expected_manifest_records_for_release(
+    records = _expected_manifest_records_for_release(
         version=PINNED_GWS_VERSION,
         artifact=artifact,
         release=release,
     )
+    return {"gws": records["gws"]}
 
 
 def _expected_manifest_records_for_release(
