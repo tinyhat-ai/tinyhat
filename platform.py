@@ -96,7 +96,7 @@ class PlatformClient:
             "Accept": "application/json",
             "Authorization": f"Bearer {token}",
             "Content-Type": "application/json",
-            "User-Agent": "tinyhat-plugin/0.20",
+            "User-Agent": "tinyhat-plugin/0.21",
         }
         body = (
             json.dumps(payload, separators=(",", ":")).encode("utf-8")
