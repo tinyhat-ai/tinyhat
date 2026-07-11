@@ -118,11 +118,12 @@ owns the central Web OAuth client, callback, exchange,
 identity validation, and RSA-encrypted credential delivery; the Computer keeps
 the one-time private key and stores the decrypted credentials locally.
 The auth skill does not contain Gmail, Calendar, or Drive operations. It routes
-connected service requests to a verified official gws service skill, which
-supplies opaque argv to `tinyhat_google_workspace_app`. The generic bridge owns
-credential injection, process bounds, and redaction; the gws skill owns command
-semantics. Never send users into `gws auth`, Google Cloud setup, credentials JSON,
-or a second OAuth flow.
+connected service requests through Hermes's bundled `google-workspace` skill for
+operation semantics and then through `tinyhat_google_workspace_app` for bounded
+execution. The native skill's OAuth setup and scripts are not used on Tinyhat
+Computers. The generic bridge owns credential injection, process bounds, and
+redaction. Never send users into `gws auth`, Google Cloud setup, credentials
+JSON, or a second OAuth flow.
 
 For revoke or disconnect requests, the skill calls
 `tinyhat_google_workspace` with `{"action": "disconnect"}` once. The tool sends
@@ -137,11 +138,11 @@ disconnected. The skill must describe this as local-only Tinyhat revocation,
 not revocation of Google's shared provider grant; other Computers are
 unaffected.
 
-If the managed gws app or operation skill is absent, route to
+If the managed gws app is absent, route to
 `tinyhat-google-workspace-app-manager`. Explain the pinned integration and ask
-before install or uninstall; never mutate the Computer automatically. Official
-operation skills must use the Tinyhat shared shim and token bridge even when
-their upstream text mentions authentication setup. The skill calls
+before install or uninstall; never mutate the Computer automatically. Hermes's
+built-in skill remains operation guidance only; Tinyhat's token bridge replaces
+its local-client authentication and script execution. The skill calls
 `tinyhat_google_workspace_app_manager` only after that approval.
 
 `tinyhat-codex-auth` is the default way to connect a Tinyhat-managed

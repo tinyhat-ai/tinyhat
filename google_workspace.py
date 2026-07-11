@@ -75,6 +75,8 @@ GOOGLE_REQUESTED_SCOPES = GOOGLE_READONLY_SCOPES
 GOOGLE_AUTHORIZATION_HOST = "accounts.google.com"
 GOOGLE_AUTHORIZATION_PATH = "/o/oauth2/v2/auth"
 DEFAULT_EXPIRES_IN_SECONDS = 600
+INSTALL_CLAIM_MAX_ATTEMPTS = 3
+INSTALL_CLAIM_RETRY_SECONDS = 1.0
 DISCONNECT_WORKER_READY_TIMEOUT_SECONDS = 15.0
 DISCONNECT_WORKER_READY_POLL_SECONDS = 0.05
 DISCONNECT_COMPLETION_RETRY_SECONDS = 60 * 60
@@ -2046,20 +2048,19 @@ def _poll_and_install(handoff: GoogleWorkspaceWorkerHandoff) -> None:
                     )
                     return
                 installed = True
-                notification_attempted = True
+                _claim_handoff_with_retry(
+                    client=handoff.client,
+                    platform_auth=handoff.platform_auth,
+                    handoff_id=handoff.handoff_id,
+                )
+                _clear_active_handoff(handoff)
                 ready_notice = (
                     "ready_gmail_send"
                     if handoff.expected_capability_bundle == GOOGLE_GMAIL_SEND_CAPABILITY_BUNDLE
                     else "ready"
                 )
+                notification_attempted = True
                 _send_google_workspace_notice(ready_notice)
-                _claim_handoff(
-                    client=handoff.client,
-                    platform_auth=handoff.platform_auth,
-                    handoff_id=handoff.handoff_id,
-                    installed=True,
-                    message=None,
-                )
                 return
             if terminal_state in TERMINAL_HANDOFF_MESSAGES:
                 notification_attempted = True
@@ -2075,21 +2076,22 @@ def _poll_and_install(handoff: GoogleWorkspaceWorkerHandoff) -> None:
         notification_attempted = True
         _finish_terminal_handoff(handoff=handoff, terminal_state="expired")
     except Exception:
-        with contextlib.suppress(Exception), _lifecycle_lock():
-            _remove_active_handoff_marker_if_matches(
-                handoff_id=handoff.handoff_id,
-                owner_token=handoff.owner_token,
-            )
-        with contextlib.suppress(Exception):
-            _claim_handoff(
-                client=handoff.client,
-                platform_auth=handoff.platform_auth,
-                handoff_id=handoff.handoff_id,
-                installed=installed,
-                message=None if installed else TERMINAL_HANDOFF_MESSAGES["failed"],
-            )
-        if not notification_attempted:
-            _send_google_workspace_notice("ready" if installed else "failed")
+        if not installed:
+            with contextlib.suppress(Exception), _lifecycle_lock():
+                _remove_active_handoff_marker_if_matches(
+                    handoff_id=handoff.handoff_id,
+                    owner_token=handoff.owner_token,
+                )
+            with contextlib.suppress(Exception):
+                _claim_handoff(
+                    client=handoff.client,
+                    platform_auth=handoff.platform_auth,
+                    handoff_id=handoff.handoff_id,
+                    installed=False,
+                    message=TERMINAL_HANDOFF_MESSAGES["failed"],
+                )
+            if not notification_attempted:
+                _send_google_workspace_notice("failed")
         raise
 
 
@@ -2191,10 +2193,6 @@ def _install_ready_credentials(
             _cancel_all_pending_handoffs_locked()
             _delete_credentials_locked()
             return "assignment_changed"
-        _remove_active_handoff_marker_if_matches(
-            handoff_id=handoff.handoff_id,
-            owner_token=handoff.owner_token,
-        )
         _atomic_save_credentials(credentials)
     return "installed"
 
@@ -2929,6 +2927,29 @@ def _claim_handoff(
         ),
         {"installed": installed, "message": message},
     )
+
+
+def _claim_handoff_with_retry(
+    *,
+    client: PlatformClient,
+    platform_auth: str,
+    handoff_id: str,
+) -> None:
+    """Acknowledge a saved credential before clearing state or notifying."""
+    for attempt in range(INSTALL_CLAIM_MAX_ATTEMPTS):
+        try:
+            _claim_handoff(
+                client=client,
+                platform_auth=platform_auth,
+                handoff_id=handoff_id,
+                installed=True,
+                message=None,
+            )
+            return
+        except Exception:
+            if attempt + 1 >= INSTALL_CLAIM_MAX_ATTEMPTS:
+                raise
+            time.sleep(INSTALL_CLAIM_RETRY_SECONDS)
 
 
 def _cleanup_worker_state(key_path: Path) -> None:

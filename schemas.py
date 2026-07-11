@@ -102,9 +102,9 @@ TINYHAT_GOOGLE_WORKSPACE_SCHEMA = {
 TINYHAT_GOOGLE_WORKSPACE_APP_SCHEMA = {
     "type": "object",
     "description": (
-        "Run bounded argv through the separately installed gws app using this "
-        "Computer's assignment-verified Tinyhat Google access. Service-specific "
-        "commands come from separate gws skills, not this authentication plugin."
+        "Run bounded argv through Tinyhat's pinned gws app using this Computer's "
+        "assignment-verified Google access. Hermes's native Google Workspace skill "
+        "supplies service-specific operation guidance; Tinyhat only bridges access."
     ),
     "properties": {
         "argv": {
@@ -113,9 +113,9 @@ TINYHAT_GOOGLE_WORKSPACE_APP_SCHEMA = {
             "maxItems": 64,
             "items": {"type": "string", "minLength": 1, "maxLength": 4096},
             "description": (
-                "Opaque gws arguments supplied by an installed gws skill. Do not "
-                "include the gws executable, auth/setup/login/export commands, or "
-                "unbounded pagination such as --page-all."
+                "Opaque gws arguments supplied by Hermes's native Google Workspace "
+                "skill. Do not include the gws executable, auth/setup/login/export "
+                "commands, or unbounded pagination such as --page-all."
             ),
         },
         "effect": {
@@ -152,8 +152,9 @@ TINYHAT_GOOGLE_WORKSPACE_APP_MANAGER_SCHEMA = {
     "type": "object",
     "description": (
         "Inspect, install, or uninstall Tinyhat's pinned and integrity-verified "
-        "Google Workspace CLI app plus official operation skills. Installation "
-        "never starts another OAuth flow and requires explicit user approval."
+        "Google Workspace CLI app. Hermes's native Google Workspace skill supplies "
+        "operation guidance. Installation never starts another OAuth flow and "
+        "requires explicit user approval."
     ),
     "properties": {
         "action": {

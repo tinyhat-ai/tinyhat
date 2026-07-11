@@ -33,7 +33,7 @@ auth flow that is installed on each Hermes Computer.
 | `tools.py` / `schemas.py` | Tinyhat tools: plugin version, joke proof, skill catalog, private secret handoff, Google identity connection, Codex auth setup/status helpers, and plugin update helper. |
 | `google_workspace.py` / `google_workspace_worker.py` | Platform-authored Google OAuth handoff, one-time RSA credential delivery, permission-protected local save, assignment-safe status, and disconnect flow. |
 | `google_workspace_app.py` | Bounded credential bridge to the manifest-verified, root-owned managed `gws` app. |
-| `google_workspace_app_manager.py` | Confirmed install/status/uninstall for pinned official `gws` Linux artifacts and operation skills. |
+| `google_workspace_app_manager.py` | Confirmed install/status/uninstall for pinned official `gws` Linux artifacts. |
 | `skills/tinyhat-tell-joke/SKILL.md` | Deterministic joke proof. |
 | `skills/tinyhat-plugin-version/SKILL.md` | Live plugin version proof. |
 | `skills/tinyhat-skill-catalog/SKILL.md` | Skill discovery guidance for plugin-qualified Tinyhat skill names. |
@@ -173,13 +173,15 @@ atomically. Permission-upgrade confirmation never counts as confirmation to
 send an actual email.
 
 The authentication plugin does not implement mail, event, or file operations.
-Those semantics live in verified official `gws` service skills and the external
-managed `gws` app.
+Hermes's bundled `google-workspace` skill supplies operation semantics while the
+external managed `gws` app performs the API call through Tinyhat's bridge. Its
+local-client OAuth setup and scripts are intentionally bypassed.
 
 `tinyhat_google_workspace_app` is a generic credential bridge. It accepts only
-bounded opaque argv from a gws skill, verifies the Computer assignment, refreshes
-through the platform broker when needed, and injects the access token only into
-one isolated, root-owned `gws` child process. The bridge accepts only
+bounded opaque argv from Hermes's native Google Workspace skill, verifies the
+Computer assignment, refreshes through the platform broker when needed, and
+injects the access token only into one isolated, root-owned `gws` child process.
+The bridge accepts only
 `/opt/tinyhat/bin/gws` when the app manager's root-only manifest matches the
 hardcoded version, architecture, source, mode, and SHA-256. It never passes the refresh token,
 client secret, credential file, executable, environment, or working directory
@@ -192,13 +194,12 @@ marked as untrusted external content.
 `tinyhat_google_workspace_app_manager` is the reproducible install path. It
 supports pinned official Linux x86_64 and aarch64 release archives, verifies
 hardcoded archive and extracted-binary SHA-256 values, rejects unsafe archive
-entries, and transactionally installs the binary plus verified official Gmail,
-Calendar, and Drive operation skills. Install and uninstall require explicit
-approval. Uninstall removes unchanged files recorded in its root-only manifest,
-moves modified managed files out of active paths into root-only quarantine, and
-leaves unmanaged files untouched. The installed Tinyhat
-`gws-shared` shim overrides upstream auth setup: the agent uses the existing
-Tinyhat token bridge and never runs `gws auth`.
+entries, and transactionally installs only the binary. Hermes already bundles
+Google Workspace operation guidance. Install and uninstall require explicit
+approval. A confirmed reinstall from plugin 0.21.0 retires its obsolete managed
+operation skills and quarantines modified copies; Hermes's bundled skill and
+unmanaged files are untouched. The agent uses the existing Tinyhat token bridge
+and never runs `gws auth` or Hermes's local-client setup scripts.
 
 Current security boundary: Hermes, plugin tools, and terminal commands run as
 uid 0 on the Computer, the same owner that can read the `0600` Google credential
