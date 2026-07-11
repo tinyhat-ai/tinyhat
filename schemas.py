@@ -57,19 +57,25 @@ TINYHAT_PRIVATE_SECRET_HANDOFF_SCHEMA = {
 TINYHAT_GOOGLE_WORKSPACE_SCHEMA = {
     "type": "object",
     "description": (
-        "Connect, inspect, or disconnect this Tinyhat Computer's Google Workspace "
-        "account using one plugin-owned, platform-allowlisted permission profile. "
+        "Connect, inspect, change permissions for, or disconnect Google Workspace "
+        "accounts on this Tinyhat Computer using plugin-owned, platform-allowlisted "
+        "permission profiles. "
         "The default profile includes identity plus read-only Gmail, Calendar, and "
         "Drive. Named upgrades can add Gmail sending, Calendar event writing, or "
-        "both while retaining existing granted write permissions. The user provides "
-        "no Google Cloud project or OAuth secret."
+        "both. Permission changes target one account and may also replace a broader "
+        "profile with an exact narrower profile. The user provides no Google Cloud "
+        "project or OAuth secret."
     ),
     "properties": {
         "action": {
             "type": "string",
-            "enum": ["connect", "status", "disconnect"],
+            "enum": ["connect", "status", "set_permissions", "disconnect"],
             "description": (
-                "Use connect to send one native Connect Google Telegram button "
+                "Use connect to add an account or, with account_id, retain the "
+                "legacy additive permission behavior. Use set_permissions with "
+                "account_id to replace one account's permissions with the exact "
+                "named profile. Use status to show safe account metadata. "
+                "Connect and permission changes send one native Telegram button "
                 "without returning a plain authorization URL, status to show safe "
                 "account metadata, or disconnect to send the platform-owned "
                 "two-stage Telegram revoke prompt. Disconnect never trusts a "
@@ -79,10 +85,21 @@ TINYHAT_GOOGLE_WORKSPACE_SCHEMA = {
         "confirmed": {
             "type": "boolean",
             "description": (
-                "Accepted only with action=connect and a write profile, after the "
-                "user explicitly confirms that permission upgrade. Disconnect "
+                "Accepted only with action=connect or action=set_permissions when "
+                "the target adds a write permission, after the user explicitly "
+                "confirms that permission upgrade. Removing a permission needs no "
+                "elevation confirmation. Disconnect "
                 "confirmation happens only through the tool-sent Telegram buttons. "
                 "This does not confirm a later email send or Calendar event change."
+            ),
+        },
+        "confirmation_id": {
+            "type": "string",
+            "pattern": "^[a-f0-9]{64}$",
+            "description": (
+                "Deterministic id returned by a permission confirmation_required "
+                "response. Repeat it unchanged with confirmed=true. It binds the "
+                "action, selected account, and exact target profile."
             ),
         },
         "profile": {
@@ -94,11 +111,22 @@ TINYHAT_GOOGLE_WORKSPACE_SCHEMA = {
                 "gmail_send_calendar_write",
             ],
             "description": (
-                "High-level allowlisted permission profile accepted only with "
-                "action=connect. Omit for workspace_readonly. Use gmail_send, "
+                "High-level allowlisted permission profile accepted with "
+                "action=connect or action=set_permissions. Omit for the read-only "
+                "connect default. Use gmail_send, "
                 "calendar_write, or gmail_send_calendar_write only after explicit "
-                "permission-upgrade confirmation. Existing granted write permissions "
-                "are preserved automatically; arbitrary scopes are never accepted."
+                "permission-upgrade confirmation. Connect with account_id preserves "
+                "existing granted write permissions; set_permissions installs the "
+                "exact selected profile. Arbitrary scopes are never accepted."
+            ),
+        },
+        "account_id": {
+            "type": "string",
+            "pattern": "^gwo_[A-Za-z0-9_-]{1,60}$",
+            "description": (
+                "Opaque account selector returned by status. Required for "
+                "set_permissions and whenever more than one account is connected. "
+                "Never use or expose the Google subject as an account selector."
             ),
         },
     },
@@ -148,6 +176,14 @@ TINYHAT_GOOGLE_WORKSPACE_APP_SCHEMA = {
             "description": (
                 "For a confirmed write, repeat the exact confirmation_id returned by "
                 "the tool's confirmation_required response for the unchanged argv."
+            ),
+        },
+        "account_id": {
+            "type": "string",
+            "pattern": "^gwo_[A-Za-z0-9_-]{1,60}$",
+            "description": (
+                "Opaque account selector returned by tinyhat_google_workspace status. "
+                "May be omitted only when exactly one account is connected."
             ),
         },
     },

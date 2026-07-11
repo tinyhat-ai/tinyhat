@@ -20,14 +20,17 @@ from typing import Any
 
 from .google_workspace import (
     GOOGLE_TOKEN_VALUE_MAX_LENGTH,
+    GoogleWorkspaceAccountSelectionRequired,
     GoogleWorkspaceError,
     _assignment_binding_matches_platform,
     _cancel_all_pending_handoffs_locked,
     _delete_credentials_locked,
+    _install_credential_generation,
     _lifecycle_lock,
     _read_credentials,
     load_verified_google_workspace_credentials,
     refresh_verified_google_workspace_credentials,
+    _validated_connection_id,
 )
 from .platform import build_platform_client
 from .tool_errors import tool_error_json
@@ -93,6 +96,17 @@ class GoogleWorkspaceAppError(RuntimeError):
         super().__init__(code)
 
 
+class GoogleWorkspaceAppAccountSelectionRequired(GoogleWorkspaceAppError):
+    """The bridge needs an explicit safe account selector."""
+
+    def __init__(self, accounts: list[dict[str, Any]]) -> None:
+        self.accounts = accounts
+        super().__init__(
+            "account_selection_required",
+            "Choose one connected Google Workspace account and retry with account_id.",
+        )
+
+
 @dataclass(frozen=True)
 class AppProcessResult:
     """Bounded result from one external app invocation."""
@@ -154,6 +168,23 @@ def google_workspace_app(args: dict[str, Any] | None = None, **_: Any) -> str:
             example_call={"argv": ["schema", "service.resource.method"]},
         )
 
+    try:
+        account_id = _validated_connection_id(
+            payload.get("account_id"),
+            required=False,
+        )
+    except GoogleWorkspaceError:
+        return tool_error_json(
+            tool="tinyhat_google_workspace_app",
+            error_name="invalid_parameter",
+            message="Google Workspace account_id is invalid.",
+            expected={"account_id": "opaque account_id returned by status"},
+            example_call={
+                "argv": ["schema", "service.resource.method"],
+                "effect": "read",
+            },
+        )
+
     effect = payload.get("effect")
     if effect not in {"read", "write"}:
         return tool_error_json(
@@ -179,7 +210,42 @@ def google_workspace_app(args: dict[str, Any] | None = None, **_: Any) -> str:
             example_call={"argv": argv, "effect": "write"},
         )
     if effect == "write":
-        confirmation_id = _argv_confirmation_id(argv)
+        try:
+            # Resolve an omitted selector to the stable platform connection id
+            # before issuing or validating confirmation. This prevents a
+            # confirmation for the former sole account from authorizing the
+            # same argv after that account is replaced.
+            account_id, credential_generation = _resolve_write_account(account_id)
+        except GoogleWorkspaceAppAccountSelectionRequired as exc:
+            return json.dumps(
+                {
+                    "schema": RESULT_SCHEMA,
+                    "status": "failed",
+                    "app": APP_NAME,
+                    "error": exc.code,
+                    "message": exc.public_message,
+                    "accounts": exc.accounts,
+                    "content_is_untrusted": False,
+                },
+                sort_keys=True,
+            )
+        except GoogleWorkspaceAppError as exc:
+            return json.dumps(
+                {
+                    "schema": RESULT_SCHEMA,
+                    "status": "failed",
+                    "app": APP_NAME,
+                    "error": exc.code,
+                    "message": exc.public_message,
+                    "content_is_untrusted": False,
+                },
+                sort_keys=True,
+            )
+        confirmation_id = _argv_confirmation_id(
+            argv,
+            account_id=account_id,
+            credential_generation=credential_generation,
+        )
         if (
             payload.get("confirmed") is not True
             or payload.get("confirmation_id") != confirmation_id
@@ -199,11 +265,29 @@ def google_workspace_app(args: dict[str, Any] | None = None, **_: Any) -> str:
                     "effect": "write",
                     "confirmed": True,
                     "confirmation_id": confirmation_id,
+                    **({"account_id": account_id} if account_id is not None else {}),
                 },
             )
 
     try:
-        result = run_google_workspace_app(argv=argv, effect=effect)
+        result = run_google_workspace_app(
+            argv=argv,
+            effect=effect,
+            account_id=account_id,
+            expected_credential_generation=(
+                credential_generation if effect == "write" else None
+            ),
+        )
+    except GoogleWorkspaceAppAccountSelectionRequired as exc:
+        result = {
+            "schema": RESULT_SCHEMA,
+            "status": "failed",
+            "app": APP_NAME,
+            "error": exc.code,
+            "message": exc.public_message,
+            "accounts": exc.accounts,
+            "content_is_untrusted": False,
+        }
     except GoogleWorkspaceAppError as exc:
         result = {
             "schema": RESULT_SCHEMA,
@@ -313,9 +397,61 @@ def _argv_requires_write_effect(argv: list[str]) -> bool:
     return positional[-1] not in READ_METHOD_NAMES
 
 
-def _argv_confirmation_id(argv: list[str]) -> str:
-    canonical = json.dumps(argv, ensure_ascii=False, separators=(",", ":"))
+def _argv_confirmation_id(
+    argv: list[str],
+    *,
+    account_id: str | None = None,
+    credential_generation: str | None = None,
+) -> str:
+    canonical = json.dumps(
+        {
+            "account_id": account_id,
+            "argv": argv,
+            "credential_generation": credential_generation,
+        },
+        ensure_ascii=False,
+        separators=(",", ":"),
+        sort_keys=True,
+    )
     return hashlib.sha256(canonical.encode()).hexdigest()
+
+
+def _resolve_write_account(account_id: str | None) -> tuple[str, str]:
+    """Resolve stable account and credential lineage before write confirmation."""
+    try:
+        credentials = (
+            load_verified_google_workspace_credentials()
+            if account_id is None
+            else load_verified_google_workspace_credentials(account_id)
+        )
+    except GoogleWorkspaceAccountSelectionRequired as exc:
+        raise GoogleWorkspaceAppAccountSelectionRequired(exc.accounts) from exc
+    except GoogleWorkspaceError as exc:
+        raise GoogleWorkspaceAppError(
+            "not_connected",
+            "Connect Google Workspace through Tinyhat on this Computer before using gws.",
+        ) from exc
+
+    try:
+        selected_account_id = _validated_connection_id(
+            credentials.get("tinyhat_connection_id")
+        )
+    except GoogleWorkspaceError as exc:
+        raise GoogleWorkspaceAppError(
+            "not_connected",
+            "The selected Google Workspace account is not connected safely.",
+        ) from exc
+    if selected_account_id is None:
+        raise GoogleWorkspaceAppError(
+            "not_connected",
+            "The selected Google Workspace account is not connected safely.",
+        )
+    if account_id is not None and not hmac.compare_digest(account_id, selected_account_id):
+        raise GoogleWorkspaceAppError(
+            "not_connected",
+            "The selected Google Workspace account is not connected safely.",
+        )
+    return selected_account_id, _install_credential_generation(credentials)
 
 
 def _is_forbidden_flag(argument: str) -> bool:
@@ -331,49 +467,77 @@ def _is_forbidden_flag(argument: str) -> bool:
     return any(lowered == flag or lowered.startswith(f"{flag}=") for flag in FORBIDDEN_FLAGS)
 
 
-def run_google_workspace_app(*, argv: list[str], effect: str = "read") -> dict[str, Any]:
+def run_google_workspace_app(
+    *,
+    argv: list[str],
+    effect: str = "read",
+    account_id: str | None = None,
+    expected_credential_generation: str | None = None,
+) -> dict[str, Any]:
     """Execute opaque gws argv without learning any Google service semantics."""
     with _open_trusted_gws_binary() as binary:
         try:
-            credentials = load_verified_google_workspace_credentials()
+            credentials = (
+                load_verified_google_workspace_credentials()
+                if account_id is None
+                else load_verified_google_workspace_credentials(account_id)
+            )
+        except GoogleWorkspaceAccountSelectionRequired as exc:
+            raise GoogleWorkspaceAppAccountSelectionRequired(exc.accounts) from exc
         except GoogleWorkspaceError as exc:
             raise GoogleWorkspaceAppError(
                 "not_connected",
                 "Connect Google Workspace through Tinyhat on this Computer before using gws.",
             ) from exc
 
+        if expected_credential_generation is not None and not hmac.compare_digest(
+            _install_credential_generation(credentials),
+            expected_credential_generation,
+        ):
+            raise GoogleWorkspaceAppError(
+                "confirmation_stale",
+                "Google Workspace permissions changed. Review and confirm the write again.",
+            )
+
         refreshed = False
         if _access_token_needs_refresh(credentials):
-            credentials = _refresh_credentials()
+            credentials = _refresh_credentials(account_id=account_id)
             refreshed = True
 
-        process_result = _invoke_with_assignment_guard(
-            binary=binary.proc_path,
-            binary_fd=binary.fd,
-            argv=argv,
-            credentials=credentials,
-        )
+        invoke_kwargs: dict[str, Any] = {
+            "binary": binary.proc_path,
+            "binary_fd": binary.fd,
+            "argv": argv,
+            "credentials": credentials,
+        }
+        if account_id is not None:
+            invoke_kwargs["account_id"] = account_id
+        process_result = _invoke_with_assignment_guard(**invoke_kwargs)
         if (
             process_result.returncode == AUTH_FAILURE_EXIT_CODE
             and not process_result.timed_out
             and not process_result.output_limited
             and not refreshed
         ):
-            credentials = _refresh_credentials()
+            credentials = _refresh_credentials(account_id=account_id)
             refreshed = True
-            process_result = _invoke_with_assignment_guard(
-                binary=binary.proc_path,
-                binary_fd=binary.fd,
-                argv=argv,
-                credentials=credentials,
-            )
+            invoke_kwargs["credentials"] = credentials
+            process_result = _invoke_with_assignment_guard(**invoke_kwargs)
 
-        return _result_payload(process_result, refreshed=refreshed, effect=effect)
+        payload = _result_payload(process_result, refreshed=refreshed, effect=effect)
+        payload["account_id"] = credentials.get("tinyhat_connection_id")
+        return payload
 
 
-def _refresh_credentials() -> dict[str, Any]:
+def _refresh_credentials(*, account_id: str | None = None) -> dict[str, Any]:
     try:
-        return refresh_verified_google_workspace_credentials()
+        return (
+            refresh_verified_google_workspace_credentials()
+            if account_id is None
+            else refresh_verified_google_workspace_credentials(account_id)
+        )
+    except GoogleWorkspaceAccountSelectionRequired as exc:
+        raise GoogleWorkspaceAppAccountSelectionRequired(exc.accounts) from exc
     except GoogleWorkspaceError as exc:
         raise GoogleWorkspaceAppError(
             "refresh_failed",
@@ -420,10 +584,14 @@ def _invoke_with_assignment_guard(
     binary_fd: int,
     argv: list[str],
     credentials: dict[str, Any],
+    account_id: str | None = None,
 ) -> AppProcessResult:
     """Serialize local lifecycle changes and discard output after reassignment."""
     with _lifecycle_lock():
-        current = _read_credentials()
+        selected_account_id = account_id or str(
+            credentials.get("tinyhat_connection_id") or ""
+        )
+        current = _read_credentials(selected_account_id or None)
         if current is None or not _same_credential_generation(current, credentials):
             raise GoogleWorkspaceAppError(
                 "connection_changed",
@@ -475,6 +643,7 @@ def _same_credential_generation(
     current: dict[str, Any], expected: dict[str, Any]
 ) -> bool:
     for field in (
+        "tinyhat_connection_id",
         "client_id",
         "access_token",
         "refresh_token",

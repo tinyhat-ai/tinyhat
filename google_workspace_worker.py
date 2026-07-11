@@ -35,6 +35,7 @@ from .google_workspace import (
     _profile_for_capability_bundle,
     _remove_active_handoff_marker_if_matches,
     _validated_capability_bundle,
+    _validated_connection_id,
     _validated_handoff_id,
 )
 from .platform import build_platform_client
@@ -72,6 +73,13 @@ def run_worker(*, handoff_id: str, key_path: Path) -> None:
                 metadata.get("scopes"),
                 expected=profile.scopes,
             )
+            connection_action = metadata.get("connection_action")
+            if connection_action not in {"add", "replace"}:
+                raise GoogleWorkspaceError("The one-time handoff action is invalid.")
+            target_connection_id = _validated_connection_id(
+                metadata.get("target_connection_id"),
+                required=True,
+            )
         except (OSError, UnicodeError, json.JSONDecodeError, GoogleWorkspaceError):
             client, platform_auth = build_platform_client()
             _claim_superseded(
@@ -92,6 +100,8 @@ def run_worker(*, handoff_id: str, key_path: Path) -> None:
                 expected_capability_bundle=capability_bundle,
                 expected_services=services,
                 expected_scopes=scopes,
+                connection_action=connection_action,
+                target_connection_id=target_connection_id,
             )
         )
         generation = ""
