@@ -20,7 +20,9 @@ app, not for Google authentication:
 The managed release supports Linux x86_64 and aarch64 Computers and installs
 only the pinned official `googleworkspace/cli` binary. Hermes already bundles
 the `google-workspace` skill for Gmail, Calendar, Drive, Sheets, and Docs
-operation guidance. Tinyhat overrides only its authentication/execution path:
+operation guidance. Tinyhat's current bridge and OAuth profiles execute Gmail,
+Calendar, and Drive namespaces; do not promise Sheets or Docs access yet.
+Tinyhat overrides only the native skill's authentication/execution path:
 never run `gws auth` or its setup scripts, never start a second OAuth flow, and
 never ask for a Google Cloud project, OAuth client, client secret, credentials
 JSON, `gcloud`, or a raw token.

@@ -50,12 +50,20 @@ GOOGLE_WORKSPACE_DISCONNECT_INTENTS_SUFFIX = f"{GOOGLE_WORKSPACE_API_SUFFIX}/dis
 GOOGLE_TOKEN_URI = "https://oauth2.googleapis.com/token"
 GOOGLE_WORKSPACE_PROFILE_READONLY = "workspace_readonly"
 GOOGLE_WORKSPACE_PROFILE_GMAIL_SEND = "gmail_send"
+GOOGLE_WORKSPACE_PROFILE_CALENDAR_WRITE = "calendar_write"
+GOOGLE_WORKSPACE_PROFILE_GMAIL_SEND_CALENDAR_WRITE = "gmail_send_calendar_write"
 GOOGLE_WORKSPACE_PROFILES = (
     GOOGLE_WORKSPACE_PROFILE_READONLY,
     GOOGLE_WORKSPACE_PROFILE_GMAIL_SEND,
+    GOOGLE_WORKSPACE_PROFILE_CALENDAR_WRITE,
+    GOOGLE_WORKSPACE_PROFILE_GMAIL_SEND_CALENDAR_WRITE,
 )
 GOOGLE_READONLY_CAPABILITY_BUNDLE = "google_workspace_readonly_v1"
 GOOGLE_GMAIL_SEND_CAPABILITY_BUNDLE = "google_workspace_gmail_send_v1"
+GOOGLE_CALENDAR_WRITE_CAPABILITY_BUNDLE = "google_workspace_calendar_write_v1"
+GOOGLE_GMAIL_SEND_CALENDAR_WRITE_CAPABILITY_BUNDLE = (
+    "google_workspace_gmail_send_calendar_write_v1"
+)
 GOOGLE_REQUESTED_SERVICES = ("identity", "gmail", "calendar", "drive")
 GOOGLE_READONLY_SCOPES = (
     "openid",
@@ -69,6 +77,16 @@ GOOGLE_GMAIL_SEND_SCOPES = (
     *GOOGLE_READONLY_SCOPES,
     "https://www.googleapis.com/auth/gmail.send",
 )
+GOOGLE_CALENDAR_WRITE_SCOPES = (
+    *GOOGLE_READONLY_SCOPES,
+    "https://www.googleapis.com/auth/calendar.events",
+)
+GOOGLE_GMAIL_SEND_CALENDAR_WRITE_SCOPES = (
+    *GOOGLE_GMAIL_SEND_SCOPES,
+    "https://www.googleapis.com/auth/calendar.events",
+)
+GOOGLE_WRITE_PERMISSION_GMAIL_SEND = "gmail_send"
+GOOGLE_WRITE_PERMISSION_CALENDAR_EVENTS = "calendar_events"
 # Backward-compatible names for callers that only need the default profile.
 GOOGLE_CAPABILITY_BUNDLE = GOOGLE_READONLY_CAPABILITY_BUNDLE
 GOOGLE_REQUESTED_SCOPES = GOOGLE_READONLY_SCOPES
@@ -128,6 +146,7 @@ class GoogleWorkspaceProfile:
     services: tuple[str, ...]
     scopes: tuple[str, ...]
     access_label: str
+    write_permissions: frozenset[str]
 
 
 GOOGLE_PROFILE_CONFIGS = {
@@ -137,6 +156,7 @@ GOOGLE_PROFILE_CONFIGS = {
         services=GOOGLE_REQUESTED_SERVICES,
         scopes=GOOGLE_READONLY_SCOPES,
         access_label="read-only Gmail, Calendar, and Drive access",
+        write_permissions=frozenset(),
     ),
     GOOGLE_WORKSPACE_PROFILE_GMAIL_SEND: GoogleWorkspaceProfile(
         name=GOOGLE_WORKSPACE_PROFILE_GMAIL_SEND,
@@ -144,8 +164,54 @@ GOOGLE_PROFILE_CONFIGS = {
         services=GOOGLE_REQUESTED_SERVICES,
         scopes=GOOGLE_GMAIL_SEND_SCOPES,
         access_label=("read-only Gmail, Calendar, and Drive access plus permission to send Gmail"),
+        write_permissions=frozenset({GOOGLE_WRITE_PERMISSION_GMAIL_SEND}),
+    ),
+    GOOGLE_WORKSPACE_PROFILE_CALENDAR_WRITE: GoogleWorkspaceProfile(
+        name=GOOGLE_WORKSPACE_PROFILE_CALENDAR_WRITE,
+        capability_bundle=GOOGLE_CALENDAR_WRITE_CAPABILITY_BUNDLE,
+        services=GOOGLE_REQUESTED_SERVICES,
+        scopes=GOOGLE_CALENDAR_WRITE_SCOPES,
+        access_label=(
+            "read-only Gmail, Calendar, and Drive access plus permission to create, "
+            "update, and delete Calendar events"
+        ),
+        write_permissions=frozenset({GOOGLE_WRITE_PERMISSION_CALENDAR_EVENTS}),
+    ),
+    GOOGLE_WORKSPACE_PROFILE_GMAIL_SEND_CALENDAR_WRITE: GoogleWorkspaceProfile(
+        name=GOOGLE_WORKSPACE_PROFILE_GMAIL_SEND_CALENDAR_WRITE,
+        capability_bundle=GOOGLE_GMAIL_SEND_CALENDAR_WRITE_CAPABILITY_BUNDLE,
+        services=GOOGLE_REQUESTED_SERVICES,
+        scopes=GOOGLE_GMAIL_SEND_CALENDAR_WRITE_SCOPES,
+        access_label=(
+            "read-only Gmail, Calendar, and Drive access plus permission to send Gmail "
+            "and create, update, and delete Calendar events"
+        ),
+        write_permissions=frozenset(
+            {
+                GOOGLE_WRITE_PERMISSION_GMAIL_SEND,
+                GOOGLE_WRITE_PERMISSION_CALENDAR_EVENTS,
+            }
+        ),
     ),
 }
+
+GOOGLE_PROFILE_CONFIGS_BY_WRITE_PERMISSIONS = {
+    profile.write_permissions: profile for profile in GOOGLE_PROFILE_CONFIGS.values()
+}
+
+
+class GoogleWorkspacePermissionConfirmationRequired(GoogleWorkspaceError):
+    """A connect request would add write permissions without confirmation."""
+
+    def __init__(
+        self,
+        *,
+        requested_profile: GoogleWorkspaceProfile,
+        missing_profile: GoogleWorkspaceProfile,
+    ) -> None:
+        self.requested_profile = requested_profile
+        self.missing_profile = missing_profile
+        super().__init__("Google Workspace permission upgrade confirmation is required.")
 
 
 @dataclass(frozen=True)
@@ -276,27 +342,22 @@ def google_workspace(args: dict[str, Any] | None = None, **_: Any) -> str:
                     "profile": GOOGLE_WORKSPACE_PROFILE_READONLY,
                 },
             )
-        if (
-            profile.name == GOOGLE_WORKSPACE_PROFILE_GMAIL_SEND
-            and payload.get("confirmed") is not True
-        ):
+        try:
+            result = _start_connection(
+                profile=profile,
+                confirmed=payload.get("confirmed") is True,
+            )
+        except GoogleWorkspacePermissionConfirmationRequired as exc:
             return tool_error_json(
                 tool="tinyhat_google_workspace",
                 error_name="confirmation_required",
-                message=(
-                    "Ask the user to explicitly confirm upgrading this Google Workspace "
-                    "connection so the agent may send Gmail. This permission upgrade is "
-                    "separate from confirming any later email send. It adds gmail.send "
-                    "only; Gmail draft management is not enabled."
-                ),
+                message=_permission_upgrade_confirmation_message(exc.missing_profile),
                 example_call={
                     "action": "connect",
-                    "profile": GOOGLE_WORKSPACE_PROFILE_GMAIL_SEND,
+                    "profile": exc.requested_profile.name,
                     "confirmed": True,
                 },
             )
-        try:
-            result = _start_connection(profile=profile)
         except Exception:
             result = {
                 "schema": "tinyhat_google_workspace_action_v1",
@@ -325,21 +386,107 @@ def _profile_for_capability_bundle(value: Any) -> GoogleWorkspaceProfile:
     raise GoogleWorkspaceError("Platform returned an unexpected capability bundle.")
 
 
-def _start_connection(*, profile: GoogleWorkspaceProfile | None = None) -> dict[str, Any]:
+def _permission_upgrade_confirmation_message(profile: GoogleWorkspaceProfile) -> str:
+    capabilities: list[str] = []
+    later_actions: list[str] = []
+    scope_names: list[str] = []
+    if GOOGLE_WRITE_PERMISSION_GMAIL_SEND in profile.write_permissions:
+        capabilities.append("send Gmail")
+        later_actions.append("email send")
+        scope_names.append("gmail.send")
+    if GOOGLE_WRITE_PERMISSION_CALENDAR_EVENTS in profile.write_permissions:
+        capabilities.append("create, update, and delete Calendar events")
+        later_actions.append("Calendar change")
+        scope_names.append("calendar.events")
+    if not capabilities:
+        raise GoogleWorkspaceError("The selected profile is not a permission upgrade.")
+    capability_text = " and ".join(capabilities)
+    later_action_text = " or ".join(later_actions)
+    scope_text = " and ".join(scope_names)
+    draft_note = (
+        " Gmail draft management is not enabled."
+        if GOOGLE_WRITE_PERMISSION_GMAIL_SEND in profile.write_permissions
+        else ""
+    )
+    return (
+        "Ask the user to explicitly confirm upgrading this Google Workspace connection "
+        f"so the agent may {capability_text}. This permission upgrade is separate from "
+        f"confirming any later {later_action_text}. It adds {scope_text} while retaining "
+        f"existing granted write permissions.{draft_note}"
+    )
+
+
+def _resolve_profile_for_connection_locked(
+    requested_profile: GoogleWorkspaceProfile,
+    *,
+    confirmed: bool,
+) -> tuple[GoogleWorkspaceProfile, PlatformClient | None, str | None]:
+    """Resolve one assignment-verified additive profile before connect side effects."""
+    current_credentials = _read_credentials()
+    client: PlatformClient | None = None
+    platform_auth: str | None = None
+    current_permissions: frozenset[str] = frozenset()
+    if current_credentials is not None:
+        client, platform_auth = build_platform_client()
+        if not _assignment_binding_matches_platform(
+            credentials=current_credentials,
+            client=client,
+            platform_auth=platform_auth,
+        ):
+            ACTIVE_DISCONNECT_PATH.unlink(missing_ok=True)
+            _cancel_all_pending_handoffs_locked()
+            _delete_credentials_locked()
+        else:
+            current_profile = _profile_for_capability_bundle(
+                current_credentials["capability_bundle"]
+            )
+            current_permissions = current_profile.write_permissions
+
+    missing_permissions = frozenset(requested_profile.write_permissions - current_permissions)
+    if missing_permissions and not confirmed:
+        missing_profile = GOOGLE_PROFILE_CONFIGS_BY_WRITE_PERMISSIONS.get(missing_permissions)
+        if missing_profile is None:
+            raise GoogleWorkspaceError(
+                "No allowlisted Google Workspace profile describes the permission upgrade."
+            )
+        raise GoogleWorkspacePermissionConfirmationRequired(
+            requested_profile=requested_profile,
+            missing_profile=missing_profile,
+        )
+
+    combined_permissions = frozenset(requested_profile.write_permissions | current_permissions)
+    combined_profile = GOOGLE_PROFILE_CONFIGS_BY_WRITE_PERMISSIONS.get(combined_permissions)
+    if combined_profile is None:
+        raise GoogleWorkspaceError(
+            "No allowlisted Google Workspace profile preserves the existing permissions."
+        )
+    return combined_profile, client, platform_auth
+
+
+def _start_connection(
+    *,
+    profile: GoogleWorkspaceProfile | None = None,
+    confirmed: bool = False,
+) -> dict[str, Any]:
     requested_profile = profile or GOOGLE_PROFILE_CONFIGS[GOOGLE_WORKSPACE_PROFILE_READONLY]
-    button_label = _google_authorization_button_label(requested_profile)
-    private_key_pem, public_key_pem = _generate_key_pair()
-    generation = secrets.token_urlsafe(32)
     # Serialize the complete start transition. A disconnect that begins after
     # this connect waits until its marker exists, then cancels it. A second
     # connect supersedes the first marker before either worker may install.
     with _lifecycle_lock():
+        _wipe_invalid_credentials_and_pending_handoffs_locked()
+        requested_profile, client, platform_auth = _resolve_profile_for_connection_locked(
+            requested_profile,
+            confirmed=confirmed,
+        )
+        if client is None or platform_auth is None:
+            client, platform_auth = build_platform_client()
+        private_key_pem, public_key_pem = _generate_key_pair()
+        generation = secrets.token_urlsafe(32)
         # A new connection attempt supersedes any unconfirmed disconnect
         # ceremony. Its worker keeps polling only long enough to observe the
         # superseded platform state; the missing local marker prevents deletion.
         ACTIVE_DISCONNECT_PATH.unlink(missing_ok=True)
-        _wipe_invalid_credentials_and_pending_handoffs_locked()
-        client, platform_auth = build_platform_client()
+        button_label = _google_authorization_button_label(requested_profile)
         handoff = client.post_json(
             computer_api_path(platform_auth, GOOGLE_WORKSPACE_API_SUFFIX),
             {
@@ -465,7 +612,7 @@ def _send_google_connect_button(
     button_label = _google_authorization_button_label(requested_profile)
     action_label = (
         "Upgrade Google Workspace"
-        if requested_profile.name == GOOGLE_WORKSPACE_PROFILE_GMAIL_SEND
+        if requested_profile.write_permissions
         else "Connect Google Workspace"
     )
     try:
@@ -489,7 +636,7 @@ def _send_google_connect_button(
 
 def _google_authorization_button_label(profile: GoogleWorkspaceProfile) -> str:
     """Distinguish first connection from a permission expansion in Telegram."""
-    if profile.name == GOOGLE_WORKSPACE_PROFILE_GMAIL_SEND:
+    if profile.write_permissions:
         return "Upgrade Google access"
     return "Connect Google"
 
@@ -2054,10 +2201,13 @@ def _poll_and_install(handoff: GoogleWorkspaceWorkerHandoff) -> None:
                     handoff_id=handoff.handoff_id,
                 )
                 _clear_active_handoff(handoff)
+                ready_profile = _profile_for_capability_bundle(
+                    handoff.expected_capability_bundle
+                )
                 ready_notice = (
-                    "ready_gmail_send"
-                    if handoff.expected_capability_bundle == GOOGLE_GMAIL_SEND_CAPABILITY_BUNDLE
-                    else "ready"
+                    "ready"
+                    if not ready_profile.write_permissions
+                    else f"ready_{ready_profile.name}"
                 )
                 notification_attempted = True
                 _send_google_workspace_notice(ready_notice)
@@ -2111,6 +2261,16 @@ TELEGRAM_NOTICE_MESSAGES = {
         "Google Workspace permissions were updated on this Computer. Read-only "
         "Gmail, Calendar, and Drive access remains available, and Gmail sending "
         "is now enabled. I will still ask before sending an email."
+    ),
+    "ready_calendar_write": (
+        "Google Workspace permissions were updated on this Computer. Read-only "
+        "Gmail, Calendar, and Drive access remains available, and Calendar event "
+        "changes are now enabled. I will still ask before changing an event."
+    ),
+    "ready_gmail_send_calendar_write": (
+        "Google Workspace permissions were updated on this Computer. Read-only "
+        "Gmail, Calendar, and Drive access remains available, Gmail sending and "
+        "Calendar event changes are now enabled, and I will still ask before each write."
     ),
     "cancelled": (
         "Google Workspace connection was cancelled. Ask me to connect Google "
@@ -2831,6 +2991,11 @@ def _persist_refreshed_credentials(
         for field in ("client_id", "refresh_token", "tinyhat_assignment_binding"):
             if not hmac.compare_digest(str(current[field]), str(expected[field])):
                 raise GoogleWorkspaceError("Google credentials changed during refresh.")
+        if not hmac.compare_digest(
+            _refresh_credential_generation(current),
+            _refresh_credential_generation(expected),
+        ):
+            raise GoogleWorkspaceError("Google credentials changed during refresh.")
         platform_binding = _fetch_assignment_binding(
             client=client,
             platform_auth=platform_auth,
@@ -2850,6 +3015,35 @@ def _persist_refreshed_credentials(
             current["refresh_token"] = rotated
         _atomic_save_credentials(current)
         return dict(current)
+
+
+def _refresh_credential_generation(credentials: dict[str, Any]) -> str:
+    """Fingerprint every connection field that an access-token refresh cannot change."""
+    material = {
+        field: credentials.get(field)
+        for field in (
+            "schema",
+            "capability_bundle",
+            "services",
+            "scopes",
+            "token_uri",
+            "client_id",
+            "refresh_token",
+            "token_type",
+            "google_subject",
+            "email",
+            "email_verified",
+            "connected_at",
+            "tinyhat_assignment_binding",
+        )
+    }
+    encoded = json.dumps(
+        material,
+        ensure_ascii=False,
+        separators=(",", ":"),
+        sort_keys=True,
+    ).encode("utf-8")
+    return hashlib.sha256(encoded).hexdigest()
 
 
 def _status_payload() -> dict[str, Any]:

@@ -107,8 +107,11 @@ to add or save an API key, token, password, or credential.
 
 `tinyhat-google-workspace` is the default way to connect an existing Google
 Workspace account. The default profile grants identity plus read-only Gmail,
-Calendar, and Drive access. A separately confirmed named `gmail_send` profile
-adds only Gmail send permission; it does not add Gmail draft management. The skill calls
+Calendar, and Drive access. Separately confirmed named `gmail_send`,
+`calendar_write`, and `gmail_send_calendar_write` profiles add Gmail sending,
+Calendar event changes, or both. Existing verified write permissions survive
+another upgrade or default reconnect; the plugin never accepts raw scopes. The
+Gmail profile does not add draft management. The skill calls
 `tinyhat_google_workspace` instead of
 asking for Google Cloud setup, OAuth values, SSH access, or a manual credential
 file. The plugin requests a fixed reviewed bundle and places the platform-authored
