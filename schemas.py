@@ -152,8 +152,9 @@ TINYHAT_GOOGLE_WORKSPACE_APP_MANAGER_SCHEMA = {
     "type": "object",
     "description": (
         "Inspect, install, or uninstall Tinyhat's pinned and integrity-verified "
-        "Google Workspace CLI app plus official operation skills. Installation "
-        "never starts another OAuth flow and requires explicit user approval."
+        "Google Workspace CLI app. Hermes's native Google Workspace skill supplies "
+        "operation guidance. Installation never starts another OAuth flow and "
+        "requires explicit user approval."
     ),
     "properties": {
         "action": {

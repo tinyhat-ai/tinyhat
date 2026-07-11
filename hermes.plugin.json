@@ -51,7 +51,7 @@
       "qualified_name": "tinyhat:tinyhat-google-workspace-app-manager",
       "aliases": ["tinyhat-google-workspace-app-manager"],
       "path": "skills/tinyhat-google-workspace-app-manager/SKILL.md",
-      "purpose": "Installs and verifies the pinned Google Workspace CLI app and official operation skills after approval."
+      "purpose": "Installs and verifies only the pinned Google Workspace CLI app after approval; Hermes supplies the native operation skill."
     },
     {
       "name": "tinyhat-codex-auth",

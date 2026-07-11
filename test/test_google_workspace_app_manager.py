@@ -181,6 +181,8 @@ class GoogleWorkspaceAppManagerTests(unittest.TestCase):
         tinyhat.register(context)
 
         self.assertEqual(set(schema["properties"]), {"action", "confirmed"})
+        self.assertIn("Hermes's native Google Workspace skill", schema["description"])
+        self.assertNotIn("operation skills", schema["description"])
         self.assertEqual(schema["properties"]["action"]["enum"], list(manager.MANAGER_ACTIONS))
         self.assertFalse(schema["additionalProperties"])
         manager_calls = [

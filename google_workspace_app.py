@@ -136,8 +136,8 @@ def google_workspace_app(args: dict[str, Any] | None = None, **_: Any) -> str:
             tool="tinyhat_google_workspace_app",
             error_name="missing_required_parameter",
             message=(
-                "Load the matching installed gws skill, then pass its bounded argv "
-                "to tinyhat_google_workspace_app."
+                "Load Hermes's native Google Workspace skill, then pass its bounded "
+                "gws argv to tinyhat_google_workspace_app."
             ),
             missing=["argv"],
             expected={"argv": "array of 1..64 gws arguments"},

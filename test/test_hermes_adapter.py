@@ -160,6 +160,10 @@ class HermesAdapterTests(unittest.TestCase):
             by_name["tinyhat-plugin-update"]["qualified_name"],
             "tinyhat:tinyhat-plugin-update",
         )
+        manager_purpose = by_name["tinyhat-google-workspace-app-manager"]["purpose"]
+        self.assertIn("only the pinned Google Workspace CLI app", manager_purpose)
+        self.assertIn("Hermes supplies the native operation skill", manager_purpose)
+        self.assertNotIn("operation skills", manager_purpose)
         self.assertIn("qualified names", payload["lookup_rule"])
 
     def test_context_hook_injects_for_secret_requests(self) -> None:
