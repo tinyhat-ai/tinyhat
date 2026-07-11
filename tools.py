@@ -4,11 +4,16 @@ from __future__ import annotations
 
 import json
 import os
-from pathlib import Path
 import subprocess
+from pathlib import Path
 from typing import Any
 from urllib import error, parse, request
 
+from .google_workspace import google_workspace as handle_google_workspace
+from .google_workspace_app import google_workspace_app as handle_google_workspace_app
+from .google_workspace_app_manager import (
+    google_workspace_app_manager as handle_google_workspace_app_manager,
+)
 from .secret_handoff import start_private_secret_handoff
 from .tool_errors import tool_error_json
 
@@ -132,6 +137,23 @@ def tell_joke(args: dict[str, Any] | None = None, **_: Any) -> str:
 def private_secret_handoff(args: dict[str, Any] | None = None, **kwargs: Any) -> str:
     """Start a blind private-secret handoff through the Tinyhat platform."""
     return start_private_secret_handoff(args, **kwargs)
+
+
+def google_workspace(args: dict[str, Any] | None = None, **kwargs: Any) -> str:
+    """Connect, inspect, or disconnect Google Workspace on this Computer."""
+    return handle_google_workspace(args, **kwargs)
+
+
+def google_workspace_app(args: dict[str, Any] | None = None, **kwargs: Any) -> str:
+    """Bridge assignment-verified Google access to the separately installed gws app."""
+    return handle_google_workspace_app(args, **kwargs)
+
+
+def google_workspace_app_manager(
+    args: dict[str, Any] | None = None, **kwargs: Any
+) -> str:
+    """Manage the pinned gws app and verified operation skills."""
+    return handle_google_workspace_app_manager(args, **kwargs)
 
 
 def codex_auth(args: dict[str, Any] | None = None, **_: Any) -> str:
@@ -496,12 +518,18 @@ def _telegram_send_message(
     token: str,
     chat_id: str,
     text: str,
+    reply_markup: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     payload: dict[str, Any] = {
         "chat_id": chat_id,
         "text": text[:3900],
         "disable_web_page_preview": "true",
     }
+    if reply_markup is not None:
+        payload["reply_markup"] = json.dumps(
+            reply_markup,
+            separators=(",", ":"),
+        )
     body = parse.urlencode(payload).encode("utf-8")
     return _telegram_post(
         token=token,

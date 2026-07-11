@@ -16,6 +16,8 @@ from pathlib import Path
 from typing import Any
 from urllib import error, parse, request
 
+JWT_MIN_PARTS = 2
+
 DEFAULT_ENV_FILES = (
     Path("/opt/tinyhat-hermes-runtime/env/runtime.env"),
     Path("/etc/tinyhat/hermes-runtime.env"),
@@ -94,7 +96,7 @@ class PlatformClient:
             "Accept": "application/json",
             "Authorization": f"Bearer {token}",
             "Content-Type": "application/json",
-            "User-Agent": "tinyhat-plugin/0.20",
+            "User-Agent": "tinyhat-plugin/0.21",
         }
         body = (
             json.dumps(payload, separators=(",", ":")).encode("utf-8")
@@ -128,19 +130,34 @@ class PlatformClient:
         return decoded
 
 
-def build_platform_client(env: dict[str, str] | None = None) -> tuple[PlatformClient, str]:
+def build_platform_client(
+    env: dict[str, str] | None = None,
+    *,
+    timeout_seconds: int = 20,
+) -> tuple[PlatformClient, str]:
     values = runtime_env(env)
     base_url = values.get("TINYHAT_PLATFORM_URL", "").strip()
     if not base_url:
         raise PlatformError("TINYHAT_PLATFORM_URL is not configured")
     local_token = values.get("TINYHAT_LOCAL_DEV_TOKEN", "").strip()
     if local_token:
-        return PlatformClient(base_url=base_url, token=local_token), "local_dev"
+        return (
+            PlatformClient(
+                base_url=base_url,
+                token=local_token,
+                timeout_seconds=timeout_seconds,
+            ),
+            "local_dev",
+        )
     audience = values.get("TINYHAT_COMPUTER_TOKEN_AUDIENCE", "").strip() or base_url
     return (
         PlatformClient(
             base_url=base_url,
-            token_provider=CachedGoogleIdentityToken(audience=audience),
+            token_provider=CachedGoogleIdentityToken(
+                audience=audience,
+                timeout_seconds=min(timeout_seconds, 5),
+            ),
+            timeout_seconds=timeout_seconds,
         ),
         "gcloud",
     )
@@ -184,7 +201,7 @@ def _read_env_file(path: Path) -> dict[str, str]:
 
 def _jwt_exp(token: str) -> int | None:
     parts = token.split(".")
-    if len(parts) < 2:
+    if len(parts) < JWT_MIN_PARTS:
         return None
     payload = parts[1] + "=" * (-len(parts[1]) % 4)
     try:

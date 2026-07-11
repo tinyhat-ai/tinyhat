@@ -71,6 +71,24 @@ def register(ctx: Any) -> None:
         handler=tools.private_secret_handoff,
     )
     ctx.register_tool(
+        name="tinyhat_google_workspace",
+        toolset="tinyhat",
+        schema=schemas.TINYHAT_GOOGLE_WORKSPACE_SCHEMA,
+        handler=tools.google_workspace,
+    )
+    ctx.register_tool(
+        name="tinyhat_google_workspace_app",
+        toolset="tinyhat",
+        schema=schemas.TINYHAT_GOOGLE_WORKSPACE_APP_SCHEMA,
+        handler=tools.google_workspace_app,
+    )
+    ctx.register_tool(
+        name="tinyhat_google_workspace_app_manager",
+        toolset="tinyhat",
+        schema=schemas.TINYHAT_GOOGLE_WORKSPACE_APP_MANAGER_SCHEMA,
+        handler=tools.google_workspace_app_manager,
+    )
+    ctx.register_tool(
         name="tinyhat_codex_auth",
         toolset="tinyhat",
         schema=schemas.TINYHAT_CODEX_AUTH_SCHEMA,

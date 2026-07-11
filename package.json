@@ -1,6 +1,6 @@
 {
   "name": "tinyhat",
-  "version": "0.20.14",
+  "version": "0.21.0",
   "description": "Hermes plugin that teaches agents how to use Tinyhat platform capabilities.",
   "private": true,
   "files": [
@@ -9,6 +9,11 @@
     "__init__.py",
     "platform.py",
     "context.py",
+    "google_workspace.py",
+    "google_workspace_app.py",
+    "google_workspace_app_manager.py",
+    "google_workspace_disconnect_worker.py",
+    "google_workspace_worker.py",
     "secret_handoff.py",
     "secret_handoff_worker.py",
     "schemas.py",
