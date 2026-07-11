@@ -6,6 +6,9 @@ All notable changes to the Tinyhat plugin are documented here.
 
 ### Changed
 
+- Bump the Hermes plugin package to `0.21.1` for Hermes-native Google
+  Workspace operation guidance, binary-only `gws` integrity checks, and
+  additive Calendar-event-write and combined Gmail/Calendar upgrades.
 - Bump the Hermes plugin package to `0.21.0` for platform-owned Google
   Workspace OAuth, named Gmail-send permission upgrades, the bounded managed
   `gws` bridge, and the Computer-local two-stage revoke flow.

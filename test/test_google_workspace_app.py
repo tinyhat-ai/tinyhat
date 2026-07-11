@@ -667,6 +667,63 @@ class GoogleRefreshTransportTests(unittest.TestCase):
                 )
             self.assertFalse(google_workspace.CREDENTIALS_PATH.exists())
 
+    def test_refresh_started_before_upgrade_cannot_overwrite_upgraded_access(self) -> None:
+        class Client:
+            def get_json(self, _path: str) -> dict[str, object]:
+                return {"tinyhat_assignment_binding": "assignment-binding-123"}
+
+        gmail_scopes = list(google_workspace.GOOGLE_GMAIL_SEND_SCOPES)
+        combined_scopes = list(google_workspace.GOOGLE_GMAIL_SEND_CALENDAR_WRITE_SCOPES)
+        expected_before_upgrade = google_workspace._normalize_saved_credentials(
+            credentials(
+                bundle=google_workspace.GOOGLE_GMAIL_SEND_CAPABILITY_BUNDLE,
+                scopes=gmail_scopes,
+            )
+        )
+        stale_refresh = google_workspace._normalize_refresh_document(
+            {
+                "schema": "tinyhat_google_workspace_refresh_v1",
+                "access_token": "stale-gmail-only-access",
+                "token_type": "Bearer",
+                "expires_at": "2030-01-01T01:00:00+00:00",
+                "scopes": gmail_scopes,
+                "tinyhat_assignment_binding": "assignment-binding-123",
+            },
+            expected_assignment_binding="assignment-binding-123",
+            expected_scopes=gmail_scopes,
+        )
+        upgraded = google_workspace._normalize_saved_credentials(
+            credentials(
+                bundle=(google_workspace.GOOGLE_GMAIL_SEND_CALENDAR_WRITE_CAPABILITY_BUNDLE),
+                scopes=combined_scopes,
+            )
+        )
+        upgraded["access_token"] = "combined-access"
+        upgraded["connected_at"] = "2026-07-10T20:05:00+00:00"
+
+        with tempfile.TemporaryDirectory() as tmp, self._patched_state(Path(tmp)):
+            google_workspace._atomic_save_credentials(upgraded)
+            before = google_workspace.CREDENTIALS_PATH.read_bytes()
+
+            with self.assertRaises(google_workspace.GoogleWorkspaceError):
+                google_workspace._persist_refreshed_credentials(
+                    expected=expected_before_upgrade,
+                    refreshed=stale_refresh,
+                    client=Client(),
+                    platform_auth="local_dev",
+                )
+
+            after = google_workspace.CREDENTIALS_PATH.read_bytes()
+            saved = json.loads(after)
+
+        self.assertEqual(after, before)
+        self.assertEqual(
+            saved["capability_bundle"],
+            google_workspace.GOOGLE_GMAIL_SEND_CALENDAR_WRITE_CAPABILITY_BUNDLE,
+        )
+        self.assertEqual(saved["scopes"], combined_scopes)
+        self.assertEqual(saved["access_token"], "combined-access")
+
     def test_refresh_document_rejects_unknown_or_server_fields(self) -> None:
         document = {
             "schema": "tinyhat_google_workspace_refresh_v1",

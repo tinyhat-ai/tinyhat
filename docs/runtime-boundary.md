@@ -35,20 +35,26 @@ The default profile fixes `google_workspace_readonly_v1` to services `identity`,
 Calendar, and Drive read-only scopes. Neither the user nor agent can supply
 arbitrary scopes. A separately confirmed `google_workspace_gmail_send_v1`
 upgrade adds only `gmail.send`; it does not add `gmail.compose`, and permission
-upgrade is not confirmation for an actual send. Consumer skills and scripts
-can evolve across the same plugin/platform boundary while the runtime continues
-to supply only the existing Computer identity and plugin lifecycle.
+upgrade is not confirmation for an actual send. Separately confirmed
+`google_workspace_calendar_write_v1` and
+`google_workspace_gmail_send_calendar_write_v1` bundles add only
+`calendar.events` or the two write permissions together. Verified existing
+write permissions are retained across upgrades and reconnects. Consumer skills
+and scripts can evolve across the same plugin/platform boundary while the runtime
+continues to supply only the existing Computer identity and plugin lifecycle.
 The auth plugin does not implement Gmail, Calendar, or Drive operations. A
 generic `tinyhat_google_workspace_app` bridge lends one current access token to
-an isolated, manifest-verified root-owned `gws` child; verified official gws skills own all
-service-specific argv and interpretation. The platform uses the central OAuth
-client secret for encrypted token refresh. No runtime change is involved.
+an isolated, manifest-verified root-owned `gws` child. Hermes's bundled
+`google-workspace` skill owns operation guidance; its local-client OAuth setup
+and scripts are bypassed. The platform uses the central OAuth client secret for
+encrypted token refresh. No runtime change is involved.
 
-The plugin-owned app manager installs pinned official Linux x86_64 or aarch64
-`gws` artifacts and operation skills after user approval. It verifies hardcoded
-hashes, installs transactionally, and removes only unchanged managed files. A
-Tinyhat shared shim makes every operation skill use the existing token bridge,
-never Google Cloud setup or `gws auth`. This also requires no runtime change.
+The plugin-owned app manager installs only a pinned official Linux x86_64 or
+aarch64 `gws` binary after user approval. It verifies hardcoded hashes and
+installs transactionally. A confirmed migration retires obsolete skills from
+the prior manager layout without touching Hermes's bundled skill. The existing
+token bridge replaces Google Cloud setup and `gws auth`. This also requires no
+runtime change.
 
 Google disconnect follows the same boundary. The plugin starts a
 generation-bound Computer worker and calls platform APIs. The platform sends a

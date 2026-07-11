@@ -61,12 +61,6 @@ def archive_with(entries: list[tuple[str, bytes, str]]) -> bytes:
 
 
 class GoogleWorkspaceAppManagerTests(unittest.TestCase):
-    def test_packaged_shared_skill_matches_hardcoded_hash(self) -> None:
-        self.assertEqual(
-            sha(manager.TINYHAT_SHARED_SKILL_SOURCE.read_bytes()),
-            manager.TINYHAT_SHARED_SKILL_SHA256,
-        )
-
     @contextmanager
     def configured_manager(self):
         binary = b"fake-pinned-gws"
@@ -81,20 +75,13 @@ class GoogleWorkspaceAppManagerTests(unittest.TestCase):
         )
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
-            shared_source = root / "package" / "gws-shared" / "SKILL.md"
-            shared_source.parent.mkdir(parents=True)
-            shared_source.write_bytes(shared)
             install_root = root / "opt" / "tinyhat"
             with ExitStack() as stack:
-                stack.enter_context(
-                    mock.patch.object(manager, "INSTALL_ROOT", install_root)
-                )
+                stack.enter_context(mock.patch.object(manager, "INSTALL_ROOT", install_root))
                 stack.enter_context(
                     mock.patch.object(manager, "BINARY_PATH", install_root / "bin" / "gws")
                 )
-                stack.enter_context(
-                    mock.patch.object(manager, "STATE_DIR", install_root / "state")
-                )
+                stack.enter_context(mock.patch.object(manager, "STATE_DIR", install_root / "state"))
                 stack.enter_context(
                     mock.patch.object(
                         manager,
@@ -115,9 +102,6 @@ class GoogleWorkspaceAppManagerTests(unittest.TestCase):
                         "HERMES_SKILLS_ROOT",
                         root / "root" / ".hermes" / "skills",
                     )
-                )
-                stack.enter_context(
-                    mock.patch.object(manager, "TINYHAT_SHARED_SKILL_SOURCE", shared_source)
                 )
                 stack.enter_context(
                     mock.patch.object(manager, "TINYHAT_SHARED_SKILL_SHA256", sha(shared))
@@ -165,6 +149,31 @@ class GoogleWorkspaceAppManagerTests(unittest.TestCase):
                     "shared": shared,
                 }
 
+    def install_legacy_manifest(self, fixture: dict[str, object]) -> None:
+        """Recreate the 0.21.0 binary-plus-skills manifest for upgrade tests."""
+        manager.install_managed_app()
+        release = manager.TRUSTED_MANAGED_RELEASES[manager.PINNED_GWS_VERSION]
+        artifact = release["artifacts"]["x86_64"]
+        records = manager._expected_manifest_records_for_release(
+            version=manager.PINNED_GWS_VERSION,
+            artifact=artifact,
+            release=release,
+        )
+        contents = {
+            "skill:gws-calendar": fixture["official"],
+            "skill:gws-shared": fixture["shared"],
+        }
+        targets = manager._managed_targets()
+        for component, content in contents.items():
+            path = targets[component]
+            path.parent.mkdir(mode=0o755, parents=True, exist_ok=True)
+            path.write_bytes(content)  # type: ignore[arg-type]
+            path.chmod(0o644)
+        manifest = json.loads(manager.MANIFEST_PATH.read_text())
+        manifest["components"] = records
+        manager.MANIFEST_PATH.write_text(json.dumps(manifest), encoding="utf-8")
+        manager.MANIFEST_PATH.chmod(0o600)
+
     def test_schema_and_adapter_expose_manager_without_raw_version_or_url(self) -> None:
         schema = schemas.TINYHAT_GOOGLE_WORKSPACE_APP_MANAGER_SCHEMA
         context = mock.Mock()
@@ -172,6 +181,22 @@ class GoogleWorkspaceAppManagerTests(unittest.TestCase):
         tinyhat.register(context)
 
         self.assertEqual(set(schema["properties"]), {"action", "confirmed"})
+        self.assertIn("Hermes's native Google Workspace skill", schema["description"])
+        self.assertNotIn("operation skills", schema["description"])
+        bridge_schema = schemas.TINYHAT_GOOGLE_WORKSPACE_APP_SCHEMA
+        self.assertIn(
+            "Hermes's native Google Workspace skill",
+            bridge_schema["description"],
+        )
+        self.assertIn(
+            "Hermes's native Google Workspace skill",
+            bridge_schema["properties"]["argv"]["description"],
+        )
+        self.assertNotIn("separate gws skills", bridge_schema["description"])
+        self.assertNotIn(
+            "installed gws skill",
+            bridge_schema["properties"]["argv"]["description"],
+        )
         self.assertEqual(schema["properties"]["action"]["enum"], list(manager.MANAGER_ACTIONS))
         self.assertFalse(schema["additionalProperties"])
         manager_calls = [
@@ -230,9 +255,10 @@ class GoogleWorkspaceAppManagerTests(unittest.TestCase):
                 archive_sha256="0" * 64,
                 binary_sha256=manager.PINNED_BINARY_SHA256,
             )
-            with mock.patch.object(
-                manager, "_require_supported_host", return_value=bad_artifact
-            ), self.assertRaises(manager.GoogleWorkspaceAppManagerError) as raised:
+            with (
+                mock.patch.object(manager, "_require_supported_host", return_value=bad_artifact),
+                self.assertRaises(manager.GoogleWorkspaceAppManagerError) as raised,
+            ):
                 manager.install_managed_app()
 
         self.assertEqual(raised.exception.code, "integrity_mismatch")
@@ -243,19 +269,19 @@ class GoogleWorkspaceAppManagerTests(unittest.TestCase):
             archive_with([("gws", b"", "symlink")]),
         ]
         for archive in variants:
-            with self.subTest(), self.assertRaises(
-                manager.GoogleWorkspaceAppManagerError
-            ) as raised:
+            with (
+                self.subTest(),
+                self.assertRaises(manager.GoogleWorkspaceAppManagerError) as raised,
+            ):
                 manager._extract_gws_binary(archive)
             self.assertEqual(raised.exception.code, "unsafe_archive")
 
     def test_install_is_transactional_when_second_replace_fails(self) -> None:
         with self.configured_manager():
             real_replace = os.replace
-            skill_target = manager.HERMES_SKILLS_ROOT / "gws-calendar" / "SKILL.md"
 
             def replace(source, target):
-                if Path(target) == skill_target and "tinyhat-stage" in Path(source).name:
+                if Path(target) == manager.MANIFEST_PATH and "tinyhat-stage" in Path(source).name:
                     raise OSError("injected commit failure")
                 return real_replace(source, target)
 
@@ -267,20 +293,18 @@ class GoogleWorkspaceAppManagerTests(unittest.TestCase):
 
             self.assertEqual(raised.exception.code, "install_failed")
             self.assertFalse(manager.BINARY_PATH.exists())
-            self.assertFalse(skill_target.exists())
             self.assertFalse(manager.MANIFEST_PATH.exists())
 
     def test_next_install_recovers_exact_orphan_after_process_kill_window(self) -> None:
         with self.configured_manager():
             real_replace = os.replace
-            skill_target = manager.HERMES_SKILLS_ROOT / "gws-calendar" / "SKILL.md"
             interrupted = False
 
             def replace(source, target):
                 nonlocal interrupted
                 if (
                     not interrupted
-                    and Path(target) == skill_target
+                    and Path(target) == manager.MANIFEST_PATH
                     and "tinyhat-stage" in Path(source).name
                 ):
                     interrupted = True
@@ -320,25 +344,23 @@ class GoogleWorkspaceAppManagerTests(unittest.TestCase):
 
         self.assertEqual(raised.exception.code, "managed_state_invalid")
 
-    def test_bridge_rejects_any_modified_operation_or_shared_skill(self) -> None:
+    def test_legacy_skill_drift_does_not_block_verified_binary(self) -> None:
         for name in ("gws-calendar", "gws-shared"):
-            with self.subTest(name=name), self.configured_manager():
-                manager.install_managed_app()
+            with self.subTest(name=name), self.configured_manager() as fixture:
+                self.install_legacy_manifest(fixture)
                 skill = manager.HERMES_SKILLS_ROOT / name / "SKILL.md"
                 skill.write_bytes(b"prompt injection")
                 skill.chmod(0o644)
 
-                with (
-                    self.assertRaises(manager.GoogleWorkspaceAppManagerError) as raised,
-                    manager.verified_managed_gws_binary(),
-                ):
-                    self.fail("modified skills must block token lending")
+                status = manager.managed_app_status()
 
-                self.assertEqual(raised.exception.code, "app_unavailable")
+                self.assertEqual(status["status"], "installed")
+                self.assertTrue(status["binary_ready"])
+                self.assertEqual(status["legacy_changed_components"], [f"skill:{name}"])
 
     def test_uninstall_quarantines_modified_skill_out_of_active_path(self) -> None:
-        with self.configured_manager():
-            manager.install_managed_app()
+        with self.configured_manager() as fixture:
+            self.install_legacy_manifest(fixture)
             skill = manager.HERMES_SKILLS_ROOT / "gws-calendar" / "SKILL.md"
             skill.write_bytes(b"locally modified")
             skill.chmod(0o644)
@@ -359,11 +381,55 @@ class GoogleWorkspaceAppManagerTests(unittest.TestCase):
         with self.configured_manager():
             result = manager.install_managed_app()
             status = manager.managed_app_status()
+            manifest = json.loads(manager.MANIFEST_PATH.read_text())
 
             self.assertEqual(result["status"], "installed")
             self.assertEqual(status["status"], "installed")
             self.assertTrue(status["binary_ready"])
-            self.assertTrue(status["skills_ready"])
+            self.assertEqual(status["operation_skill"], "google-workspace")
+            self.assertEqual(set(manifest["components"]), {"gws"})
+
+    def test_fresh_install_reuses_native_skill_without_touching_hermes_tree(self) -> None:
+        with self.configured_manager():
+            native_skill = (
+                manager.HERMES_SKILLS_ROOT / "productivity" / "google-workspace" / "SKILL.md"
+            )
+            native_skill.parent.mkdir(mode=0o755, parents=True)
+            native_skill.write_bytes(b"Hermes bundled skill")
+            native_skill.chmod(0o644)
+            manager._download_bytes.reset_mock()
+
+            manager.install_managed_app()
+
+            self.assertEqual(native_skill.read_bytes(), b"Hermes bundled skill")
+            self.assertEqual(manager._download_bytes.call_count, 1)
+            self.assertFalse((manager.HERMES_SKILLS_ROOT / "gws-shared").exists())
+            self.assertFalse((manager.HERMES_SKILLS_ROOT / "gws-calendar").exists())
+
+    def test_reinstall_retires_legacy_skills_and_preserves_modified_copy(self) -> None:
+        with self.configured_manager() as fixture:
+            self.install_legacy_manifest(fixture)
+            shared = manager.HERMES_SKILLS_ROOT / "gws-shared" / "SKILL.md"
+            shared.write_bytes(b"Hermes self-improvement")
+            shared.chmod(0o644)
+
+            result = manager.install_managed_app()
+            manifest = json.loads(manager.MANIFEST_PATH.read_text())
+
+            self.assertEqual(result["status"], "installed")
+            self.assertEqual(
+                result["retired_legacy_components"],
+                ["skill:gws-calendar"],
+            )
+            self.assertEqual(
+                result["quarantined_legacy_components"],
+                ["skill:gws-shared"],
+            )
+            self.assertEqual(set(manifest["components"]), {"gws"})
+            self.assertFalse(shared.exists())
+            quarantined = list(manager.QUARANTINE_DIR.iterdir())
+            self.assertEqual(len(quarantined), 1)
+            self.assertEqual(quarantined[0].read_bytes(), b"Hermes self-improvement")
 
     def test_old_trusted_manifest_remains_uninstallable_after_next_pin(self) -> None:
         with self.configured_manager():

@@ -3,7 +3,6 @@
 
 from __future__ import annotations
 
-import hashlib
 import json
 import re
 import sys
@@ -324,7 +323,7 @@ def validate_docs(root: Path) -> None:
             "does not revoke the shared Google",
             "tinyhat_google_workspace",
             "tinyhat_google_workspace_app",
-            "matching installed official gws",
+            "Hermes's bundled `google-workspace` skill",
             "Never claim that only Gmail is exposed",
             "Never ask for a Google Cloud",
             "gws auth",
@@ -473,20 +472,6 @@ def validate_google_workspace_contract(root: Path) -> None:
             phrase not in manager_text,
             f"google_workspace_app_manager.py retained forbidden contract: {phrase}",
         )
-    shared_skill = (
-        root
-        / "skills"
-        / "tinyhat-google-workspace"
-        / "assets"
-        / "gws-shared"
-        / "SKILL.md"
-    )
-    require(shared_skill.is_file(), "packaged gws-shared skill is missing")
-    require(
-        hashlib.sha256(shared_skill.read_bytes()).hexdigest()
-        == "9679052ece7c05ff3f05fb5f00c0437b460fade67631b60f279e445f5b5fd63e",
-        "packaged gws-shared skill does not match its hardcoded integrity pin",
-    )
 
 
 def main() -> int:

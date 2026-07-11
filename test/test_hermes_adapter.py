@@ -142,14 +142,14 @@ class HermesAdapterTests(unittest.TestCase):
 
         self.assertEqual(payload["schema"], "tinyhat_plugin_version_v1")
         self.assertEqual(payload["name"], "tinyhat")
-        self.assertEqual(payload["version"], "0.21.0")
+        self.assertEqual(payload["version"], "0.21.1")
 
     def test_skill_catalog_lists_qualified_names_and_aliases(self) -> None:
         payload = json.loads(tools.skill_catalog())
 
         self.assertEqual(payload["schema"], "tinyhat_skill_catalog_v1")
         self.assertEqual(payload["plugin"]["name"], "tinyhat")
-        self.assertEqual(payload["plugin"]["version"], "0.21.0")
+        self.assertEqual(payload["plugin"]["version"], "0.21.1")
         by_name = {skill["name"]: skill for skill in payload["skills"]}
         self.assertEqual(
             by_name["tinyhat-codex-auth"]["qualified_name"],
@@ -160,6 +160,10 @@ class HermesAdapterTests(unittest.TestCase):
             by_name["tinyhat-plugin-update"]["qualified_name"],
             "tinyhat:tinyhat-plugin-update",
         )
+        manager_purpose = by_name["tinyhat-google-workspace-app-manager"]["purpose"]
+        self.assertIn("only the pinned Google Workspace CLI app", manager_purpose)
+        self.assertIn("Hermes supplies the native operation skill", manager_purpose)
+        self.assertNotIn("operation skills", manager_purpose)
         self.assertIn("qualified names", payload["lookup_rule"])
 
     def test_context_hook_injects_for_secret_requests(self) -> None:

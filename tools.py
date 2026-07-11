@@ -152,7 +152,7 @@ def google_workspace_app(args: dict[str, Any] | None = None, **kwargs: Any) -> s
 def google_workspace_app_manager(
     args: dict[str, Any] | None = None, **kwargs: Any
 ) -> str:
-    """Manage the pinned gws app and verified operation skills."""
+    """Manage the pinned gws app; Hermes supplies operation guidance."""
     return handle_google_workspace_app_manager(args, **kwargs)
 
 

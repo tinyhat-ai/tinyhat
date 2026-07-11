@@ -57,6 +57,16 @@ GMAIL_SEND_SCOPES = [
     *READONLY_SCOPES,
     "https://www.googleapis.com/auth/gmail.send",
 ]
+CALENDAR_WRITE_BUNDLE = "google_workspace_calendar_write_v1"
+CALENDAR_WRITE_SCOPES = [
+    *READONLY_SCOPES,
+    "https://www.googleapis.com/auth/calendar.events",
+]
+GMAIL_SEND_CALENDAR_WRITE_BUNDLE = "google_workspace_gmail_send_calendar_write_v1"
+GMAIL_SEND_CALENDAR_WRITE_SCOPES = [
+    *GMAIL_SEND_SCOPES,
+    "https://www.googleapis.com/auth/calendar.events",
+]
 
 
 def credential_envelope(
@@ -349,7 +359,12 @@ class GoogleWorkspaceTests(unittest.TestCase):
         self.assertNotIn("scopes", schema["properties"])
         self.assertEqual(
             schema["properties"]["profile"]["enum"],
-            ["workspace_readonly", "gmail_send"],
+            [
+                "workspace_readonly",
+                "gmail_send",
+                "calendar_write",
+                "gmail_send_calendar_write",
+            ],
         )
         self.assertIn("read-only Gmail", schema["description"])
         self.assertIn("never trusts", schema["properties"]["action"]["description"])
@@ -377,6 +392,41 @@ class GoogleWorkspaceTests(unittest.TestCase):
         self.assertIn("separate from confirming any later email send", result["message"])
         self.assertIn("draft management is not enabled", result["message"])
         build_client.assert_not_called()
+
+    def test_calendar_write_profiles_require_confirmation_before_platform_call(self) -> None:
+        for profile in ("calendar_write", "gmail_send_calendar_write"):
+            with (
+                self.subTest(profile=profile),
+                mock.patch.object(workspace, "build_platform_client") as build_client,
+            ):
+                result = json.loads(
+                    tools.google_workspace({"action": "connect", "profile": profile})
+                )
+
+            self.assertEqual(result["error"], "confirmation_required")
+            self.assertIn("Calendar events", result["message"])
+            self.assertIn("calendar.events", result["message"])
+            self.assertIn("separate from confirming", result["message"])
+            build_client.assert_not_called()
+
+    def test_calendar_write_profiles_are_fixed_additive_bundles(self) -> None:
+        calendar = workspace.GOOGLE_PROFILE_CONFIGS["calendar_write"]
+        combined = workspace.GOOGLE_PROFILE_CONFIGS["gmail_send_calendar_write"]
+
+        self.assertEqual(calendar.capability_bundle, CALENDAR_WRITE_BUNDLE)
+        self.assertEqual(list(calendar.scopes), CALENDAR_WRITE_SCOPES)
+        self.assertEqual(
+            combined.capability_bundle,
+            GMAIL_SEND_CALENDAR_WRITE_BUNDLE,
+        )
+        self.assertEqual(
+            list(combined.scopes),
+            GMAIL_SEND_CALENDAR_WRITE_SCOPES,
+        )
+        self.assertEqual(
+            combined.write_permissions,
+            frozenset({"gmail_send", "calendar_events"}),
+        )
 
     def test_confirmed_gmail_send_upgrade_requests_exact_allowlisted_superset(self) -> None:
         class FakeClient:
@@ -442,6 +492,308 @@ class GoogleWorkspaceTests(unittest.TestCase):
         send_button.assert_called_once_with(
             start_response()["authorization_url"], profile="gmail_send"
         )
+
+    def test_calendar_write_upgrade_preserves_verified_gmail_send_permission(self) -> None:
+        class UpgradeClient:
+            def __init__(self) -> None:
+                self.gets: list[str] = []
+                self.posts: list[tuple[str, dict[str, object]]] = []
+
+            def get_json(self, path: str) -> dict[str, object]:
+                self.gets.append(path)
+                return {"tinyhat_assignment_binding": "assignment-binding-123"}
+
+            def post_json(self, path: str, payload: dict[str, object]) -> dict[str, object]:
+                self.posts.append((path, payload))
+                return start_response(
+                    bundle=GMAIL_SEND_CALENDAR_WRITE_BUNDLE,
+                    scopes=GMAIL_SEND_CALENDAR_WRITE_SCOPES,
+                )
+
+        client = UpgradeClient()
+        with (
+            tempfile.TemporaryDirectory() as tmp,
+            self._patched_state(Path(tmp)),
+            mock.patch.object(
+                workspace, "build_platform_client", return_value=(client, "local_dev")
+            ),
+            mock.patch.object(
+                workspace,
+                "_generate_key_pair",
+                return_value=("one-time-private-key", "one-time-public-key"),
+            ),
+            mock.patch.object(workspace, "_start_worker_process") as start_worker,
+            mock.patch.object(
+                workspace,
+                "_send_google_connect_button",
+                return_value={"sent": True, "ok": True},
+            ) as send_button,
+        ):
+            workspace._atomic_save_credentials(
+                workspace._normalize_credentials(
+                    credential_envelope(
+                        bundle=GMAIL_SEND_BUNDLE,
+                        scopes=GMAIL_SEND_SCOPES,
+                    )
+                )
+            )
+            result = json.loads(
+                tools.google_workspace(
+                    {
+                        "action": "connect",
+                        "profile": "calendar_write",
+                        "confirmed": True,
+                    }
+                )
+            )
+
+        self.assertEqual(result["profile"], "gmail_send_calendar_write")
+        self.assertEqual(
+            result["capability_bundle"],
+            GMAIL_SEND_CALENDAR_WRITE_BUNDLE,
+        )
+        self.assertEqual(len(client.gets), 1)
+        self.assertEqual(
+            client.posts[0][1]["requested_scopes"],
+            GMAIL_SEND_CALENDAR_WRITE_SCOPES,
+        )
+        self.assertEqual(
+            start_worker.call_args.kwargs["handoff_metadata"]["scopes"],
+            GMAIL_SEND_CALENDAR_WRITE_SCOPES,
+        )
+        send_button.assert_called_once_with(
+            start_response()["authorization_url"],
+            profile="gmail_send_calendar_write",
+        )
+
+    def test_default_reconnect_retains_verified_calendar_write_without_confirmation(self) -> None:
+        class ReconnectClient:
+            def get_json(self, _path: str) -> dict[str, object]:
+                return {"tinyhat_assignment_binding": "assignment-binding-123"}
+
+            def post_json(self, _path: str, _payload: dict[str, object]) -> dict[str, object]:
+                return start_response(
+                    bundle=CALENDAR_WRITE_BUNDLE,
+                    scopes=CALENDAR_WRITE_SCOPES,
+                )
+
+        with (
+            tempfile.TemporaryDirectory() as tmp,
+            self._patched_state(Path(tmp)),
+            mock.patch.object(
+                workspace,
+                "build_platform_client",
+                return_value=(ReconnectClient(), "local_dev"),
+            ),
+            mock.patch.object(
+                workspace,
+                "_generate_key_pair",
+                return_value=("one-time-private-key", "one-time-public-key"),
+            ),
+            mock.patch.object(workspace, "_start_worker_process"),
+            mock.patch.object(
+                workspace,
+                "_send_google_connect_button",
+                return_value={"sent": True, "ok": True},
+            ),
+        ):
+            workspace._atomic_save_credentials(
+                workspace._normalize_credentials(
+                    credential_envelope(
+                        bundle=CALENDAR_WRITE_BUNDLE,
+                        scopes=CALENDAR_WRITE_SCOPES,
+                    )
+                )
+            )
+            result = json.loads(tools.google_workspace({"action": "connect"}))
+            retained = json.loads(
+                tools.google_workspace({"action": "connect", "profile": "calendar_write"})
+            )
+
+        self.assertNotIn("error", result)
+        self.assertEqual(result["profile"], "calendar_write")
+        self.assertEqual(result["capability_bundle"], CALENDAR_WRITE_BUNDLE)
+        self.assertIn("native Upgrade Google access button", result["message"])
+        self.assertNotIn("error", retained)
+        self.assertEqual(retained["profile"], "calendar_write")
+
+    def test_upgrade_does_not_preserve_write_permissions_from_stale_assignment(self) -> None:
+        client = PollingClient([], binding="replacement-assignment-binding")
+        with (
+            tempfile.TemporaryDirectory() as tmp,
+            self._patched_state(Path(tmp)),
+            mock.patch.object(
+                workspace,
+                "build_platform_client",
+                return_value=(client, "local_dev"),
+            ),
+        ):
+            workspace._atomic_save_credentials(
+                workspace._normalize_credentials(
+                    credential_envelope(
+                        bundle=GMAIL_SEND_BUNDLE,
+                        scopes=GMAIL_SEND_SCOPES,
+                    )
+                )
+            )
+            with workspace._lifecycle_lock():
+                resolved, resolved_client, platform_auth = (
+                    workspace._resolve_profile_for_connection_locked(
+                        workspace.GOOGLE_PROFILE_CONFIGS["calendar_write"],
+                        confirmed=True,
+                    )
+                )
+
+            self.assertEqual(resolved.name, "calendar_write")
+            self.assertIs(resolved_client, client)
+            self.assertEqual(platform_auth, "local_dev")
+            self.assertFalse(workspace.CREDENTIALS_PATH.exists())
+
+    def test_gmail_send_upgrade_preserves_verified_calendar_write_permission(self) -> None:
+        client = PollingClient([])
+        with (
+            tempfile.TemporaryDirectory() as tmp,
+            self._patched_state(Path(tmp)),
+            mock.patch.object(
+                workspace,
+                "build_platform_client",
+                return_value=(client, "local_dev"),
+            ),
+        ):
+            workspace._atomic_save_credentials(
+                workspace._normalize_credentials(
+                    credential_envelope(
+                        bundle=CALENDAR_WRITE_BUNDLE,
+                        scopes=CALENDAR_WRITE_SCOPES,
+                    )
+                )
+            )
+            with workspace._lifecycle_lock():
+                resolved, resolved_client, platform_auth = (
+                    workspace._resolve_profile_for_connection_locked(
+                        workspace.GOOGLE_PROFILE_CONFIGS["gmail_send"],
+                        confirmed=True,
+                    )
+                )
+
+        self.assertEqual(resolved.name, "gmail_send_calendar_write")
+        self.assertIs(resolved_client, client)
+        self.assertEqual(platform_auth, "local_dev")
+        self.assertEqual(
+            list(resolved.scopes),
+            GMAIL_SEND_CALENDAR_WRITE_SCOPES,
+        )
+
+    def test_disconnect_winning_before_connect_resolution_cannot_bypass_confirmation(
+        self,
+    ) -> None:
+        class Client:
+            def __init__(self) -> None:
+                self.posts: list[tuple[str, dict[str, object]]] = []
+
+            def get_json(self, _path: str) -> dict[str, object]:
+                return {"tinyhat_assignment_binding": "assignment-binding-123"}
+
+            def post_json(self, path: str, payload: dict[str, object]) -> dict[str, object]:
+                self.posts.append((path, payload))
+                return start_response(bundle=GMAIL_SEND_BUNDLE, scopes=GMAIL_SEND_SCOPES)
+
+        client = Client()
+        real_start_connection = workspace._start_connection
+
+        def disconnect_then_start(**kwargs):
+            with workspace._lifecycle_lock():
+                workspace._delete_credentials_locked()
+            return real_start_connection(**kwargs)
+
+        with (
+            tempfile.TemporaryDirectory() as tmp,
+            self._patched_state(Path(tmp)),
+            mock.patch.object(
+                workspace,
+                "build_platform_client",
+                return_value=(client, "local_dev"),
+            ) as build_client,
+            mock.patch.object(
+                workspace,
+                "_start_connection",
+                side_effect=disconnect_then_start,
+            ),
+            mock.patch.object(workspace, "_start_worker_process") as start_worker,
+            mock.patch.object(workspace, "_send_google_connect_button") as send_button,
+        ):
+            workspace._atomic_save_credentials(
+                workspace._normalize_credentials(
+                    credential_envelope(
+                        bundle=GMAIL_SEND_BUNDLE,
+                        scopes=GMAIL_SEND_SCOPES,
+                    )
+                )
+            )
+            result = json.loads(
+                tools.google_workspace({"action": "connect", "profile": "gmail_send"})
+            )
+
+        self.assertEqual(result["error"], "confirmation_required")
+        self.assertEqual(client.posts, [])
+        build_client.assert_not_called()
+        start_worker.assert_not_called()
+        send_button.assert_not_called()
+
+    def test_stale_assignment_cleanup_cannot_bypass_write_confirmation(self) -> None:
+        class Client:
+            def __init__(self) -> None:
+                self.binding = "assignment-binding-123"
+                self.posts: list[tuple[str, dict[str, object]]] = []
+
+            def get_json(self, _path: str) -> dict[str, object]:
+                return {"tinyhat_assignment_binding": self.binding}
+
+            def post_json(self, path: str, payload: dict[str, object]) -> dict[str, object]:
+                self.posts.append((path, payload))
+                return start_response(bundle=GMAIL_SEND_BUNDLE, scopes=GMAIL_SEND_SCOPES)
+
+        client = Client()
+        real_start_connection = workspace._start_connection
+
+        def assignment_changes_then_start(**kwargs):
+            client.binding = "replacement-assignment-binding"
+            return real_start_connection(**kwargs)
+
+        with (
+            tempfile.TemporaryDirectory() as tmp,
+            self._patched_state(Path(tmp)),
+            mock.patch.object(
+                workspace,
+                "build_platform_client",
+                return_value=(client, "local_dev"),
+            ),
+            mock.patch.object(
+                workspace,
+                "_start_connection",
+                side_effect=assignment_changes_then_start,
+            ),
+            mock.patch.object(workspace, "_start_worker_process") as start_worker,
+            mock.patch.object(workspace, "_send_google_connect_button") as send_button,
+        ):
+            workspace._atomic_save_credentials(
+                workspace._normalize_credentials(
+                    credential_envelope(
+                        bundle=GMAIL_SEND_BUNDLE,
+                        scopes=GMAIL_SEND_SCOPES,
+                    )
+                )
+            )
+            result = json.loads(
+                tools.google_workspace({"action": "connect", "profile": "gmail_send"})
+            )
+
+            self.assertEqual(result["error"], "confirmation_required")
+            self.assertFalse(workspace.CREDENTIALS_PATH.exists())
+
+        self.assertEqual(client.posts, [])
+        start_worker.assert_not_called()
+        send_button.assert_not_called()
 
     def test_profile_rejects_arbitrary_raw_scope_or_unknown_profile(self) -> None:
         with mock.patch.object(
@@ -1033,15 +1385,17 @@ class GoogleWorkspaceTests(unittest.TestCase):
             )
             self.assertEqual(notices, ["superseded"])
 
-    def test_ready_worker_saves_before_claim_without_returning_credentials(self) -> None:
+    def test_ready_worker_saves_claims_clears_then_notifies(self) -> None:
         events: list[str] = []
         notice_states: list[str] = []
 
         class EventClient(PollingClient):
             def post_json(self, path: str, payload: dict[str, object]) -> dict[str, object]:
+                self_test.assertTrue(workspace.ACTIVE_HANDOFF_PATH.exists())
                 events.append("claim")
                 return super().post_json(path, payload)
 
+        self_test = self
         client = EventClient(
             [
                 {
@@ -1053,6 +1407,7 @@ class GoogleWorkspaceTests(unittest.TestCase):
         )
         handoff = self._worker_handoff(client=client)
         original_save = workspace._atomic_save_credentials
+        original_clear = workspace._clear_active_handoff
 
         def save(credentials: dict[str, object]) -> None:
             events.append("save")
@@ -1062,6 +1417,10 @@ class GoogleWorkspaceTests(unittest.TestCase):
             events.append("notice")
             notice_states.append(terminal_state)
             return {"sent": True, "ok": True}
+
+        def clear_active(current_handoff: workspace.GoogleWorkspaceWorkerHandoff) -> None:
+            events.append("clear")
+            original_clear(current_handoff)
 
         with (
             tempfile.TemporaryDirectory() as tmp,
@@ -1074,6 +1433,11 @@ class GoogleWorkspaceTests(unittest.TestCase):
             mock.patch.object(workspace, "_atomic_save_credentials", side_effect=save),
             mock.patch.object(
                 workspace,
+                "_clear_active_handoff",
+                side_effect=clear_active,
+            ),
+            mock.patch.object(
+                workspace,
                 "_send_google_workspace_notice",
                 side_effect=send_notice,
             ),
@@ -1082,13 +1446,97 @@ class GoogleWorkspaceTests(unittest.TestCase):
             workspace._poll_and_install(handoff)
             saved = json.loads(workspace.CREDENTIALS_PATH.read_text())
 
-        self.assertEqual(events, ["save", "notice", "claim"])
+        self.assertEqual(events, ["save", "claim", "clear", "notice"])
         self.assertEqual(notice_states, ["ready"])
+        self.assertFalse(workspace.ACTIVE_HANDOFF_PATH.exists())
         self.assertEqual(saved["email"], "owner@example.com")
         claim = client.posts[-1][1]
         self.assertEqual(claim, {"installed": True, "message": None})
         self.assertNotIn("access_token", json.dumps(claim))
         self.assertNotIn("refresh_token", json.dumps(claim))
+
+    def test_ready_worker_retries_claim_before_clearing_or_notifying(self) -> None:
+        claim_attempts: list[int] = []
+
+        class FlakyClaimClient(PollingClient):
+            def post_json(self, path: str, payload: dict[str, object]) -> dict[str, object]:
+                claim_attempts.append(len(claim_attempts) + 1)
+                if len(claim_attempts) < workspace.INSTALL_CLAIM_MAX_ATTEMPTS:
+                    raise RuntimeError("temporary platform failure")
+                return super().post_json(path, payload)
+
+        client = FlakyClaimClient(
+            [
+                {
+                    "status": "ready",
+                    "terminal_state": "ready",
+                    "ciphertext_payload": {"ciphertext": "opaque"},
+                }
+            ]
+        )
+        handoff = self._worker_handoff(client=client)
+        with (
+            tempfile.TemporaryDirectory() as tmp,
+            self._patched_state(Path(tmp)),
+            mock.patch.object(
+                workspace,
+                "_decrypt_ciphertext",
+                return_value=json.dumps(credential_envelope()),
+            ),
+            mock.patch.object(workspace.time, "sleep") as sleep,
+            self._captured_notices() as notices,
+        ):
+            self._activate_handoff()
+            workspace._poll_and_install(handoff)
+
+            self.assertEqual(
+                claim_attempts,
+                list(range(1, workspace.INSTALL_CLAIM_MAX_ATTEMPTS + 1)),
+            )
+            self.assertEqual(sleep.call_count, workspace.INSTALL_CLAIM_MAX_ATTEMPTS - 1)
+            self.assertFalse(workspace.ACTIVE_HANDOFF_PATH.exists())
+            self.assertEqual(notices, ["ready"])
+
+    def test_ready_worker_claim_failure_keeps_marker_and_sends_no_success(self) -> None:
+        claim_attempts = 0
+
+        class FailingClaimClient(PollingClient):
+            def post_json(self, path: str, payload: dict[str, object]) -> dict[str, object]:
+                nonlocal claim_attempts
+                claim_attempts += 1
+                if not workspace.ACTIVE_HANDOFF_PATH.exists():
+                    raise AssertionError("claim retry lost the active handoff marker")
+                raise RuntimeError("platform unavailable")
+
+        client = FailingClaimClient(
+            [
+                {
+                    "status": "ready",
+                    "terminal_state": "ready",
+                    "ciphertext_payload": {"ciphertext": "opaque"},
+                }
+            ]
+        )
+        handoff = self._worker_handoff(client=client)
+        with (
+            tempfile.TemporaryDirectory() as tmp,
+            self._patched_state(Path(tmp)),
+            mock.patch.object(
+                workspace,
+                "_decrypt_ciphertext",
+                return_value=json.dumps(credential_envelope()),
+            ),
+            mock.patch.object(workspace.time, "sleep"),
+            self._captured_notices() as notices,
+        ):
+            self._activate_handoff()
+            with self.assertRaisesRegex(RuntimeError, "platform unavailable"):
+                workspace._poll_and_install(handoff)
+
+            self.assertEqual(claim_attempts, workspace.INSTALL_CLAIM_MAX_ATTEMPTS)
+            self.assertTrue(workspace.CREDENTIALS_PATH.exists())
+            self.assertTrue(workspace.ACTIVE_HANDOFF_PATH.exists())
+            self.assertEqual(notices, [])
 
     def test_cancelled_gmail_send_upgrade_keeps_existing_readonly_credential(self) -> None:
         client = PollingClient([{"terminal_state": "cancelled"}])
@@ -1154,6 +1602,53 @@ class GoogleWorkspaceTests(unittest.TestCase):
         self.assertEqual(notices, ["ready_gmail_send"])
         self.assertEqual(client.posts[-1][1], {"installed": True, "message": None})
 
+    def test_successful_combined_upgrade_reports_both_write_permissions(self) -> None:
+        client = PollingClient(
+            [{"terminal_state": "ready", "ciphertext_payload": {"ciphertext": "opaque"}}]
+        )
+        handoff = self._worker_handoff(
+            client=client,
+            bundle=GMAIL_SEND_CALENDAR_WRITE_BUNDLE,
+            scopes=GMAIL_SEND_CALENDAR_WRITE_SCOPES,
+        )
+        with (
+            tempfile.TemporaryDirectory() as tmp,
+            self._patched_state(Path(tmp)),
+            self._captured_notices() as notices,
+            mock.patch.object(
+                workspace,
+                "_decrypt_ciphertext",
+                return_value=json.dumps(
+                    credential_envelope(
+                        bundle=GMAIL_SEND_CALENDAR_WRITE_BUNDLE,
+                        scopes=GMAIL_SEND_CALENDAR_WRITE_SCOPES,
+                    )
+                ),
+            ),
+        ):
+            workspace._atomic_save_credentials(
+                workspace._normalize_credentials(
+                    credential_envelope(
+                        bundle=GMAIL_SEND_BUNDLE,
+                        scopes=GMAIL_SEND_SCOPES,
+                    )
+                )
+            )
+            self._activate_handoff()
+            workspace._poll_and_install(handoff)
+            saved = json.loads(workspace.CREDENTIALS_PATH.read_text())
+
+        self.assertEqual(
+            saved["capability_bundle"],
+            GMAIL_SEND_CALENDAR_WRITE_BUNDLE,
+        )
+        self.assertEqual(saved["scopes"], GMAIL_SEND_CALENDAR_WRITE_SCOPES)
+        self.assertEqual(notices, ["ready_gmail_send_calendar_write"])
+        self.assertIn(
+            "Calendar event changes",
+            workspace.TELEGRAM_NOTICE_MESSAGES["ready_gmail_send_calendar_write"],
+        )
+
     def test_terminal_states_stop_with_fixed_safe_messages(self) -> None:
         for terminal_state, expected_message in workspace.TERMINAL_HANDOFF_MESSAGES.items():
             with self.subTest(terminal_state=terminal_state), tempfile.TemporaryDirectory() as tmp:
@@ -1190,7 +1685,13 @@ class GoogleWorkspaceTests(unittest.TestCase):
             sent_texts.append(kwargs["text"])
             return {"ok": True}
 
-        states = ["ready", *workspace.TERMINAL_HANDOFF_MESSAGES]
+        states = [
+            "ready",
+            "ready_gmail_send",
+            "ready_calendar_write",
+            "ready_gmail_send_calendar_write",
+            *workspace.TERMINAL_HANDOFF_MESSAGES,
+        ]
         with (
             mock.patch.object(
                 tools,

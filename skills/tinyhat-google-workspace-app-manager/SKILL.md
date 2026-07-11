@@ -1,6 +1,6 @@
 ---
 name: tinyhat-google-workspace-app-manager
-description: Inspect or, after explicit approval, install or uninstall Tinyhat's pinned Google Workspace CLI app and verified official Gmail, Calendar, and Drive operation skills. Use when the Google Workspace bridge says the managed gws app or matching skill is unavailable.
+description: Inspect or, after explicit approval, install or uninstall Tinyhat's pinned Google Workspace CLI app. Hermes's bundled Google Workspace skill owns operation guidance. Use when the Google Workspace bridge says the managed gws app is unavailable.
 ---
 
 # Tinyhat Google Workspace app manager
@@ -9,7 +9,7 @@ Use `tinyhat_google_workspace_app_manager` for the separately managed operation
 app, not for Google authentication:
 
 - Check safe installation metadata with `{"action": "status"}`.
-- If the app or a compatible operation skill is unavailable, explain that
+- If the app is unavailable, explain that
   Tinyhat can install its pinned, integrity-verified Google Workspace CLI
   integration. Ask the user for approval. Do not install automatically.
 - Only after approval, install with
@@ -17,18 +17,22 @@ app, not for Google authentication:
 - Uninstall only after explicit approval with
   `{"action": "uninstall", "confirmed": true}`.
 
-The first managed release supports Linux x86_64 and aarch64 Computers. It installs the
-pinned official `googleworkspace/cli` binary and verified official Gmail,
-Calendar, and Drive operation skills. Tinyhat also installs a shared integration
-shim that overrides upstream authentication setup: never run `gws auth`, never
-start a second OAuth flow, and never ask for a Google Cloud project, OAuth
-client, client secret, credentials JSON, `gcloud`, or a raw token.
+The managed release supports Linux x86_64 and aarch64 Computers and installs
+only the pinned official `googleworkspace/cli` binary. Hermes already bundles
+the `google-workspace` skill for Gmail, Calendar, Drive, Sheets, and Docs
+operation guidance. Tinyhat's current bridge and OAuth profiles execute Gmail,
+Calendar, and Drive namespaces; do not promise Sheets or Docs access yet.
+Tinyhat overrides only the native skill's authentication/execution path:
+never run `gws auth` or its setup scripts, never start a second OAuth flow, and
+never ask for a Google Cloud project, OAuth client, client secret, credentials
+JSON, `gcloud`, or a raw token.
 
-After installation, return to `tinyhat:tinyhat-google-workspace`. The official
-operation skill constructs bounded argv, and `tinyhat_google_workspace_app`
-injects the existing assignment-verified Tinyhat token into one isolated child.
+After installation, return to `tinyhat:tinyhat-google-workspace`. Load Hermes's
+built-in `google-workspace` skill for operation semantics, then use
+`tinyhat_google_workspace_app`; it injects the existing assignment-verified
+Tinyhat token into one isolated child.
 
 Uninstall removes exact unchanged files recorded in Tinyhat's root-only managed
-manifest. Modified managed files are preserved in root-only quarantine outside
-active skill paths; unmanaged files are left untouched. Results use only safe
-component names.
+manifest. An approved reinstall from the previous manager layout also retires
+its obsolete top-level gws skills, preserving modified copies in root-only quarantine.
+Hermes's bundled skill and all unmanaged files remain untouched.
