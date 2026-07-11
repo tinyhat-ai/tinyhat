@@ -92,6 +92,9 @@ GOOGLE_CAPABILITY_BUNDLE = GOOGLE_READONLY_CAPABILITY_BUNDLE
 GOOGLE_REQUESTED_SCOPES = GOOGLE_READONLY_SCOPES
 GOOGLE_AUTHORIZATION_HOST = "accounts.google.com"
 GOOGLE_AUTHORIZATION_PATH = "/o/oauth2/v2/auth"
+TINYHAT_GOOGLE_PREPARE_PATH = (
+    "/hapi/v1/public/tinyhat/google-workspace/oauth/prepare/v1"
+)
 DEFAULT_EXPIRES_IN_SECONDS = 600
 INSTALL_CLAIM_MAX_ATTEMPTS = 3
 INSTALL_CLAIM_RETRY_SECONDS = 1.0
@@ -111,6 +114,9 @@ GOOGLE_TOKEN_VALUE_MAX_LENGTH = 16_384
 GOOGLE_TOKEN_EXPIRY_MAX_LENGTH = 64
 OWNER_ONLY_FILE_MODE = 0o600
 HANDOFF_ID_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_.-]{0,127}$")
+GOOGLE_LAUNCH_TICKET_RE = re.compile(
+    r"^gwol1\.[1-9][0-9]{0,9}\.[A-Za-z0-9_-]{32,16000}$"
+)
 DISCONNECT_OWNER_TOKEN_RE = re.compile(r"^[A-Za-z0-9_-]{32,256}$")
 DISCONNECT_GENERATION_RE = re.compile(r"^[0-9a-f]{64}$")
 STATE_DIR = Path.home() / ".tinyhat" / "google-workspace"
@@ -511,7 +517,10 @@ def _start_connection(
             expected=requested_profile.scopes,
         )
         poll_after_ms = _poll_after_ms(handoff.get("poll_after_ms"))
-        authorization_url = _validated_authorization_url(handoff.get("authorization_url"))
+        authorization_url = _validated_authorization_url(
+            handoff.get("authorization_url"),
+            platform_base_url=getattr(client, "base_url", None),
+        )
         try:
             _start_worker_process(
                 handoff=handoff,
@@ -578,7 +587,11 @@ def _validated_handoff_id(value: Any) -> str:
     return handoff_id
 
 
-def _validated_authorization_url(value: Any) -> str:
+def _validated_authorization_url(
+    value: Any,
+    *,
+    platform_base_url: str | None = None,
+) -> str:
     authorization_url = str(value or "").strip()
     parsed = parse.urlsplit(authorization_url)
     try:
@@ -587,17 +600,47 @@ def _validated_authorization_url(value: Any) -> str:
         raise GoogleWorkspaceError(
             "Platform returned an invalid Google authorization URL."
         ) from exc
-    if (
-        parsed.scheme != "https"
-        or parsed.hostname != GOOGLE_AUTHORIZATION_HOST
-        or parsed.username is not None
-        or parsed.password is not None
-        or port not in {None, 443}
-        or parsed.path != GOOGLE_AUTHORIZATION_PATH
-        or not parsed.query
-        or parsed.fragment
-        or len(authorization_url) > AUTHORIZATION_URL_MAX_LENGTH
-    ):
+    direct_google_url = (
+        parsed.scheme == "https"
+        and parsed.hostname == GOOGLE_AUTHORIZATION_HOST
+        and parsed.username is None
+        and parsed.password is None
+        and port in {None, 443}
+        and parsed.path == GOOGLE_AUTHORIZATION_PATH
+        and bool(parsed.query)
+        and not parsed.fragment
+    )
+    if direct_google_url and len(authorization_url) <= AUTHORIZATION_URL_MAX_LENGTH:
+        # Rolling compatibility while platform deployments move from direct
+        # Google buttons to the Tinyhat preparation page.
+        return authorization_url
+
+    platform_url = parse.urlsplit(str(platform_base_url or "").strip())
+    try:
+        platform_port = platform_url.port
+    except ValueError as exc:
+        raise GoogleWorkspaceError(
+            "Platform returned an invalid Google authorization URL."
+        ) from exc
+    trusted_prepare_url = (
+        parsed.scheme == "https"
+        and parsed.hostname is not None
+        and parsed.username is None
+        and parsed.password is None
+        and port in {None, 443}
+        and parsed.path == TINYHAT_GOOGLE_PREPARE_PATH
+        and not parsed.query
+        and GOOGLE_LAUNCH_TICKET_RE.fullmatch(parsed.fragment) is not None
+        and platform_url.scheme == "https"
+        and platform_url.hostname is not None
+        and platform_url.username is None
+        and platform_url.password is None
+        and platform_port in {None, 443}
+        and parsed.hostname == platform_url.hostname
+        and (port or 443) == (platform_port or 443)
+        and len(authorization_url) <= AUTHORIZATION_URL_MAX_LENGTH
+    )
+    if not trusted_prepare_url:
         raise GoogleWorkspaceError("Platform returned an invalid Google authorization URL.")
     return authorization_url
 

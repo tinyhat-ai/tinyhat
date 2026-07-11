@@ -67,6 +67,19 @@ GMAIL_SEND_CALENDAR_WRITE_SCOPES = [
     *GMAIL_SEND_SCOPES,
     "https://www.googleapis.com/auth/calendar.events",
 ]
+PLATFORM_BASE_URL = "https://api.example.test"
+PREPARE_PATH = "/hapi/v1/public/tinyhat/google-workspace/oauth/prepare/v1"
+
+
+def prepare_authorization_url() -> str:
+    return f"{PLATFORM_BASE_URL}{PREPARE_PATH}#gwol1.1.{'a' * 64}"
+
+
+def direct_google_authorization_url() -> str:
+    return (
+        "https://accounts.google.com/o/oauth2/v2/auth?"
+        "client_id=central-public-client&state=opaque"
+    )
 
 
 def credential_envelope(
@@ -96,14 +109,12 @@ def start_response(
     *,
     bundle: str = READONLY_BUNDLE,
     scopes: list[str] | None = None,
+    authorization_url: str | None = None,
 ) -> dict[str, object]:
     return {
         "handoff_id": "gwo_test123",
         "status": "pending",
-        "authorization_url": (
-            "https://accounts.google.com/o/oauth2/v2/auth?"
-            "client_id=central-public-client&state=opaque"
-        ),
+        "authorization_url": authorization_url or direct_google_authorization_url(),
         "capability_bundle": bundle,
         "services": READONLY_SERVICES.copy(),
         "scopes": list(scopes or READONLY_SCOPES),
@@ -822,12 +833,14 @@ class GoogleWorkspaceTests(unittest.TestCase):
 
     def test_connect_sends_native_button_without_returning_authorization_url(self) -> None:
         class FakeClient:
+            base_url = PLATFORM_BASE_URL
+
             def __init__(self) -> None:
                 self.calls: list[tuple[str, dict[str, object]]] = []
 
             def post_json(self, path: str, payload: dict[str, object]) -> dict[str, object]:
                 self.calls.append((path, payload))
-                return start_response()
+                return start_response(authorization_url=prepare_authorization_url())
 
         client = FakeClient()
         worker_calls: list[dict[str, object]] = []
@@ -871,7 +884,7 @@ class GoogleWorkspaceTests(unittest.TestCase):
         self.assertTrue(result["button_sent"])
         self.assertNotIn("authorization_url", result)
         self.assertNotIn("accounts.google.com", json.dumps(result))
-        self.assertEqual(button_urls, [start_response()["authorization_url"]])
+        self.assertEqual(button_urls, [prepare_authorization_url()])
         self.assertEqual(events, ["worker", "button"])
         self.assertNotIn("handoff_id", result)
         self.assertNotIn("generation", result)
@@ -1139,6 +1152,51 @@ class GoogleWorkspaceTests(unittest.TestCase):
 
         form = parse.parse_qs(bytes(captured["body"]).decode("utf-8"))
         self.assertEqual(json.loads(form["reply_markup"][0]), reply_markup)
+
+    def test_authorization_url_accepts_tinyhat_prepare_and_legacy_google(self) -> None:
+        prepare_url = prepare_authorization_url()
+        self.assertEqual(
+            workspace._validated_authorization_url(
+                prepare_url,
+                platform_base_url=PLATFORM_BASE_URL,
+            ),
+            prepare_url,
+        )
+
+        direct_google_url = direct_google_authorization_url()
+        self.assertEqual(
+            workspace._validated_authorization_url(direct_google_url),
+            direct_google_url,
+        )
+
+    def test_authorization_url_rejects_untrusted_prepare_shapes(self) -> None:
+        ticket = f"gwol1.1.{'a' * 64}"
+        invalid_urls = (
+            f"https://evil.example{PREPARE_PATH}#{ticket}",
+            f"http://api.example.test{PREPARE_PATH}#{ticket}",
+            f"https://user@api.example.test{PREPARE_PATH}#{ticket}",
+            f"{PLATFORM_BASE_URL}/wrong-path#{ticket}",
+            f"{PLATFORM_BASE_URL}{PREPARE_PATH}?ticket=visible#{ticket}",
+            f"{PLATFORM_BASE_URL}{PREPARE_PATH}",
+            f"{PLATFORM_BASE_URL}{PREPARE_PATH}#gwol1.0.{'a' * 64}",
+            f"{PLATFORM_BASE_URL}{PREPARE_PATH}#gwol1.1.too-short",
+            f"{PLATFORM_BASE_URL}{PREPARE_PATH}#gwol1.1.{'a' * 16001}",
+        )
+        for authorization_url in invalid_urls:
+            with (
+                self.subTest(authorization_url=authorization_url[:120]),
+                self.assertRaises(workspace.GoogleWorkspaceError),
+            ):
+                workspace._validated_authorization_url(
+                    authorization_url,
+                    platform_base_url=PLATFORM_BASE_URL,
+                )
+
+        with self.assertRaises(workspace.GoogleWorkspaceError):
+            workspace._validated_authorization_url(
+                f"https://{PREPARE_PATH}#{ticket}",
+                platform_base_url="https://",
+            )
 
     def test_connect_rejects_platform_url_or_capability_drift(self) -> None:
         variants = []

@@ -6,6 +6,9 @@ All notable changes to the Tinyhat plugin are documented here.
 
 ### Changed
 
+- Bump the Hermes plugin package to `0.21.2` so Google connection buttons can
+  open the platform-authored Tinyhat preparation page before Google while
+  retaining direct-Google URL compatibility during rollout.
 - Bump the Hermes plugin package to `0.21.1` for Hermes-native Google
   Workspace operation guidance, binary-only `gws` integrity checks, and
   additive Calendar-event-write and combined Gmail/Calendar upgrades.
