@@ -46,12 +46,133 @@ TINYHAT_PRIVATE_SECRET_HANDOFF_SCHEMA = {
         "description": {
             "type": "string",
             "description": (
-                "Required short human-readable description of what this "
-                "secret is used for."
+                "Required short human-readable description of what this secret is used for."
             ),
         },
     },
     "required": ["name", "description"],
+    "additionalProperties": False,
+}
+
+TINYHAT_GOOGLE_WORKSPACE_SCHEMA = {
+    "type": "object",
+    "description": (
+        "Connect, inspect, or disconnect this Tinyhat Computer's Google Workspace "
+        "account using one plugin-owned, platform-allowlisted permission profile. "
+        "The default profile includes identity plus read-only Gmail, Calendar, and "
+        "Drive. The gmail_send profile adds only Gmail send permission. The user "
+        "provides no Google Cloud project or OAuth secret."
+    ),
+    "properties": {
+        "action": {
+            "type": "string",
+            "enum": ["connect", "status", "disconnect"],
+            "description": (
+                "Use connect to send one native Connect Google Telegram button "
+                "without returning a plain authorization URL, status to show safe "
+                "account metadata, or disconnect to send the platform-owned "
+                "two-stage Telegram revoke prompt. Disconnect never trusts a "
+                "model-supplied confirmation boolean."
+            ),
+        },
+        "confirmed": {
+            "type": "boolean",
+            "description": (
+                "Accepted only with action=connect and profile=gmail_send, after "
+                "the user explicitly confirms that permission upgrade. Disconnect "
+                "confirmation happens only through the tool-sent Telegram buttons. "
+                "This does not confirm a later email send."
+            ),
+        },
+        "profile": {
+            "type": "string",
+            "enum": ["workspace_readonly", "gmail_send"],
+            "description": (
+                "High-level allowlisted permission profile accepted only with "
+                "action=connect. Omit for workspace_readonly. Use gmail_send only "
+                "after explicit permission-upgrade confirmation; it adds gmail.send "
+                "but does not enable Gmail draft management or arbitrary scopes."
+            ),
+        },
+    },
+    "required": ["action"],
+    "additionalProperties": False,
+}
+
+TINYHAT_GOOGLE_WORKSPACE_APP_SCHEMA = {
+    "type": "object",
+    "description": (
+        "Run bounded argv through the separately installed gws app using this "
+        "Computer's assignment-verified Tinyhat Google access. Service-specific "
+        "commands come from separate gws skills, not this authentication plugin."
+    ),
+    "properties": {
+        "argv": {
+            "type": "array",
+            "minItems": 1,
+            "maxItems": 64,
+            "items": {"type": "string", "minLength": 1, "maxLength": 4096},
+            "description": (
+                "Opaque gws arguments supplied by an installed gws skill. Do not "
+                "include the gws executable, auth/setup/login/export commands, or "
+                "unbounded pagination such as --page-all."
+            ),
+        },
+        "effect": {
+            "type": "string",
+            "enum": ["read", "write"],
+            "description": (
+                "Declare whether this invocation only reads Google data or may "
+                "change external state. Write commands require a separate exact-argv "
+                "confirmation after any permission upgrade."
+            ),
+        },
+        "confirmed": {
+            "type": "boolean",
+            "description": (
+                "Set true for effect=write only after the user explicitly confirms "
+                "the exact external operation. Permission-upgrade confirmation does "
+                "not count."
+            ),
+        },
+        "confirmation_id": {
+            "type": "string",
+            "pattern": "^[0-9a-f]{64}$",
+            "description": (
+                "For a confirmed write, repeat the exact confirmation_id returned by "
+                "the tool's confirmation_required response for the unchanged argv."
+            ),
+        },
+    },
+    "required": ["argv", "effect"],
+    "additionalProperties": False,
+}
+
+TINYHAT_GOOGLE_WORKSPACE_APP_MANAGER_SCHEMA = {
+    "type": "object",
+    "description": (
+        "Inspect, install, or uninstall Tinyhat's pinned and integrity-verified "
+        "Google Workspace CLI app plus official operation skills. Installation "
+        "never starts another OAuth flow and requires explicit user approval."
+    ),
+    "properties": {
+        "action": {
+            "type": "string",
+            "enum": ["status", "install", "uninstall"],
+            "description": (
+                "Use status to inspect safe managed metadata. Use install or "
+                "uninstall only after explicit user approval."
+            ),
+        },
+        "confirmed": {
+            "type": "boolean",
+            "description": (
+                "Set true for install or uninstall only after the user explicitly "
+                "approves that managed app change."
+            ),
+        },
+    },
+    "required": ["action"],
     "additionalProperties": False,
 }
 

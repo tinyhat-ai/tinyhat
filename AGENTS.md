@@ -20,11 +20,17 @@ a fresh Hermes-only start.
 - `plugin.yaml`: Hermes manifest.
 - `__init__.py`: Hermes registration entrypoint.
 - `hermes.plugin.json`: Tinyhat adapter metadata.
-- `tools.py`, `schemas.py`, `platform.py`, and `secret_handoff.py`: tiny public tool surface.
+- `tools.py`, `schemas.py`, `platform.py`, `secret_handoff.py`,
+  `google_workspace.py`, `google_workspace_app.py`, and
+  `google_workspace_app_manager.py`: tiny public tool surface.
+- `google_workspace_worker.py` and `google_workspace_disconnect_worker.py`:
+  detached owner-bound connection and disconnect workers.
 - `skills/tinyhat-tell-joke/SKILL.md`: deterministic joke proof.
 - `skills/tinyhat-plugin-version/SKILL.md`: live plugin version proof.
 - `skills/tinyhat-skill-catalog/SKILL.md`: plugin-qualified skill discovery.
 - `skills/tinyhat-private-secret/SKILL.md`: private Mini App secret handoff.
+- `skills/tinyhat-google-workspace/SKILL.md`: Google Workspace connection and named permission upgrades.
+- `skills/tinyhat-google-workspace-app-manager/SKILL.md`: confirmed pinned gws app and operation-skill manager.
 - `skills/tinyhat-codex-auth/SKILL.md`: OpenAI Codex / ChatGPT subscription auth flow guidance.
 - `skills/tinyhat-plugin-update/SKILL.md`: installed plugin channel update guidance.
 - `skills/tinyhat-platform/SKILL.md`: Tinyhat-managed Hermes operating context.
