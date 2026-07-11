@@ -1033,15 +1033,17 @@ class GoogleWorkspaceTests(unittest.TestCase):
             )
             self.assertEqual(notices, ["superseded"])
 
-    def test_ready_worker_saves_before_claim_without_returning_credentials(self) -> None:
+    def test_ready_worker_saves_claims_clears_then_notifies(self) -> None:
         events: list[str] = []
         notice_states: list[str] = []
 
         class EventClient(PollingClient):
             def post_json(self, path: str, payload: dict[str, object]) -> dict[str, object]:
+                self_test.assertTrue(workspace.ACTIVE_HANDOFF_PATH.exists())
                 events.append("claim")
                 return super().post_json(path, payload)
 
+        self_test = self
         client = EventClient(
             [
                 {
@@ -1053,6 +1055,7 @@ class GoogleWorkspaceTests(unittest.TestCase):
         )
         handoff = self._worker_handoff(client=client)
         original_save = workspace._atomic_save_credentials
+        original_clear = workspace._clear_active_handoff
 
         def save(credentials: dict[str, object]) -> None:
             events.append("save")
@@ -1062,6 +1065,10 @@ class GoogleWorkspaceTests(unittest.TestCase):
             events.append("notice")
             notice_states.append(terminal_state)
             return {"sent": True, "ok": True}
+
+        def clear_active(current_handoff: workspace.GoogleWorkspaceWorkerHandoff) -> None:
+            events.append("clear")
+            original_clear(current_handoff)
 
         with (
             tempfile.TemporaryDirectory() as tmp,
@@ -1074,6 +1081,11 @@ class GoogleWorkspaceTests(unittest.TestCase):
             mock.patch.object(workspace, "_atomic_save_credentials", side_effect=save),
             mock.patch.object(
                 workspace,
+                "_clear_active_handoff",
+                side_effect=clear_active,
+            ),
+            mock.patch.object(
+                workspace,
                 "_send_google_workspace_notice",
                 side_effect=send_notice,
             ),
@@ -1082,13 +1094,97 @@ class GoogleWorkspaceTests(unittest.TestCase):
             workspace._poll_and_install(handoff)
             saved = json.loads(workspace.CREDENTIALS_PATH.read_text())
 
-        self.assertEqual(events, ["save", "notice", "claim"])
+        self.assertEqual(events, ["save", "claim", "clear", "notice"])
         self.assertEqual(notice_states, ["ready"])
+        self.assertFalse(workspace.ACTIVE_HANDOFF_PATH.exists())
         self.assertEqual(saved["email"], "owner@example.com")
         claim = client.posts[-1][1]
         self.assertEqual(claim, {"installed": True, "message": None})
         self.assertNotIn("access_token", json.dumps(claim))
         self.assertNotIn("refresh_token", json.dumps(claim))
+
+    def test_ready_worker_retries_claim_before_clearing_or_notifying(self) -> None:
+        claim_attempts: list[int] = []
+
+        class FlakyClaimClient(PollingClient):
+            def post_json(self, path: str, payload: dict[str, object]) -> dict[str, object]:
+                claim_attempts.append(len(claim_attempts) + 1)
+                if len(claim_attempts) < workspace.INSTALL_CLAIM_MAX_ATTEMPTS:
+                    raise RuntimeError("temporary platform failure")
+                return super().post_json(path, payload)
+
+        client = FlakyClaimClient(
+            [
+                {
+                    "status": "ready",
+                    "terminal_state": "ready",
+                    "ciphertext_payload": {"ciphertext": "opaque"},
+                }
+            ]
+        )
+        handoff = self._worker_handoff(client=client)
+        with (
+            tempfile.TemporaryDirectory() as tmp,
+            self._patched_state(Path(tmp)),
+            mock.patch.object(
+                workspace,
+                "_decrypt_ciphertext",
+                return_value=json.dumps(credential_envelope()),
+            ),
+            mock.patch.object(workspace.time, "sleep") as sleep,
+            self._captured_notices() as notices,
+        ):
+            self._activate_handoff()
+            workspace._poll_and_install(handoff)
+
+            self.assertEqual(
+                claim_attempts,
+                list(range(1, workspace.INSTALL_CLAIM_MAX_ATTEMPTS + 1)),
+            )
+            self.assertEqual(sleep.call_count, workspace.INSTALL_CLAIM_MAX_ATTEMPTS - 1)
+            self.assertFalse(workspace.ACTIVE_HANDOFF_PATH.exists())
+            self.assertEqual(notices, ["ready"])
+
+    def test_ready_worker_claim_failure_keeps_marker_and_sends_no_success(self) -> None:
+        claim_attempts = 0
+
+        class FailingClaimClient(PollingClient):
+            def post_json(self, path: str, payload: dict[str, object]) -> dict[str, object]:
+                nonlocal claim_attempts
+                claim_attempts += 1
+                if not workspace.ACTIVE_HANDOFF_PATH.exists():
+                    raise AssertionError("claim retry lost the active handoff marker")
+                raise RuntimeError("platform unavailable")
+
+        client = FailingClaimClient(
+            [
+                {
+                    "status": "ready",
+                    "terminal_state": "ready",
+                    "ciphertext_payload": {"ciphertext": "opaque"},
+                }
+            ]
+        )
+        handoff = self._worker_handoff(client=client)
+        with (
+            tempfile.TemporaryDirectory() as tmp,
+            self._patched_state(Path(tmp)),
+            mock.patch.object(
+                workspace,
+                "_decrypt_ciphertext",
+                return_value=json.dumps(credential_envelope()),
+            ),
+            mock.patch.object(workspace.time, "sleep"),
+            self._captured_notices() as notices,
+        ):
+            self._activate_handoff()
+            with self.assertRaisesRegex(RuntimeError, "platform unavailable"):
+                workspace._poll_and_install(handoff)
+
+            self.assertEqual(claim_attempts, workspace.INSTALL_CLAIM_MAX_ATTEMPTS)
+            self.assertTrue(workspace.CREDENTIALS_PATH.exists())
+            self.assertTrue(workspace.ACTIVE_HANDOFF_PATH.exists())
+            self.assertEqual(notices, [])
 
     def test_cancelled_gmail_send_upgrade_keeps_existing_readonly_credential(self) -> None:
         client = PollingClient([{"terminal_state": "cancelled"}])
