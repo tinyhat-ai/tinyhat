@@ -252,7 +252,7 @@ def _require_supported_host() -> GwsReleaseArtifact:
 
 
 def _validate_trusted_hermes_home(configured_home: Path) -> None:
-    """Reject symlinked or writable ancestors before root writes operation skills."""
+    """Reject unsafe Hermes-home ancestors before legacy-skill cleanup."""
     candidates = [configured_home, *configured_home.parents]
     for candidate in candidates:
         if not candidate.exists():

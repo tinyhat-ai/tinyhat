@@ -178,9 +178,10 @@ external managed `gws` app performs the API call through Tinyhat's bridge. Its
 local-client OAuth setup and scripts are intentionally bypassed.
 
 `tinyhat_google_workspace_app` is a generic credential bridge. It accepts only
-bounded opaque argv from a gws skill, verifies the Computer assignment, refreshes
-through the platform broker when needed, and injects the access token only into
-one isolated, root-owned `gws` child process. The bridge accepts only
+bounded opaque argv from Hermes's native Google Workspace skill, verifies the
+Computer assignment, refreshes through the platform broker when needed, and
+injects the access token only into one isolated, root-owned `gws` child process.
+The bridge accepts only
 `/opt/tinyhat/bin/gws` when the app manager's root-only manifest matches the
 hardcoded version, architecture, source, mode, and SHA-256. It never passes the refresh token,
 client secret, credential file, executable, environment, or working directory

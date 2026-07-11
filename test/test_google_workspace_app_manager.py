@@ -183,6 +183,20 @@ class GoogleWorkspaceAppManagerTests(unittest.TestCase):
         self.assertEqual(set(schema["properties"]), {"action", "confirmed"})
         self.assertIn("Hermes's native Google Workspace skill", schema["description"])
         self.assertNotIn("operation skills", schema["description"])
+        bridge_schema = schemas.TINYHAT_GOOGLE_WORKSPACE_APP_SCHEMA
+        self.assertIn(
+            "Hermes's native Google Workspace skill",
+            bridge_schema["description"],
+        )
+        self.assertIn(
+            "Hermes's native Google Workspace skill",
+            bridge_schema["properties"]["argv"]["description"],
+        )
+        self.assertNotIn("separate gws skills", bridge_schema["description"])
+        self.assertNotIn(
+            "installed gws skill",
+            bridge_schema["properties"]["argv"]["description"],
+        )
         self.assertEqual(schema["properties"]["action"]["enum"], list(manager.MANAGER_ACTIONS))
         self.assertFalse(schema["additionalProperties"])
         manager_calls = [
