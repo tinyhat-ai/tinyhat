@@ -142,14 +142,14 @@ class HermesAdapterTests(unittest.TestCase):
 
         self.assertEqual(payload["schema"], "tinyhat_plugin_version_v1")
         self.assertEqual(payload["name"], "tinyhat")
-        self.assertEqual(payload["version"], "0.21.0")
+        self.assertEqual(payload["version"], "0.21.1")
 
     def test_skill_catalog_lists_qualified_names_and_aliases(self) -> None:
         payload = json.loads(tools.skill_catalog())
 
         self.assertEqual(payload["schema"], "tinyhat_skill_catalog_v1")
         self.assertEqual(payload["plugin"]["name"], "tinyhat")
-        self.assertEqual(payload["plugin"]["version"], "0.21.0")
+        self.assertEqual(payload["plugin"]["version"], "0.21.1")
         by_name = {skill["name"]: skill for skill in payload["skills"]}
         self.assertEqual(
             by_name["tinyhat-codex-auth"]["qualified_name"],
