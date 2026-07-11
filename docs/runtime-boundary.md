@@ -35,9 +35,13 @@ The default profile fixes `google_workspace_readonly_v1` to services `identity`,
 Calendar, and Drive read-only scopes. Neither the user nor agent can supply
 arbitrary scopes. A separately confirmed `google_workspace_gmail_send_v1`
 upgrade adds only `gmail.send`; it does not add `gmail.compose`, and permission
-upgrade is not confirmation for an actual send. Consumer skills and scripts
-can evolve across the same plugin/platform boundary while the runtime continues
-to supply only the existing Computer identity and plugin lifecycle.
+upgrade is not confirmation for an actual send. Separately confirmed
+`google_workspace_calendar_write_v1` and
+`google_workspace_gmail_send_calendar_write_v1` bundles add only
+`calendar.events` or the two write permissions together. Verified existing
+write permissions are retained across upgrades and reconnects. Consumer skills
+and scripts can evolve across the same plugin/platform boundary while the runtime
+continues to supply only the existing Computer identity and plugin lifecycle.
 The auth plugin does not implement Gmail, Calendar, or Drive operations. A
 generic `tinyhat_google_workspace_app` bridge lends one current access token to
 an isolated, manifest-verified root-owned `gws` child. Hermes's bundled

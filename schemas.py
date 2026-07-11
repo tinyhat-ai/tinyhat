@@ -60,8 +60,9 @@ TINYHAT_GOOGLE_WORKSPACE_SCHEMA = {
         "Connect, inspect, or disconnect this Tinyhat Computer's Google Workspace "
         "account using one plugin-owned, platform-allowlisted permission profile. "
         "The default profile includes identity plus read-only Gmail, Calendar, and "
-        "Drive. The gmail_send profile adds only Gmail send permission. The user "
-        "provides no Google Cloud project or OAuth secret."
+        "Drive. Named upgrades can add Gmail sending, Calendar event writing, or "
+        "both while retaining existing granted write permissions. The user provides "
+        "no Google Cloud project or OAuth secret."
     ),
     "properties": {
         "action": {
@@ -78,20 +79,26 @@ TINYHAT_GOOGLE_WORKSPACE_SCHEMA = {
         "confirmed": {
             "type": "boolean",
             "description": (
-                "Accepted only with action=connect and profile=gmail_send, after "
-                "the user explicitly confirms that permission upgrade. Disconnect "
+                "Accepted only with action=connect and a write profile, after the "
+                "user explicitly confirms that permission upgrade. Disconnect "
                 "confirmation happens only through the tool-sent Telegram buttons. "
-                "This does not confirm a later email send."
+                "This does not confirm a later email send or Calendar event change."
             ),
         },
         "profile": {
             "type": "string",
-            "enum": ["workspace_readonly", "gmail_send"],
+            "enum": [
+                "workspace_readonly",
+                "gmail_send",
+                "calendar_write",
+                "gmail_send_calendar_write",
+            ],
             "description": (
                 "High-level allowlisted permission profile accepted only with "
-                "action=connect. Omit for workspace_readonly. Use gmail_send only "
-                "after explicit permission-upgrade confirmation; it adds gmail.send "
-                "but does not enable Gmail draft management or arbitrary scopes."
+                "action=connect. Omit for workspace_readonly. Use gmail_send, "
+                "calendar_write, or gmail_send_calendar_write only after explicit "
+                "permission-upgrade confirmation. Existing granted write permissions "
+                "are preserved automatically; arbitrary scopes are never accepted."
             ),
         },
     },

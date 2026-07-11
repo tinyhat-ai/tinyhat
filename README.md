@@ -17,8 +17,9 @@ Mini App without sending the plaintext to Tinyhat's servers. It also
 connects an existing Google identity to a Computer without asking the user for
 a Google Cloud project, OAuth client, secret, or SSH access. The default
 profile includes identity plus read-only Gmail, Calendar, and Drive access.
-After separate confirmation, a named least-privilege upgrade can add Gmail
-sending without enabling Gmail draft management. It
+After separate confirmation, named least-privilege upgrades can add Gmail
+sending, Calendar event changes, or both without enabling Gmail draft
+management or broader Calendar settings access. It
 teaches the agent the Tinyhat-managed OpenAI Codex / ChatGPT subscription
 auth flow that is installed on each Hermes Computer.
 
@@ -162,15 +163,17 @@ development OAuth project. Other Tinyhat Computers are unaffected, and the
 plugin must never claim that the Google account's provider grant was revoked.
 
 This first delivery grants identity plus read-only Gmail, Calendar, and Drive
-permissions by default. If a connected user asks to send Gmail, the agent first
-asks for permission to upgrade the same connection, then calls the lifecycle
-tool with the named `gmail_send` profile. That fixed
-`google_workspace_gmail_send_v1` bundle adds only `gmail.send` to the baseline.
-It does not add restricted `gmail.compose`, so Gmail draft management remains
-deferred. A cancelled, failed, or expired upgrade leaves the existing local
+permissions by default. Named `gmail_send`, `calendar_write`, and
+`gmail_send_calendar_write` upgrades add Gmail sending, Calendar event changes,
+or both after explicit permission confirmation. Their fixed bundles add only
+`gmail.send`, `calendar.events`, or both to the baseline. Gmail draft management
+and broader Calendar settings remain out of scope. A verified existing write
+permission is retained automatically when another permission is added or the
+default connection is reauthorized, so an upgrade never silently downgrades the
+connection. A cancelled, failed, or expired upgrade leaves the existing local
 credential untouched; a valid encrypted expanded credential replaces it
-atomically. Permission-upgrade confirmation never counts as confirmation to
-send an actual email.
+atomically. Permission-upgrade confirmation never counts as confirmation for an
+actual email send or Calendar event change.
 
 The authentication plugin does not implement mail, event, or file operations.
 Hermes's bundled `google-workspace` skill supplies operation semantics while the

@@ -67,17 +67,22 @@ are exactly `openid`, `email`, `profile`,
 scope or service input. The platform validates all three fields and returns the
 Google URL authored from its central Web OAuth client.
 
-For a connected user who asks to send or write Gmail, the agent first asks for
-explicit permission to expand the connection. Only after confirmation does it
-call `tinyhat_google_workspace` with
-`{"action": "connect", "profile": "gmail_send", "confirmed": true}`. This
-named profile maps to `google_workspace_gmail_send_v1`, the exact read-only
-baseline plus `https://www.googleapis.com/auth/gmail.send`. It does not add
-restricted `gmail.compose`; Gmail drafts are deferred. The existing credential
-remains usable unless the new encrypted credential completes successfully and
-replaces it atomically. Enabling Gmail send permission is separate from
-confirming an actual outbound email. The permission-expansion button is labeled
-**Upgrade Google access**, so it cannot be mistaken for first connection.
+For a connected user who asks to send Gmail or change Calendar events, the agent
+first asks for explicit permission to expand the connection. Only after
+confirmation does it call `tinyhat_google_workspace` with the named
+`gmail_send`, `calendar_write`, or `gmail_send_calendar_write` profile. These map
+to `google_workspace_gmail_send_v1`, `google_workspace_calendar_write_v1`, and
+`google_workspace_gmail_send_calendar_write_v1`; they add `gmail.send`,
+`calendar.events`, or both to the exact read-only baseline. They do not add
+restricted `gmail.compose` or
+broader Calendar settings access. The plugin verifies and retains existing
+write permissions automatically when adding another permission or reconnecting,
+so Calendar write cannot remove Gmail send and a default reconnect cannot
+silently downgrade either permission. The existing credential remains usable
+unless the new encrypted credential completes successfully and replaces it
+atomically. Permission expansion is separate from confirming any outbound email
+or Calendar event change. The permission-expansion button is labeled **Upgrade
+Google access**, so it cannot be mistaken for first connection.
 
 The platform owns the callback, validates state, exchanges the code, verifies
 userinfo and the granted scope set, and encrypts the complete credential envelope
