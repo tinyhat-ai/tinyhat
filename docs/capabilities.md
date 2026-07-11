@@ -76,7 +76,8 @@ baseline plus `https://www.googleapis.com/auth/gmail.send`. It does not add
 restricted `gmail.compose`; Gmail drafts are deferred. The existing credential
 remains usable unless the new encrypted credential completes successfully and
 replaces it atomically. Enabling Gmail send permission is separate from
-confirming an actual outbound email.
+confirming an actual outbound email. The permission-expansion button is labeled
+**Upgrade Google access**, so it cannot be mistaken for first connection.
 
 The platform owns the callback, validates state, exchanges the code, verifies
 userinfo and the granted scope set, and encrypts the complete credential envelope

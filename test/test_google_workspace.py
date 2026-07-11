@@ -419,6 +419,7 @@ class GoogleWorkspaceTests(unittest.TestCase):
         self.assertEqual(result["status"], "waiting_for_user")
         self.assertEqual(result["profile"], "gmail_send")
         self.assertEqual(result["capability_bundle"], GMAIL_SEND_BUNDLE)
+        self.assertIn("native Upgrade Google access button", result["message"])
         self.assertEqual(
             client.calls[0][1],
             {
@@ -731,6 +732,39 @@ class GoogleWorkspaceTests(unittest.TestCase):
             sends[0]["reply_markup"],
             {"inline_keyboard": [[{"text": "Connect Google", "url": authorization_url}]]},
         )
+        self.assertNotIn(authorization_url, str(sends[0]["text"]))
+
+    def test_gmail_send_upgrade_button_is_distinct_from_first_connect(self) -> None:
+        sends: list[dict[str, object]] = []
+        authorization_url = str(start_response()["authorization_url"])
+        with (
+            mock.patch.object(
+                tools,
+                "_telegram_credentials",
+                return_value=("telegram-token", "chat-123"),
+            ),
+            mock.patch.object(
+                tools,
+                "_telegram_send_message",
+                side_effect=lambda **kwargs: sends.append(kwargs) or {"ok": True},
+            ),
+        ):
+            result = workspace._send_google_connect_button(
+                authorization_url,
+                profile="gmail_send",
+            )
+
+        self.assertEqual(result, {"sent": True, "ok": True})
+        self.assertEqual(len(sends), 1)
+        self.assertEqual(
+            sends[0]["reply_markup"],
+            {
+                "inline_keyboard": [
+                    [{"text": "Upgrade Google access", "url": authorization_url}]
+                ]
+            },
+        )
+        self.assertIn("Upgrade Google Workspace", str(sends[0]["text"]))
         self.assertNotIn(authorization_url, str(sends[0]["text"]))
 
     def test_telegram_message_helper_encodes_reply_markup_as_json(self) -> None:

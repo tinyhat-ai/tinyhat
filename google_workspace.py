@@ -325,6 +325,7 @@ def _profile_for_capability_bundle(value: Any) -> GoogleWorkspaceProfile:
 
 def _start_connection(*, profile: GoogleWorkspaceProfile | None = None) -> dict[str, Any]:
     requested_profile = profile or GOOGLE_PROFILE_CONFIGS[GOOGLE_WORKSPACE_PROFILE_READONLY]
+    button_label = _google_authorization_button_label(requested_profile)
     private_key_pem, public_key_pem = _generate_key_pair()
     generation = secrets.token_urlsafe(32)
     # Serialize the complete start transition. A disconnect that begins after
@@ -412,7 +413,7 @@ def _start_connection(*, profile: GoogleWorkspaceProfile | None = None) -> dict[
         "button_sent": True,
         "poll_after_ms": poll_after_ms,
         "message": (
-            "I sent a native Connect Google button in Telegram. Use that button "
+            f"I sent a native {button_label} button in Telegram. Use that button "
             f"to approve {requested_profile.access_label} plus basic identity. "
             "No plain authorization link is returned. Your existing connection "
             "stays usable unless the expanded credential is completed successfully."
@@ -459,6 +460,12 @@ def _send_google_connect_button(
 ) -> dict[str, bool]:
     """Send the platform URL only inside a native Telegram button."""
     requested_profile = _requested_profile(profile)
+    button_label = _google_authorization_button_label(requested_profile)
+    action_label = (
+        "Upgrade Google Workspace"
+        if requested_profile.name == GOOGLE_WORKSPACE_PROFILE_GMAIL_SEND
+        else "Connect Google Workspace"
+    )
     try:
         # Lazy import avoids the tools -> google_workspace registration cycle.
         from .tools import _telegram_credentials, _telegram_send_message  # noqa: PLC0415
@@ -467,15 +474,22 @@ def _send_google_connect_button(
         sent = _telegram_send_message(
             token=token,
             chat_id=chat_id,
-            text=(f"Connect Google Workspace with {requested_profile.access_label}."),
+            text=(f"{action_label} with {requested_profile.access_label}."),
             reply_markup={
-                "inline_keyboard": [[{"text": "Connect Google", "url": authorization_url}]]
+                "inline_keyboard": [[{"text": button_label, "url": authorization_url}]]
             },
         )
         ok = bool(sent.get("ok"))
         return {"sent": ok, "ok": ok}
     except Exception:
         return {"sent": False, "ok": False}
+
+
+def _google_authorization_button_label(profile: GoogleWorkspaceProfile) -> str:
+    """Distinguish first connection from a permission expansion in Telegram."""
+    if profile.name == GOOGLE_WORKSPACE_PROFILE_GMAIL_SEND:
+        return "Upgrade Google access"
+    return "Connect Google"
 
 
 def _validated_capability_bundle(value: Any, *, expected: str | None = None) -> str:

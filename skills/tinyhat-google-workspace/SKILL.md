@@ -48,7 +48,7 @@ If a connected user asks to send or write Gmail and status does not include
    upgrade from the original request alone.
 3. After confirmation, call `tinyhat_google_workspace` with
    `{"action": "connect", "profile": "gmail_send", "confirmed": true}`.
-4. The tool sends a new native **Connect Google** button. The existing local
+4. The tool sends a new native **Upgrade Google access** button. The existing local
    credential remains usable if the user cancels, the flow fails, or it expires;
    it is replaced atomically only after a valid encrypted expanded credential
    arrives for the current assignment and same Google account.
