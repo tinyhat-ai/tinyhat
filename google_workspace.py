@@ -32,9 +32,12 @@ from .platform import PlatformClient, build_platform_client, computer_api_path
 from .secret_handoff import KEY_ALGORITHM, _decrypt_ciphertext, _generate_key_pair
 from .tool_errors import tool_error_json
 
-GOOGLE_WORKSPACE_ACTIONS = ("connect", "status", "disconnect")
+GOOGLE_WORKSPACE_ACTIONS = ("connect", "status", "set_permissions", "disconnect")
 GOOGLE_WORKSPACE_CREDENTIAL_SCHEMA = "tinyhat_google_workspace_credentials_v1"
+GOOGLE_WORKSPACE_ACCOUNTS_SCHEMA = "tinyhat_google_workspace_accounts_v1"
+GOOGLE_WORKSPACE_CONNECTIONS_SCHEMA = "tinyhat_google_workspace_connections_v1"
 GOOGLE_WORKSPACE_REFRESH_SCHEMA = "tinyhat_google_workspace_refresh_v1"
+GOOGLE_WORKSPACE_INSTALL_RECEIPT_SCHEMA = "tinyhat_google_workspace_install_receipt_v1"
 GOOGLE_WORKSPACE_DISCONNECT_INTENT_SCHEMA = "tinyhat_google_workspace_disconnect_intent_v1"
 GOOGLE_WORKSPACE_DISCONNECT_WORKER_STATE_SCHEMA = (
     "tinyhat_google_workspace_disconnect_worker_state_v1"
@@ -46,6 +49,7 @@ GOOGLE_WORKSPACE_DISCONNECT_COMPLETION_RECEIPT_SCHEMA = (
     "tinyhat_google_workspace_disconnect_completion_receipt_v1"
 )
 GOOGLE_WORKSPACE_API_SUFFIX = "google-workspace-oauth/v1"
+GOOGLE_WORKSPACE_CONNECTIONS_SUFFIX = f"{GOOGLE_WORKSPACE_API_SUFFIX}/connections"
 GOOGLE_WORKSPACE_DISCONNECT_INTENTS_SUFFIX = f"{GOOGLE_WORKSPACE_API_SUFFIX}/disconnect-intents"
 GOOGLE_TOKEN_URI = "https://oauth2.googleapis.com/token"
 GOOGLE_WORKSPACE_PROFILE_READONLY = "workspace_readonly"
@@ -106,6 +110,7 @@ DISCONNECT_AUTO_RESUME_LIMIT = 8
 DISCONNECT_ORPHAN_SWEEP_GRACE_SECONDS = 5 * 60
 DISCONNECT_ORPHAN_SWEEP_SCAN_LIMIT = 32
 DISCONNECT_ORPHAN_SWEEP_DELETE_LIMIT = 8
+INSTALL_RECEIPT_SCAN_LIMIT = 32
 CONTEXT_ASSIGNMENT_CHECK_TTL_SECONDS = 30.0
 CONTEXT_ASSIGNMENT_CHECK_TIMEOUT_SECONDS = 2
 AUTHORIZATION_URL_MAX_LENGTH = 16_384
@@ -114,14 +119,17 @@ GOOGLE_TOKEN_VALUE_MAX_LENGTH = 16_384
 GOOGLE_TOKEN_EXPIRY_MAX_LENGTH = 64
 OWNER_ONLY_FILE_MODE = 0o600
 HANDOFF_ID_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_.-]{0,127}$")
+GOOGLE_CONNECTION_ID_RE = re.compile(r"^gwo_[A-Za-z0-9_-]{1,60}$")
 GOOGLE_LAUNCH_TICKET_RE = re.compile(
     r"^gwol1\.[1-9][0-9]{0,9}\.[A-Za-z0-9_-]{32,16000}$"
 )
 DISCONNECT_OWNER_TOKEN_RE = re.compile(r"^[A-Za-z0-9_-]{32,256}$")
 DISCONNECT_GENERATION_RE = re.compile(r"^[0-9a-f]{64}$")
 STATE_DIR = Path.home() / ".tinyhat" / "google-workspace"
-CREDENTIALS_PATH = STATE_DIR / "credentials.json"
+CREDENTIALS_PATH = STATE_DIR / "accounts.json"
+LEGACY_CREDENTIALS_PATH = STATE_DIR / "credentials.json"
 HANDOFFS_DIR = STATE_DIR / "handoffs"
+INSTALL_RECEIPTS_DIR = STATE_DIR / "install-receipts"
 ACTIVE_HANDOFF_PATH = STATE_DIR / "active-handoff.json"
 DISCONNECTS_DIR = STATE_DIR / "disconnects"
 ACTIVE_DISCONNECT_PATH = STATE_DIR / "active-disconnect.json"
@@ -141,6 +149,14 @@ _context_assignment_check_cache_lock = threading.Lock()
 
 class GoogleWorkspaceError(RuntimeError):
     """A Google Workspace connection step failed safely."""
+
+
+class GoogleWorkspaceAccountSelectionRequired(GoogleWorkspaceError):
+    """An account-specific action cannot safely guess among connected accounts."""
+
+    def __init__(self, accounts: list[dict[str, Any]]) -> None:
+        self.accounts = accounts
+        super().__init__("Choose one connected Google Workspace account.")
 
 
 @dataclass(frozen=True)
@@ -214,9 +230,11 @@ class GoogleWorkspacePermissionConfirmationRequired(GoogleWorkspaceError):
         *,
         requested_profile: GoogleWorkspaceProfile,
         missing_profile: GoogleWorkspaceProfile,
+        confirmation_id: str,
     ) -> None:
         self.requested_profile = requested_profile
         self.missing_profile = missing_profile
+        self.confirmation_id = confirmation_id
         super().__init__("Google Workspace permission upgrade confirmation is required.")
 
 
@@ -232,6 +250,8 @@ class GoogleWorkspaceWorkerHandoff:
     expected_capability_bundle: str
     expected_services: list[str]
     expected_scopes: list[str]
+    connection_action: str
+    target_connection_id: str | None
 
 
 @dataclass(frozen=True)
@@ -242,6 +262,7 @@ class GoogleWorkspaceDisconnectIntent:
     platform_auth: str
     intent_id: str
     owner_token: str
+    connection_id: str
     credential_generation: str
     expires_at: str
     poll_after_ms: int
@@ -257,7 +278,12 @@ class GoogleWorkspaceDisconnectCompletionReceipt:
 
 
 def google_workspace(args: dict[str, Any] | None = None, **_: Any) -> str:
-    """Connect, inspect, or disconnect this Computer's Google account."""
+    """Connect, inspect, change, or disconnect this Computer's Google accounts."""
+    # A credential may have been saved just before a temporary platform claim
+    # outage. Resume that durable acknowledgement before starting another
+    # lifecycle transition so local and safe platform metadata converge.
+    with contextlib.suppress(Exception):
+        _resume_retained_install_receipts()
     # A prior worker may have exhausted its bounded completion window while
     # the platform was unavailable. Any later plugin use automatically
     # restarts retained idempotent receipts; this never replays OAuth polling.
@@ -271,7 +297,7 @@ def google_workspace(args: dict[str, Any] | None = None, **_: Any) -> str:
             error_name="missing_required_parameter",
             message=(
                 "Call tinyhat_google_workspace with action='connect', "
-                "action='status', or action='disconnect'."
+                "action='status', action='set_permissions', or action='disconnect'."
             ),
             missing=["action"],
             example_call={"action": "connect"},
@@ -292,18 +318,63 @@ def google_workspace(args: dict[str, Any] | None = None, **_: Any) -> str:
         )
 
     raw_profile = payload.get("profile")
-    if action != "connect" and raw_profile is not None:
+    if action not in {"connect", "set_permissions"} and raw_profile is not None:
         return tool_error_json(
             tool="tinyhat_google_workspace",
             error_name="invalid_parameter",
-            message="The profile parameter is accepted only with action='connect'.",
+            message=(
+                "The profile parameter is accepted only with action='connect' or "
+                "action='set_permissions'."
+            ),
             expected={"profile": list(GOOGLE_WORKSPACE_PROFILES)},
             example_call={"action": "connect", "profile": GOOGLE_WORKSPACE_PROFILE_READONLY},
         )
 
+    try:
+        account_id = _optional_account_id(payload.get("account_id"))
+    except GoogleWorkspaceError:
+        return tool_error_json(
+            tool="tinyhat_google_workspace",
+            error_name="invalid_parameter",
+            message="Google Workspace account_id is invalid.",
+            expected={"account_id": "opaque account_id returned by status"},
+            example_call={"action": "status"},
+        )
+
+    if action == "set_permissions" and account_id is None:
+        return tool_error_json(
+            tool="tinyhat_google_workspace",
+            error_name="missing_required_parameter",
+            message="Choose the Google Workspace account whose permissions should change.",
+            missing=["account_id"],
+            expected={"account_id": "opaque account_id returned by status"},
+            example_call={
+                "action": "set_permissions",
+                "account_id": "connection_id_from_status",
+                "profile": GOOGLE_WORKSPACE_PROFILE_READONLY,
+            },
+        )
+
+    if action in {"connect", "set_permissions"} and _has_unresolved_install_receipts():
+        return tool_error_json(
+            tool="tinyhat_google_workspace",
+            error_name="platform_sync_pending",
+            message=(
+                "A saved Google connection is still syncing safe metadata with "
+                "Tinyhat. Retry this permission or connection change shortly."
+            ),
+            example_call={"action": "status"},
+        )
+
     if action == "status":
         try:
-            result = _status_payload()
+            result = _status_payload(account_id=account_id)
+        except GoogleWorkspaceAccountSelectionRequired as exc:
+            return _account_selection_error(
+                tool="tinyhat_google_workspace",
+                action="status",
+                accounts=exc.accounts,
+            )
         except Exception:
             result = {
                 "schema": "tinyhat_google_workspace_status_v1",
@@ -317,7 +388,13 @@ def google_workspace(args: dict[str, Any] | None = None, **_: Any) -> str:
             # A model-provided boolean is not human confirmation. The platform
             # sends an authenticated two-stage Telegram ceremony and the
             # detached Computer worker acts only after its terminal confirm.
-            result = _start_disconnect_intent()
+            result = _start_disconnect_intent(account_id=account_id)
+        except GoogleWorkspaceAccountSelectionRequired as exc:
+            return _account_selection_error(
+                tool="tinyhat_google_workspace",
+                action="disconnect",
+                accounts=exc.accounts,
+            )
         except Exception:
             result = {
                 "schema": "tinyhat_google_workspace_action_v1",
@@ -352,26 +429,64 @@ def google_workspace(args: dict[str, Any] | None = None, **_: Any) -> str:
             result = _start_connection(
                 profile=profile,
                 confirmed=payload.get("confirmed") is True,
+                confirmation_id=payload.get("confirmation_id"),
+                account_id=account_id,
+                exact_permissions=action == "set_permissions",
             )
         except GoogleWorkspacePermissionConfirmationRequired as exc:
             return tool_error_json(
                 tool="tinyhat_google_workspace",
                 error_name="confirmation_required",
                 message=_permission_upgrade_confirmation_message(exc.missing_profile),
+                expected={"confirmation_id": exc.confirmation_id},
                 example_call={
-                    "action": "connect",
+                    "action": action,
                     "profile": exc.requested_profile.name,
                     "confirmed": True,
+                    "confirmation_id": exc.confirmation_id,
+                    **({"account_id": account_id} if account_id is not None else {}),
                 },
+            )
+        except GoogleWorkspaceAccountSelectionRequired as exc:
+            return _account_selection_error(
+                tool="tinyhat_google_workspace",
+                action=action,
+                accounts=exc.accounts,
             )
         except Exception:
             result = {
                 "schema": "tinyhat_google_workspace_action_v1",
-                "action": "connect",
+                "action": action,
                 "status": "failed",
                 "message": ("I could not start Google sign-in on this Computer. Please try again."),
             }
     return json.dumps(result, sort_keys=True)
+
+
+def _optional_account_id(value: Any) -> str | None:
+    if value is None:
+        return None
+    if not isinstance(value, str):
+        raise GoogleWorkspaceError("Google Workspace account id must be a string.")
+    account_id = value.strip()
+    if GOOGLE_CONNECTION_ID_RE.fullmatch(account_id) is None:
+        raise GoogleWorkspaceError("Google Workspace account id is invalid.")
+    return account_id
+
+
+def _account_selection_error(
+    *, tool: str, action: str, accounts: list[dict[str, Any]]
+) -> str:
+    return tool_error_json(
+        tool=tool,
+        error_name="account_selection_required",
+        message=(
+            "More than one Google Workspace account is connected. Choose the exact "
+            "account_id from this safe account list and retry."
+        ),
+        expected={"accounts": accounts},
+        example_call={"action": action, "account_id": accounts[0]["account_id"]},
+    )
 
 
 def _requested_profile(value: Any) -> GoogleWorkspaceProfile:
@@ -417,8 +532,7 @@ def _permission_upgrade_confirmation_message(profile: GoogleWorkspaceProfile) ->
     return (
         "Ask the user to explicitly confirm upgrading this Google Workspace connection "
         f"so the agent may {capability_text}. This permission upgrade is separate from "
-        f"confirming any later {later_action_text}. It adds {scope_text} while retaining "
-        f"existing granted write permissions.{draft_note}"
+        f"confirming any later {later_action_text}. It adds {scope_text}.{draft_note}"
     )
 
 
@@ -426,14 +540,32 @@ def _resolve_profile_for_connection_locked(
     requested_profile: GoogleWorkspaceProfile,
     *,
     confirmed: bool,
+    confirmation_id: Any = None,
+    account_id: str | None = None,
+    exact_permissions: bool = False,
 ) -> tuple[GoogleWorkspaceProfile, PlatformClient | None, str | None]:
-    """Resolve one assignment-verified additive profile before connect side effects."""
-    current_credentials = _read_credentials()
+    """Resolve one assignment-verified add or exact target before side effects."""
+    current_credentials: dict[str, Any] | None = None
+    # A write-enabled add has no target credential yet, so bind its human
+    # confirmation to the complete local account set. This prevents a prompt
+    # issued before another add or replacement from authorizing a later,
+    # materially different store state. Normal access-token refreshes do not
+    # change this generation because each member uses install lineage only.
+    current_generation: str | None = (
+        _account_store_generation([]) if account_id is None else None
+    )
     client: PlatformClient | None = None
     platform_auth: str | None = None
     current_permissions: frozenset[str] = frozenset()
-    if current_credentials is not None:
+    if account_id is not None:
         client, platform_auth = build_platform_client()
+        _migrate_legacy_credentials_locked(
+            client=client,
+            platform_auth=platform_auth,
+        )
+        current_credentials = _read_credentials(account_id)
+        if current_credentials is None:
+            raise GoogleWorkspaceError("Google Workspace account is not connected.")
         if not _assignment_binding_matches_platform(
             credentials=current_credentials,
             client=client,
@@ -442,68 +574,164 @@ def _resolve_profile_for_connection_locked(
             ACTIVE_DISCONNECT_PATH.unlink(missing_ok=True)
             _cancel_all_pending_handoffs_locked()
             _delete_credentials_locked()
+            raise GoogleWorkspaceError("Computer assignment changed before Google sign-in.")
         else:
+            current_generation = _install_credential_generation(current_credentials)
             current_profile = _profile_for_capability_bundle(
                 current_credentials["capability_bundle"]
             )
             current_permissions = current_profile.write_permissions
+    elif CREDENTIALS_PATH.exists() or _owner_entry_exists(LEGACY_CREDENTIALS_PATH):
+        client, platform_auth = build_platform_client()
+        _migrate_legacy_credentials_locked(
+            client=client,
+            platform_auth=platform_auth,
+        )
+        existing_accounts = _read_account_store()
+        current_generation = _account_store_generation(existing_accounts)
+        if existing_accounts:
+            current_binding = _fetch_assignment_binding(
+                client=client,
+                platform_auth=platform_auth,
+            )
+            if any(
+                not hmac.compare_digest(
+                    str(existing["tinyhat_assignment_binding"]),
+                    current_binding,
+                )
+                for existing in existing_accounts
+            ):
+                ACTIVE_DISCONNECT_PATH.unlink(missing_ok=True)
+                _cancel_all_pending_handoffs_locked()
+                _delete_credentials_locked()
+                _delete_all_install_receipts_locked()
+                raise GoogleWorkspaceError(
+                    "Computer assignment changed before Google sign-in."
+                )
 
-    missing_permissions = frozenset(requested_profile.write_permissions - current_permissions)
-    if missing_permissions and not confirmed:
+    target_permissions = (
+        requested_profile.write_permissions
+        if exact_permissions
+        else frozenset(requested_profile.write_permissions | current_permissions)
+    )
+    target_profile = GOOGLE_PROFILE_CONFIGS_BY_WRITE_PERMISSIONS.get(target_permissions)
+    if target_profile is None:
+        raise GoogleWorkspaceError(
+            "No allowlisted Google Workspace profile preserves the existing permissions."
+        )
+
+    missing_permissions = frozenset(target_permissions - current_permissions)
+    if missing_permissions:
         missing_profile = GOOGLE_PROFILE_CONFIGS_BY_WRITE_PERMISSIONS.get(missing_permissions)
         if missing_profile is None:
             raise GoogleWorkspaceError(
                 "No allowlisted Google Workspace profile describes the permission upgrade."
             )
-        raise GoogleWorkspacePermissionConfirmationRequired(
-            requested_profile=requested_profile,
-            missing_profile=missing_profile,
+        expected_confirmation_id = _permission_confirmation_id(
+            action="set_permissions" if exact_permissions else "connect",
+            account_id=account_id,
+            target_profile=target_profile.name,
+            credential_generation=current_generation,
         )
+        if (
+            not confirmed
+            or not isinstance(confirmation_id, str)
+            or not hmac.compare_digest(confirmation_id, expected_confirmation_id)
+        ):
+            raise GoogleWorkspacePermissionConfirmationRequired(
+                requested_profile=target_profile,
+                missing_profile=missing_profile,
+                confirmation_id=expected_confirmation_id,
+            )
+    return target_profile, client, platform_auth
 
-    combined_permissions = frozenset(requested_profile.write_permissions | current_permissions)
-    combined_profile = GOOGLE_PROFILE_CONFIGS_BY_WRITE_PERMISSIONS.get(combined_permissions)
-    if combined_profile is None:
-        raise GoogleWorkspaceError(
-            "No allowlisted Google Workspace profile preserves the existing permissions."
-        )
-    return combined_profile, client, platform_auth
+
+def _permission_confirmation_id(
+    *,
+    action: str,
+    account_id: str | None,
+    target_profile: str,
+    credential_generation: str | None = None,
+) -> str:
+    canonical = json.dumps(
+        {
+            "account_id": account_id,
+            "action": action,
+            "credential_generation": credential_generation,
+            "target_profile": target_profile,
+        },
+        ensure_ascii=False,
+        separators=(",", ":"),
+        sort_keys=True,
+    )
+    return hashlib.sha256(canonical.encode()).hexdigest()
 
 
 def _start_connection(
     *,
     profile: GoogleWorkspaceProfile | None = None,
     confirmed: bool = False,
+    confirmation_id: Any = None,
+    account_id: str | None = None,
+    exact_permissions: bool = False,
 ) -> dict[str, Any]:
     requested_profile = profile or GOOGLE_PROFILE_CONFIGS[GOOGLE_WORKSPACE_PROFILE_READONLY]
     # Serialize the complete start transition. A disconnect that begins after
     # this connect waits until its marker exists, then cancels it. A second
     # connect supersedes the first marker before either worker may install.
     with _lifecycle_lock():
+        if _has_unresolved_install_receipts():
+            raise GoogleWorkspaceError(
+                "Google connection metadata acknowledgement is still pending."
+            )
         _wipe_invalid_credentials_and_pending_handoffs_locked()
         requested_profile, client, platform_auth = _resolve_profile_for_connection_locked(
             requested_profile,
             confirmed=confirmed,
+            confirmation_id=confirmation_id,
+            account_id=account_id,
+            exact_permissions=exact_permissions,
         )
         if client is None or platform_auth is None:
             client, platform_auth = build_platform_client()
+        # Adding a second account must first move any legacy singleton into the
+        # owner-only multi-account store. Failure leaves the legacy file intact.
+        _migrate_legacy_credentials_locked(
+            client=client,
+            platform_auth=platform_auth,
+        )
         private_key_pem, public_key_pem = _generate_key_pair()
         generation = secrets.token_urlsafe(32)
         # A new connection attempt supersedes any unconfirmed disconnect
         # ceremony. Its worker keeps polling only long enough to observe the
         # superseded platform state; the missing local marker prevents deletion.
         ACTIVE_DISCONNECT_PATH.unlink(missing_ok=True)
-        button_label = _google_authorization_button_label(requested_profile)
+        connection_action = "replace" if account_id is not None else "add"
+        button_label = _google_authorization_button_label(
+            requested_profile,
+            permission_change=exact_permissions,
+        )
+        start_payload: dict[str, Any] = {
+            "public_key_pem": public_key_pem,
+            "key_algorithm": KEY_ALGORITHM,
+            "capability_bundle": requested_profile.capability_bundle,
+            "requested_services": list(requested_profile.services),
+            "requested_scopes": list(requested_profile.scopes),
+            "connection_action": connection_action,
+        }
+        if account_id is not None:
+            start_payload["connection_id"] = account_id
         handoff = client.post_json(
             computer_api_path(platform_auth, GOOGLE_WORKSPACE_API_SUFFIX),
-            {
-                "public_key_pem": public_key_pem,
-                "key_algorithm": KEY_ALGORITHM,
-                "capability_bundle": requested_profile.capability_bundle,
-                "requested_services": list(requested_profile.services),
-                "requested_scopes": list(requested_profile.scopes),
-            },
+            start_payload,
         )
         handoff_id = _validated_handoff_id(handoff.get("handoff_id"))
+        returned_connection_id = _validated_connection_id(handoff.get("connection_id"))
+        if account_id is not None and not hmac.compare_digest(
+            returned_connection_id,
+            account_id,
+        ):
+            raise GoogleWorkspaceError("Platform returned another Google connection.")
         capability_bundle = _validated_capability_bundle(
             handoff.get("capability_bundle"),
             expected=requested_profile.capability_bundle,
@@ -530,6 +758,8 @@ def _start_connection(
                     "capability_bundle": capability_bundle,
                     "services": services,
                     "scopes": scopes,
+                    "connection_action": connection_action,
+                    "target_connection_id": returned_connection_id,
                 },
             )
         except Exception:
@@ -540,16 +770,22 @@ def _start_connection(
                     handoff_id=handoff_id,
                     installed=False,
                     message="Google sign-in worker could not start.",
+                    expected_connection_id=returned_connection_id,
                 )
             raise
-        button_result = (
-            _send_google_connect_button(authorization_url)
-            if requested_profile.name == GOOGLE_WORKSPACE_PROFILE_READONLY
-            else _send_google_connect_button(
+        if exact_permissions:
+            button_result = _send_google_connect_button(
+                authorization_url,
+                profile=requested_profile.name,
+                permission_change=True,
+            )
+        elif requested_profile.name == GOOGLE_WORKSPACE_PROFILE_READONLY:
+            button_result = _send_google_connect_button(authorization_url)
+        else:
+            button_result = _send_google_connect_button(
                 authorization_url,
                 profile=requested_profile.name,
             )
-        )
         if not button_result.get("ok"):
             with contextlib.suppress(Exception):
                 _claim_handoff(
@@ -558,13 +794,16 @@ def _start_connection(
                     handoff_id=handoff_id,
                     installed=False,
                     message="Connect Google button could not be delivered.",
+                    expected_connection_id=returned_connection_id,
                 )
             raise GoogleWorkspaceError("Could not deliver the Connect Google button.")
     private_key_pem = ""
     generation = ""
     return {
         "schema": "tinyhat_google_workspace_action_v1",
-        "action": "connect",
+        "action": "set_permissions" if exact_permissions else "connect",
+        "account_id": returned_connection_id,
+        "connection_action": connection_action,
         "profile": requested_profile.name,
         "capability_bundle": requested_profile.capability_bundle,
         "status": "waiting_for_user",
@@ -573,8 +812,9 @@ def _start_connection(
         "message": (
             f"I sent a native {button_label} button in Telegram. Use that button "
             f"to approve {requested_profile.access_label} plus basic identity. "
-            "No plain authorization link is returned. Your existing connection "
-            "stays usable unless the expanded credential is completed successfully."
+            "No plain authorization link is returned. Existing accounts and the "
+            "selected account's current credential stay usable unless this encrypted "
+            "handoff completes successfully."
         ),
         "handoff_started": bool(handoff_id),
     }
@@ -649,12 +889,18 @@ def _send_google_connect_button(
     authorization_url: str,
     *,
     profile: str = GOOGLE_WORKSPACE_PROFILE_READONLY,
+    permission_change: bool = False,
 ) -> dict[str, bool]:
     """Send the platform URL only inside a native Telegram button."""
     requested_profile = _requested_profile(profile)
-    button_label = _google_authorization_button_label(requested_profile)
+    button_label = _google_authorization_button_label(
+        requested_profile,
+        permission_change=permission_change,
+    )
     action_label = (
-        "Upgrade Google Workspace"
+        "Change Google Workspace permissions"
+        if permission_change
+        else "Upgrade Google Workspace"
         if requested_profile.write_permissions
         else "Connect Google Workspace"
     )
@@ -677,8 +923,14 @@ def _send_google_connect_button(
         return {"sent": False, "ok": False}
 
 
-def _google_authorization_button_label(profile: GoogleWorkspaceProfile) -> str:
+def _google_authorization_button_label(
+    profile: GoogleWorkspaceProfile,
+    *,
+    permission_change: bool = False,
+) -> str:
     """Distinguish first connection from a permission expansion in Telegram."""
+    if permission_change:
+        return "Change Google access"
     if profile.write_permissions:
         return "Upgrade Google access"
     return "Connect Google"
@@ -742,9 +994,11 @@ def _trusted_telegram_user_id() -> int:
     return telegram_user_id
 
 
-def _start_disconnect_intent() -> dict[str, Any]:
+def _start_disconnect_intent(*, account_id: str | None = None) -> dict[str, Any]:
     """Start the platform-owned two-stage Telegram disconnect ceremony."""
-    credentials, verification = _verified_credentials()
+    if _owner_entry_exists(LEGACY_CREDENTIALS_PATH):
+        _migrate_legacy_credentials()
+    credentials, verification = _verified_credentials(account_id)
     if credentials is None:
         if verification in {"not_present", "removed"}:
             return {
@@ -759,6 +1013,7 @@ def _start_disconnect_intent() -> dict[str, Any]:
             "Google Workspace ownership could not be verified for disconnect."
         )
 
+    connection_id = _validated_connection_id(credentials.get("tinyhat_connection_id"))
     telegram_user_id = _trusted_telegram_user_id()
     client, platform_auth = build_platform_client()
     created = client.post_json(
@@ -766,18 +1021,23 @@ def _start_disconnect_intent() -> dict[str, Any]:
             platform_auth,
             GOOGLE_WORKSPACE_DISCONNECT_INTENTS_SUFFIX,
         ),
-        {"telegram_user_id": telegram_user_id},
+        {
+            "telegram_user_id": telegram_user_id,
+            "connection_id": connection_id,
+        },
     )
     intent = _normalize_disconnect_intent_create(
         created,
         client=client,
         platform_auth=platform_auth,
+        connection_id=connection_id,
+        account_email=str(credentials["email"]),
     )
     state_path: Path | None = None
     worker_started = False
     try:
         with _lifecycle_lock():
-            current = _read_credentials()
+            current = _read_credentials(connection_id)
             if current is None:
                 raise GoogleWorkspaceError(
                     "Google Workspace was disconnected before the prompt started."
@@ -809,6 +1069,7 @@ def _start_disconnect_intent() -> dict[str, Any]:
                 platform_auth=intent.platform_auth,
                 intent_id=intent.intent_id,
                 owner_token=intent.owner_token,
+                connection_id=connection_id,
                 credential_generation=current_generation,
                 expires_at=intent.expires_at,
                 poll_after_ms=intent.poll_after_ms,
@@ -842,6 +1103,7 @@ def _start_disconnect_intent() -> dict[str, Any]:
         activated_status = _normalize_disconnect_intent_response(
             activated,
             expected_intent_id=intent.intent_id,
+            expected_connection_id=intent.connection_id,
         )
         if activated_status not in {"offered", "awaiting_confirmation"}:
             raise GoogleWorkspaceError("Platform did not activate the Google disconnect prompt.")
@@ -871,6 +1133,7 @@ def _start_disconnect_intent() -> dict[str, Any]:
         "action": "disconnect",
         "status": "waiting_for_user",
         "connected": True,
+        "account_id": connection_id,
         "button_sent": True,
         "message": (
             "I sent a native Telegram button labeled Revoke this Computer's "
@@ -887,6 +1150,8 @@ def _normalize_disconnect_intent_create(
     *,
     client: PlatformClient,
     platform_auth: str,
+    connection_id: str,
+    account_email: str,
 ) -> GoogleWorkspaceDisconnectIntent:
     if not isinstance(value, dict):
         raise GoogleWorkspaceError("Platform returned an invalid disconnect intent.")
@@ -894,6 +1159,20 @@ def _normalize_disconnect_intent_create(
         raise GoogleWorkspaceError("Platform returned an invalid disconnect schema.")
     if value.get("status") != "created":
         raise GoogleWorkspaceError("Platform did not create the disconnect intent.")
+    expected_connection_id = _validated_connection_id(connection_id)
+    returned_connection_id = _validated_connection_id(value.get("connection_id"))
+    if not hmac.compare_digest(returned_connection_id, expected_connection_id):
+        raise GoogleWorkspaceError("Platform returned another Google connection.")
+    returned_email = value.get("account_email")
+    if (
+        not isinstance(returned_email, str)
+        or not returned_email.strip()
+        or not hmac.compare_digest(
+            returned_email.strip().casefold().encode("utf-8"),
+            account_email.casefold().encode("utf-8"),
+        )
+    ):
+        raise GoogleWorkspaceError("Platform returned another Google account.")
     intent_id = _validated_handoff_id(value.get("intent_id"))
     owner_token = _validated_disconnect_owner_token(value.get("owner_token"))
     expires_at = _validated_disconnect_expires_at(value.get("expires_at"))
@@ -902,6 +1181,7 @@ def _normalize_disconnect_intent_create(
         platform_auth=platform_auth,
         intent_id=intent_id,
         owner_token=owner_token,
+        connection_id=expected_connection_id,
         credential_generation="",
         expires_at=expires_at,
         poll_after_ms=_poll_after_ms(value.get("poll_after_ms")),
@@ -912,6 +1192,7 @@ def _normalize_disconnect_intent_response(
     value: Any,
     *,
     expected_intent_id: str,
+    expected_connection_id: str,
 ) -> str:
     if not isinstance(value, dict):
         raise GoogleWorkspaceError("Platform returned invalid disconnect state.")
@@ -919,8 +1200,17 @@ def _normalize_disconnect_intent_response(
     if schema is not None and schema != GOOGLE_WORKSPACE_DISCONNECT_INTENT_SCHEMA:
         raise GoogleWorkspaceError("Platform returned an invalid disconnect schema.")
     returned_id = value.get("intent_id")
-    if returned_id is not None and _validated_handoff_id(returned_id) != expected_intent_id:
+    if returned_id is not None and not hmac.compare_digest(
+        _validated_handoff_id(returned_id),
+        expected_intent_id,
+    ):
         raise GoogleWorkspaceError("Platform returned another disconnect intent.")
+    returned_connection_id = _validated_connection_id(value.get("connection_id"))
+    if not hmac.compare_digest(
+        returned_connection_id,
+        _validated_connection_id(expected_connection_id),
+    ):
+        raise GoogleWorkspaceError("Platform returned another Google connection.")
     status = str(value.get("status") or "").strip().lower()
     if status not in DISCONNECT_INTENT_STATUSES:
         raise GoogleWorkspaceError("Platform returned unknown disconnect state.")
@@ -965,6 +1255,7 @@ def _credential_generation(
         key: credentials.get(key)
         for key in (
             "schema",
+            "tinyhat_connection_id",
             "capability_bundle",
             "client_id",
             "refresh_token",
@@ -1007,6 +1298,7 @@ def _write_disconnect_worker_state(
                     "schema": GOOGLE_WORKSPACE_DISCONNECT_WORKER_STATE_SCHEMA,
                     "intent_id": intent.intent_id,
                     "owner_token": intent.owner_token,
+                    "connection_id": intent.connection_id,
                     "credential_generation": credential_generation,
                     "expires_at": intent.expires_at,
                     "poll_after_ms": intent.poll_after_ms,
@@ -1036,6 +1328,7 @@ def _validated_disconnect_worker_state(
         "schema",
         "intent_id",
         "owner_token",
+        "connection_id",
         "credential_generation",
         "expires_at",
         "poll_after_ms",
@@ -1052,6 +1345,7 @@ def _validated_disconnect_worker_state(
     return {
         "intent_id": clean_intent_id,
         "owner_token": _validated_disconnect_owner_token(value.get("owner_token")),
+        "connection_id": _validated_connection_id(value.get("connection_id")),
         "credential_generation": generation,
         "expires_at": _validated_disconnect_expires_at(
             value.get("expires_at"),
@@ -1077,6 +1371,7 @@ def _load_disconnect_worker_intent(
         platform_auth=platform_auth,
         intent_id=value["intent_id"],
         owner_token=value["owner_token"],
+        connection_id=value["connection_id"],
         credential_generation=value["credential_generation"],
         expires_at=value["expires_at"],
         poll_after_ms=value["poll_after_ms"],
@@ -1239,7 +1534,7 @@ def _resume_delete_pending_receipt(
                 credential_generation=intent.credential_generation,
             )
             return claim_status
-        if _read_credentials() is not None:
+        if _read_credentials(intent.connection_id) is not None:
             return "delete_required"
         _write_disconnect_completion_receipt(
             intent=intent,
@@ -1532,6 +1827,7 @@ def _poll_disconnect_intent(
             status = _normalize_disconnect_intent_response(
                 state,
                 expected_intent_id=intent.intent_id,
+                expected_connection_id=intent.connection_id,
             )
             if state.get("expires_at") is not None:
                 returned_deadline = datetime.fromisoformat(
@@ -1614,6 +1910,7 @@ def _claim_disconnect_deletion(intent: GoogleWorkspaceDisconnectIntent) -> str:
     status = _normalize_disconnect_intent_response(
         response,
         expected_intent_id=intent.intent_id,
+        expected_connection_id=intent.connection_id,
     )
     if status == "confirmed" and response.get("deletion_claimed") is True:
         return "confirmed"
@@ -1625,7 +1922,7 @@ def _claim_disconnect_deletion(intent: GoogleWorkspaceDisconnectIntent) -> str:
 def _current_disconnect_credential_status(
     intent: GoogleWorkspaceDisconnectIntent,
 ) -> tuple[dict[str, Any] | None, str]:
-    current = _read_credentials()
+    current = _read_credentials(intent.connection_id)
     if current is None:
         return None, "disconnected"
     current_generation = _credential_generation(
@@ -1691,7 +1988,7 @@ def _delete_confirmed_disconnect(
                 else:
                     if current is not None:
                         _cancel_pending_handoffs_for_disconnect_locked()
-                        _delete_credentials_locked()
+                        _delete_credentials_locked(account_id=intent.connection_id)
                     local_terminal_confirmed = True
                     if record_completion_receipt is not None:
                         # The durable pre-delete receipt is already sufficient
@@ -1741,6 +2038,7 @@ def _complete_disconnect_intent(
     status = _normalize_disconnect_intent_response(
         response,
         expected_intent_id=intent.intent_id,
+        expected_connection_id=intent.connection_id,
     )
     if outcome == "disconnected" and status != "disconnected":
         raise GoogleWorkspaceError("Platform did not complete the disconnect.")
@@ -2216,6 +2514,13 @@ def _poll_and_install(handoff: GoogleWorkspaceWorkerHandoff) -> None:
                 "superseded",
             }:
                 terminal_state = status
+            if (
+                terminal_state == "failed"
+                and state.get("error_code") == "account_already_connected"
+            ):
+                # This is the one reviewed platform error safe to surface as a
+                # duplicate. Arbitrary platform error text remains generic.
+                terminal_state = "duplicate_account"
             if terminal_state == "ready":
                 outcome = _install_ready_credentials(handoff=handoff, state=state)
                 if outcome == "superseded":
@@ -2235,25 +2540,36 @@ def _poll_and_install(handoff: GoogleWorkspaceWorkerHandoff) -> None:
                         handoff_id=handoff.handoff_id,
                         installed=False,
                         message="Computer assignment changed before Google sign-in completed.",
+                        expected_connection_id=handoff.target_connection_id,
+                    )
+                    return
+                if outcome in {"duplicate_account", "invalid_replacement"}:
+                    notification_attempted = True
+                    _clear_active_handoff(handoff)
+                    notice = "duplicate_account" if outcome == "duplicate_account" else "failed"
+                    _send_google_workspace_notice(notice)
+                    _claim_handoff(
+                        client=handoff.client,
+                        platform_auth=handoff.platform_auth,
+                        handoff_id=handoff.handoff_id,
+                        installed=False,
+                        message=(
+                            "That Google account is already connected on this Computer."
+                            if outcome == "duplicate_account"
+                            else "Google account identity changed during the permission update."
+                        ),
+                        expected_connection_id=handoff.target_connection_id,
                     )
                     return
                 installed = True
-                _claim_handoff_with_retry(
+                _processed, ready_notice = _acknowledge_install_receipt(
+                    path=_install_receipt_path(handoff.handoff_id),
                     client=handoff.client,
                     platform_auth=handoff.platform_auth,
-                    handoff_id=handoff.handoff_id,
                 )
-                _clear_active_handoff(handoff)
-                ready_profile = _profile_for_capability_bundle(
-                    handoff.expected_capability_bundle
-                )
-                ready_notice = (
-                    "ready"
-                    if not ready_profile.write_permissions
-                    else f"ready_{ready_profile.name}"
-                )
-                notification_attempted = True
-                _send_google_workspace_notice(ready_notice)
+                if ready_notice is not None:
+                    notification_attempted = True
+                    _send_google_workspace_notice(ready_notice)
                 return
             if terminal_state in TERMINAL_HANDOFF_MESSAGES:
                 notification_attempted = True
@@ -2282,6 +2598,7 @@ def _poll_and_install(handoff: GoogleWorkspaceWorkerHandoff) -> None:
                     handoff_id=handoff.handoff_id,
                     installed=False,
                     message=TERMINAL_HANDOFF_MESSAGES["failed"],
+                    expected_connection_id=handoff.target_connection_id,
                 )
             if not notification_attempted:
                 _send_google_workspace_notice("failed")
@@ -2293,6 +2610,7 @@ TERMINAL_HANDOFF_MESSAGES = {
     "failed": "Google sign-in failed. Start a new connection and try again.",
     "expired": "Google sign-in expired. Start connect again for a fresh link.",
     "superseded": "This Google sign-in was replaced by a newer connection attempt.",
+    "duplicate_account": "That Google account is already connected on this Computer.",
 }
 
 TELEGRAM_NOTICE_MESSAGES = {
@@ -2328,6 +2646,10 @@ TELEGRAM_NOTICE_MESSAGES = {
         "again for a fresh link."
     ),
     "superseded": ("This Google Workspace connection was replaced by a newer connection attempt."),
+    "duplicate_account": (
+        "That Google account is already connected on this Computer. Use its existing "
+        "account when changing permissions."
+    ),
 }
 
 
@@ -2360,6 +2682,253 @@ def _clear_active_handoff(handoff: GoogleWorkspaceWorkerHandoff) -> None:
         )
 
 
+def _install_receipt_path(handoff_id: str) -> Path:
+    return INSTALL_RECEIPTS_DIR / f"{_validated_handoff_id(handoff_id)}.json"
+
+
+def _has_unresolved_install_receipts() -> bool:
+    try:
+        directory_stat = os.lstat(INSTALL_RECEIPTS_DIR)
+    except FileNotFoundError:
+        return False
+    except OSError:
+        return True
+    if not stat.S_ISDIR(directory_stat.st_mode) or directory_stat.st_uid != os.getuid():
+        return True
+    try:
+        return any(INSTALL_RECEIPTS_DIR.glob("gwo_*.json"))
+    except OSError:
+        return True
+
+
+def _sweep_install_receipt_temps() -> None:
+    try:
+        directory_stat = os.lstat(INSTALL_RECEIPTS_DIR)
+    except OSError:
+        return
+    if not stat.S_ISDIR(directory_stat.st_mode) or directory_stat.st_uid != os.getuid():
+        return
+    try:
+        candidates = sorted(INSTALL_RECEIPTS_DIR.glob(".install-receipt-*"))[
+            :INSTALL_RECEIPT_SCAN_LIMIT
+        ]
+    except OSError:
+        return
+    for path in candidates:
+        try:
+            path_stat = os.lstat(path)
+            if stat.S_ISREG(path_stat.st_mode) and path_stat.st_uid == os.getuid():
+                path.unlink(missing_ok=True)
+        except OSError:
+            continue
+
+
+def _delete_all_install_receipts_locked() -> None:
+    try:
+        directory_stat = os.lstat(INSTALL_RECEIPTS_DIR)
+    except FileNotFoundError:
+        return
+    if not stat.S_ISDIR(directory_stat.st_mode) or directory_stat.st_uid != os.getuid():
+        raise GoogleWorkspaceError("Google install receipt directory is unsafe.")
+    for path in list(INSTALL_RECEIPTS_DIR.iterdir()):
+        path_stat = os.lstat(path)
+        if not stat.S_ISREG(path_stat.st_mode) or path_stat.st_uid != os.getuid():
+            raise GoogleWorkspaceError("Google install receipt is unsafe.")
+        path.unlink(missing_ok=True)
+    INSTALL_RECEIPTS_DIR.rmdir()
+
+
+def _write_install_receipt(
+    *,
+    handoff: GoogleWorkspaceWorkerHandoff,
+    credentials: dict[str, Any],
+    phase: str,
+) -> Path:
+    if phase not in {"install_pending", "claim_pending"}:
+        raise GoogleWorkspaceError("Google install receipt phase is invalid.")
+    profile = _profile_for_capability_bundle(credentials.get("capability_bundle"))
+    notice_state = (
+        "ready" if not profile.write_permissions else f"ready_{profile.name}"
+    )
+    path = _install_receipt_path(handoff.handoff_id)
+    _atomic_write_json(
+        path=path,
+        value={
+            "schema": GOOGLE_WORKSPACE_INSTALL_RECEIPT_SCHEMA,
+            "handoff_id": handoff.handoff_id,
+            "owner_token": handoff.owner_token,
+            "connection_id": _validated_connection_id(
+                credentials.get("tinyhat_connection_id")
+            ),
+            "credential_generation": _install_credential_generation(credentials),
+            "phase": phase,
+            "notice_state": notice_state,
+            "created_at": datetime.now(timezone.utc).isoformat(),
+        },
+        temporary_prefix=".install-receipt-",
+    )
+    return path
+
+
+def _read_install_receipt(path: Path) -> dict[str, str]:
+    if path.parent != INSTALL_RECEIPTS_DIR or path.suffix != ".json":
+        raise GoogleWorkspaceError("Google install receipt path is invalid.")
+    handoff_id = _validated_handoff_id(path.stem)
+    value = _read_owner_only_json(path, label="Google install receipt")
+    expected_fields = {
+        "schema",
+        "handoff_id",
+        "owner_token",
+        "connection_id",
+        "credential_generation",
+        "phase",
+        "notice_state",
+        "created_at",
+    }
+    if set(value) != expected_fields:
+        raise GoogleWorkspaceError("Google install receipt is invalid.")
+    if value.get("schema") != GOOGLE_WORKSPACE_INSTALL_RECEIPT_SCHEMA:
+        raise GoogleWorkspaceError("Google install receipt schema is invalid.")
+    if not hmac.compare_digest(_validated_handoff_id(value.get("handoff_id")), handoff_id):
+        raise GoogleWorkspaceError("Google install receipt handoff changed.")
+    owner_token = str(value.get("owner_token") or "")
+    if DISCONNECT_GENERATION_RE.fullmatch(owner_token) is None:
+        raise GoogleWorkspaceError("Google install receipt owner is invalid.")
+    generation = str(value.get("credential_generation") or "")
+    if DISCONNECT_GENERATION_RE.fullmatch(generation) is None:
+        raise GoogleWorkspaceError("Google install receipt generation is invalid.")
+    phase = str(value.get("phase") or "")
+    if phase not in {"install_pending", "claim_pending"}:
+        raise GoogleWorkspaceError("Google install receipt phase is invalid.")
+    notice_state = str(value.get("notice_state") or "")
+    if notice_state not in {
+        "ready",
+        "ready_gmail_send",
+        "ready_calendar_write",
+        "ready_gmail_send_calendar_write",
+    }:
+        raise GoogleWorkspaceError("Google install receipt notice is invalid.")
+    created_at = str(value.get("created_at") or "")
+    try:
+        parsed = datetime.fromisoformat(created_at.replace("Z", "+00:00"))
+    except ValueError as exc:
+        raise GoogleWorkspaceError("Google install receipt time is invalid.") from exc
+    if parsed.tzinfo is None or parsed.utcoffset() is None:
+        raise GoogleWorkspaceError("Google install receipt time is invalid.")
+    return {
+        "handoff_id": handoff_id,
+        "owner_token": owner_token,
+        "connection_id": _validated_connection_id(value.get("connection_id")),
+        "credential_generation": generation,
+        "phase": phase,
+        "notice_state": notice_state,
+    }
+
+
+def _delete_install_receipt(path: Path) -> None:
+    if path.parent != INSTALL_RECEIPTS_DIR or path.suffix != ".json":
+        raise GoogleWorkspaceError("Google install receipt path is invalid.")
+    path.unlink(missing_ok=True)
+
+
+def _resume_retained_install_receipts() -> int:
+    try:
+        directory_stat = os.lstat(INSTALL_RECEIPTS_DIR)
+    except OSError:
+        return 0
+    if not stat.S_ISDIR(directory_stat.st_mode) or directory_stat.st_uid != os.getuid():
+        return 0
+    with _lifecycle_lock():
+        _sweep_install_receipt_temps()
+    try:
+        paths = sorted(INSTALL_RECEIPTS_DIR.glob("gwo_*.json"))[:INSTALL_RECEIPT_SCAN_LIMIT]
+    except OSError:
+        return 0
+    if not paths:
+        return 0
+    client, platform_auth = build_platform_client()
+    completed = 0
+    for path in paths:
+        try:
+            processed, notice_state = _acknowledge_install_receipt(
+                path=path,
+                client=client,
+                platform_auth=platform_auth,
+            )
+            if processed:
+                completed += 1
+            if notice_state is not None:
+                _send_google_workspace_notice(notice_state)
+        except Exception:
+            continue
+    return completed
+
+
+def _acknowledge_install_receipt(
+    *,
+    path: Path,
+    client: PlatformClient,
+    platform_auth: str,
+) -> tuple[bool, str | None]:
+    """Let exactly one worker claim and retire one durable install receipt."""
+    with _lifecycle_lock():
+        if not path.exists():
+            return False, None
+        receipt = _read_install_receipt(path)
+        current = _read_credentials(receipt["connection_id"])
+        generation_matches = bool(
+            current is not None
+            and hmac.compare_digest(
+                _install_credential_generation(current),
+                receipt["credential_generation"],
+            )
+        )
+        assignment_matches = bool(
+            generation_matches
+            and current is not None
+            and _assignment_binding_matches_platform(
+                credentials=current,
+                client=client,
+                platform_auth=platform_auth,
+            )
+        )
+        if generation_matches and not assignment_matches:
+            ACTIVE_DISCONNECT_PATH.unlink(missing_ok=True)
+            _cancel_all_pending_handoffs_locked()
+            _delete_credentials_locked()
+            _delete_all_install_receipts_locked()
+        if not (generation_matches and assignment_matches):
+            try:
+                _claim_handoff(
+                    client=client,
+                    platform_auth=platform_auth,
+                    handoff_id=receipt["handoff_id"],
+                    installed=False,
+                    message="Google credential installation did not complete.",
+                    expected_connection_id=receipt["connection_id"],
+                )
+            except Exception:
+                pass
+            finally:
+                # With no matching local generation there is nothing left to
+                # reconcile as installed. Old-assignment negative claims can
+                # be rejected, so the receipt must not persist forever.
+                _delete_install_receipt(path)
+            return True, None
+        _claim_handoff_with_retry(
+            client=client,
+            platform_auth=platform_auth,
+            handoff_id=receipt["handoff_id"],
+            expected_connection_id=receipt["connection_id"],
+        )
+        _delete_install_receipt(path)
+        _remove_active_handoff_marker_if_matches(
+            handoff_id=receipt["handoff_id"],
+            owner_token=receipt["owner_token"],
+        )
+        return True, receipt["notice_state"]
+
+
 def _finish_terminal_handoff(*, handoff: GoogleWorkspaceWorkerHandoff, terminal_state: str) -> None:
     _clear_active_handoff(handoff)
     _send_google_workspace_notice(terminal_state)
@@ -2369,6 +2938,7 @@ def _finish_terminal_handoff(*, handoff: GoogleWorkspaceWorkerHandoff, terminal_
         handoff_id=handoff.handoff_id,
         installed=False,
         message=TERMINAL_HANDOFF_MESSAGES[terminal_state],
+        expected_connection_id=handoff.target_connection_id,
     )
 
 
@@ -2382,6 +2952,7 @@ def _install_ready_credentials(
         raise GoogleWorkspaceError("Google services changed during handoff.")
     if credentials["scopes"] != handoff.expected_scopes:
         raise GoogleWorkspaceError("Google scopes changed during handoff.")
+    connection_id = _validated_connection_id(credentials.get("tinyhat_connection_id"))
     with _lifecycle_lock():
         if not _active_handoff_matches_locked(
             handoff_id=handoff.handoff_id,
@@ -2396,7 +2967,67 @@ def _install_ready_credentials(
             _cancel_all_pending_handoffs_locked()
             _delete_credentials_locked()
             return "assignment_changed"
-        _atomic_save_credentials(credentials)
+        accounts = _read_account_store()
+        if handoff.connection_action == "replace":
+            target_connection_id = _validated_connection_id(
+                handoff.target_connection_id
+            )
+            if not hmac.compare_digest(connection_id, target_connection_id):
+                return "invalid_replacement"
+            current = next(
+                (
+                    item
+                    for item in accounts
+                    if hmac.compare_digest(
+                        str(item["tinyhat_connection_id"]),
+                        target_connection_id,
+                    )
+                ),
+                None,
+            )
+            if current is None or not hmac.compare_digest(
+                str(current["google_subject"]),
+                str(credentials["google_subject"]),
+            ):
+                return "invalid_replacement"
+        elif handoff.connection_action == "add":
+            target_connection_id = _validated_connection_id(
+                handoff.target_connection_id
+            )
+            if not hmac.compare_digest(connection_id, target_connection_id):
+                return "invalid_replacement"
+            if any(
+                hmac.compare_digest(
+                    str(item["google_subject"]),
+                    str(credentials["google_subject"]),
+                )
+                or hmac.compare_digest(
+                    str(item["tinyhat_connection_id"]),
+                    connection_id,
+                )
+                for item in accounts
+            ):
+                return "duplicate_account"
+        else:
+            return "invalid_replacement"
+        receipt_path = _write_install_receipt(
+            handoff=handoff,
+            credentials=credentials,
+            phase="install_pending",
+        )
+        saved = False
+        try:
+            _atomic_save_credentials(credentials)
+            saved = True
+            _write_install_receipt(
+                handoff=handoff,
+                credentials=credentials,
+                phase="claim_pending",
+            )
+        except Exception:
+            if not saved:
+                _delete_install_receipt(receipt_path)
+            raise
     return "installed"
 
 
@@ -2465,6 +3096,9 @@ def _normalize_credentials(value: Any) -> dict[str, Any]:
             expected=profile.services,
         ),
         "token_uri": _validated_token_uri(value.get("token_uri")),
+        "tinyhat_connection_id": _validated_connection_id(
+            value.get("tinyhat_connection_id")
+        ),
     }
     for key in required_strings:
         item = value.get(key)
@@ -2525,13 +3159,55 @@ def _validated_public_client_id(value: Any) -> str:
     return client_id
 
 
-def _atomic_save_credentials(credentials: dict[str, Any]) -> None:
-    _refuse_unsafe_credentials_entry()
+def _validated_connection_id(value: Any, *, required: bool = True) -> str | None:
+    if value is None and not required:
+        return None
+    connection_id = str(value or "").strip()
+    if GOOGLE_CONNECTION_ID_RE.fullmatch(connection_id) is None:
+        raise GoogleWorkspaceError("Google connection id was invalid.")
+    return connection_id
+
+
+def _account_store_document(accounts: list[dict[str, Any]]) -> dict[str, Any]:
+    normalized = sorted(
+        (_normalize_saved_credentials(dict(item), require_connection_id=True) for item in accounts),
+        key=lambda item: str(item["tinyhat_connection_id"]),
+    )
+    connection_ids = [str(item["tinyhat_connection_id"]) for item in normalized]
+    if len(connection_ids) != len(set(connection_ids)):
+        raise GoogleWorkspaceError("Saved Google account ids are not unique.")
+    subjects = [str(item["google_subject"]) for item in normalized]
+    if len(subjects) != len(set(subjects)):
+        raise GoogleWorkspaceError("The same Google account cannot be connected twice.")
+    return {
+        "schema": GOOGLE_WORKSPACE_ACCOUNTS_SCHEMA,
+        "accounts": normalized,
+    }
+
+
+def _atomic_save_account_store(accounts: list[dict[str, Any]]) -> None:
+    _refuse_unsafe_credentials_entry(path=CREDENTIALS_PATH)
     _atomic_write_json(
         path=CREDENTIALS_PATH,
-        value=credentials,
-        temporary_prefix=".credentials-",
+        value=_account_store_document(accounts),
+        temporary_prefix=".accounts-",
     )
+
+
+def _atomic_save_credentials(credentials: dict[str, Any]) -> None:
+    """Upsert one connection while preserving every other local account."""
+    normalized = _normalize_saved_credentials(dict(credentials), require_connection_id=True)
+    connection_id = str(normalized["tinyhat_connection_id"])
+    accounts = _read_account_store()
+    replaced = False
+    for index, current in enumerate(accounts):
+        if hmac.compare_digest(str(current["tinyhat_connection_id"]), connection_id):
+            accounts[index] = normalized
+            replaced = True
+            break
+    if not replaced:
+        accounts.append(normalized)
+    _atomic_save_account_store(accounts)
 
 
 def _ensure_private_directory(path: Path) -> None:
@@ -2541,14 +3217,20 @@ def _ensure_private_directory(path: Path) -> None:
     path.chmod(0o700)
 
 
-def _credentials_entry_exists() -> bool:
+def _owner_entry_exists(path: Path) -> bool:
     try:
-        os.lstat(CREDENTIALS_PATH)
+        os.lstat(path)
     except FileNotFoundError:
         return False
     except OSError:
         return True
     return True
+
+
+def _credentials_entry_exists() -> bool:
+    return _owner_entry_exists(CREDENTIALS_PATH) or _owner_entry_exists(
+        LEGACY_CREDENTIALS_PATH
+    )
 
 
 def _refuse_unsafe_owner_file(path: Path, *, label: str) -> os.stat_result:
@@ -2607,24 +3289,102 @@ def _read_owner_only_json(path: Path, *, label: str) -> dict[str, Any]:
     return value
 
 
-def _refuse_unsafe_credentials_entry() -> None:
-    if not _credentials_entry_exists():
+def _refuse_unsafe_credentials_entry(*, path: Path = CREDENTIALS_PATH) -> None:
+    if not _owner_entry_exists(path):
         return
-    _refuse_unsafe_owner_file(CREDENTIALS_PATH, label="Saved Google credentials")
+    _refuse_unsafe_owner_file(path, label="Saved Google credentials")
 
 
-def _read_credentials() -> dict[str, Any] | None:
-    if not _credentials_entry_exists():
-        return None
+def _read_account_store() -> list[dict[str, Any]]:
+    if not _owner_entry_exists(CREDENTIALS_PATH):
+        return []
     value = _read_owner_only_json(
         CREDENTIALS_PATH,
-        label="Saved Google credentials",
+        label="Saved Google accounts",
     )
-    normalized = _normalize_saved_credentials(value)
-    return normalized
+    if value.get("schema") != GOOGLE_WORKSPACE_ACCOUNTS_SCHEMA:
+        raise GoogleWorkspaceError("Saved Google accounts are invalid.")
+    raw_accounts = value.get("accounts")
+    if not isinstance(raw_accounts, list):
+        raise GoogleWorkspaceError("Saved Google accounts are invalid.")
+    return _account_store_document(raw_accounts)["accounts"]
 
 
-def _normalize_saved_credentials(value: Any) -> dict[str, Any]:
+def _read_legacy_credentials() -> dict[str, Any] | None:
+    if not _owner_entry_exists(LEGACY_CREDENTIALS_PATH):
+        return None
+    value = _read_owner_only_json(
+        LEGACY_CREDENTIALS_PATH,
+        label="Legacy saved Google credentials",
+    )
+    return _normalize_saved_credentials(value, require_connection_id=False)
+
+
+def _read_all_credentials() -> list[dict[str, Any]]:
+    accounts = _read_account_store()
+    legacy = _read_legacy_credentials()
+    if legacy is None:
+        return accounts
+    if accounts:
+        if any(
+            hmac.compare_digest(
+                str(item["google_subject"]),
+                str(legacy["google_subject"]),
+            )
+            for item in accounts
+        ):
+            return accounts
+        return [*accounts, legacy]
+    return [legacy]
+
+
+def _safe_account_metadata(credentials: dict[str, Any]) -> dict[str, Any]:
+    profile = _profile_for_capability_bundle(credentials["capability_bundle"])
+    connection_id = _validated_connection_id(
+        credentials.get("tinyhat_connection_id"),
+        required=False,
+    )
+    payload: dict[str, Any] = {
+        "account_id": connection_id,
+        "email": credentials["email"],
+        "email_verified": credentials["email_verified"],
+        "profile": profile.name,
+        "capability_bundle": profile.capability_bundle,
+        "services": list(profile.services),
+        "scopes": list(credentials["scopes"]),
+        "expires_at": credentials["expires_at"],
+        "connected_at": credentials["connected_at"],
+        "refresh_supported": True,
+    }
+    return payload
+
+
+def _read_credentials(account_id: str | None = None) -> dict[str, Any] | None:
+    accounts = _read_all_credentials()
+    if not accounts:
+        return None
+    if account_id is not None:
+        clean_account_id = _validated_connection_id(account_id)
+        for credentials in accounts:
+            current_id = _validated_connection_id(
+                credentials.get("tinyhat_connection_id"),
+                required=False,
+            )
+            if current_id is not None and hmac.compare_digest(current_id, clean_account_id):
+                return credentials
+        return None
+    if len(accounts) > 1:
+        raise GoogleWorkspaceAccountSelectionRequired(
+            [_safe_account_metadata(item) for item in accounts]
+        )
+    return accounts[0]
+
+
+def _normalize_saved_credentials(
+    value: Any,
+    *,
+    require_connection_id: bool = True,
+) -> dict[str, Any]:
     if not isinstance(value, dict) or value.get("schema") != GOOGLE_WORKSPACE_CREDENTIAL_SCHEMA:
         raise GoogleWorkspaceError("Saved Google credentials are invalid.")
     if "client_secret" in value:
@@ -2663,6 +3423,14 @@ def _normalize_saved_credentials(value: Any) -> dict[str, Any]:
     if value.get("email_verified") is not True:
         raise GoogleWorkspaceError("Saved Google credential metadata is invalid.")
     value["scopes"] = normalized_scopes
+    connection_id = _validated_connection_id(
+        value.get("tinyhat_connection_id"),
+        required=require_connection_id,
+    )
+    if connection_id is None:
+        value.pop("tinyhat_connection_id", None)
+    else:
+        value["tinyhat_connection_id"] = connection_id
     return value
 
 
@@ -2679,6 +3447,105 @@ def _fetch_assignment_binding(*, client: PlatformClient, platform_auth: str) -> 
     return binding.strip()
 
 
+def _fetch_platform_connections(
+    *, client: PlatformClient, platform_auth: str
+) -> list[dict[str, Any]]:
+    response = client.get_json(
+        computer_api_path(platform_auth, GOOGLE_WORKSPACE_CONNECTIONS_SUFFIX)
+    )
+    if response.get("schema") != GOOGLE_WORKSPACE_CONNECTIONS_SCHEMA:
+        raise GoogleWorkspaceError("Platform returned invalid Google connections.")
+    raw_connections = response.get("connections")
+    if not isinstance(raw_connections, list):
+        raise GoogleWorkspaceError("Platform returned invalid Google connections.")
+    connections: list[dict[str, Any]] = []
+    for raw in raw_connections:
+        if not isinstance(raw, dict):
+            raise GoogleWorkspaceError("Platform returned invalid Google connections.")
+        connection_id = _validated_connection_id(raw.get("connection_id"))
+        email = raw.get("account_email")
+        bundle = raw.get("capability_bundle")
+        status = raw.get("connection_status")
+        if (
+            not isinstance(email, str)
+            or not email.strip()
+            or not isinstance(bundle, str)
+            or status not in {"connected", "disconnected"}
+        ):
+            raise GoogleWorkspaceError("Platform returned invalid Google connections.")
+        connections.append(
+            {
+                "connection_id": connection_id,
+                "account_email": email.strip(),
+                "capability_bundle": bundle,
+                "connection_status": status,
+            }
+        )
+    return connections
+
+
+def _fsync_state_directory() -> None:
+    directory_fd = os.open(
+        STATE_DIR,
+        os.O_RDONLY | getattr(os, "O_DIRECTORY", 0) | getattr(os, "O_NOFOLLOW", 0),
+    )
+    try:
+        os.fsync(directory_fd)
+    finally:
+        os.close(directory_fd)
+
+
+def _migrate_legacy_credentials_locked(
+    *, client: PlatformClient, platform_auth: str
+) -> bool:
+    """Resolve one legacy singleton to platform metadata before changing custody."""
+    legacy = _read_legacy_credentials()
+    if legacy is None:
+        return False
+    matches = [
+        item
+        for item in _fetch_platform_connections(
+            client=client,
+            platform_auth=platform_auth,
+        )
+        if item["connection_status"] == "connected"
+        and str(item["account_email"]).casefold() == str(legacy["email"]).casefold()
+        and item["capability_bundle"] == legacy["capability_bundle"]
+    ]
+    if len(matches) != 1:
+        raise GoogleWorkspaceError(
+            "Legacy Google credentials could not be matched to exactly one connection."
+        )
+    migrated = dict(legacy)
+    migrated["tinyhat_connection_id"] = matches[0]["connection_id"]
+    accounts = _read_account_store()
+    accounts = [
+        current
+        for current in accounts
+        if str(current["google_subject"]) != str(migrated["google_subject"])
+    ]
+    accounts.append(migrated)
+    _atomic_save_account_store(accounts)
+    _refuse_unsafe_owner_file(
+        LEGACY_CREDENTIALS_PATH,
+        label="Legacy saved Google credentials",
+    )
+    LEGACY_CREDENTIALS_PATH.unlink()
+    _fsync_state_directory()
+    return True
+
+
+def _migrate_legacy_credentials() -> bool:
+    if not _owner_entry_exists(LEGACY_CREDENTIALS_PATH):
+        return False
+    client, platform_auth = build_platform_client()
+    with _lifecycle_lock():
+        return _migrate_legacy_credentials_locked(
+            client=client,
+            platform_auth=platform_auth,
+        )
+
+
 def _assignment_binding_matches_platform(
     *,
     credentials: dict[str, Any],
@@ -2693,10 +3560,30 @@ def _assignment_binding_matches_platform(
     return hmac.compare_digest(saved_binding, current_binding)
 
 
-def _delete_credentials_locked() -> None:
-    # unlink removes a symlink itself without following it. Reads and writes
-    # still refuse such entries through lstat and O_NOFOLLOW.
-    CREDENTIALS_PATH.unlink(missing_ok=True)
+def _delete_credentials_locked(*, account_id: str | None = None) -> None:
+    """Delete one selected account, or every credential on assignment cleanup."""
+    if account_id is None:
+        # unlink removes a symlink itself without following it. Reads and writes
+        # still refuse such entries through lstat and O_NOFOLLOW.
+        CREDENTIALS_PATH.unlink(missing_ok=True)
+        LEGACY_CREDENTIALS_PATH.unlink(missing_ok=True)
+        return
+    clean_account_id = _validated_connection_id(account_id)
+    accounts = _read_account_store()
+    remaining = [
+        item
+        for item in accounts
+        if not hmac.compare_digest(
+            str(item["tinyhat_connection_id"]),
+            clean_account_id,
+        )
+    ]
+    if len(remaining) == len(accounts):
+        raise GoogleWorkspaceError("Google Workspace account is not connected.")
+    if remaining:
+        _atomic_save_account_store(remaining)
+    else:
+        CREDENTIALS_PATH.unlink(missing_ok=True)
 
 
 def _wipe_invalid_credentials_and_pending_handoffs_locked() -> str:
@@ -2704,22 +3591,24 @@ def _wipe_invalid_credentials_and_pending_handoffs_locked() -> str:
     if not _credentials_entry_exists():
         return "not_present"
     try:
-        credentials = _read_credentials()
+        credentials = _read_all_credentials()
     except GoogleWorkspaceError:
         # Only remove owner-readable regular files with no hard links. This may
         # include a mode-drifted file, but never follows a symlink or unlinks a
         # shared inode.
-        _refuse_unsafe_owned_readable_file(
-            CREDENTIALS_PATH,
-            label="Saved Google credentials",
-        )
+        for path, label in (
+            (CREDENTIALS_PATH, "Saved Google accounts"),
+            (LEGACY_CREDENTIALS_PATH, "Legacy saved Google credentials"),
+        ):
+            if _owner_entry_exists(path):
+                _refuse_unsafe_owned_readable_file(path, label=label)
         # Delete the credential first so a scratch-cleanup failure cannot leave
         # stale tokens available on the Computer.
         _delete_credentials_locked()
         ACTIVE_DISCONNECT_PATH.unlink(missing_ok=True)
         _cancel_all_pending_handoffs_locked()
         return "invalid"
-    return "valid" if credentials is not None else "not_present"
+    return "valid" if credentials else "not_present"
 
 
 def _wipe_invalid_credentials_and_pending_handoffs() -> str:
@@ -2760,8 +3649,13 @@ def remove_credentials_if_assignment_changed(*, timeout_seconds: int | None = No
 def _context_assignment_cache_key(
     credentials: dict[str, Any],
 ) -> tuple[int, int, int, int, str] | None:
+    credential_path = (
+        CREDENTIALS_PATH
+        if _owner_entry_exists(CREDENTIALS_PATH)
+        else LEGACY_CREDENTIALS_PATH
+    )
     try:
-        entry = os.lstat(CREDENTIALS_PATH)
+        entry = os.lstat(credential_path)
     except OSError:
         return None
     if (
@@ -2843,25 +3737,33 @@ def _local_credentials_for_binding_check() -> tuple[str, dict[str, Any] | None]:
     if not _credentials_entry_exists():
         return "not_present", None
     try:
-        credentials = _read_credentials()
+        accounts = _read_all_credentials()
     except GoogleWorkspaceError:
         return "invalid", None
-    if credentials is None:
+    if not accounts:
         return "not_present", None
-    return "present", credentials
+    bindings = {str(item["tinyhat_assignment_binding"]) for item in accounts}
+    if len(bindings) != 1:
+        return "invalid", None
+    return "present", accounts[0]
 
 
 def _remove_credentials_for_stale_binding(saved_binding: str) -> str:
     with _lifecycle_lock():
         try:
-            current_credentials = _read_credentials()
+            current_accounts = _read_all_credentials()
         except GoogleWorkspaceError:
             result = _wipe_invalid_credentials_and_pending_handoffs_locked()
             return "retry" if result == "valid" else result
-        if current_credentials is None:
+        if not current_accounts:
             return "not_present"
-        current_local_binding = str(current_credentials["tinyhat_assignment_binding"])
-        if not hmac.compare_digest(saved_binding, current_local_binding):
+        if any(
+            not hmac.compare_digest(
+                saved_binding,
+                str(current["tinyhat_assignment_binding"]),
+            )
+            for current in current_accounts
+        ):
             return "retry"
         ACTIVE_DISCONNECT_PATH.unlink(missing_ok=True)
         _cancel_all_pending_handoffs_locked()
@@ -2869,7 +3771,9 @@ def _remove_credentials_for_stale_binding(saved_binding: str) -> str:
     return "removed"
 
 
-def _verified_credentials() -> tuple[dict[str, Any] | None, str]:
+def _verified_credentials(
+    account_id: str | None = None,
+) -> tuple[dict[str, Any] | None, str]:
     for _ in range(2):
         verification = remove_credentials_if_assignment_changed()
         if verification == "retry":
@@ -2877,20 +3781,38 @@ def _verified_credentials() -> tuple[dict[str, Any] | None, str]:
         if verification != "match":
             return None, verification
         try:
-            return _read_credentials(), "match"
+            return _read_credentials(account_id), "match"
+        except GoogleWorkspaceAccountSelectionRequired:
+            raise
         except GoogleWorkspaceError:
             return None, "invalid"
     return None, "unavailable"
 
 
-def load_verified_google_workspace_credentials() -> dict[str, Any]:
+def _verified_accounts() -> tuple[list[dict[str, Any]], str]:
+    for _ in range(2):
+        verification = remove_credentials_if_assignment_changed()
+        if verification == "retry":
+            continue
+        if verification != "match":
+            return [], verification
+        try:
+            return _read_all_credentials(), "match"
+        except GoogleWorkspaceError:
+            return [], "invalid"
+    return [], "unavailable"
+
+
+def load_verified_google_workspace_credentials(
+    account_id: str | None = None,
+) -> dict[str, Any]:
     """Load credentials only after current-assignment verification.
 
     Gmail, Calendar, or Drive read-only operations must use this helper rather
     than reading the local file directly. The connection tool itself does not
     expose service data.
     """
-    credentials, verification = _verified_credentials()
+    credentials, verification = _verified_credentials(account_id)
     if verification != "match" or credentials is None:
         raise GoogleWorkspaceError(
             "Google credentials are unavailable for the Computer's current assignment."
@@ -2898,9 +3820,15 @@ def load_verified_google_workspace_credentials() -> dict[str, Any]:
     return credentials
 
 
-def refresh_verified_google_workspace_credentials() -> dict[str, Any]:
+def refresh_verified_google_workspace_credentials(
+    account_id: str | None = None,
+) -> dict[str, Any]:
     """Refresh Google access through the attested platform, never Google directly."""
-    credentials = load_verified_google_workspace_credentials()
+    credentials = load_verified_google_workspace_credentials(account_id)
+    if credentials.get("tinyhat_connection_id") is None:
+        _migrate_legacy_credentials()
+        credentials = load_verified_google_workspace_credentials(account_id)
+    connection_id = _validated_connection_id(credentials.get("tinyhat_connection_id"))
     profile = _profile_for_capability_bundle(credentials["capability_bundle"])
     private_key_pem, public_key_pem = _generate_key_pair()
     try:
@@ -2915,6 +3843,7 @@ def refresh_verified_google_workspace_credentials() -> dict[str, Any]:
                 "key_algorithm": KEY_ALGORITHM,
                 "client_id": credentials["client_id"],
                 "refresh_token": credentials["refresh_token"],
+                "tinyhat_connection_id": connection_id,
                 "tinyhat_assignment_binding": credentials["tinyhat_assignment_binding"],
                 "capability_bundle": profile.capability_bundle,
                 "requested_services": list(profile.services),
@@ -2933,6 +3862,7 @@ def refresh_verified_google_workspace_credentials() -> dict[str, Any]:
             plaintext = ""
         refreshed = _normalize_refresh_document(
             decoded,
+            expected_connection_id=connection_id,
             expected_assignment_binding=str(credentials["tinyhat_assignment_binding"]),
             expected_scopes=profile.scopes,
         )
@@ -2953,6 +3883,7 @@ def refresh_verified_google_workspace_credentials() -> dict[str, Any]:
 def _normalize_refresh_document(
     value: Any,
     *,
+    expected_connection_id: str,
     expected_assignment_binding: str,
     expected_scopes: tuple[str, ...] | list[str] = GOOGLE_READONLY_SCOPES,
 ) -> dict[str, Any]:
@@ -2960,6 +3891,7 @@ def _normalize_refresh_document(
         raise GoogleWorkspaceError("Refreshed Google access had an invalid schema.")
     allowed_fields = {
         "schema",
+        "tinyhat_connection_id",
         "access_token",
         "token_type",
         "expires_at",
@@ -2971,9 +3903,15 @@ def _normalize_refresh_document(
         raise GoogleWorkspaceError("Refreshed Google access contained an unknown field.")
 
     access_token = value.get("access_token")
+    connection_id = _validated_connection_id(value.get("tinyhat_connection_id"))
     token_type = value.get("token_type")
     expires_at = value.get("expires_at")
     assignment_binding = value.get("tinyhat_assignment_binding")
+    if connection_id is None or not hmac.compare_digest(
+        connection_id,
+        _validated_connection_id(expected_connection_id),
+    ):
+        raise GoogleWorkspaceError("Google account changed during refresh.")
     if (
         not isinstance(access_token, str)
         or not access_token
@@ -3010,6 +3948,7 @@ def _normalize_refresh_document(
     ):
         raise GoogleWorkspaceError("Refreshed Google access had an invalid refresh token.")
     return {
+        "tinyhat_connection_id": connection_id,
         "access_token": access_token,
         "token_type": "Bearer",
         "expires_at": expires_at,
@@ -3028,7 +3967,8 @@ def _persist_refreshed_credentials(
 ) -> dict[str, Any]:
     """Atomically update token fields without reviving disconnected credentials."""
     with _lifecycle_lock():
-        current = _read_credentials()
+        connection_id = _validated_connection_id(expected.get("tinyhat_connection_id"))
+        current = _read_credentials(connection_id)
         if current is None:
             raise GoogleWorkspaceError("Google Workspace was disconnected during refresh.")
         for field in ("client_id", "refresh_token", "tinyhat_assignment_binding"):
@@ -3066,6 +4006,7 @@ def _refresh_credential_generation(credentials: dict[str, Any]) -> str:
         field: credentials.get(field)
         for field in (
             "schema",
+            "tinyhat_connection_id",
             "capability_bundle",
             "services",
             "scopes",
@@ -3089,8 +4030,60 @@ def _refresh_credential_generation(credentials: dict[str, Any]) -> str:
     return hashlib.sha256(encoded).hexdigest()
 
 
-def _status_payload() -> dict[str, Any]:
-    credentials, verification = _verified_credentials()
+def _install_credential_generation(credentials: dict[str, Any]) -> str:
+    """Fingerprint install lineage while allowing normal token refresh rotation."""
+    material = {
+        field: credentials.get(field)
+        for field in (
+            "schema",
+            "tinyhat_connection_id",
+            "capability_bundle",
+            "services",
+            "scopes",
+            "token_uri",
+            "client_id",
+            "google_subject",
+            "email",
+            "email_verified",
+            "connected_at",
+            "tinyhat_assignment_binding",
+        )
+    }
+    encoded = json.dumps(
+        material,
+        ensure_ascii=False,
+        separators=(",", ":"),
+        sort_keys=True,
+    ).encode("utf-8")
+    return hashlib.sha256(encoded).hexdigest()
+
+
+def _account_store_generation(accounts: list[dict[str, Any]]) -> str:
+    """Fingerprint the current installed account set without token rotation."""
+    encoded = json.dumps(
+        sorted(_install_credential_generation(account) for account in accounts),
+        ensure_ascii=False,
+        separators=(",", ":"),
+    ).encode("utf-8")
+    return hashlib.sha256(encoded).hexdigest()
+
+
+def _status_payload(*, account_id: str | None = None) -> dict[str, Any]:
+    if _owner_entry_exists(LEGACY_CREDENTIALS_PATH):
+        try:
+            _migrate_legacy_credentials()
+        except GoogleWorkspaceError:
+            return {
+                "schema": "tinyhat_google_workspace_status_v1",
+                "action": "status",
+                "status": "verification_unavailable",
+                "connected": False,
+                "message": (
+                    "The Computer could not match its existing Google credential to "
+                    "current safe connection metadata. Try status again."
+                ),
+            }
+    accounts, verification = _verified_accounts()
     if verification == "invalid":
         return {
             "schema": "tinyhat_google_workspace_status_v1",
@@ -3110,7 +4103,7 @@ def _status_payload() -> dict[str, Any]:
                 "still belong to its current assignment. Try status again."
             ),
         }
-    if credentials is None:
+    if not accounts:
         return {
             "schema": "tinyhat_google_workspace_status_v1",
             "action": "status",
@@ -3128,25 +4121,45 @@ def _status_payload() -> dict[str, Any]:
                 "arguments": {"action": "connect"},
             },
         }
-    profile = _profile_for_capability_bundle(credentials["capability_bundle"])
-    return {
+    safe_accounts = sorted(
+        (_safe_account_metadata(credentials) for credentials in accounts),
+        key=lambda item: (str(item["email"]).casefold(), str(item["account_id"])),
+    )
+    selected: dict[str, Any] | None = None
+    if account_id is not None:
+        for item in safe_accounts:
+            if hmac.compare_digest(str(item["account_id"]), account_id):
+                selected = item
+                break
+        if selected is None:
+            raise GoogleWorkspaceError("Google Workspace account is not connected.")
+    elif len(safe_accounts) == 1:
+        selected = safe_accounts[0]
+
+    result: dict[str, Any] = {
         "schema": "tinyhat_google_workspace_status_v1",
         "action": "status",
         "status": "connected",
         "connected": True,
-        "profile": profile.name,
-        "capability_bundle": profile.capability_bundle,
-        "services": list(profile.services),
-        "email": credentials["email"],
-        "email_verified": credentials["email_verified"],
-        "scopes": credentials["scopes"],
-        "expires_at": credentials["expires_at"],
-        "connected_at": credentials["connected_at"],
-        "refresh_token_present": bool(credentials.get("refresh_token")),
-        "refresh_supported": True,
+        "account_count": len(safe_accounts),
+        "accounts": safe_accounts,
+        "account_selection_required": len(safe_accounts) > 1 and account_id is None,
+        "platform_sync_pending": _has_unresolved_install_receipts(),
         "refresh_mode": "tinyhat_platform_broker_v1",
-        "refresh_available": bool(credentials.get("refresh_token")),
     }
+    if selected is not None:
+        selected_credentials = next(
+            item
+            for item in accounts
+            if hmac.compare_digest(
+                str(item["tinyhat_connection_id"]),
+                str(selected["account_id"]),
+            )
+        )
+        result.update(selected)
+        result["refresh_token_present"] = bool(selected_credentials.get("refresh_token"))
+        result["refresh_available"] = bool(selected_credentials.get("refresh_token"))
+    return result
 
 
 def _claim_handoff(
@@ -3156,14 +4169,40 @@ def _claim_handoff(
     handoff_id: str,
     installed: bool,
     message: str | None,
+    expected_connection_id: str | None = None,
 ) -> None:
-    client.post_json(
+    response = client.post_json(
         computer_api_path(
             platform_auth,
             f"{GOOGLE_WORKSPACE_API_SUFFIX}/{handoff_id}/claim",
         ),
         {"installed": installed, "message": message},
     )
+    if not isinstance(response, dict):
+        raise GoogleWorkspaceError("Platform returned an invalid Google claim response.")
+    returned_handoff_id = _validated_handoff_id(response.get("handoff_id"))
+    if not hmac.compare_digest(returned_handoff_id, _validated_handoff_id(handoff_id)):
+        raise GoogleWorkspaceError("Platform claimed another Google handoff.")
+    returned_status = str(response.get("status") or "").strip().lower()
+    if installed:
+        if returned_status != "claimed":
+            raise GoogleWorkspaceError("Platform did not acknowledge the Google handoff claim.")
+    elif returned_status not in {
+        "claimed",
+        "cancelled",
+        "failed",
+        "expired",
+        "superseded",
+    }:
+        raise GoogleWorkspaceError("Platform returned invalid terminal Google handoff state.")
+    returned_connection_id = response.get("connection_id")
+    if returned_connection_id is not None:
+        clean_connection_id = _validated_connection_id(returned_connection_id)
+        if expected_connection_id is None or not hmac.compare_digest(
+            clean_connection_id,
+            _validated_connection_id(expected_connection_id),
+        ):
+            raise GoogleWorkspaceError("Platform claimed another Google connection.")
 
 
 def _claim_handoff_with_retry(
@@ -3171,6 +4210,7 @@ def _claim_handoff_with_retry(
     client: PlatformClient,
     platform_auth: str,
     handoff_id: str,
+    expected_connection_id: str,
 ) -> None:
     """Acknowledge a saved credential before clearing state or notifying."""
     for attempt in range(INSTALL_CLAIM_MAX_ATTEMPTS):
@@ -3181,6 +4221,7 @@ def _claim_handoff_with_retry(
                 handoff_id=handoff_id,
                 installed=True,
                 message=None,
+                expected_connection_id=expected_connection_id,
             )
             return
         except Exception:

@@ -86,9 +86,13 @@ def credential_envelope(
     *,
     bundle: str = READONLY_BUNDLE,
     scopes: list[str] | None = None,
+    connection_id: str = "gwo_connection123",
+    google_subject: str = "google-user-123",
+    email: str = "owner@example.com",
 ) -> dict[str, object]:
     return {
         "schema": "tinyhat_google_workspace_credentials_v1",
+        "tinyhat_connection_id": connection_id,
         "capability_bundle": bundle,
         "services": READONLY_SERVICES.copy(),
         "token_uri": "https://oauth2.googleapis.com/token",
@@ -98,8 +102,8 @@ def credential_envelope(
         "token_type": "Bearer",
         "expires_at": "2030-01-01T00:00:00+00:00",
         "scopes": list(scopes or READONLY_SCOPES),
-        "google_subject": "google-user-123",
-        "email": "owner@example.com",
+        "google_subject": google_subject,
+        "email": email,
         "email_verified": True,
         "tinyhat_assignment_binding": "assignment-binding-123",
     }
@@ -110,9 +114,11 @@ def start_response(
     bundle: str = READONLY_BUNDLE,
     scopes: list[str] | None = None,
     authorization_url: str | None = None,
+    connection_id: str = "gwo_connection123",
 ) -> dict[str, object]:
     return {
         "handoff_id": "gwo_test123",
+        "connection_id": connection_id,
         "status": "pending",
         "authorization_url": authorization_url or direct_google_authorization_url(),
         "capability_bundle": bundle,
@@ -127,6 +133,8 @@ def disconnect_create_response() -> dict[str, object]:
     return {
         "schema": "tinyhat_google_workspace_disconnect_intent_v1",
         "intent_id": "gwd_test123",
+        "connection_id": "gwo_connection123",
+        "account_email": "owner@example.com",
         "owner_token": "disconnect-owner-token-value-1234567890",
         "status": "created",
         "expires_at": (datetime.now(timezone.utc) + timedelta(minutes=5)).isoformat(),
@@ -168,6 +176,7 @@ class DisconnectClient:
             return {
                 "schema": "tinyhat_google_workspace_disconnect_intent_v1",
                 "intent_id": "gwd_test123",
+                "connection_id": "gwo_connection123",
                 "status": "offered",
                 "button_sent": self.button_sent,
             }
@@ -175,12 +184,15 @@ class DisconnectClient:
             self.events.append("poll")
             if not self.states:
                 raise AssertionError("Unexpected extra disconnect poll")
-            return self.states.pop(0)
+            state = self.states.pop(0)
+            state.setdefault("connection_id", "gwo_connection123")
+            return state
         if path.endswith("/claim"):
             self.events.append("claim")
             return {
                 "schema": "tinyhat_google_workspace_disconnect_intent_v1",
                 "intent_id": "gwd_test123",
+                "connection_id": "gwo_connection123",
                 "status": self.claim_status,
                 "deletion_claimed": self.deletion_claimed,
             }
@@ -196,6 +208,7 @@ class DisconnectClient:
             return {
                 "schema": "tinyhat_google_workspace_disconnect_intent_v1",
                 "intent_id": "gwd_test123",
+                "connection_id": "gwo_connection123",
                 "status": status,
             }
         raise AssertionError(f"Unexpected POST {path}")
@@ -236,6 +249,11 @@ class PollingClient:
 
     def post_json(self, path: str, payload: dict[str, object]) -> dict[str, object]:
         self.posts.append((path, payload))
+        if path.endswith("/claim"):
+            return {
+                "handoff_id": path.rstrip("/").split("/")[-2],
+                "status": "claimed" if payload.get("installed") is True else "failed",
+            }
         return {}
 
 
@@ -246,7 +264,9 @@ class GoogleWorkspaceTests(unittest.TestCase):
         paths = {
             "STATE_DIR": state,
             "CREDENTIALS_PATH": state / "credentials.json",
+            "LEGACY_CREDENTIALS_PATH": state / "legacy-credentials.json",
             "HANDOFFS_DIR": state / "handoffs",
+            "INSTALL_RECEIPTS_DIR": state / "install-receipts",
             "ACTIVE_HANDOFF_PATH": state / "active-handoff.json",
             "DISCONNECTS_DIR": state / "disconnects",
             "ACTIVE_DISCONNECT_PATH": state / "active-disconnect.json",
@@ -268,6 +288,8 @@ class GoogleWorkspaceTests(unittest.TestCase):
         generation: str = "generation-value-that-is-long-enough-123",
         bundle: str = READONLY_BUNDLE,
         scopes: list[str] | None = None,
+        connection_action: str = "add",
+        target_connection_id: str | None = "gwo_connection123",
     ) -> workspace.GoogleWorkspaceWorkerHandoff:
         return workspace.GoogleWorkspaceWorkerHandoff(
             client=client,
@@ -278,6 +300,8 @@ class GoogleWorkspaceTests(unittest.TestCase):
             expected_capability_bundle=bundle,
             expected_services=READONLY_SERVICES.copy(),
             expected_scopes=list(scopes or READONLY_SCOPES),
+            connection_action=connection_action,
+            target_connection_id=target_connection_id,
         )
 
     def _disconnect_intent(
@@ -299,6 +323,7 @@ class GoogleWorkspaceTests(unittest.TestCase):
             platform_auth="local_dev",
             intent_id=intent_id,
             owner_token=owner_token,
+            connection_id=str(credentials["tinyhat_connection_id"]),
             credential_generation=generation,
             expires_at=expires_at
             or (datetime.now(timezone.utc) + timedelta(minutes=5)).isoformat(),
@@ -361,10 +386,13 @@ class GoogleWorkspaceTests(unittest.TestCase):
 
         self.assertEqual(schema["required"], ["action"])
         self.assertFalse(schema["additionalProperties"])
-        self.assertEqual(set(schema["properties"]), {"action", "confirmed", "profile"})
+        self.assertEqual(
+            set(schema["properties"]),
+            {"action", "confirmed", "confirmation_id", "profile", "account_id"},
+        )
         self.assertEqual(
             schema["properties"]["action"]["enum"],
-            ["connect", "status", "disconnect"],
+            ["connect", "status", "set_permissions", "disconnect"],
         )
         self.assertNotIn("scope", schema["properties"])
         self.assertNotIn("scopes", schema["properties"])
@@ -384,13 +412,512 @@ class GoogleWorkspaceTests(unittest.TestCase):
             schema["properties"]["confirmed"]["description"],
         )
 
+    def test_set_permissions_downgrades_one_account_to_exact_readonly_profile(self) -> None:
+        class Client:
+            def __init__(self) -> None:
+                self.posts: list[tuple[str, dict[str, object]]] = []
+
+            def get_json(self, path: str) -> dict[str, object]:
+                self.assert_assignment_path = path
+                return {"tinyhat_assignment_binding": "assignment-binding-123"}
+
+            def post_json(self, path: str, payload: dict[str, object]) -> dict[str, object]:
+                self.posts.append((path, payload))
+                return start_response()
+
+        client = Client()
+        with (
+            tempfile.TemporaryDirectory() as tmp,
+            self._patched_state(Path(tmp)),
+            mock.patch.object(
+                workspace,
+                "build_platform_client",
+                return_value=(client, "local_dev"),
+            ),
+            mock.patch.object(
+                workspace,
+                "_generate_key_pair",
+                return_value=("one-time-private-key", "one-time-public-key"),
+            ),
+            mock.patch.object(workspace, "_start_worker_process") as start_worker,
+            mock.patch.object(
+                workspace,
+                "_send_google_connect_button",
+                return_value={"sent": True, "ok": True},
+            ) as send_button,
+        ):
+            workspace._atomic_save_credentials(
+                workspace._normalize_credentials(
+                    credential_envelope(
+                        bundle=GMAIL_SEND_CALENDAR_WRITE_BUNDLE,
+                        scopes=GMAIL_SEND_CALENDAR_WRITE_SCOPES,
+                    )
+                )
+            )
+            result = json.loads(
+                tools.google_workspace(
+                    {
+                        "action": "set_permissions",
+                        "account_id": "gwo_connection123",
+                        "profile": "workspace_readonly",
+                    }
+                )
+            )
+
+            still_current = workspace._read_credentials("gwo_connection123")
+
+        self.assertEqual(result["status"], "waiting_for_user")
+        self.assertEqual(result["action"], "set_permissions")
+        self.assertEqual(result["profile"], "workspace_readonly")
+        self.assertEqual(result["connection_action"], "replace")
+        self.assertEqual(
+            client.posts[0][1],
+            {
+                "public_key_pem": "one-time-public-key",
+                "key_algorithm": workspace.KEY_ALGORITHM,
+                "capability_bundle": READONLY_BUNDLE,
+                "requested_services": READONLY_SERVICES,
+                "requested_scopes": READONLY_SCOPES,
+                "connection_action": "replace",
+                "connection_id": "gwo_connection123",
+            },
+        )
+        self.assertEqual(still_current["capability_bundle"], GMAIL_SEND_CALENDAR_WRITE_BUNDLE)
+        self.assertEqual(
+            start_worker.call_args.kwargs["handoff_metadata"]["target_connection_id"],
+            "gwo_connection123",
+        )
+        send_button.assert_called_once_with(
+            start_response()["authorization_url"],
+            profile="workspace_readonly",
+            permission_change=True,
+        )
+
+    def test_set_permissions_requires_confirmation_only_for_new_write_permission(self) -> None:
+        client = PollingClient([])
+        with (
+            tempfile.TemporaryDirectory() as tmp,
+            self._patched_state(Path(tmp)),
+            mock.patch.object(
+                workspace,
+                "build_platform_client",
+                return_value=(client, "local_dev"),
+            ),
+        ):
+            workspace._atomic_save_credentials(
+                workspace._normalize_credentials(
+                    credential_envelope(
+                        bundle=GMAIL_SEND_BUNDLE,
+                        scopes=GMAIL_SEND_SCOPES,
+                    )
+                )
+            )
+            result = json.loads(
+                tools.google_workspace(
+                    {
+                        "action": "set_permissions",
+                        "account_id": "gwo_connection123",
+                        "profile": "calendar_write",
+                    }
+                )
+            )
+
+        self.assertEqual(result["error"], "confirmation_required")
+        self.assertIn("calendar.events", result["message"])
+        self.assertEqual(result["example_call"]["account_id"], "gwo_connection123")
+        self.assertEqual(
+            result["example_call"]["confirmation_id"],
+            result["expected"]["confirmation_id"],
+        )
+
+    def test_permission_confirmation_is_bound_to_account_action_and_exact_profile(self) -> None:
+        client = PollingClient([])
+        with (
+            tempfile.TemporaryDirectory() as tmp,
+            self._patched_state(Path(tmp)),
+            mock.patch.object(
+                workspace,
+                "build_platform_client",
+                return_value=(client, "local_dev"),
+            ),
+        ):
+            workspace._atomic_save_credentials(
+                workspace._normalize_credentials(credential_envelope())
+            )
+            workspace._atomic_save_credentials(
+                workspace._normalize_credentials(
+                    credential_envelope(
+                        connection_id="gwo_personal456",
+                        google_subject="google-user-456",
+                        email="personal@example.com",
+                    )
+                )
+            )
+            first = json.loads(
+                tools.google_workspace(
+                    {
+                        "action": "set_permissions",
+                        "account_id": "gwo_connection123",
+                        "profile": "calendar_write",
+                    }
+                )
+            )
+            confirmation_id = first["expected"]["confirmation_id"]
+            switched_account = json.loads(
+                tools.google_workspace(
+                    {
+                        "action": "set_permissions",
+                        "account_id": "gwo_personal456",
+                        "profile": "calendar_write",
+                        "confirmed": True,
+                        "confirmation_id": confirmation_id,
+                    }
+                )
+            )
+            expanded_profile = json.loads(
+                tools.google_workspace(
+                    {
+                        "action": "set_permissions",
+                        "account_id": "gwo_connection123",
+                        "profile": "gmail_send_calendar_write",
+                        "confirmed": True,
+                        "confirmation_id": confirmation_id,
+                    }
+                )
+            )
+
+        self.assertEqual(switched_account["error"], "confirmation_required")
+        self.assertNotEqual(
+            switched_account["expected"]["confirmation_id"],
+            confirmation_id,
+        )
+        self.assertEqual(expanded_profile["error"], "confirmation_required")
+        self.assertNotEqual(
+            expanded_profile["expected"]["confirmation_id"],
+            confirmation_id,
+        )
+
+    def test_permission_confirmation_cannot_replay_after_credential_replacement(self) -> None:
+        client = PollingClient([])
+        with (
+            tempfile.TemporaryDirectory() as tmp,
+            self._patched_state(Path(tmp)),
+            mock.patch.object(
+                workspace,
+                "build_platform_client",
+                return_value=(client, "local_dev"),
+            ),
+        ):
+            initial = workspace._normalize_credentials(credential_envelope())
+            workspace._atomic_save_credentials(initial)
+            first = json.loads(
+                tools.google_workspace(
+                    {
+                        "action": "set_permissions",
+                        "account_id": "gwo_connection123",
+                        "profile": "calendar_write",
+                    }
+                )
+            )
+            replacement = workspace._normalize_credentials(credential_envelope())
+            replacement["connected_at"] = "2026-07-11T21:00:00+00:00"
+            replacement["refresh_token"] = "replacement-refresh-value"
+            workspace._atomic_save_credentials(replacement)
+            replay = json.loads(
+                tools.google_workspace(
+                    {
+                        "action": "set_permissions",
+                        "account_id": "gwo_connection123",
+                        "profile": "calendar_write",
+                        "confirmed": True,
+                        "confirmation_id": first["expected"]["confirmation_id"],
+                    }
+                )
+            )
+
+        self.assertEqual(replay["error"], "confirmation_required")
+        self.assertNotEqual(
+            replay["expected"]["confirmation_id"],
+            first["expected"]["confirmation_id"],
+        )
+
+    def test_status_lists_accounts_and_disconnect_never_guesses(self) -> None:
+        with (
+            tempfile.TemporaryDirectory() as tmp,
+            self._patched_state(Path(tmp)),
+            mock.patch.object(
+                workspace,
+                "build_platform_client",
+                return_value=(PollingClient([]), "local_dev"),
+            ),
+        ):
+            workspace._atomic_save_credentials(
+                workspace._normalize_credentials(credential_envelope())
+            )
+            workspace._atomic_save_credentials(
+                workspace._normalize_credentials(
+                    credential_envelope(
+                        connection_id="gwo_personal456",
+                        google_subject="google-user-456",
+                        email="personal@example.com",
+                    )
+                )
+            )
+            status = workspace._status_payload()
+            disconnect = json.loads(tools.google_workspace({"action": "disconnect"}))
+
+        self.assertEqual(status["account_count"], 2)
+        self.assertTrue(status["account_selection_required"])
+        self.assertEqual(
+            {item["account_id"] for item in status["accounts"]},
+            {"gwo_connection123", "gwo_personal456"},
+        )
+        self.assertNotIn("access_token", json.dumps(status))
+        self.assertEqual(disconnect["error"], "account_selection_required")
+
+    def test_ready_add_and_exact_replace_preserve_other_accounts(self) -> None:
+        second = credential_envelope(
+            connection_id="gwo_personal456",
+            google_subject="google-user-456",
+            email="personal@example.com",
+            bundle=CALENDAR_WRITE_BUNDLE,
+            scopes=CALENDAR_WRITE_SCOPES,
+        )
+        with tempfile.TemporaryDirectory() as tmp, self._patched_state(Path(tmp)):
+            workspace._atomic_save_credentials(
+                workspace._normalize_credentials(credential_envelope())
+            )
+            add_handoff = self._worker_handoff(
+                client=PollingClient([]),
+                handoff_id="gwo_add456",
+                generation="generation-value-that-is-long-enough-456",
+                bundle=CALENDAR_WRITE_BUNDLE,
+                scopes=CALENDAR_WRITE_SCOPES,
+                target_connection_id="gwo_personal456",
+            )
+            self._activate_handoff(
+                handoff_id="gwo_add456",
+                generation="generation-value-that-is-long-enough-456",
+            )
+            with mock.patch.object(
+                workspace,
+                "_decrypt_ciphertext",
+                return_value=json.dumps(second),
+            ):
+                outcome = workspace._install_ready_credentials(
+                    handoff=add_handoff,
+                    state={"ciphertext_payload": {"ciphertext": "opaque"}},
+                )
+
+            self.assertEqual(outcome, "installed")
+            self.assertEqual(len(workspace._read_account_store()), 2)
+
+            replace_handoff = self._worker_handoff(
+                client=PollingClient([]),
+                handoff_id="gwo_replace123",
+                generation="generation-value-that-is-long-enough-789",
+                connection_action="replace",
+                target_connection_id="gwo_connection123",
+            )
+            self._activate_handoff(
+                handoff_id="gwo_replace123",
+                generation="generation-value-that-is-long-enough-789",
+            )
+            with mock.patch.object(
+                workspace,
+                "_decrypt_ciphertext",
+                return_value=json.dumps(credential_envelope()),
+            ):
+                outcome = workspace._install_ready_credentials(
+                    handoff=replace_handoff,
+                    state={"ciphertext_payload": {"ciphertext": "opaque"}},
+                )
+
+            accounts = {
+                item["tinyhat_connection_id"]: item
+                for item in workspace._read_account_store()
+            }
+
+        self.assertEqual(outcome, "installed")
+        self.assertEqual(accounts["gwo_connection123"]["capability_bundle"], READONLY_BUNDLE)
+        self.assertEqual(
+            accounts["gwo_personal456"]["capability_bundle"],
+            CALENDAR_WRITE_BUNDLE,
+        )
+
+    def test_duplicate_add_is_rejected_without_replacing_existing_account(self) -> None:
+        duplicate = credential_envelope(
+            connection_id="gwo_duplicate456",
+            email="renamed@example.com",
+        )
+        with tempfile.TemporaryDirectory() as tmp, self._patched_state(Path(tmp)):
+            original = workspace._normalize_credentials(credential_envelope())
+            workspace._atomic_save_credentials(original)
+            handoff = self._worker_handoff(
+                client=PollingClient([]),
+                target_connection_id="gwo_duplicate456",
+            )
+            self._activate_handoff()
+            with mock.patch.object(
+                workspace,
+                "_decrypt_ciphertext",
+                return_value=json.dumps(duplicate),
+            ):
+                outcome = workspace._install_ready_credentials(
+                    handoff=handoff,
+                    state={"ciphertext_payload": {"ciphertext": "opaque"}},
+                )
+            accounts = workspace._read_account_store()
+
+        self.assertEqual(outcome, "duplicate_account")
+        self.assertEqual(len(accounts), 1)
+        self.assertEqual(accounts[0]["tinyhat_connection_id"], "gwo_connection123")
+        self.assertEqual(accounts[0]["email"], "owner@example.com")
+
+    def test_targeted_disconnect_preserves_other_account(self) -> None:
+        client = DisconnectClient(
+            [
+                {
+                    "schema": "tinyhat_google_workspace_disconnect_intent_v1",
+                    "intent_id": "gwd_test123",
+                    "status": "confirmed",
+                }
+            ]
+        )
+        with tempfile.TemporaryDirectory() as tmp, self._patched_state(Path(tmp)):
+            first = workspace._normalize_credentials(credential_envelope())
+            second = workspace._normalize_credentials(
+                credential_envelope(
+                    connection_id="gwo_personal456",
+                    google_subject="google-user-456",
+                    email="personal@example.com",
+                )
+            )
+            workspace._atomic_save_credentials(first)
+            workspace._atomic_save_credentials(second)
+            intent = self._disconnect_intent(client=client, credentials=first)
+            self._activate_disconnect_intent(intent)
+            with mock.patch.object(workspace.time, "sleep"):
+                outcome = workspace._poll_disconnect_intent(intent)
+            accounts = workspace._read_account_store()
+
+        self.assertEqual(outcome, "disconnected")
+        self.assertEqual(len(accounts), 1)
+        self.assertEqual(accounts[0]["tinyhat_connection_id"], "gwo_personal456")
+
+    def test_assignment_change_wipes_every_connected_account(self) -> None:
+        with (
+            tempfile.TemporaryDirectory() as tmp,
+            self._patched_state(Path(tmp)),
+            mock.patch.object(
+                workspace,
+                "build_platform_client",
+                return_value=(PollingClient([], binding="new-assignment"), "local_dev"),
+            ),
+        ):
+            workspace._atomic_save_credentials(
+                workspace._normalize_credentials(credential_envelope())
+            )
+            workspace._atomic_save_credentials(
+                workspace._normalize_credentials(
+                    credential_envelope(
+                        connection_id="gwo_personal456",
+                        google_subject="google-user-456",
+                        email="personal@example.com",
+                    )
+                )
+            )
+            result = workspace.remove_credentials_if_assignment_changed()
+
+            self.assertEqual(result, "removed")
+            self.assertFalse(workspace.CREDENTIALS_PATH.exists())
+
+    def test_legacy_migration_uses_exact_platform_connection_match(self) -> None:
+        class Client:
+            def get_json(self, path: str) -> dict[str, object]:
+                self.path = path
+                return {
+                    "schema": "tinyhat_google_workspace_connections_v1",
+                    "connections": [
+                        {
+                            "connection_id": "gwo_migrated123",
+                            "account_email": "OWNER@example.com",
+                            "capability_bundle": READONLY_BUNDLE,
+                            "connection_status": "connected",
+                        }
+                    ],
+                }
+
+        client = Client()
+        with tempfile.TemporaryDirectory() as tmp, self._patched_state(Path(tmp)):
+            legacy = credential_envelope()
+            legacy.pop("tinyhat_connection_id")
+            legacy["connected_at"] = "2026-07-10T20:00:00+00:00"
+            workspace._ensure_private_directory(workspace.STATE_DIR)
+            workspace._write_private_file(
+                workspace.LEGACY_CREDENTIALS_PATH,
+                json.dumps(legacy),
+            )
+            with workspace._lifecycle_lock():
+                migrated = workspace._migrate_legacy_credentials_locked(
+                    client=client,
+                    platform_auth="local_dev",
+                )
+            accounts = workspace._read_account_store()
+
+        self.assertTrue(migrated)
+        self.assertFalse(workspace.LEGACY_CREDENTIALS_PATH.exists())
+        self.assertEqual(accounts[0]["tinyhat_connection_id"], "gwo_migrated123")
+        self.assertTrue(client.path.endswith("/google-workspace-oauth/v1/connections"))
+
+    def test_ambiguous_legacy_migration_preserves_singleton(self) -> None:
+        class Client:
+            def get_json(self, _path: str) -> dict[str, object]:
+                connection = {
+                    "account_email": "owner@example.com",
+                    "capability_bundle": READONLY_BUNDLE,
+                    "connection_status": "connected",
+                }
+                return {
+                    "schema": "tinyhat_google_workspace_connections_v1",
+                    "connections": [
+                        {**connection, "connection_id": "gwo_match1"},
+                        {**connection, "connection_id": "gwo_match2"},
+                    ],
+                }
+
+        with tempfile.TemporaryDirectory() as tmp, self._patched_state(Path(tmp)):
+            legacy = credential_envelope()
+            legacy.pop("tinyhat_connection_id")
+            legacy["connected_at"] = "2026-07-10T20:00:00+00:00"
+            workspace._ensure_private_directory(workspace.STATE_DIR)
+            workspace._write_private_file(
+                workspace.LEGACY_CREDENTIALS_PATH,
+                json.dumps(legacy),
+            )
+            with workspace._lifecycle_lock(), self.assertRaisesRegex(
+                workspace.GoogleWorkspaceError,
+                "exactly one",
+            ):
+                workspace._migrate_legacy_credentials_locked(
+                    client=Client(),
+                    platform_auth="local_dev",
+                )
+
+            self.assertTrue(workspace.LEGACY_CREDENTIALS_PATH.exists())
+            self.assertFalse(workspace.CREDENTIALS_PATH.exists())
+
     def test_missing_and_invalid_actions_are_actionable(self) -> None:
         missing = json.loads(tools.google_workspace({}))
         invalid = json.loads(tools.google_workspace({"action": "refresh"}))
+        invalid_account = json.loads(
+            tools.google_workspace({"action": "status", "account_id": "not-a-gwo-id"})
+        )
 
         self.assertEqual(missing["error"], "missing_required_parameter")
         self.assertEqual(missing["example_call"], {"action": "connect"})
         self.assertEqual(invalid["error"], "invalid_parameter")
+        self.assertEqual(invalid_account["error"], "invalid_parameter")
 
     def test_gmail_send_upgrade_requires_confirmation_before_platform_call(self) -> None:
         with mock.patch.object(workspace, "build_platform_client") as build_client:
@@ -403,6 +930,74 @@ class GoogleWorkspaceTests(unittest.TestCase):
         self.assertIn("separate from confirming any later email send", result["message"])
         self.assertIn("draft management is not enabled", result["message"])
         build_client.assert_not_called()
+
+    def test_add_permission_confirmation_cannot_replay_after_account_store_changes(
+        self,
+    ) -> None:
+        client = PollingClient([])
+        with (
+            tempfile.TemporaryDirectory() as tmp,
+            self._patched_state(Path(tmp)),
+            mock.patch.object(
+                workspace,
+                "build_platform_client",
+                return_value=(client, "local_dev"),
+            ),
+        ):
+            first = json.loads(
+                tools.google_workspace({"action": "connect", "profile": "gmail_send"})
+            )
+            workspace._atomic_save_credentials(
+                workspace._normalize_credentials(credential_envelope())
+            )
+            replay = json.loads(
+                tools.google_workspace(
+                    {
+                        "action": "connect",
+                        "profile": "gmail_send",
+                        "confirmed": True,
+                        "confirmation_id": first["expected"]["confirmation_id"],
+                    }
+                )
+            )
+
+        self.assertEqual(replay["error"], "confirmation_required")
+        self.assertNotEqual(
+            replay["expected"]["confirmation_id"],
+            first["expected"]["confirmation_id"],
+        )
+
+    def test_start_response_connection_must_match_replaced_account(self) -> None:
+        class Client(PollingClient):
+            def post_json(self, _path: str, _payload: dict[str, object]) -> dict[str, object]:
+                return start_response(connection_id="gwo_personal456")
+
+        client = Client([])
+        with (
+            tempfile.TemporaryDirectory() as tmp,
+            self._patched_state(Path(tmp)),
+            mock.patch.object(
+                workspace,
+                "build_platform_client",
+                return_value=(client, "local_dev"),
+            ),
+            mock.patch.object(workspace, "_start_worker_process") as start_worker,
+        ):
+            workspace._atomic_save_credentials(
+                workspace._normalize_credentials(credential_envelope())
+            )
+            result = json.loads(
+                tools.google_workspace(
+                    {
+                        "action": "set_permissions",
+                        "account_id": "gwo_connection123",
+                        "profile": "workspace_readonly",
+                    }
+                )
+            )
+
+        self.assertEqual(result["status"], "failed")
+        start_worker.assert_not_called()
 
     def test_calendar_write_profiles_require_confirmation_before_platform_call(self) -> None:
         for profile in ("calendar_write", "gmail_send_calendar_write"):
@@ -467,12 +1062,16 @@ class GoogleWorkspaceTests(unittest.TestCase):
                 return_value={"sent": True, "ok": True},
             ) as send_button,
         ):
+            prompt = json.loads(
+                tools.google_workspace({"action": "connect", "profile": "gmail_send"})
+            )
             result = json.loads(
                 tools.google_workspace(
                     {
                         "action": "connect",
                         "profile": "gmail_send",
                         "confirmed": True,
+                        "confirmation_id": prompt["expected"]["confirmation_id"],
                     }
                 )
             )
@@ -489,6 +1088,7 @@ class GoogleWorkspaceTests(unittest.TestCase):
                 "capability_bundle": GMAIL_SEND_BUNDLE,
                 "requested_services": READONLY_SERVICES,
                 "requested_scopes": GMAIL_SEND_SCOPES,
+                "connection_action": "add",
             },
         )
         start_worker.assert_called_once()
@@ -498,6 +1098,8 @@ class GoogleWorkspaceTests(unittest.TestCase):
                 "capability_bundle": GMAIL_SEND_BUNDLE,
                 "services": READONLY_SERVICES,
                 "scopes": GMAIL_SEND_SCOPES,
+                "connection_action": "add",
+                "target_connection_id": "gwo_connection123",
             },
         )
         send_button.assert_called_once_with(
@@ -553,7 +1155,19 @@ class GoogleWorkspaceTests(unittest.TestCase):
                     {
                         "action": "connect",
                         "profile": "calendar_write",
+                        "account_id": "gwo_connection123",
+                    }
+                )
+            )
+            confirmation_id = result["expected"]["confirmation_id"]
+            result = json.loads(
+                tools.google_workspace(
+                    {
+                        "action": "connect",
+                        "profile": "calendar_write",
                         "confirmed": True,
+                        "confirmation_id": confirmation_id,
+                        "account_id": "gwo_connection123",
                     }
                 )
             )
@@ -563,7 +1177,7 @@ class GoogleWorkspaceTests(unittest.TestCase):
             result["capability_bundle"],
             GMAIL_SEND_CALENDAR_WRITE_BUNDLE,
         )
-        self.assertEqual(len(client.gets), 1)
+        self.assertEqual(len(client.gets), 2)
         self.assertEqual(
             client.posts[0][1]["requested_scopes"],
             GMAIL_SEND_CALENDAR_WRITE_SCOPES,
@@ -616,9 +1230,19 @@ class GoogleWorkspaceTests(unittest.TestCase):
                     )
                 )
             )
-            result = json.loads(tools.google_workspace({"action": "connect"}))
+            result = json.loads(
+                tools.google_workspace(
+                    {"action": "connect", "account_id": "gwo_connection123"}
+                )
+            )
             retained = json.loads(
-                tools.google_workspace({"action": "connect", "profile": "calendar_write"})
+                tools.google_workspace(
+                    {
+                        "action": "connect",
+                        "profile": "calendar_write",
+                        "account_id": "gwo_connection123",
+                    }
+                )
             )
 
         self.assertNotIn("error", result)
@@ -647,17 +1271,15 @@ class GoogleWorkspaceTests(unittest.TestCase):
                     )
                 )
             )
-            with workspace._lifecycle_lock():
-                resolved, resolved_client, platform_auth = (
-                    workspace._resolve_profile_for_connection_locked(
-                        workspace.GOOGLE_PROFILE_CONFIGS["calendar_write"],
-                        confirmed=True,
-                    )
+            with workspace._lifecycle_lock(), self.assertRaisesRegex(
+                workspace.GoogleWorkspaceError,
+                "assignment changed",
+            ):
+                workspace._resolve_profile_for_connection_locked(
+                    workspace.GOOGLE_PROFILE_CONFIGS["calendar_write"],
+                    confirmed=True,
+                    account_id="gwo_connection123",
                 )
-
-            self.assertEqual(resolved.name, "calendar_write")
-            self.assertIs(resolved_client, client)
-            self.assertEqual(platform_auth, "local_dev")
             self.assertFalse(workspace.CREDENTIALS_PATH.exists())
 
     def test_gmail_send_upgrade_preserves_verified_calendar_write_permission(self) -> None:
@@ -684,6 +1306,15 @@ class GoogleWorkspaceTests(unittest.TestCase):
                     workspace._resolve_profile_for_connection_locked(
                         workspace.GOOGLE_PROFILE_CONFIGS["gmail_send"],
                         confirmed=True,
+                        confirmation_id=workspace._permission_confirmation_id(
+                            action="connect",
+                            account_id="gwo_connection123",
+                            target_profile="gmail_send_calendar_write",
+                            credential_generation=workspace._install_credential_generation(
+                                workspace._read_credentials("gwo_connection123")
+                            ),
+                        ),
+                        account_id="gwo_connection123",
                     )
                 )
 
@@ -751,7 +1382,7 @@ class GoogleWorkspaceTests(unittest.TestCase):
         start_worker.assert_not_called()
         send_button.assert_not_called()
 
-    def test_stale_assignment_cleanup_cannot_bypass_write_confirmation(self) -> None:
+    def test_stale_assignment_blocks_new_write_account_before_confirmation(self) -> None:
         class Client:
             def __init__(self) -> None:
                 self.binding = "assignment-binding-123"
@@ -799,7 +1430,7 @@ class GoogleWorkspaceTests(unittest.TestCase):
                 tools.google_workspace({"action": "connect", "profile": "gmail_send"})
             )
 
-            self.assertEqual(result["error"], "confirmation_required")
+            self.assertEqual(result["status"], "failed")
             self.assertFalse(workspace.CREDENTIALS_PATH.exists())
 
         self.assertEqual(client.posts, [])
@@ -898,6 +1529,7 @@ class GoogleWorkspaceTests(unittest.TestCase):
                 "capability_bundle": READONLY_BUNDLE,
                 "requested_services": READONLY_SERVICES,
                 "requested_scopes": READONLY_SCOPES,
+                "connection_action": "add",
             },
         )
         self.assertNotIn("client_id", request_payload)
@@ -909,6 +1541,8 @@ class GoogleWorkspaceTests(unittest.TestCase):
                 "capability_bundle": READONLY_BUNDLE,
                 "services": READONLY_SERVICES,
                 "scopes": READONLY_SCOPES,
+                "connection_action": "add",
+                "target_connection_id": "gwo_connection123",
             },
         )
 
@@ -1258,6 +1892,8 @@ class GoogleWorkspaceTests(unittest.TestCase):
                     "capability_bundle": READONLY_BUNDLE,
                     "services": READONLY_SERVICES,
                     "scopes": READONLY_SCOPES,
+                    "connection_action": "add",
+                    "target_connection_id": "gwo_connection123",
                 },
             )
             directory = key_path.parent
@@ -1279,7 +1915,7 @@ class GoogleWorkspaceTests(unittest.TestCase):
         ):
             normalized = workspace._normalize_credentials(credential_envelope())
             workspace._atomic_save_credentials(normalized)
-            saved = json.loads(workspace.CREDENTIALS_PATH.read_text())
+            saved = json.loads(workspace.CREDENTIALS_PATH.read_text())["accounts"][0]
 
             self.assertEqual(saved["capability_bundle"], READONLY_BUNDLE)
             self.assertEqual(saved["services"], READONLY_SERVICES)
@@ -1329,6 +1965,8 @@ class GoogleWorkspaceTests(unittest.TestCase):
                     "capability_bundle": READONLY_BUNDLE,
                     "services": READONLY_SERVICES,
                     "scopes": READONLY_SCOPES,
+                    "connection_action": "add",
+                    "target_connection_id": "gwo_connection123",
                 },
             )
             workspace._write_active_handoff_marker(
@@ -1465,7 +2103,6 @@ class GoogleWorkspaceTests(unittest.TestCase):
         )
         handoff = self._worker_handoff(client=client)
         original_save = workspace._atomic_save_credentials
-        original_clear = workspace._clear_active_handoff
 
         def save(credentials: dict[str, object]) -> None:
             events.append("save")
@@ -1475,10 +2112,6 @@ class GoogleWorkspaceTests(unittest.TestCase):
             events.append("notice")
             notice_states.append(terminal_state)
             return {"sent": True, "ok": True}
-
-        def clear_active(current_handoff: workspace.GoogleWorkspaceWorkerHandoff) -> None:
-            events.append("clear")
-            original_clear(current_handoff)
 
         with (
             tempfile.TemporaryDirectory() as tmp,
@@ -1491,20 +2124,15 @@ class GoogleWorkspaceTests(unittest.TestCase):
             mock.patch.object(workspace, "_atomic_save_credentials", side_effect=save),
             mock.patch.object(
                 workspace,
-                "_clear_active_handoff",
-                side_effect=clear_active,
-            ),
-            mock.patch.object(
-                workspace,
                 "_send_google_workspace_notice",
                 side_effect=send_notice,
             ),
         ):
             self._activate_handoff()
             workspace._poll_and_install(handoff)
-            saved = json.loads(workspace.CREDENTIALS_PATH.read_text())
+            saved = json.loads(workspace.CREDENTIALS_PATH.read_text())["accounts"][0]
 
-        self.assertEqual(events, ["save", "claim", "clear", "notice"])
+        self.assertEqual(events, ["save", "claim", "notice"])
         self.assertEqual(notice_states, ["ready"])
         self.assertFalse(workspace.ACTIVE_HANDOFF_PATH.exists())
         self.assertEqual(saved["email"], "owner@example.com")
@@ -1595,6 +2223,342 @@ class GoogleWorkspaceTests(unittest.TestCase):
             self.assertTrue(workspace.CREDENTIALS_PATH.exists())
             self.assertTrue(workspace.ACTIVE_HANDOFF_PATH.exists())
             self.assertEqual(notices, [])
+            receipt_path = workspace._install_receipt_path(handoff.handoff_id)
+            self.assertTrue(receipt_path.exists())
+
+            resumed_client = PollingClient([])
+            with (
+                mock.patch.object(
+                    workspace,
+                    "build_platform_client",
+                    return_value=(resumed_client, "local_dev"),
+                ),
+                self._captured_notices() as resumed_notices,
+            ):
+                resumed = workspace._resume_retained_install_receipts()
+
+            self.assertEqual(resumed, 1)
+            self.assertFalse(receipt_path.exists())
+            self.assertFalse(workspace.ACTIVE_HANDOFF_PATH.exists())
+            self.assertEqual(
+                resumed_client.posts,
+                [
+                    (
+                        workspace.computer_api_path(
+                            "local_dev",
+                            f"{workspace.GOOGLE_WORKSPACE_API_SUFFIX}/{handoff.handoff_id}/claim",
+                        ),
+                        {"installed": True, "message": None},
+                    )
+                ],
+            )
+            self.assertEqual(resumed_notices, ["ready"])
+
+    def test_stale_claim_pending_receipt_cannot_reconnect_replaced_account(self) -> None:
+        client = PollingClient([])
+        handoff = self._worker_handoff(client=client)
+        with tempfile.TemporaryDirectory() as tmp, self._patched_state(Path(tmp)):
+            installed = workspace._normalize_credentials(credential_envelope())
+            workspace._atomic_save_credentials(installed)
+            receipt_path = workspace._write_install_receipt(
+                handoff=handoff,
+                credentials=installed,
+                phase="claim_pending",
+            )
+            replacement = workspace._normalize_credentials(credential_envelope())
+            replacement["refresh_token"] = "replacement-refresh-value"
+            replacement["connected_at"] = "2026-07-11T21:00:00+00:00"
+            workspace._atomic_save_credentials(replacement)
+
+            with mock.patch.object(
+                workspace,
+                "build_platform_client",
+                return_value=(client, "local_dev"),
+            ):
+                resumed = workspace._resume_retained_install_receipts()
+
+            self.assertEqual(resumed, 1)
+            self.assertFalse(receipt_path.exists())
+            self.assertEqual(client.posts[-1][1]["installed"], False)
+
+    def test_install_receipt_survives_allowed_token_refresh_rotation(self) -> None:
+        client = PollingClient([])
+        handoff = self._worker_handoff(client=client)
+        with tempfile.TemporaryDirectory() as tmp, self._patched_state(Path(tmp)):
+            installed = workspace._normalize_credentials(credential_envelope())
+            workspace._atomic_save_credentials(installed)
+            receipt_path = workspace._write_install_receipt(
+                handoff=handoff,
+                credentials=installed,
+                phase="claim_pending",
+            )
+            refreshed = dict(installed)
+            refreshed["access_token"] = "refreshed-access-value"
+            refreshed["refresh_token"] = "rotated-refresh-value"
+            refreshed["expires_at"] = "2030-01-01T01:00:00+00:00"
+            workspace._atomic_save_credentials(refreshed)
+
+            with mock.patch.object(
+                workspace,
+                "build_platform_client",
+                return_value=(client, "local_dev"),
+            ):
+                resumed = workspace._resume_retained_install_receipts()
+
+            self.assertEqual(resumed, 1)
+            self.assertFalse(receipt_path.exists())
+            self.assertEqual(client.posts[-1][1]["installed"], True)
+
+    def test_install_receipt_has_only_one_claim_and_notice_winner(self) -> None:
+        client = PollingClient([])
+        handoff = self._worker_handoff(client=client)
+        with tempfile.TemporaryDirectory() as tmp, self._patched_state(Path(tmp)):
+            installed = workspace._normalize_credentials(credential_envelope())
+            workspace._atomic_save_credentials(installed)
+            receipt_path = workspace._write_install_receipt(
+                handoff=handoff,
+                credentials=installed,
+                phase="claim_pending",
+            )
+
+            first = workspace._acknowledge_install_receipt(
+                path=receipt_path,
+                client=client,
+                platform_auth="local_dev",
+            )
+            second = workspace._acknowledge_install_receipt(
+                path=receipt_path,
+                client=client,
+                platform_auth="local_dev",
+            )
+
+            self.assertEqual(first, (True, "ready"))
+            self.assertEqual(second, (False, None))
+            self.assertEqual(len(client.posts), 1)
+
+    def test_install_receipt_rejects_misrouted_claim_acknowledgement(self) -> None:
+        class MisroutedClient(PollingClient):
+            def post_json(self, path: str, payload: dict[str, object]) -> dict[str, object]:
+                self.posts.append((path, payload))
+                return {"handoff_id": "gwo_other999", "status": "claimed"}
+
+        client = MisroutedClient([])
+        handoff = self._worker_handoff(client=client)
+        with tempfile.TemporaryDirectory() as tmp, self._patched_state(Path(tmp)):
+            installed = workspace._normalize_credentials(credential_envelope())
+            workspace._atomic_save_credentials(installed)
+            receipt_path = workspace._write_install_receipt(
+                handoff=handoff,
+                credentials=installed,
+                phase="claim_pending",
+            )
+
+            with self.assertRaisesRegex(
+                workspace.GoogleWorkspaceError,
+                "another Google handoff",
+            ):
+                workspace._acknowledge_install_receipt(
+                    path=receipt_path,
+                    client=client,
+                    platform_auth="local_dev",
+                )
+
+            self.assertTrue(receipt_path.exists())
+
+    def test_handoff_claim_response_distinguishes_install_and_terminal_ack(self) -> None:
+        class Client:
+            def __init__(self, status: str) -> None:
+                self.status = status
+
+            def post_json(self, _path: str, _payload: dict[str, object]) -> dict[str, object]:
+                return {"handoff_id": "gwo_test123", "status": self.status}
+
+        workspace._claim_handoff(
+            client=Client("failed"),
+            platform_auth="local_dev",
+            handoff_id="gwo_test123",
+            installed=False,
+            message="safe terminal",
+        )
+        with self.assertRaisesRegex(
+            workspace.GoogleWorkspaceError,
+            "did not acknowledge",
+        ):
+            workspace._claim_handoff(
+                client=Client("failed"),
+                platform_auth="local_dev",
+                handoff_id="gwo_test123",
+                installed=True,
+                message=None,
+            )
+
+    def test_new_connection_is_blocked_while_install_ack_is_unresolved(self) -> None:
+        handoff = self._worker_handoff(client=PollingClient([]))
+        with tempfile.TemporaryDirectory() as tmp, self._patched_state(Path(tmp)):
+            installed = workspace._normalize_credentials(credential_envelope())
+            workspace._atomic_save_credentials(installed)
+            receipt_path = workspace._write_install_receipt(
+                handoff=handoff,
+                credentials=installed,
+                phase="claim_pending",
+            )
+            with (
+                mock.patch.object(
+                    workspace,
+                    "_resume_retained_install_receipts",
+                    return_value=0,
+                ),
+                mock.patch.object(workspace, "build_platform_client") as build_client,
+            ):
+                result = json.loads(
+                    tools.google_workspace({"action": "connect"})
+                )
+
+            self.assertEqual(result["error"], "platform_sync_pending")
+            self.assertTrue(receipt_path.exists())
+            build_client.assert_not_called()
+
+    def test_start_rechecks_install_receipt_under_lifecycle_lock(self) -> None:
+        with (
+            tempfile.TemporaryDirectory() as tmp,
+            self._patched_state(Path(tmp)),
+            mock.patch.object(
+                workspace,
+                "_resume_retained_install_receipts",
+                return_value=0,
+            ),
+            mock.patch.object(
+                workspace,
+                "_has_unresolved_install_receipts",
+                side_effect=[False, True],
+            ) as pending,
+            mock.patch.object(workspace, "build_platform_client") as build_client,
+        ):
+            result = json.loads(tools.google_workspace({"action": "connect"}))
+
+        self.assertEqual(result["status"], "failed")
+        self.assertEqual(pending.call_count, 2)
+        build_client.assert_not_called()
+
+    def test_stale_receipt_is_removed_even_when_negative_ack_is_rejected(self) -> None:
+        class RejectingClient(PollingClient):
+            def post_json(self, _path: str, _payload: dict[str, object]) -> dict[str, object]:
+                raise RuntimeError("old assignment rejected")
+
+        client = RejectingClient([])
+        handoff = self._worker_handoff(client=client)
+        with tempfile.TemporaryDirectory() as tmp, self._patched_state(Path(tmp)):
+            installed = workspace._normalize_credentials(credential_envelope())
+            receipt_path = workspace._write_install_receipt(
+                handoff=handoff,
+                credentials=installed,
+                phase="claim_pending",
+            )
+            with mock.patch.object(
+                workspace,
+                "build_platform_client",
+                return_value=(client, "local_dev"),
+            ):
+                workspace._resume_retained_install_receipts()
+
+            self.assertFalse(receipt_path.exists())
+
+    def test_orphan_install_receipt_temp_does_not_block_new_lifecycle(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp, self._patched_state(Path(tmp)):
+            workspace._ensure_private_directory(workspace.INSTALL_RECEIPTS_DIR)
+            temporary = workspace.INSTALL_RECEIPTS_DIR / ".install-receipt-crash"
+            workspace._write_private_file(temporary, "partial")
+
+            self.assertFalse(workspace._has_unresolved_install_receipts())
+            self.assertTrue(temporary.exists())
+            self.assertEqual(workspace._resume_retained_install_receipts(), 0)
+            self.assertFalse(temporary.exists())
+
+    def test_install_receipt_symlink_directory_is_never_followed(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp, self._patched_state(Path(tmp)):
+            workspace.STATE_DIR.mkdir(parents=True)
+            outside = Path(tmp) / "outside-receipts"
+            outside.mkdir()
+            orphan = outside / ".install-receipt-do-not-delete"
+            orphan.write_text("outside", encoding="utf-8")
+            workspace.INSTALL_RECEIPTS_DIR.symlink_to(outside, target_is_directory=True)
+
+            self.assertEqual(workspace._resume_retained_install_receipts(), 0)
+            self.assertTrue(workspace._has_unresolved_install_receipts())
+            self.assertEqual(orphan.read_text(encoding="utf-8"), "outside")
+
+    def test_assignment_change_clears_stale_accounts_before_new_add(self) -> None:
+        class Client:
+            def __init__(self) -> None:
+                self.posts: list[tuple[str, dict[str, object]]] = []
+
+            def get_json(self, _path: str) -> dict[str, object]:
+                return {"tinyhat_assignment_binding": "replacement-binding-456"}
+
+            def post_json(self, path: str, payload: dict[str, object]) -> dict[str, object]:
+                self.posts.append((path, payload))
+                if path.endswith("/claim"):
+                    return {}
+                return start_response()
+
+        client = Client()
+        handoff = self._worker_handoff(client=PollingClient([]))
+        with (
+            tempfile.TemporaryDirectory() as tmp,
+            self._patched_state(Path(tmp)),
+            mock.patch.object(
+                workspace,
+                "build_platform_client",
+                return_value=(client, "local_dev"),
+            ),
+            mock.patch.object(workspace, "_generate_key_pair", return_value=("private", "public")),
+            mock.patch.object(workspace, "_start_worker_process"),
+            mock.patch.object(
+                workspace,
+                "_send_google_connect_button",
+                return_value={"sent": True, "ok": True},
+            ),
+        ):
+            stale = workspace._normalize_credentials(credential_envelope())
+            workspace._atomic_save_credentials(stale)
+            workspace._write_install_receipt(
+                handoff=handoff,
+                credentials=stale,
+                phase="claim_pending",
+            )
+
+            result = json.loads(tools.google_workspace({"action": "connect"}))
+
+            self.assertEqual(result["status"], "waiting_for_user")
+            self.assertFalse(workspace.CREDENTIALS_PATH.exists())
+            self.assertFalse(workspace._has_unresolved_install_receipts())
+            negative_claims = [
+                payload for path, payload in client.posts if path.endswith("/claim")
+            ]
+            self.assertEqual(negative_claims[-1]["installed"], False)
+
+    def test_plain_add_cannot_preserve_accounts_from_an_old_assignment(self) -> None:
+        client = PollingClient([], binding="replacement-binding-456")
+        with (
+            tempfile.TemporaryDirectory() as tmp,
+            self._patched_state(Path(tmp)),
+            mock.patch.object(
+                workspace,
+                "build_platform_client",
+                return_value=(client, "local_dev"),
+            ),
+            mock.patch.object(workspace, "_start_worker_process") as start_worker,
+        ):
+            workspace._atomic_save_credentials(
+                workspace._normalize_credentials(credential_envelope())
+            )
+
+            result = json.loads(tools.google_workspace({"action": "connect"}))
+
+            self.assertEqual(result["status"], "failed")
+            self.assertFalse(workspace.CREDENTIALS_PATH.exists())
+            self.assertEqual(client.posts, [])
+            start_worker.assert_not_called()
 
     def test_cancelled_gmail_send_upgrade_keeps_existing_readonly_credential(self) -> None:
         client = PollingClient([{"terminal_state": "cancelled"}])
@@ -1602,6 +2566,8 @@ class GoogleWorkspaceTests(unittest.TestCase):
             client=client,
             bundle=GMAIL_SEND_BUNDLE,
             scopes=GMAIL_SEND_SCOPES,
+            connection_action="replace",
+            target_connection_id="gwo_connection123",
         )
         with (
             tempfile.TemporaryDirectory() as tmp,
@@ -1613,11 +2579,38 @@ class GoogleWorkspaceTests(unittest.TestCase):
             )
             self._activate_handoff()
             workspace._poll_and_install(handoff)
-            saved = json.loads(workspace.CREDENTIALS_PATH.read_text())
+            saved = json.loads(workspace.CREDENTIALS_PATH.read_text())["accounts"][0]
 
         self.assertEqual(saved["capability_bundle"], READONLY_BUNDLE)
         self.assertEqual(saved["scopes"], READONLY_SCOPES)
         self.assertEqual(notices, ["cancelled"])
+
+    def test_platform_duplicate_terminal_uses_safe_duplicate_notice(self) -> None:
+        client = PollingClient(
+            [
+                {
+                    "terminal_state": "failed",
+                    "error_code": "account_already_connected",
+                }
+            ]
+        )
+        handoff = self._worker_handoff(client=client)
+        with (
+            tempfile.TemporaryDirectory() as tmp,
+            self._patched_state(Path(tmp)),
+            self._captured_notices() as notices,
+        ):
+            self._activate_handoff()
+            workspace._poll_and_install(handoff)
+
+        self.assertEqual(notices, ["duplicate_account"])
+        self.assertEqual(
+            client.posts[-1][1],
+            {
+                "installed": False,
+                "message": workspace.TERMINAL_HANDOFF_MESSAGES["duplicate_account"],
+            },
+        )
 
     def test_successful_gmail_send_upgrade_atomically_replaces_connection(self) -> None:
         client = PollingClient(
@@ -1632,6 +2625,8 @@ class GoogleWorkspaceTests(unittest.TestCase):
             client=client,
             bundle=GMAIL_SEND_BUNDLE,
             scopes=GMAIL_SEND_SCOPES,
+            connection_action="replace",
+            target_connection_id="gwo_connection123",
         )
         with (
             tempfile.TemporaryDirectory() as tmp,
@@ -1653,7 +2648,7 @@ class GoogleWorkspaceTests(unittest.TestCase):
             )
             self._activate_handoff()
             workspace._poll_and_install(handoff)
-            saved = json.loads(workspace.CREDENTIALS_PATH.read_text())
+            saved = json.loads(workspace.CREDENTIALS_PATH.read_text())["accounts"][0]
 
         self.assertEqual(saved["capability_bundle"], GMAIL_SEND_BUNDLE)
         self.assertEqual(saved["scopes"], GMAIL_SEND_SCOPES)
@@ -1668,6 +2663,8 @@ class GoogleWorkspaceTests(unittest.TestCase):
             client=client,
             bundle=GMAIL_SEND_CALENDAR_WRITE_BUNDLE,
             scopes=GMAIL_SEND_CALENDAR_WRITE_SCOPES,
+            connection_action="replace",
+            target_connection_id="gwo_connection123",
         )
         with (
             tempfile.TemporaryDirectory() as tmp,
@@ -1694,7 +2691,7 @@ class GoogleWorkspaceTests(unittest.TestCase):
             )
             self._activate_handoff()
             workspace._poll_and_install(handoff)
-            saved = json.loads(workspace.CREDENTIALS_PATH.read_text())
+            saved = json.loads(workspace.CREDENTIALS_PATH.read_text())["accounts"][0]
 
         self.assertEqual(
             saved["capability_bundle"],
@@ -1913,7 +2910,7 @@ class GoogleWorkspaceTests(unittest.TestCase):
                 handoff_id="gwo_bindingrace123",
                 owner_token="stale-owner-token",
             )
-            original_read = workspace._read_credentials
+            original_read = workspace._read_all_credentials
             read_count = 0
             locked_reread_call = 2
 
@@ -1929,7 +2926,11 @@ class GoogleWorkspaceTests(unittest.TestCase):
                 return original_read()
 
             with (
-                mock.patch.object(workspace, "_read_credentials", side_effect=racing_read),
+                mock.patch.object(
+                    workspace,
+                    "_read_all_credentials",
+                    side_effect=racing_read,
+                ),
                 mock.patch.object(
                     workspace,
                     "build_platform_client",
@@ -2202,6 +3203,43 @@ class GoogleWorkspaceTests(unittest.TestCase):
             ):
                 workspace._trusted_telegram_user_id()
 
+    def test_disconnect_rejects_platform_state_for_another_account(self) -> None:
+        created = disconnect_create_response()
+        created["connection_id"] = "gwo_personal456"
+        with self.assertRaisesRegex(workspace.GoogleWorkspaceError, "another Google connection"):
+            workspace._normalize_disconnect_intent_create(
+                created,
+                client=mock.Mock(),
+                platform_auth="local_dev",
+                connection_id="gwo_connection123",
+                account_email="owner@example.com",
+            )
+
+        with self.assertRaisesRegex(workspace.GoogleWorkspaceError, "another Google connection"):
+            workspace._normalize_disconnect_intent_response(
+                {
+                    "schema": "tinyhat_google_workspace_disconnect_intent_v1",
+                    "intent_id": "gwd_test123",
+                    "connection_id": "gwo_personal456",
+                    "status": "confirmed",
+                },
+                expected_intent_id="gwd_test123",
+                expected_connection_id="gwo_connection123",
+            )
+
+    def test_disconnect_create_accepts_unicode_account_email_without_type_error(self) -> None:
+        created = disconnect_create_response()
+        created["account_email"] = "JOSÉ@EXAMPLE.COM"
+        intent = workspace._normalize_disconnect_intent_create(
+            created,
+            client=mock.Mock(),
+            platform_auth="local_dev",
+            connection_id="gwo_connection123",
+            account_email="josé@example.com",
+        )
+
+        self.assertEqual(intent.connection_id, "gwo_connection123")
+
     def test_disconnect_creates_worker_before_activate_and_returns_no_intent_secret(
         self,
     ) -> None:
@@ -2241,7 +3279,15 @@ class GoogleWorkspaceTests(unittest.TestCase):
             create_payloads = [
                 payload for path, payload in client.posts if path.endswith("/disconnect-intents")
             ]
-            self.assertEqual(create_payloads, [{"telegram_user_id": 424242}])
+            self.assertEqual(
+                create_payloads,
+                [
+                    {
+                        "telegram_user_id": 424242,
+                        "connection_id": "gwo_connection123",
+                    }
+                ],
+            )
             self.assertNotIn("telegram-bot-secret", json.dumps(client.posts))
             serialized = json.dumps(result, sort_keys=True)
             self.assertNotIn("gwd_test123", serialized)
@@ -2419,9 +3465,9 @@ class GoogleWorkspaceTests(unittest.TestCase):
             self._activate_disconnect_intent(intent)
             real_delete = workspace._delete_credentials_locked
 
-            def delete_once() -> None:
+            def delete_once(*, account_id: str | None = None) -> None:
                 client.events.append("delete")
-                real_delete()
+                real_delete(account_id=account_id)
 
             with (
                 mock.patch.object(
@@ -2440,7 +3486,7 @@ class GoogleWorkspaceTests(unittest.TestCase):
                     state_path=state_path,
                 )
 
-            delete.assert_called_once_with()
+            delete.assert_called_once_with(account_id="gwo_connection123")
             self.assertEqual(receipt_seen_at_claim, [True])
             claim_payloads = [payload for path, payload in client.posts if path.endswith("/claim")]
             self.assertEqual(claim_payloads, [{"owner_token": intent.owner_token}])
@@ -2686,7 +3732,7 @@ class GoogleWorkspaceTests(unittest.TestCase):
 
             self.assertEqual(outcome, "disconnected")
             self.assertEqual(complete.call_count, 2)
-            delete.assert_called_once_with()
+            delete.assert_called_once_with(account_id="gwo_connection123")
             self.assertFalse(workspace.CREDENTIALS_PATH.exists())
             self.assertFalse(workspace.ACTIVE_DISCONNECT_PATH.exists())
 
@@ -2839,6 +3885,7 @@ class GoogleWorkspaceTests(unittest.TestCase):
                 platform_auth=current.platform_auth,
                 intent_id=current.intent_id,
                 owner_token=current.owner_token,
+                connection_id=current.connection_id,
                 credential_generation=current.credential_generation,
                 expires_at=(now + timedelta(seconds=1)).isoformat(),
                 poll_after_ms=current.poll_after_ms,
@@ -2874,6 +3921,7 @@ class GoogleWorkspaceTests(unittest.TestCase):
                 platform_auth=current.platform_auth,
                 intent_id=current.intent_id,
                 owner_token=current.owner_token,
+                connection_id=current.connection_id,
                 credential_generation=current.credential_generation,
                 expires_at=(now - timedelta(seconds=1)).isoformat(),
                 poll_after_ms=current.poll_after_ms,
@@ -3254,7 +4302,7 @@ class GoogleWorkspaceTests(unittest.TestCase):
                     state_path=state_path,
                 )
 
-            delete.assert_called_once_with()
+            delete.assert_called_once_with(account_id="gwo_connection123")
             complete.assert_called_once_with(
                 intent=mock.ANY,
                 outcome="disconnected",
@@ -3411,6 +4459,7 @@ class GoogleWorkspaceTests(unittest.TestCase):
                 platform_auth=current.platform_auth,
                 intent_id=current.intent_id,
                 owner_token=current.owner_token,
+                connection_id=current.connection_id,
                 credential_generation=current.credential_generation,
                 expires_at=(datetime.now(timezone.utc) - timedelta(seconds=1)).isoformat(),
                 poll_after_ms=current.poll_after_ms,
@@ -3447,6 +4496,7 @@ class GoogleWorkspaceTests(unittest.TestCase):
                 platform_auth=current.platform_auth,
                 intent_id=current.intent_id,
                 owner_token=current.owner_token,
+                connection_id=current.connection_id,
                 credential_generation=current.credential_generation,
                 expires_at=(datetime.now(timezone.utc) - timedelta(seconds=1)).isoformat(),
                 poll_after_ms=current.poll_after_ms,
@@ -3578,6 +4628,8 @@ class GoogleWorkspaceTests(unittest.TestCase):
                     "capability_bundle": READONLY_BUNDLE,
                     "services": READONLY_SERVICES,
                     "scopes": READONLY_SCOPES,
+                    "connection_action": "add",
+                    "target_connection_id": "gwo_connection123",
                 },
             )
             workspace._write_active_handoff_marker(
@@ -3592,6 +4644,76 @@ class GoogleWorkspaceTests(unittest.TestCase):
             self.assertFalse(key_path.parent.exists())
             self.assertFalse(workspace.ACTIVE_HANDOFF_PATH.exists())
             self.assertEqual(notices, ["cancelled"])
+
+    def test_detached_worker_preserves_install_receipt_across_claim_outage(self) -> None:
+        class FailingClaimClient(PollingClient):
+            def post_json(self, _path: str, _payload: dict[str, object]) -> dict[str, object]:
+                raise RuntimeError("platform claim unavailable")
+
+        failing_client = FailingClaimClient(
+            [{"terminal_state": "ready", "ciphertext_payload": {"ciphertext": "opaque"}}]
+        )
+        generation = "generation-value-that-is-long-enough-claim-outage"
+        with tempfile.TemporaryDirectory() as tmp, self._patched_state(Path(tmp)):
+            key_path = workspace._write_worker_state(
+                handoff_id="gwo_workerclaim123",
+                private_key_pem="private-key",
+                generation=generation,
+                handoff_metadata={
+                    "capability_bundle": READONLY_BUNDLE,
+                    "services": READONLY_SERVICES,
+                    "scopes": READONLY_SCOPES,
+                    "connection_action": "add",
+                    "target_connection_id": "gwo_connection123",
+                },
+            )
+            workspace._write_active_handoff_marker(
+                handoff_id="gwo_workerclaim123",
+                owner_token=workspace._handoff_owner_token(generation),
+            )
+            with (
+                mock.patch.object(
+                    google_workspace_worker,
+                    "build_platform_client",
+                    return_value=(failing_client, "local_dev"),
+                ),
+                mock.patch.object(
+                    workspace,
+                    "_decrypt_ciphertext",
+                    return_value=json.dumps(credential_envelope()),
+                ),
+                mock.patch.object(workspace.time, "sleep"),
+                self._captured_notices() as notices,
+                self.assertRaisesRegex(RuntimeError, "platform claim unavailable"),
+            ):
+                google_workspace_worker.run_worker(
+                    handoff_id="gwo_workerclaim123",
+                    key_path=key_path,
+                )
+
+            receipt_path = workspace._install_receipt_path("gwo_workerclaim123")
+            self.assertFalse(key_path.parent.exists())
+            self.assertFalse(workspace.ACTIVE_HANDOFF_PATH.exists())
+            self.assertTrue(workspace.CREDENTIALS_PATH.exists())
+            self.assertTrue(receipt_path.exists())
+            self.assertEqual(notices, [])
+
+            resumed_client = PollingClient([])
+            with (
+                mock.patch.object(
+                    workspace,
+                    "build_platform_client",
+                    return_value=(resumed_client, "local_dev"),
+                ),
+                self._captured_notices() as resumed_notices,
+            ):
+                resumed = workspace._resume_retained_install_receipts()
+
+            self.assertEqual(resumed, 1)
+            self.assertFalse(receipt_path.exists())
+            self.assertTrue(workspace.CREDENTIALS_PATH.exists())
+            self.assertEqual(resumed_client.posts[-1][1]["installed"], True)
+            self.assertEqual(resumed_notices, ["ready"])
 
     def test_worker_cleans_scratch_when_platform_client_setup_fails(self) -> None:
         generation = "generation-value-that-is-long-enough-123"
@@ -3612,6 +4734,8 @@ class GoogleWorkspaceTests(unittest.TestCase):
                     "capability_bundle": READONLY_BUNDLE,
                     "services": READONLY_SERVICES,
                     "scopes": READONLY_SCOPES,
+                    "connection_action": "add",
+                    "target_connection_id": "gwo_connection123",
                 },
             )
             workspace._write_active_handoff_marker(

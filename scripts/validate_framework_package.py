@@ -398,7 +398,7 @@ def validate_google_workspace_contract(root: Path) -> None:
         "parsed.path == TINYHAT_GOOGLE_PREPARE_PATH",
         "GOOGLE_LAUNCH_TICKET_RE.fullmatch(parsed.fragment)",
         "_send_google_connect_button(authorization_url)",
-        "_start_disconnect_intent()",
+        "_start_disconnect_intent(account_id=account_id)",
         "_start_disconnect_worker_process(",
         'f"{GOOGLE_WORKSPACE_DISCONNECT_INTENTS_SUFFIX}/{intent.intent_id}/activate"',
         'f"{GOOGLE_WORKSPACE_DISCONNECT_INTENTS_SUFFIX}/{intent.intent_id}/poll"',

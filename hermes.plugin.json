@@ -44,7 +44,7 @@
       "qualified_name": "tinyhat:tinyhat-google-workspace",
       "aliases": ["tinyhat-google-workspace"],
       "path": "skills/tinyhat-google-workspace/SKILL.md",
-      "purpose": "Connects, upgrades, or starts the two-stage local disconnect ceremony for a Google Workspace account."
+      "purpose": "Connects multiple Google accounts, sets exact named permissions, or starts an account-targeted local disconnect ceremony."
     },
     {
       "name": "tinyhat-google-workspace-app-manager",

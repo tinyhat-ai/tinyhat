@@ -27,9 +27,10 @@ belongs in the runtime.
 
 Google identity connection is a concrete example: the plugin supplies the
 agent tool, one-time Computer key, fixed named capability request, detached
-poll/decrypt worker, permission-protected credential custody, and user-facing
-skill. The platform owns the central Web OAuth client, callback, code exchange,
-identity and allowlist validation, and short-lived encrypted credential handoff.
+poll/decrypt worker, owner-only multi-account credential registry, account
+selection, and user-facing skill. The platform owns stable connection ids, the
+central Web OAuth client, callback, code exchange, identity and allowlist
+validation, and short-lived encrypted credential handoff.
 The default profile fixes `google_workspace_readonly_v1` to services `identity`,
 `gmail`, `calendar`, and `drive`, with basic identity plus the official Gmail,
 Calendar, and Drive read-only scopes. Neither the user nor agent can supply
@@ -38,13 +39,19 @@ upgrade adds only `gmail.send`; it does not add `gmail.compose`, and permission
 upgrade is not confirmation for an actual send. Separately confirmed
 `google_workspace_calendar_write_v1` and
 `google_workspace_gmail_send_calendar_write_v1` bundles add only
-`calendar.events` or the two write permissions together. Verified existing
-write permissions are retained across upgrades and reconnects. Consumer skills
-and scripts can evolve across the same plugin/platform boundary while the runtime
+`calendar.events` or the two write permissions together. The plugin can replace
+one selected account's local credential with any exact named profile, including
+the read-only profile so the Computer stops using earlier write scopes. This is
+not Google provider-side granular scope revocation and does not erase consent
+history. Adding write permission needs explicit elevation confirmation bound to
+the action, account, current credential generation, and exact target profile;
+removing it does not. Consumer skills and
+scripts can evolve across the same plugin/platform boundary while the runtime
 continues to supply only the existing Computer identity and plugin lifecycle.
 The auth plugin does not implement Gmail, Calendar, or Drive operations. A
-generic `tinyhat_google_workspace_app` bridge lends one current access token to
-an isolated, manifest-verified root-owned `gws` child. Hermes's bundled
+generic `tinyhat_google_workspace_app` bridge lends one selected account's
+current access token to an isolated, manifest-verified root-owned `gws` child.
+Its write confirmation binds both account id and argv. Hermes's bundled
 `google-workspace` skill owns operation guidance; its local-client OAuth setup
 and scripts are bypassed. The platform uses the central OAuth client secret for
 encrypted token refresh. No runtime change is involved.
@@ -62,10 +69,10 @@ native Telegram `web_app` message with exactly one **Revoke this Computer’s
 access** button, authenticates the first tap, and edits that same message to
 show final **Confirm revoke** and **Cancel** buttons. Confirm or cancel removes
 the buttons. Cancel preserves the local
-credential. Confirm lets only the matching worker delete the matching local
-credential, after which the platform marks that Computer disconnected. No URL,
-token, or intent identifier is exposed to the model, and no runtime callback or
-command is added.
+credential. Confirm lets only the matching worker delete the selected local
+account, after which the platform marks that connection disconnected. Other
+accounts on the Computer remain available. No URL, token, or intent identifier
+is exposed to the model, and no runtime callback or command is added.
 
 This is local-only revocation. The shared development Google OAuth project means
 the plugin does not call Google's provider-level token revocation endpoint;

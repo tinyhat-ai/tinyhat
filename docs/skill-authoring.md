@@ -105,13 +105,18 @@ to retry with names like `tinyhat:tinyhat-codex-auth`.
 It should be triggered before generic `.env` advice whenever a user asks
 to add or save an API key, token, password, or credential.
 
-`tinyhat-google-workspace` is the default way to connect an existing Google
-Workspace account. The default profile grants identity plus read-only Gmail,
-Calendar, and Drive access. Separately confirmed named `gmail_send`,
-`calendar_write`, and `gmail_send_calendar_write` profiles add Gmail sending,
-Calendar event changes, or both. Existing verified write permissions survive
-another upgrade or default reconnect; the plugin never accepts raw scopes. The
-Gmail profile does not add draft management. The skill calls
+`tinyhat-google-workspace` is the default way to connect existing Google
+accounts. Calling connect without `account_id` adds an account. Status exposes
+safe metadata and the stable opaque `account_id` used to select an account;
+skills must never guess between multiple accounts. The default profile grants
+identity plus read-only Gmail, Calendar, and Drive access. Exact named
+`workspace_readonly`, `gmail_send`, `calendar_write`, and
+`gmail_send_calendar_write` profiles let the user replace one local credential
+so the Computer adds or stops using write access without disconnecting. This is
+not provider-side granular scope revocation. Adding write permission requires
+explicit elevation confirmation plus an unchanged retry carrying the returned
+`confirmation_id`; removing it does not. The plugin never accepts raw scopes, and
+the Gmail profile does not add draft management. The skill calls
 `tinyhat_google_workspace` instead of
 asking for Google Cloud setup, OAuth values, SSH access, or a manual credential
 file. The plugin requests a fixed reviewed bundle and places the platform-authored
@@ -122,24 +127,26 @@ identity validation, and RSA-encrypted credential delivery; the Computer keeps
 the one-time private key and stores the decrypted credentials locally.
 The auth skill does not contain Gmail, Calendar, or Drive operations. It routes
 connected service requests through Hermes's bundled `google-workspace` skill for
-operation semantics and then through `tinyhat_google_workspace_app` for bounded
-execution. The native skill's OAuth setup and scripts are not used on Tinyhat
+operation semantics and then through `tinyhat_google_workspace_app` with the
+selected `account_id` for bounded execution. Write confirmation binds account
+and argv. The native skill's OAuth setup and scripts are not used on Tinyhat
 Computers. The generic bridge owns credential injection, process bounds, and
 redaction. Never send users into `gws auth`, Google Cloud setup, credentials
 JSON, or a second OAuth flow.
 
 For revoke or disconnect requests, the skill calls
-`tinyhat_google_workspace` with `{"action": "disconnect"}` once. The tool sends
+`tinyhat_google_workspace` with `action=disconnect` and the selected
+`account_id` once. The tool sends
 an initial native Telegram `web_app` message with exactly one **Revoke this
 Computer’s access** button, and the agent sends no duplicate reply, exposes no
 action URL, and never passes or claims `confirmed: true`. The first authenticated
 tap edits the same message to final **Confirm revoke** and **Cancel** buttons.
 Either result removes the buttons.
 Cancel preserves credentials. Confirm lets a generation-bound worker delete
-only the matching local credential before the platform marks that Computer
-disconnected. The skill must describe this as local-only Tinyhat revocation,
-not revocation of Google's shared provider grant; other Computers are
-unaffected.
+only the selected local account before the platform marks that connection
+disconnected. Other local accounts remain connected. The skill must describe
+this as local-only Tinyhat revocation, not revocation of Google's shared
+provider grant; other Computers are unaffected.
 
 If the managed gws app is absent, route to
 `tinyhat-google-workspace-app-manager`. Explain the pinned integration and ask
