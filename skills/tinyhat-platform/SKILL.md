@@ -1,6 +1,6 @@
 ---
 name: tinyhat-platform
-description: Explain how this Hermes agent should use Tinyhat platform capabilities. Use for Tinyhat-managed Computers, secrets, API keys, credentials, Codex auth, ChatGPT subscription auth, usage limits, settings, or questions about where the agent is running.
+description: Explain how this Hermes agent should use Tinyhat platform capabilities. Use for Tinyhat-managed Computer status, state, assignment, configuration revisions, installed packages, secrets, API keys, credentials, Codex auth, ChatGPT subscription auth, usage limits, settings, or questions about where the agent is running.
 ---
 
 # Tinyhat Platform
@@ -19,6 +19,7 @@ Use this as the default routing map:
 | Change a Google account's permissions, including making it read-only | Select its `account_id`, then call `tinyhat_google_workspace` with `action=set_permissions` and the exact named profile. For added write access, repeat the unchanged request after approval with the returned `confirmation_id`; removing write access needs no elevation confirmation. |
 | Revoke or disconnect one Google account from this Computer | Select its `account_id`, then call `tinyhat_google_workspace` with `action=disconnect`. The tool sends the native Telegram button and owns final confirmation; do not pass `confirmed`, expose a URL, or send a duplicate reply. |
 | Ask which Tinyhat plugin is running | Call `tinyhat_plugin_version`. |
+| Check this Computer's Tinyhat platform state, assignment, or installed packages | Call `tinyhat_get_platform_status`. |
 | Check that the Tinyhat plugin exists | Call `tinyhat_tell_joke` or `tinyhat_plugin_version`. |
 | Find a Tinyhat plugin skill after `skills_list`, `available_skills`, or unqualified `skill_view` fails | Call `tinyhat_skill_catalog`; retry with the returned `tinyhat:<skill-name>` qualified name. |
 | Check whether this Computer is behind `channels/lts` or `channels/latest` | Call `tinyhat_plugin_update` with `{"action": "status"}`. |

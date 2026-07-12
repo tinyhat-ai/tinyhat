@@ -1,6 +1,6 @@
 {
   "schema": "tinyhat.framework-adapter.v1",
-  "version": "0.21.2",
+  "version": "0.21.3",
   "framework": {
     "name": "hermes",
     "minimum": "0.0.0"
@@ -80,6 +80,11 @@
       "name": "tinyhat_plugin_version",
       "handler": "tools.plugin_version",
       "skill": "tinyhat-plugin-version"
+    },
+    {
+      "name": "tinyhat_get_platform_status",
+      "handler": "tools.get_platform_status",
+      "skill": "tinyhat-platform"
     },
     {
       "name": "tinyhat_tell_joke",

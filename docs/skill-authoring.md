@@ -172,5 +172,6 @@ before `{"action": "update", "confirmed": true, "restart_gateway": true}`.
 
 `tinyhat-platform` is the compact operating map for Tinyhat-managed
 Hermes agents. It explains secrets, Codex auth commands, usage limit
-commands, skill discovery, plugin updates, reporting guidance, and the
+commands, safe Computer platform status through `tinyhat_get_platform_status`,
+skill discovery, plugin updates, reporting guidance, and the
 runtime/plugin/platform boundary.

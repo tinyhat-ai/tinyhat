@@ -12,6 +12,7 @@ VERSION_SHAPE = re.compile(r"^\d+\.\d+\.\d+$")
 CODEX_SCREENSHOT_MIN_BYTES = 10_000
 REQUIRED_TOOLS = [
     "tinyhat_plugin_version",
+    "tinyhat_get_platform_status",
     "tinyhat_tell_joke",
     "tinyhat_skill_catalog",
     "tinyhat_private_secret_handoff",
@@ -296,8 +297,10 @@ def validate_docs(root: Path) -> None:
             "tinyhat_google_workspace_app",
             "tinyhat_google_workspace_app_manager",
             "tinyhat-plugin-update",
+            "tinyhat_get_platform_status",
         ),
         "skills/tinyhat-platform/SKILL.md": (
+            "tinyhat_get_platform_status",
             "tinyhat_skill_catalog",
             "tinyhat_plugin_update",
             "tinyhat_google_workspace_app",
@@ -306,6 +309,7 @@ def validate_docs(root: Path) -> None:
             "Reporting Tinyhat Bugs",
         ),
         "docs/capabilities.md": (
+            "tinyhat_get_platform_status",
             "tinyhat_skill_catalog",
             "tinyhat_plugin_update",
             "tinyhat_google_workspace",

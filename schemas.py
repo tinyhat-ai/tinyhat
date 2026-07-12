@@ -7,6 +7,18 @@ TINYHAT_PLUGIN_VERSION_SCHEMA = {
     "additionalProperties": False,
 }
 
+TINYHAT_GET_PLATFORM_STATUS_SCHEMA = {
+    "type": "object",
+    "description": (
+        "Reads safe, non-secret Tinyhat platform context for this authenticated "
+        "Computer, including its state, assignment, configuration revisions, and "
+        "installed package inventory. It never returns tokens or credentials."
+    ),
+    "properties": {},
+    "required": [],
+    "additionalProperties": False,
+}
+
 TINYHAT_TELL_JOKE_SCHEMA = {
     "type": "object",
     "properties": {},

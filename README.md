@@ -31,7 +31,7 @@ auth flow that is installed on each Hermes Computer.
 | `__init__.py` | Hermes registration entrypoint. |
 | `hermes.plugin.json` | Tinyhat metadata for the Hermes adapter, skill, command, and release channels. |
 | `context.py` | Small Hermes `pre_llm_call` context hook for Tinyhat-sensitive turns. |
-| `tools.py` / `schemas.py` | Tinyhat tools: plugin version, joke proof, skill catalog, private secret handoff, Google identity connection, Codex auth setup/status helpers, and plugin update helper. |
+| `tools.py` / `schemas.py` | Tinyhat tools: plugin version, safe platform status, joke proof, skill catalog, private secret handoff, Google identity connection, Codex auth setup/status helpers, and plugin update helper. |
 | `google_workspace.py` / `google_workspace_worker.py` | Platform-authored Google OAuth handoff, multi-account local custody, exact permission profiles, assignment-safe status, and targeted disconnect. |
 | `google_workspace_app.py` | Account-selected credential bridge to the manifest-verified, root-owned managed `gws` app. |
 | `google_workspace_app_manager.py` | Confirmed install/status/uninstall for pinned official `gws` Linux artifacts. |
@@ -90,6 +90,11 @@ whole installation path before adding real platform capabilities.
 Tinyhat plugin version is running, the agent can call
 `tinyhat_plugin_version`. The answer comes from the plugin code loaded by
 Hermes, not from admin metadata or a GitHub branch name.
+
+`tinyhat_get_platform_status` reads the existing Computer-authenticated
+platform status endpoint. It returns only safe Computer state, assignment,
+configuration revision, and package inventory metadata; it never returns
+tokens, credentials, or private platform URLs.
 
 `tinyhat-skill-catalog` is the discovery repair path. When `skills_list`,
 `available_skills`, or an unqualified `skill_view(name="tinyhat-codex-auth")`

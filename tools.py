@@ -14,6 +14,7 @@ from .google_workspace_app import google_workspace_app as handle_google_workspac
 from .google_workspace_app_manager import (
     google_workspace_app_manager as handle_google_workspace_app_manager,
 )
+from .platform import PlatformError, build_platform_client, computer_api_path
 from .secret_handoff import start_private_secret_handoff
 from .tool_errors import tool_error_json
 
@@ -61,6 +62,23 @@ def plugin_version(args: dict[str, Any] | None = None, **_: Any) -> str:
     """Hermes tool handler for reporting the loaded Tinyhat plugin version."""
     _ = args
     return json.dumps(plugin_version_payload(), sort_keys=True)
+
+
+def get_platform_status(args: dict[str, Any] | None = None, **_: Any) -> str:
+    """Read safe platform context for this attested Tinyhat Computer."""
+    _ = args
+    try:
+        client, platform_auth = build_platform_client()
+        payload = client.get_json(
+            computer_api_path(platform_auth, "platform-status"),
+        )
+    except PlatformError as exc:
+        return tool_error_json(
+            tool="tinyhat_get_platform_status",
+            error_name="platform_status_unavailable",
+            message=str(exc),
+        )
+    return json.dumps(payload, sort_keys=True)
 
 
 def skill_catalog_payload() -> dict[str, Any]:
