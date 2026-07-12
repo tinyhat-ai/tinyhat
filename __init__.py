@@ -53,6 +53,12 @@ def register(ctx: Any) -> None:
         handler=tools.plugin_version,
     )
     ctx.register_tool(
+        name="tinyhat_get_platform_status",
+        toolset="tinyhat",
+        schema=schemas.TINYHAT_GET_PLATFORM_STATUS_SCHEMA,
+        handler=tools.get_platform_status,
+    )
+    ctx.register_tool(
         name="tinyhat_tell_joke",
         toolset="tinyhat",
         schema=schemas.TINYHAT_TELL_JOKE_SCHEMA,

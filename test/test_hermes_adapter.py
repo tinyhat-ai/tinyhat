@@ -64,6 +64,7 @@ class HermesAdapterTests(unittest.TestCase):
         tinyhat.register(ctx)
 
         self.assertIn("tinyhat_plugin_version", ctx.tools)
+        self.assertIn("tinyhat_get_platform_status", ctx.tools)
         self.assertIn("tinyhat_tell_joke", ctx.tools)
         self.assertIn("tinyhat_skill_catalog", ctx.tools)
         self.assertIn("tinyhat_private_secret_handoff", ctx.tools)
@@ -104,6 +105,9 @@ class HermesAdapterTests(unittest.TestCase):
     def test_registered_tool_schemas_are_agent_actionable(self) -> None:
         self.assertEqual(schemas.TINYHAT_PLUGIN_VERSION_SCHEMA["properties"], {})
         self.assertEqual(schemas.TINYHAT_PLUGIN_VERSION_SCHEMA["required"], [])
+        self.assertEqual(schemas.TINYHAT_GET_PLATFORM_STATUS_SCHEMA["properties"], {})
+        self.assertEqual(schemas.TINYHAT_GET_PLATFORM_STATUS_SCHEMA["required"], [])
+        self.assertFalse(schemas.TINYHAT_GET_PLATFORM_STATUS_SCHEMA["additionalProperties"])
         self.assertEqual(schemas.TINYHAT_TELL_JOKE_SCHEMA["properties"], {})
         self.assertEqual(schemas.TINYHAT_TELL_JOKE_SCHEMA["required"], [])
         self.assertEqual(schemas.TINYHAT_SKILL_CATALOG_SCHEMA["properties"], {})
@@ -142,14 +146,56 @@ class HermesAdapterTests(unittest.TestCase):
 
         self.assertEqual(payload["schema"], "tinyhat_plugin_version_v1")
         self.assertEqual(payload["name"], "tinyhat")
-        self.assertEqual(payload["version"], "0.21.2")
+        self.assertEqual(payload["version"], "0.21.3")
+
+    def test_platform_status_uses_attested_computer_endpoint(self) -> None:
+        original_build = tools.build_platform_client
+        paths: list[str] = []
+
+        class FakePlatformClient:
+            def get_json(self, path: str) -> dict[str, object]:
+                paths.append(path)
+                return {
+                    "computer_id": 5359,
+                    "state": "active",
+                    "assigned": True,
+                    "package_inventory": {"plugin": {"version": "0.21.3"}},
+                }
+
+        try:
+            tools.build_platform_client = lambda: (FakePlatformClient(), "gcloud")
+            payload = json.loads(tools.get_platform_status(task_id="smoke-task"))
+        finally:
+            tools.build_platform_client = original_build
+
+        self.assertEqual(paths, ["/hapi/v1/computers/me/platform-status"])
+        self.assertEqual(payload["computer_id"], 5359)
+        self.assertEqual(payload["state"], "active")
+        self.assertTrue(payload["assigned"])
+        self.assertEqual(payload["package_inventory"]["plugin"]["version"], "0.21.3")
+
+    def test_platform_status_returns_structured_platform_error(self) -> None:
+        original_build = tools.build_platform_client
+
+        def fail_build():
+            raise tools.PlatformError("TINYHAT_PLATFORM_URL is not configured")
+
+        try:
+            tools.build_platform_client = fail_build
+            payload = json.loads(tools.get_platform_status())
+        finally:
+            tools.build_platform_client = original_build
+
+        self.assertEqual(payload["schema"], "tinyhat_tool_error_v1")
+        self.assertEqual(payload["tool"], "tinyhat_get_platform_status")
+        self.assertEqual(payload["error"], "platform_status_unavailable")
 
     def test_skill_catalog_lists_qualified_names_and_aliases(self) -> None:
         payload = json.loads(tools.skill_catalog())
 
         self.assertEqual(payload["schema"], "tinyhat_skill_catalog_v1")
         self.assertEqual(payload["plugin"]["name"], "tinyhat")
-        self.assertEqual(payload["plugin"]["version"], "0.21.2")
+        self.assertEqual(payload["plugin"]["version"], "0.21.3")
         by_name = {skill["name"]: skill for skill in payload["skills"]}
         self.assertEqual(
             by_name["tinyhat-codex-auth"]["qualified_name"],
