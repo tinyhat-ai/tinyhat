@@ -118,8 +118,13 @@ GOOGLE_EXACT_SCOPE_SERVICES = {
     GOOGLE_CONTACTS_FEEDS_SCOPE: "people",
 }
 GOOGLE_EXACT_SCOPE_LABELS = {
-    GOOGLE_CALENDAR_FEEDS_SCOPE: "Google Calendar feed access",
-    GOOGLE_CONTACTS_FEEDS_SCOPE: "Google Contacts feed access",
+    GOOGLE_MAIL_SCOPE: "Full Gmail access including permanent deletion",
+    GOOGLE_CALENDAR_FEEDS_SCOPE: (
+        "Full Calendar read/write access including sharing and permanent deletion"
+    ),
+    GOOGLE_CONTACTS_FEEDS_SCOPE: (
+        "Full Contacts read/write access including permanent deletion"
+    ),
 }
 GOOGLE_SCOPE_ALIASES = {
     f"{GOOGLE_SCOPE_PREFIX}userinfo.email": "email",
@@ -695,7 +700,7 @@ def _custom_profile(
         else "the requested Google permissions"
     )
     if exact_scope_labels:
-        access_label = f"{access_label}, including {' and '.join(exact_scope_labels)}"
+        access_label = f"{access_label}: {'; '.join(exact_scope_labels)}"
     return GoogleWorkspaceProfile(
         name=GOOGLE_WORKSPACE_PROFILE_CUSTOM,
         capability_bundle=GOOGLE_CUSTOM_CAPABILITY_BUNDLE,

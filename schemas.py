@@ -122,8 +122,12 @@ TINYHAT_GOOGLE_WORKSPACE_SCHEMA = {
                 "and profile, canonicalizes the set, and accepts Google-owned scopes "
                 "without a product profile ceiling. The exact official legacy scopes "
                 "https://www.google.com/calendar/feeds and "
-                "https://www.google.com/m8/feeds are also supported for Google "
-                "Calendar and Contacts feed access; other google.com URLs are not. "
+                "https://www.google.com/m8/feeds are also supported. They grant full "
+                "Calendar read/write access including sharing and permanent deletion, "
+                "and full Contacts read/write access including permanent deletion, "
+                "respectively. The separate https://mail.google.com/ scope grants full "
+                "Gmail access including permanent deletion. No other "
+                "https://www.google.com/... legacy scope URL is accepted. "
                 "Requires reason and cannot be combined with profile."
             ),
         },

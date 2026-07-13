@@ -45,11 +45,15 @@ tokens.
   never both.
 - Two official legacy Google user scopes are exact exceptions to the normal
   `https://www.googleapis.com/auth/` shape:
-  `https://www.google.com/calendar/feeds` means **Google Calendar feed access**,
-  and `https://www.google.com/m8/feeds` means **Google Contacts feed access**.
+  `https://www.google.com/calendar/feeds` means **full Calendar read/write
+  access including sharing and permanent deletion**, and
+  `https://www.google.com/m8/feeds` means **full Contacts read/write access
+  including permanent deletion**.
   Request them only when the operation or Apps Script API genuinely requires
-  that exact legacy scope. Do not accept or construct any other `google.com`
-  scope URL.
+  that broad, potentially destructive permission. The separate
+  `https://mail.google.com/` scope means **full Gmail access including permanent
+  deletion**. Do not accept or construct any other
+  `https://www.google.com/...` legacy scope URL.
 - `connect` with an explicit `account_id` is additive: it combines the selected
   account's current scopes with the requested profile or custom scopes.
   `set_permissions` is exact replacement: it installs only the selected profile

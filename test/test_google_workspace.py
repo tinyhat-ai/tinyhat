@@ -93,6 +93,13 @@ LEGACY_FEED_SCOPES = [
     "https://www.google.com/m8/feeds",
 ]
 LEGACY_FEED_SERVICES = ["identity", "calendar", "people"]
+GMAIL_FULL_DISCLOSURE = "Full Gmail access including permanent deletion"
+CALENDAR_FEEDS_DISCLOSURE = (
+    "Full Calendar read/write access including sharing and permanent deletion"
+)
+CONTACTS_FEEDS_DISCLOSURE = (
+    "Full Contacts read/write access including permanent deletion"
+)
 PLATFORM_BASE_URL = "https://api.example.test"
 PREPARE_PATH = "/hapi/v1/public/tinyhat/google-workspace/oauth/prepare/v1"
 
@@ -455,6 +462,16 @@ class GoogleWorkspaceTests(unittest.TestCase):
                 for fragment in disclosure_fragments:
                     self.assertIn(fragment, surface)
 
+        custom_scope_description = schema["properties"]["scopes"]["description"]
+        normalized_scope_description = custom_scope_description.lower()
+        self.assertIn(CALENDAR_FEEDS_DISCLOSURE.lower(), normalized_scope_description)
+        self.assertIn(CONTACTS_FEEDS_DISCLOSURE.lower(), normalized_scope_description)
+        self.assertIn(GMAIL_FULL_DISCLOSURE.lower(), normalized_scope_description)
+        self.assertIn(
+            "No other https://www.google.com/... legacy scope URL is accepted",
+            custom_scope_description,
+        )
+
     def test_set_permissions_downgrades_one_account_to_exact_readonly_profile(self) -> None:
         class Client:
             def __init__(self) -> None:
@@ -700,8 +717,16 @@ class GoogleWorkspaceTests(unittest.TestCase):
 
         self.assertEqual(list(requested.scopes), LEGACY_FEED_SCOPES)
         self.assertEqual(list(requested.services), LEGACY_FEED_SERVICES)
-        self.assertIn("Google Calendar feed access", requested.access_label)
-        self.assertIn("Google Contacts feed access", requested.access_label)
+        self.assertEqual(
+            workspace.GOOGLE_EXACT_SCOPE_LABELS[workspace.GOOGLE_CALENDAR_FEEDS_SCOPE],
+            CALENDAR_FEEDS_DISCLOSURE,
+        )
+        self.assertEqual(
+            workspace.GOOGLE_EXACT_SCOPE_LABELS[workspace.GOOGLE_CONTACTS_FEEDS_SCOPE],
+            CONTACTS_FEEDS_DISCLOSURE,
+        )
+        self.assertIn(CALENDAR_FEEDS_DISCLOSURE, requested.access_label)
+        self.assertIn(CONTACTS_FEEDS_DISCLOSURE, requested.access_label)
 
         for scope in (
             "https://www.google.com/calendar/feeds/",
@@ -767,6 +792,8 @@ class GoogleWorkspaceTests(unittest.TestCase):
         self.assertEqual(request["requested_services"], LEGACY_FEED_SERVICES)
         self.assertEqual(result["scopes"], LEGACY_FEED_SCOPES)
         self.assertEqual(result["services"], LEGACY_FEED_SERVICES)
+        self.assertIn(CALENDAR_FEEDS_DISCLOSURE, result["message"])
+        self.assertIn(CONTACTS_FEEDS_DISCLOSURE, result["message"])
         self.assertEqual(
             start_worker.call_args.kwargs["handoff_metadata"]["scopes"],
             LEGACY_FEED_SCOPES,
@@ -1656,6 +1683,10 @@ class GoogleWorkspaceTests(unittest.TestCase):
             list(start.call_args.kwargs["profile"].scopes),
             ["openid", "email", "profile", "https://mail.google.com/"],
         )
+        self.assertIn(
+            GMAIL_FULL_DISCLOSURE,
+            start.call_args.kwargs["profile"].access_label,
+        )
         self.assertEqual(missing_reason["error"], "invalid_parameter")
         self.assertEqual(unknown["error"], "invalid_parameter")
 
@@ -1933,6 +1964,40 @@ class GoogleWorkspaceTests(unittest.TestCase):
             sends[0]["reply_markup"],
             {"inline_keyboard": [[{"text": "Connect Google", "url": authorization_url}]]},
         )
+        self.assertNotIn(authorization_url, str(sends[0]["text"]))
+
+    def test_connect_button_discloses_legacy_scope_power_before_consent(self) -> None:
+        sends: list[dict[str, object]] = []
+        authorization_url = prepare_authorization_url()
+        profile = workspace._requested_profile(
+            None,
+            scopes=[
+                workspace.GOOGLE_CALENDAR_FEEDS_SCOPE,
+                workspace.GOOGLE_CONTACTS_FEEDS_SCOPE,
+            ],
+            reason="synchronize legacy Calendar and Contacts data",
+        )
+        with (
+            mock.patch.object(
+                tools,
+                "_telegram_credentials",
+                return_value=("telegram-token", "chat-123"),
+            ),
+            mock.patch.object(
+                tools,
+                "_telegram_send_message",
+                side_effect=lambda **kwargs: sends.append(kwargs) or {"ok": True},
+            ),
+        ):
+            result = workspace._send_google_connect_button(
+                authorization_url,
+                profile=profile,
+            )
+
+        self.assertEqual(result, {"sent": True, "ok": True})
+        self.assertEqual(len(sends), 1)
+        self.assertIn(CALENDAR_FEEDS_DISCLOSURE, str(sends[0]["text"]))
+        self.assertIn(CONTACTS_FEEDS_DISCLOSURE, str(sends[0]["text"]))
         self.assertNotIn(authorization_url, str(sends[0]["text"]))
 
     def test_permission_change_button_is_distinct_from_first_connect(self) -> None:

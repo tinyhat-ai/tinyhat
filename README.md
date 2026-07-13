@@ -136,12 +136,16 @@ short user-facing reason. The plugin adds identity scopes, canonicalizes and
 bounds the request, derives its service metadata, and sends the exact set to the
 platform for validation. It also exact-allows Google's official legacy Calendar
 feed (`https://www.google.com/calendar/feeds`) and Contacts feed
-(`https://www.google.com/m8/feeds`) scopes, mapped to Calendar and People; no
-other `google.com` scope URL is accepted. The platform returns its Google
-sign-in URL to the plugin, which places it only inside a native Telegram inline
-button labeled **Connect Google**. The tool never returns a plain authorization
-link. The user supplies only their existing Google account; they never provide a
-Google Cloud project, OAuth client, or secret.
+(`https://www.google.com/m8/feeds`) scopes. They grant full Calendar read/write
+access including sharing and permanent deletion, and full Contacts read/write
+access including permanent deletion, respectively. The separate
+`https://mail.google.com/` scope grants full Gmail access including permanent
+deletion. No other `https://www.google.com/...` legacy scope URL is accepted.
+The platform returns its Google sign-in URL to the plugin, which places it only
+inside a native Telegram inline button labeled **Connect Google**. The tool
+never returns a plain authorization link. The user supplies only their existing
+Google account; they never provide a Google Cloud project, OAuth client, or
+secret.
 
 Google posts the code to Tinyhat's fixed HTTPS callback. The platform validates
 state, exchanges the code through its central Web OAuth client, verifies the

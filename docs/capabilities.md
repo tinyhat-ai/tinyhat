@@ -77,9 +77,12 @@ authored from its central Web OAuth client. Common families include Gmail,
 Calendar, Drive, Docs, Sheets, Slides, People/Contacts, Tasks, Chat, Forms,
 Meet, Classroom, Keep, Apps Script, Cloud Search, and Workspace Admin APIs.
 Google's official legacy `https://www.google.com/calendar/feeds` and
-`https://www.google.com/m8/feeds` scopes are exact exceptions for Calendar feed
-and Contacts feed access. They map to `calendar` and `people`; the plugin does
-not accept arbitrary `google.com` scope URLs.
+`https://www.google.com/m8/feeds` scopes are exact exceptions. They grant full
+Calendar read/write access including sharing and permanent deletion, and full
+Contacts read/write access including permanent deletion, respectively. They map
+to `calendar` and `people`. The separate `https://mail.google.com/` scope grants
+full Gmail access including permanent deletion. The plugin does not accept any
+other `https://www.google.com/...` legacy scope URL.
 
 `{"action": "status"}` returns safe metadata for all connected accounts. Each
 entry includes the platform's stable opaque connection id as `account_id`; the

@@ -121,9 +121,13 @@ scopes, never both. Connect with an account id is additive, while
 disconnecting. This is not provider-side granular scope revocation. Google
 Calendar/Contacts integrations may also request the exact official legacy
 `https://www.google.com/calendar/feeds` or `https://www.google.com/m8/feeds`
-scope; no other `google.com` scope URL is accepted. Google
-consent is the permission decision; do not add a plugin elevation confirmation
-or pass `confirmed` / `confirmation_id` to permission changes. The skill calls
+scope. They grant full Calendar read/write access including sharing and
+permanent deletion, or full Contacts read/write access including permanent
+deletion, respectively. The separate `https://mail.google.com/` scope grants
+full Gmail access including permanent deletion. No other
+`https://www.google.com/...` legacy scope URL is accepted. Google consent is the
+permission decision; do not add a plugin elevation confirmation or pass
+`confirmed` / `confirmation_id` to permission changes. The skill calls
 `tinyhat_google_workspace` instead of
 asking for Google Cloud setup, OAuth values, SSH access, or a manual credential
 file. The plugin places the platform-authored

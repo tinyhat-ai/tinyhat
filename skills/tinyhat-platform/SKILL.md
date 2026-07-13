@@ -82,9 +82,11 @@ People/Contacts, Tasks, Chat, Forms, Meet, Classroom, Keep, Apps Script, Cloud
 Search, Workspace Admin, and other Google services. Tinyhat adds basic identity
 scopes and does not impose a product allowlist on Google-owned scopes.
 The exact official legacy scopes `https://www.google.com/calendar/feeds` and
-`https://www.google.com/m8/feeds` remain available as Google Calendar feed and
-Google Contacts feed access respectively; no other `google.com` scope URL is
-accepted.
+`https://www.google.com/m8/feeds` remain available as full Calendar read/write
+access including sharing and permanent deletion, and full Contacts read/write
+access including permanent deletion, respectively. The separate
+`https://mail.google.com/` scope grants full Gmail access including permanent
+deletion. No other `https://www.google.com/...` legacy scope URL is accepted.
 
 `connect` with `account_id` adds the requested scopes to that account's current
 set. `set_permissions` replaces them exactly, so use it to narrow access. Use

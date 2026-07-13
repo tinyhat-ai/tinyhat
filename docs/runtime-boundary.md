@@ -40,10 +40,14 @@ permanent deletion. For other Workspace capabilities, the
 agent may request bounded canonical Google-owned user-OAuth scopes with a short
 reason. The plugin adds identity, canonicalizes the set, derives its services,
 and sends exact metadata for platform validation. Two official legacy scopes
-are exact exceptions: `https://www.google.com/calendar/feeds` maps to Calendar
-feed access and `https://www.google.com/m8/feeds` maps to Contacts/People feed
-access. Other `google.com` scope URLs remain invalid. Legacy fixed profiles remain
-readable. `connect` with one account id unions current and requested scopes;
+are exact exceptions: `https://www.google.com/calendar/feeds` grants full
+Calendar read/write access including sharing and permanent deletion, while
+`https://www.google.com/m8/feeds` grants full Contacts read/write access including
+permanent deletion. They map to `calendar` and `people`. The separate
+`https://mail.google.com/` scope grants full Gmail access including permanent
+deletion; other `https://www.google.com/...` legacy scope URLs remain invalid.
+Legacy fixed profiles remain readable. `connect` with one account id unions
+current and requested scopes;
 `set_permissions` replaces one selected account's local credential with the
 exact profile or custom set. A narrower replacement stops the Computer from
 using removed scopes, but is not Google provider-side granular revocation and

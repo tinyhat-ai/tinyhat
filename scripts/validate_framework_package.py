@@ -381,6 +381,31 @@ def validate_docs(root: Path) -> None:
         for phrase in phrases:
             require(phrase in text, f"{rel} missing phrase: {phrase}")
 
+    legacy_scope_disclosure_files = (
+        "README.md",
+        "schemas.py",
+        "skills/tinyhat-google-workspace/SKILL.md",
+        "skills/tinyhat-platform/SKILL.md",
+        "docs/capabilities.md",
+        "docs/runtime-boundary.md",
+        "docs/skill-authoring.md",
+    )
+    legacy_scope_disclosures = (
+        "full calendar read/write access including sharing and permanent deletion",
+        "full contacts read/write access including permanent deletion",
+        "https://mail.google.com/",
+        "full gmail access including permanent deletion",
+        "https://www.google.com/...",
+    )
+    for rel in legacy_scope_disclosure_files:
+        raw_text = (root / rel).read_text(encoding="utf-8").replace('"', "")
+        normalized = " ".join(raw_text.split()).lower()
+        for disclosure in legacy_scope_disclosures:
+            require(
+                disclosure in normalized,
+                f"{rel} missing legacy Google scope disclosure: {disclosure}",
+            )
+
 
 def validate_google_workspace_contract(root: Path) -> None:
     text = (root / "google_workspace.py").read_text(encoding="utf-8")
@@ -407,8 +432,14 @@ def validate_google_workspace_contract(root: Path) -> None:
         'GOOGLE_CONTACTS_FEEDS_SCOPE = "https://www.google.com/m8/feeds"',
         "GOOGLE_EXACT_SCOPE_SERVICES",
         "GOOGLE_EXACT_SCOPE_LABELS",
+        '"Full Gmail access including permanent deletion"',
+        '"Full Calendar read/write access including sharing and permanent deletion"',
+        '"Full Contacts read/write access including permanent deletion"',
         "GOOGLE_SCOPE_MAX_COUNT = 32",
         "GOOGLE_SCOPE_TOTAL_MAX_LENGTH = 4096",
+        "AUTHORIZATION_URL_MAX_LENGTH = 32 * 1024",
+        "GOOGLE_LAUNCH_TICKET_MAX_LENGTH = 32 * 1024",
+        "len(parsed.fragment) <= GOOGLE_LAUNCH_TICKET_MAX_LENGTH",
         '"button_sent": True',
         'platform_base_url=getattr(client, "base_url", None)',
         "parsed.hostname is not None",
