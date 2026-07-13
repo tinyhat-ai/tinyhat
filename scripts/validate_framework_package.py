@@ -473,12 +473,20 @@ def validate_google_workspace_contract(root: Path) -> None:
         "_HttpsOnlyRedirectHandler",
         "_transactional_install",
         "managed_app_lock",
-        "_sealed_executable_copy",
+        "_sha256_open_file",
+        'proc_path = f"/proc/self/fd/{source_fd}"',
         "_recover_interrupted_install",
         "partially_uninstalled",
     ):
         require(phrase in manager_text, f"google_workspace_app_manager.py missing: {phrase}")
-    for phrase in ("subprocess", "shell=True", "npm install", "curl "):
+    for phrase in (
+        "subprocess",
+        "shell=True",
+        "npm install",
+        "curl ",
+        "memfd_create",
+        "F_ADD_SEALS",
+    ):
         require(
             phrase not in manager_text,
             f"google_workspace_app_manager.py retained forbidden contract: {phrase}",

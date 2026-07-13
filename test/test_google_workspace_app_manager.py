@@ -7,6 +7,7 @@ import importlib.util
 import io
 import json
 import os
+import subprocess
 import sys
 import tarfile
 import tempfile
@@ -62,8 +63,7 @@ def archive_with(entries: list[tuple[str, bytes, str]]) -> bytes:
 
 class GoogleWorkspaceAppManagerTests(unittest.TestCase):
     @contextmanager
-    def configured_manager(self):
-        binary = b"fake-pinned-gws"
+    def configured_manager(self, *, binary: bytes = b"fake-pinned-gws"):
         archive = archive_with([("./gws", binary, "file")])
         official = b"official-calendar-skill"
         shared = b"tinyhat-shared-skill"
@@ -450,22 +450,64 @@ class GoogleWorkspaceAppManagerTests(unittest.TestCase):
             self.assertFalse(manager.MANIFEST_PATH.exists())
 
     @unittest.skipUnless(
-        hasattr(os, "memfd_create") and hasattr(manager.fcntl, "F_ADD_SEALS"),
-        "sealed memfd requires Linux",
+        sys.platform.startswith("linux") and Path("/proc/self/fd").is_dir(),
+        "verified fd execution requires Linux procfs",
     )
-    def test_verified_copy_is_sealed_against_post_hash_writes(self) -> None:
-        content = b"known executable bytes"
-        with tempfile.TemporaryFile() as source:
-            source.write(content)
-            source.flush()
-            sealed_fd = manager._sealed_executable_copy(
-                source.fileno(), expected_sha256=sha(content)
+    def test_verified_fd_executes_original_inode_after_path_replacement(self) -> None:
+        trusted = b"#!/bin/sh\nprintf 'trusted\\n'\n"
+        replacement = b"#!/bin/sh\nprintf 'replacement\\n'\n"
+        with self.configured_manager(binary=trusted):
+            manager.install_managed_app()
+            original = manager.BINARY_PATH.stat()
+
+            with manager.verified_managed_gws_binary() as binary:
+                replacement_path = manager.BINARY_PATH.with_suffix(".replacement")
+                replacement_path.write_bytes(replacement)
+                replacement_path.chmod(0o755)
+                os.replace(replacement_path, manager.BINARY_PATH)
+
+                opened = os.fstat(binary.fd)
+                completed = subprocess.run(
+                    [binary.proc_path],
+                    check=True,
+                    capture_output=True,
+                    text=True,
+                    pass_fds=(binary.fd,),
+                )
+
+            self.assertEqual(
+                (opened.st_dev, opened.st_ino),
+                (original.st_dev, original.st_ino),
             )
-            try:
-                with self.assertRaises(OSError):
-                    os.write(sealed_fd, b"mutation")
-            finally:
-                os.close(sealed_fd)
+            self.assertEqual(binary.sha256, sha(trusted))
+            self.assertEqual(completed.stdout, "trusted\n")
+
+    def test_verified_fd_rejects_modified_binary_bytes(self) -> None:
+        with self.configured_manager():
+            manager.install_managed_app()
+            manager.BINARY_PATH.write_bytes(b"modified")
+            manager.BINARY_PATH.chmod(0o755)
+
+            with self.assertRaises(manager.GoogleWorkspaceAppManagerError) as raised:
+                with manager.verified_managed_gws_binary():
+                    self.fail("modified managed bytes must not execute")
+
+        self.assertEqual(raised.exception.code, "app_unavailable")
+
+    def test_verified_fd_rejects_symlink_replacement(self) -> None:
+        with self.configured_manager():
+            manager.install_managed_app()
+            outside = manager.BINARY_PATH.with_suffix(".outside")
+            outside.write_bytes(b"outside")
+            outside.chmod(0o755)
+            manager.BINARY_PATH.unlink()
+            manager.BINARY_PATH.symlink_to(outside)
+
+            with self.assertRaises(manager.GoogleWorkspaceAppManagerError) as raised:
+                with manager.verified_managed_gws_binary():
+                    self.fail("symlinked managed path must not execute")
+
+        self.assertEqual(raised.exception.code, "app_unavailable")
 
 
 if __name__ == "__main__":

@@ -567,13 +567,13 @@ def _quarantine_modified_component(*, component: str, path: Path) -> bool:
 
 @contextlib.contextmanager
 def verified_managed_gws_binary() -> Iterator[ManagedGwsBinary]:
-    """Yield an O_NOFOLLOW executable fd while holding the shared manager lock."""
+    """Yield the exact verified executable fd under the shared manager lock."""
     artifact = _require_supported_host()
     with managed_app_lock(exclusive=False):
         manifest = _read_manifest(optional=False)
         records = _validate_manifest(manifest, artifact=artifact)
         record = records.get("gws")
-        if record is None or not _file_matches_record(BINARY_PATH, record):
+        if record is None:
             raise GoogleWorkspaceAppManagerError(
                 "app_unavailable",
                 "The managed gws app failed its integrity check.",
@@ -600,67 +600,40 @@ def verified_managed_gws_binary() -> Iterator[ManagedGwsBinary]:
                     "app_unavailable",
                     "The managed gws binary is missing or failed its integrity check.",
                 )
-            sealed_fd = _sealed_executable_copy(
-                source_fd,
-                expected_sha256=record["sha256"],
-            )
-            proc_path = f"/proc/self/fd/{sealed_fd}"
+            if _sha256_open_file(source_fd) != record["sha256"]:
+                raise GoogleWorkspaceAppManagerError(
+                    "app_unavailable",
+                    "The managed gws binary failed its integrity check.",
+                )
+            proc_path = f"/proc/self/fd/{source_fd}"
             if not Path(proc_path).exists():
-                os.close(sealed_fd)
                 raise GoogleWorkspaceAppManagerError(
                     "app_unavailable", "The managed executable fd is unavailable."
                 )
-            try:
-                yield ManagedGwsBinary(
-                    fd=sealed_fd,
-                    proc_path=proc_path,
-                    sha256=record["sha256"],
-                )
-            finally:
-                os.close(sealed_fd)
+            yield ManagedGwsBinary(
+                fd=source_fd,
+                proc_path=proc_path,
+                sha256=record["sha256"],
+            )
         finally:
             os.close(source_fd)
 
 
-def _sealed_executable_copy(source_fd: int, *, expected_sha256: str) -> int:
-    """Copy verified bytes into a sealed anonymous executable inode."""
-    required = ("memfd_create", "MFD_ALLOW_SEALING")
-    if any(not hasattr(os, name) for name in required) or not hasattr(fcntl, "F_ADD_SEALS"):
-        raise GoogleWorkspaceAppManagerError(
-            "app_unavailable", "This Linux host cannot seal the managed gws executable."
-        )
-    sealed_fd = os.memfd_create(  # type: ignore[attr-defined]
-        "tinyhat-gws-v0.22.5",
-        flags=os.MFD_CLOEXEC | os.MFD_ALLOW_SEALING,  # type: ignore[attr-defined]
-    )
+def _sha256_open_file(source_fd: int) -> str:
+    """Hash one open file descriptor and rewind it for execution."""
     digest = hashlib.sha256()
     try:
         os.lseek(source_fd, 0, os.SEEK_SET)
         while chunk := os.read(source_fd, 64 * 1024):
             digest.update(chunk)
-            view = memoryview(chunk)
-            while view:
-                written = os.write(sealed_fd, view)
-                if written <= 0:
-                    raise OSError("short memfd write")
-                view = view[written:]
-        if digest.hexdigest() != expected_sha256:
-            raise GoogleWorkspaceAppManagerError(
-                "app_unavailable", "The managed gws binary failed its integrity check."
-            )
-        os.fchmod(sealed_fd, 0o755)
-        seals = (
-            fcntl.F_SEAL_SEAL
-            | fcntl.F_SEAL_SHRINK
-            | fcntl.F_SEAL_GROW
-            | fcntl.F_SEAL_WRITE
-        )
-        fcntl.fcntl(sealed_fd, fcntl.F_ADD_SEALS, seals)
-        os.lseek(sealed_fd, 0, os.SEEK_SET)
-        return sealed_fd
-    except Exception:
-        os.close(sealed_fd)
-        raise
+        return digest.hexdigest()
+    except OSError as exc:
+        raise GoogleWorkspaceAppManagerError(
+            "app_unavailable", "The managed gws binary could not be verified."
+        ) from exc
+    finally:
+        with contextlib.suppress(OSError):
+            os.lseek(source_fd, 0, os.SEEK_SET)
 
 
 def _download_bytes(url: str, *, max_bytes: int) -> bytes:
