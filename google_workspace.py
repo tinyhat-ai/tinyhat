@@ -52,27 +52,41 @@ GOOGLE_WORKSPACE_API_SUFFIX = "google-workspace-oauth/v1"
 GOOGLE_WORKSPACE_CONNECTIONS_SUFFIX = f"{GOOGLE_WORKSPACE_API_SUFFIX}/connections"
 GOOGLE_WORKSPACE_DISCONNECT_INTENTS_SUFFIX = f"{GOOGLE_WORKSPACE_API_SUFFIX}/disconnect-intents"
 GOOGLE_TOKEN_URI = "https://oauth2.googleapis.com/token"
+GOOGLE_WORKSPACE_PROFILE_RECOMMENDED = "workspace_recommended"
+GOOGLE_WORKSPACE_PROFILE_CUSTOM = "workspace_custom"
 GOOGLE_WORKSPACE_PROFILE_READONLY = "workspace_readonly"
 GOOGLE_WORKSPACE_PROFILE_GMAIL_SEND = "gmail_send"
 GOOGLE_WORKSPACE_PROFILE_CALENDAR_WRITE = "calendar_write"
 GOOGLE_WORKSPACE_PROFILE_GMAIL_SEND_CALENDAR_WRITE = "gmail_send_calendar_write"
 GOOGLE_WORKSPACE_PROFILES = (
+    GOOGLE_WORKSPACE_PROFILE_RECOMMENDED,
     GOOGLE_WORKSPACE_PROFILE_READONLY,
     GOOGLE_WORKSPACE_PROFILE_GMAIL_SEND,
     GOOGLE_WORKSPACE_PROFILE_CALENDAR_WRITE,
     GOOGLE_WORKSPACE_PROFILE_GMAIL_SEND_CALENDAR_WRITE,
 )
+GOOGLE_RECOMMENDED_CAPABILITY_BUNDLE = "google_workspace_recommended_v1"
+GOOGLE_CUSTOM_CAPABILITY_BUNDLE = "google_workspace_custom_v1"
 GOOGLE_READONLY_CAPABILITY_BUNDLE = "google_workspace_readonly_v1"
 GOOGLE_GMAIL_SEND_CAPABILITY_BUNDLE = "google_workspace_gmail_send_v1"
 GOOGLE_CALENDAR_WRITE_CAPABILITY_BUNDLE = "google_workspace_calendar_write_v1"
 GOOGLE_GMAIL_SEND_CALENDAR_WRITE_CAPABILITY_BUNDLE = (
     "google_workspace_gmail_send_calendar_write_v1"
 )
-GOOGLE_REQUESTED_SERVICES = ("identity", "gmail", "calendar", "drive")
-GOOGLE_READONLY_SCOPES = (
+GOOGLE_IDENTITY_SCOPES = (
     "openid",
     "email",
     "profile",
+)
+GOOGLE_REQUESTED_SERVICES = ("identity", "gmail", "calendar", "drive")
+GOOGLE_RECOMMENDED_SCOPES = (
+    *GOOGLE_IDENTITY_SCOPES,
+    "https://www.googleapis.com/auth/gmail.modify",
+    "https://www.googleapis.com/auth/calendar.events",
+    "https://www.googleapis.com/auth/drive.readonly",
+)
+GOOGLE_READONLY_SCOPES = (
+    *GOOGLE_IDENTITY_SCOPES,
     "https://www.googleapis.com/auth/gmail.readonly",
     "https://www.googleapis.com/auth/calendar.readonly",
     "https://www.googleapis.com/auth/drive.readonly",
@@ -90,10 +104,96 @@ GOOGLE_GMAIL_SEND_CALENDAR_WRITE_SCOPES = (
     "https://www.googleapis.com/auth/calendar.events",
 )
 GOOGLE_WRITE_PERMISSION_GMAIL_SEND = "gmail_send"
+GOOGLE_WRITE_PERMISSION_GMAIL_MODIFY = "gmail_modify"
 GOOGLE_WRITE_PERMISSION_CALENDAR_EVENTS = "calendar_events"
-# Backward-compatible names for callers that only need the default profile.
-GOOGLE_CAPABILITY_BUNDLE = GOOGLE_READONLY_CAPABILITY_BUNDLE
-GOOGLE_REQUESTED_SCOPES = GOOGLE_READONLY_SCOPES
+# Backward-compatible names for callers that only need the current default.
+GOOGLE_CAPABILITY_BUNDLE = GOOGLE_RECOMMENDED_CAPABILITY_BUNDLE
+GOOGLE_REQUESTED_SCOPES = GOOGLE_RECOMMENDED_SCOPES
+GOOGLE_SCOPE_PREFIX = "https://www.googleapis.com/auth/"
+GOOGLE_MAIL_SCOPE = "https://mail.google.com/"
+GOOGLE_CALENDAR_FEEDS_SCOPE = "https://www.google.com/calendar/feeds"
+GOOGLE_CONTACTS_FEEDS_SCOPE = "https://www.google.com/m8/feeds"
+GOOGLE_EXACT_SCOPE_SERVICES = {
+    GOOGLE_CALENDAR_FEEDS_SCOPE: "calendar",
+    GOOGLE_CONTACTS_FEEDS_SCOPE: "people",
+}
+GOOGLE_EXACT_SCOPE_LABELS = {
+    GOOGLE_MAIL_SCOPE: "Full Gmail access including permanent deletion",
+    f"{GOOGLE_SCOPE_PREFIX}calendar": (
+        "Full Calendar read/write access including sharing and permanent deletion"
+    ),
+    f"{GOOGLE_SCOPE_PREFIX}contacts": (
+        "Full Contacts read/write access including permanent deletion"
+    ),
+    f"{GOOGLE_SCOPE_PREFIX}drive": (
+        "Full Drive access including creating, editing, and deleting files"
+    ),
+    f"{GOOGLE_SCOPE_PREFIX}gmail.settings.sharing": (
+        "Gmail forwarding and sharing settings management"
+    ),
+    f"{GOOGLE_SCOPE_PREFIX}admin.directory.user": (
+        "Workspace user directory management including creating and deleting users"
+    ),
+    f"{GOOGLE_SCOPE_PREFIX}cloud-platform": (
+        "Broad Google Cloud access including viewing, changing, and deleting cloud data"
+    ),
+    f"{GOOGLE_SCOPE_PREFIX}bigquery": "BigQuery data viewing and management",
+}
+GOOGLE_SCOPE_DISCLOSURE_KEYS = {
+    GOOGLE_CALENDAR_FEEDS_SCOPE: f"{GOOGLE_SCOPE_PREFIX}calendar",
+    GOOGLE_CONTACTS_FEEDS_SCOPE: f"{GOOGLE_SCOPE_PREFIX}contacts",
+}
+GOOGLE_SCOPE_ALIASES = {
+    f"{GOOGLE_SCOPE_PREFIX}userinfo.email": "email",
+    f"{GOOGLE_SCOPE_PREFIX}userinfo.profile": "profile",
+}
+GOOGLE_SCOPE_MAX_COUNT = 32
+GOOGLE_GRANT_SCOPE_MAX_COUNT = GOOGLE_SCOPE_MAX_COUNT + len(GOOGLE_IDENTITY_SCOPES)
+GOOGLE_ACCESS_PAIR_COUNT = 2
+GOOGLE_SCOPE_MAX_LENGTH = 512
+GOOGLE_SCOPE_TOTAL_MAX_LENGTH = 4096
+GOOGLE_REASON_MAX_LENGTH = 280
+CONTROL_CODEPOINT_LIMIT = 0x20
+DELETE_CODEPOINT = 0x7F
+GOOGLE_SERVICE_ORDER = (
+    "identity",
+    "gmail",
+    "calendar",
+    "drive",
+    "docs",
+    "sheets",
+    "slides",
+    "people",
+    "tasks",
+    "chat",
+    "forms",
+    "meet",
+    "classroom",
+    "keep",
+    "apps_script",
+    "cloud_search",
+    "admin",
+    "google",
+)
+GOOGLE_SERVICE_LABELS = {
+    "gmail": "Gmail",
+    "calendar": "Calendar",
+    "drive": "Drive",
+    "docs": "Docs",
+    "sheets": "Sheets",
+    "slides": "Slides",
+    "people": "People and Contacts",
+    "tasks": "Tasks",
+    "chat": "Chat",
+    "forms": "Forms",
+    "meet": "Meet",
+    "classroom": "Classroom",
+    "keep": "Keep",
+    "apps_script": "Apps Script",
+    "cloud_search": "Cloud Search",
+    "admin": "Workspace Admin",
+    "google": "other Google services",
+}
 GOOGLE_AUTHORIZATION_HOST = "accounts.google.com"
 GOOGLE_AUTHORIZATION_PATH = "/o/oauth2/v2/auth"
 TINYHAT_GOOGLE_PREPARE_PATH = (
@@ -113,15 +213,17 @@ DISCONNECT_ORPHAN_SWEEP_DELETE_LIMIT = 8
 INSTALL_RECEIPT_SCAN_LIMIT = 32
 CONTEXT_ASSIGNMENT_CHECK_TTL_SECONDS = 30.0
 CONTEXT_ASSIGNMENT_CHECK_TIMEOUT_SECONDS = 2
-AUTHORIZATION_URL_MAX_LENGTH = 16_384
+AUTHORIZATION_URL_MAX_LENGTH = 32 * 1024
 PUBLIC_CLIENT_ID_MAX_LENGTH = 512
 GOOGLE_TOKEN_VALUE_MAX_LENGTH = 16_384
 GOOGLE_TOKEN_EXPIRY_MAX_LENGTH = 64
 OWNER_ONLY_FILE_MODE = 0o600
 HANDOFF_ID_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_.-]{0,127}$")
 GOOGLE_CONNECTION_ID_RE = re.compile(r"^gwo_[A-Za-z0-9_-]{1,60}$")
+GOOGLE_LAUNCH_TICKET_MAX_LENGTH = 32 * 1024
 GOOGLE_LAUNCH_TICKET_RE = re.compile(
-    r"^gwol1\.[1-9][0-9]{0,9}\.[A-Za-z0-9_-]{32,16000}$"
+    rf"^gwol1\.[1-9][0-9]{{0,9}}\."
+    rf"[A-Za-z0-9_-]{{32,{GOOGLE_LAUNCH_TICKET_MAX_LENGTH}}}$"
 )
 DISCONNECT_OWNER_TOKEN_RE = re.compile(r"^[A-Za-z0-9_-]{32,256}$")
 DISCONNECT_GENERATION_RE = re.compile(r"^[0-9a-f]{64}$")
@@ -161,7 +263,7 @@ class GoogleWorkspaceAccountSelectionRequired(GoogleWorkspaceError):
 
 @dataclass(frozen=True)
 class GoogleWorkspaceProfile:
-    """One plugin-owned, platform-allowlisted OAuth capability profile."""
+    """One normalized reviewed or caller-selected OAuth capability request."""
 
     name: str
     capability_bundle: str
@@ -169,9 +271,28 @@ class GoogleWorkspaceProfile:
     scopes: tuple[str, ...]
     access_label: str
     write_permissions: frozenset[str]
+    reason: str | None = None
 
 
 GOOGLE_PROFILE_CONFIGS = {
+    GOOGLE_WORKSPACE_PROFILE_RECOMMENDED: GoogleWorkspaceProfile(
+        name=GOOGLE_WORKSPACE_PROFILE_RECOMMENDED,
+        capability_bundle=GOOGLE_RECOMMENDED_CAPABILITY_BUNDLE,
+        services=GOOGLE_REQUESTED_SERVICES,
+        scopes=GOOGLE_RECOMMENDED_SCOPES,
+        access_label=(
+            "Gmail reading, composing, sending, and inbox/draft/label management while "
+            "messages and threads cannot bypass Trash for immediate permanent deletion, "
+            "Calendar event management, and "
+            "read-only Drive access"
+        ),
+        write_permissions=frozenset(
+            {
+                GOOGLE_WRITE_PERMISSION_GMAIL_MODIFY,
+                GOOGLE_WRITE_PERMISSION_CALENDAR_EVENTS,
+            }
+        ),
+    ),
     GOOGLE_WORKSPACE_PROFILE_READONLY: GoogleWorkspaceProfile(
         name=GOOGLE_WORKSPACE_PROFILE_READONLY,
         capability_bundle=GOOGLE_READONLY_CAPABILITY_BUNDLE,
@@ -217,27 +338,6 @@ GOOGLE_PROFILE_CONFIGS = {
     ),
 }
 
-GOOGLE_PROFILE_CONFIGS_BY_WRITE_PERMISSIONS = {
-    profile.write_permissions: profile for profile in GOOGLE_PROFILE_CONFIGS.values()
-}
-
-
-class GoogleWorkspacePermissionConfirmationRequired(GoogleWorkspaceError):
-    """A connect request would add write permissions without confirmation."""
-
-    def __init__(
-        self,
-        *,
-        requested_profile: GoogleWorkspaceProfile,
-        missing_profile: GoogleWorkspaceProfile,
-        confirmation_id: str,
-    ) -> None:
-        self.requested_profile = requested_profile
-        self.missing_profile = missing_profile
-        self.confirmation_id = confirmation_id
-        super().__init__("Google Workspace permission upgrade confirmation is required.")
-
-
 @dataclass(frozen=True)
 class GoogleWorkspaceWorkerHandoff:
     """One in-memory central OAuth handoff worker context."""
@@ -277,7 +377,9 @@ class GoogleWorkspaceDisconnectCompletionReceipt:
     error_code: str | None
 
 
-def google_workspace(args: dict[str, Any] | None = None, **_: Any) -> str:
+def google_workspace(  # noqa: PLR0911, PLR0912
+    args: dict[str, Any] | None = None, **_: Any
+) -> str:
     """Connect, inspect, change, or disconnect this Computer's Google accounts."""
     # A credential may have been saved just before a temporary platform claim
     # outage. Resume that durable acknowledgement before starting another
@@ -318,16 +420,24 @@ def google_workspace(args: dict[str, Any] | None = None, **_: Any) -> str:
         )
 
     raw_profile = payload.get("profile")
-    if action not in {"connect", "set_permissions"} and raw_profile is not None:
+    raw_scopes = payload.get("scopes")
+    raw_reason = payload.get("reason")
+    if action not in {"connect", "set_permissions"} and any(
+        item is not None for item in (raw_profile, raw_scopes, raw_reason)
+    ):
         return tool_error_json(
             tool="tinyhat_google_workspace",
             error_name="invalid_parameter",
             message=(
-                "The profile parameter is accepted only with action='connect' or "
-                "action='set_permissions'."
+                "The profile, scopes, and reason parameters are accepted only with "
+                "action='connect' or action='set_permissions'."
             ),
-            expected={"profile": list(GOOGLE_WORKSPACE_PROFILES)},
-            example_call={"action": "connect", "profile": GOOGLE_WORKSPACE_PROFILE_READONLY},
+            expected={
+                "profile": list(GOOGLE_WORKSPACE_PROFILES),
+                "scopes": "canonical Google-owned OAuth scopes",
+                "reason": "short user-facing reason required with scopes",
+            },
+            example_call={"action": "connect"},
         )
 
     try:
@@ -409,43 +519,34 @@ def google_workspace(args: dict[str, Any] | None = None, **_: Any) -> str:
             }
     else:
         try:
-            profile = _requested_profile(raw_profile)
-        except GoogleWorkspaceError:
+            profile = _requested_profile(
+                raw_profile,
+                scopes=raw_scopes,
+                reason=raw_reason,
+            )
+        except GoogleWorkspaceError as exc:
             return tool_error_json(
                 tool="tinyhat_google_workspace",
                 error_name="invalid_parameter",
-                message=(
-                    "Unsupported Google Workspace permission profile. Use one of: "
-                    + ", ".join(GOOGLE_WORKSPACE_PROFILES)
-                    + "."
-                ),
-                expected={"profile": list(GOOGLE_WORKSPACE_PROFILES)},
+                message=str(exc),
+                expected={
+                    "profile": list(GOOGLE_WORKSPACE_PROFILES),
+                    "or": {
+                        "scopes": "canonical Google-owned OAuth scopes",
+                        "reason": "short explanation shown before Google consent",
+                    },
+                },
                 example_call={
                     "action": "connect",
-                    "profile": GOOGLE_WORKSPACE_PROFILE_READONLY,
+                    "scopes": ["https://www.googleapis.com/auth/tasks"],
+                    "reason": "manage your Google Tasks",
                 },
             )
         try:
             result = _start_connection(
                 profile=profile,
-                confirmed=payload.get("confirmed") is True,
-                confirmation_id=payload.get("confirmation_id"),
                 account_id=account_id,
                 exact_permissions=action == "set_permissions",
-            )
-        except GoogleWorkspacePermissionConfirmationRequired as exc:
-            return tool_error_json(
-                tool="tinyhat_google_workspace",
-                error_name="confirmation_required",
-                message=_permission_upgrade_confirmation_message(exc.missing_profile),
-                expected={"confirmation_id": exc.confirmation_id},
-                example_call={
-                    "action": action,
-                    "profile": exc.requested_profile.name,
-                    "confirmed": True,
-                    "confirmation_id": exc.confirmation_id,
-                    **({"account_id": account_id} if account_id is not None else {}),
-                },
             )
         except GoogleWorkspaceAccountSelectionRequired as exc:
             return _account_selection_error(
@@ -489,9 +590,222 @@ def _account_selection_error(
     )
 
 
-def _requested_profile(value: Any) -> GoogleWorkspaceProfile:
+def _validated_scope_values(
+    value: Any,
+    *,
+    completed_grant: bool = False,
+) -> tuple[str, ...]:
+    if not isinstance(value, list) or not value:
+        raise GoogleWorkspaceError("Google Workspace scopes must be a non-empty bounded list.")
+    normalized: list[str] = []
+    seen: set[str] = set()
+    for item in value:
+        canonical_item = _canonical_scope_item(item)
+        if canonical_item in seen:
+            raise GoogleWorkspaceError("Google Workspace scopes cannot contain duplicates.")
+        seen.add(canonical_item)
+        normalized.append(canonical_item)
+    bounded_scopes = (
+        [scope for scope in normalized if scope not in GOOGLE_IDENTITY_SCOPES]
+        if completed_grant
+        else normalized
+    )
+    if completed_grant and len(normalized) > GOOGLE_GRANT_SCOPE_MAX_COUNT:
+        raise GoogleWorkspaceError("Google Workspace completed grant is too large.")
+    if len(bounded_scopes) > GOOGLE_SCOPE_MAX_COUNT:
+        raise GoogleWorkspaceError(
+            "Google Workspace scopes may contain at most 32 requested permissions."
+        )
+    if sum(len(scope.encode("utf-8")) for scope in bounded_scopes) > GOOGLE_SCOPE_TOTAL_MAX_LENGTH:
+        raise GoogleWorkspaceError("Google Workspace scopes are too large.")
+    return tuple(normalized)
+
+
+def _canonical_scope_item(value: Any) -> str:
+    if not isinstance(value, str) or not value or value != value.strip():
+        raise GoogleWorkspaceError("Google Workspace scopes must be canonical strings.")
+    if not value.isascii() or len(value.encode("utf-8")) > GOOGLE_SCOPE_MAX_LENGTH:
+        raise GoogleWorkspaceError("Google Workspace scope is too long.")
+    if any(
+        character.isspace()
+        or ord(character) < CONTROL_CODEPOINT_LIMIT
+        or ord(character) == DELETE_CODEPOINT
+        for character in value
+    ):
+        raise GoogleWorkspaceError("Google Workspace scopes cannot contain whitespace or controls.")
+    canonical = GOOGLE_SCOPE_ALIASES.get(value, value)
+    legacy_aliases = {
+        f"{GOOGLE_CALENDAR_FEEDS_SCOPE}/",
+        f"{GOOGLE_CONTACTS_FEEDS_SCOPE}/",
+    }
+    if canonical in legacy_aliases:
+        canonical = canonical.removesuffix("/")
+    if (
+        canonical in GOOGLE_IDENTITY_SCOPES
+        or canonical == GOOGLE_MAIL_SCOPE
+        or canonical in GOOGLE_EXACT_SCOPE_SERVICES
+    ):
+        return canonical
+    if not canonical.startswith(GOOGLE_SCOPE_PREFIX):
+        raise GoogleWorkspaceError("Google Workspace scope is not owned by Google.")
+    suffix = canonical[len(GOOGLE_SCOPE_PREFIX) :]
+    if (
+        not suffix
+        or suffix.startswith((".", "/"))
+        or suffix.endswith((".", "/"))
+        or any(
+            character not in "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789._-/"
+            for character in suffix
+        )
+    ):
+        raise GoogleWorkspaceError("Google Workspace scope is not canonical.")
+    return canonical
+
+
+def _canonical_requested_scopes(value: Any) -> tuple[str, ...]:
+    requested = _validated_scope_values(value)
+    non_identity = sorted(scope for scope in requested if scope not in GOOGLE_IDENTITY_SCOPES)
+    return _validated_scope_values(
+        [*GOOGLE_IDENTITY_SCOPES, *non_identity],
+        completed_grant=True,
+    )
+
+
+def _canonical_custom_grant_scopes(value: Any) -> tuple[str, ...]:
+    scopes = _validated_scope_values(value, completed_grant=True)
+    if not set(GOOGLE_IDENTITY_SCOPES).issubset(scopes):
+        raise GoogleWorkspaceError("Google Workspace custom scopes are missing basic identity.")
+    canonical = (
+        *GOOGLE_IDENTITY_SCOPES,
+        *sorted(scope for scope in scopes if scope not in GOOGLE_IDENTITY_SCOPES),
+    )
+    if scopes != canonical:
+        raise GoogleWorkspaceError("Google Workspace custom scopes are not canonical.")
+    return canonical
+
+
+def _validated_scope_reason(value: Any, *, required: bool) -> str | None:
+    if value is None and not required:
+        return None
+    if not isinstance(value, str):
+        raise GoogleWorkspaceError("Google Workspace permission reason must be a string.")
+    reason = value.strip()
+    if (
+        not reason
+        or len(reason) > GOOGLE_REASON_MAX_LENGTH
+        or any(
+            ord(character) < CONTROL_CODEPOINT_LIMIT
+            or ord(character) == DELETE_CODEPOINT
+            for character in reason
+        )
+    ):
+        raise GoogleWorkspaceError("Google Workspace permission reason is invalid.")
+    return reason
+
+
+def _scope_service(scope: str) -> str | None:
+    if scope in GOOGLE_IDENTITY_SCOPES:
+        return None
+    if scope in GOOGLE_EXACT_SCOPE_SERVICES:
+        return GOOGLE_EXACT_SCOPE_SERVICES[scope]
+    if scope == GOOGLE_MAIL_SCOPE:
+        return "gmail"
+    suffix = scope[len(GOOGLE_SCOPE_PREFIX) :]
+    mappings = (
+        (("gmail",), "gmail"),
+        (("calendar",), "calendar"),
+        (("drive",), "drive"),
+        (("documents",), "docs"),
+        (("spreadsheets",), "sheets"),
+        (("presentations",), "slides"),
+        (("contacts", "directory", "user."), "people"),
+        (("tasks",), "tasks"),
+        (("chat",), "chat"),
+        (("forms",), "forms"),
+        (("meetings",), "meet"),
+        (("classroom",), "classroom"),
+        (("keep",), "keep"),
+        (("script",), "apps_script"),
+        (("cloud_search",), "cloud_search"),
+        (("admin.", "apps.groups.settings"), "admin"),
+    )
+    for prefixes, service in mappings:
+        if suffix.startswith(prefixes):
+            return service
+    return "google"
+
+
+def _services_for_scopes(scopes: tuple[str, ...] | list[str]) -> tuple[str, ...]:
+    present = {"identity"}
+    present.update(
+        service
+        for scope in scopes
+        if (service := _scope_service(scope)) is not None
+    )
+    return tuple(service for service in GOOGLE_SERVICE_ORDER if service in present)
+
+
+def _google_access_label(service_labels: list[str]) -> str:
+    if not service_labels:
+        return "Google identity access"
+    if len(service_labels) == 1:
+        joined = service_labels[0]
+    elif len(service_labels) == GOOGLE_ACCESS_PAIR_COUNT:
+        joined = f"{service_labels[0]} and {service_labels[1]}"
+    else:
+        joined = f"{', '.join(service_labels[:-1])}, and {service_labels[-1]}"
+    return f"Google access for {joined}"
+
+
+def _custom_profile(
+    scopes: Any,
+    *,
+    reason: str | None = None,
+) -> GoogleWorkspaceProfile:
+    canonical_scopes = _canonical_custom_grant_scopes(scopes)
+    canonical_services = _services_for_scopes(canonical_scopes)
+    exact_scope_labels = [
+        GOOGLE_EXACT_SCOPE_LABELS[GOOGLE_SCOPE_DISCLOSURE_KEYS.get(scope, scope)]
+        for scope in canonical_scopes
+        if GOOGLE_SCOPE_DISCLOSURE_KEYS.get(scope, scope) in GOOGLE_EXACT_SCOPE_LABELS
+    ]
+    service_labels = [
+        GOOGLE_SERVICE_LABELS[service] for service in canonical_services if service != "identity"
+    ]
+    access_label = (
+        f"Google permissions needed to {reason}" if reason else _google_access_label(service_labels)
+    )
+    if exact_scope_labels:
+        access_label = f"{access_label}: {'; '.join(exact_scope_labels)}"
+    return GoogleWorkspaceProfile(
+        name=GOOGLE_WORKSPACE_PROFILE_CUSTOM,
+        capability_bundle=GOOGLE_CUSTOM_CAPABILITY_BUNDLE,
+        services=canonical_services,
+        scopes=canonical_scopes,
+        access_label=access_label,
+        write_permissions=frozenset({"custom"}),
+        reason=reason,
+    )
+
+
+def _requested_profile(
+    value: Any,
+    *,
+    scopes: Any = None,
+    reason: Any = None,
+) -> GoogleWorkspaceProfile:
+    if scopes is not None:
+        if value is not None:
+            raise GoogleWorkspaceError("Use either a Google Workspace profile or scopes, not both.")
+        clean_reason = _validated_scope_reason(reason, required=True)
+        return _custom_profile(
+            list(_canonical_requested_scopes(scopes)),
+            reason=clean_reason,
+        )
+    if reason is not None:
+        raise GoogleWorkspaceError("A Google Workspace reason requires scopes.")
     if value is None:
-        return GOOGLE_PROFILE_CONFIGS[GOOGLE_WORKSPACE_PROFILE_READONLY]
+        return GOOGLE_PROFILE_CONFIGS[GOOGLE_WORKSPACE_PROFILE_RECOMMENDED]
     if not isinstance(value, str):
         raise GoogleWorkspaceError("Google Workspace profile must be a string.")
     profile = GOOGLE_PROFILE_CONFIGS.get(value.strip().lower())
@@ -500,63 +814,58 @@ def _requested_profile(value: Any) -> GoogleWorkspaceProfile:
     return profile
 
 
-def _profile_for_capability_bundle(value: Any) -> GoogleWorkspaceProfile:
+def _profile_for_capability_bundle(
+    value: Any,
+    *,
+    scopes: Any = None,
+    services: Any = None,
+) -> GoogleWorkspaceProfile:
+    if value == GOOGLE_CUSTOM_CAPABILITY_BUNDLE:
+        # Scopes are the authority. Service names are a derived display/index
+        # projection and may evolve independently across platform/plugin versions.
+        return _custom_profile(scopes)
     for profile in GOOGLE_PROFILE_CONFIGS.values():
         if value == profile.capability_bundle:
+            if scopes is not None and scopes != list(profile.scopes):
+                raise GoogleWorkspaceError("Platform returned unexpected Google Workspace scopes.")
+            if services is not None and services != list(profile.services):
+                raise GoogleWorkspaceError("Platform returned unexpected Google services.")
             return profile
     raise GoogleWorkspaceError("Platform returned an unexpected capability bundle.")
 
 
-def _permission_upgrade_confirmation_message(profile: GoogleWorkspaceProfile) -> str:
-    capabilities: list[str] = []
-    later_actions: list[str] = []
-    scope_names: list[str] = []
-    if GOOGLE_WRITE_PERMISSION_GMAIL_SEND in profile.write_permissions:
-        capabilities.append("send Gmail")
-        later_actions.append("email send")
-        scope_names.append("gmail.send")
-    if GOOGLE_WRITE_PERMISSION_CALENDAR_EVENTS in profile.write_permissions:
-        capabilities.append("create, update, and delete Calendar events")
-        later_actions.append("Calendar change")
-        scope_names.append("calendar.events")
-    if not capabilities:
-        raise GoogleWorkspaceError("The selected profile is not a permission upgrade.")
-    capability_text = " and ".join(capabilities)
-    later_action_text = " or ".join(later_actions)
-    scope_text = " and ".join(scope_names)
-    draft_note = (
-        " Gmail draft management is not enabled."
-        if GOOGLE_WRITE_PERMISSION_GMAIL_SEND in profile.write_permissions
-        else ""
+def _profile_for_scope_set(
+    scopes: tuple[str, ...] | list[str],
+    *,
+    force_custom: bool,
+    reason: str | None = None,
+) -> GoogleWorkspaceProfile:
+    scope_set = set(_validated_scope_values(list(scopes), completed_grant=True))
+    if not set(GOOGLE_IDENTITY_SCOPES).issubset(scope_set):
+        raise GoogleWorkspaceError("Google Workspace scopes are missing basic identity.")
+    if not force_custom:
+        for profile in GOOGLE_PROFILE_CONFIGS.values():
+            if scope_set == set(profile.scopes):
+                return profile
+    canonical = (
+        *GOOGLE_IDENTITY_SCOPES,
+        *sorted(scope for scope in scope_set if scope not in GOOGLE_IDENTITY_SCOPES),
     )
-    return (
-        "Ask the user to explicitly confirm upgrading this Google Workspace connection "
-        f"so the agent may {capability_text}. This permission upgrade is separate from "
-        f"confirming any later {later_action_text}. It adds {scope_text}.{draft_note}"
-    )
+    return _custom_profile(list(canonical), reason=reason)
 
 
 def _resolve_profile_for_connection_locked(
     requested_profile: GoogleWorkspaceProfile,
     *,
-    confirmed: bool,
-    confirmation_id: Any = None,
     account_id: str | None = None,
     exact_permissions: bool = False,
 ) -> tuple[GoogleWorkspaceProfile, PlatformClient | None, str | None]:
     """Resolve one assignment-verified add or exact target before side effects."""
     current_credentials: dict[str, Any] | None = None
-    # A write-enabled add has no target credential yet, so bind its human
-    # confirmation to the complete local account set. This prevents a prompt
-    # issued before another add or replacement from authorizing a later,
-    # materially different store state. Normal access-token refreshes do not
-    # change this generation because each member uses install lineage only.
-    current_generation: str | None = (
-        _account_store_generation([]) if account_id is None else None
-    )
     client: PlatformClient | None = None
     platform_auth: str | None = None
-    current_permissions: frozenset[str] = frozenset()
+    current_scopes: tuple[str, ...] = GOOGLE_IDENTITY_SCOPES
+    current_bundle: str | None = None
     if account_id is not None:
         client, platform_auth = build_platform_client()
         _migrate_legacy_credentials_locked(
@@ -576,11 +885,8 @@ def _resolve_profile_for_connection_locked(
             _delete_credentials_locked()
             raise GoogleWorkspaceError("Computer assignment changed before Google sign-in.")
         else:
-            current_generation = _install_credential_generation(current_credentials)
-            current_profile = _profile_for_capability_bundle(
-                current_credentials["capability_bundle"]
-            )
-            current_permissions = current_profile.write_permissions
+            current_scopes = tuple(current_credentials["scopes"])
+            current_bundle = str(current_credentials["capability_bundle"])
     elif CREDENTIALS_PATH.exists() or _owner_entry_exists(LEGACY_CREDENTIALS_PATH):
         client, platform_auth = build_platform_client()
         _migrate_legacy_credentials_locked(
@@ -588,7 +894,6 @@ def _resolve_profile_for_connection_locked(
             platform_auth=platform_auth,
         )
         existing_accounts = _read_account_store()
-        current_generation = _account_store_generation(existing_accounts)
         if existing_accounts:
             current_binding = _fetch_assignment_binding(
                 client=client,
@@ -609,73 +914,30 @@ def _resolve_profile_for_connection_locked(
                     "Computer assignment changed before Google sign-in."
                 )
 
-    target_permissions = (
-        requested_profile.write_permissions
-        if exact_permissions
-        else frozenset(requested_profile.write_permissions | current_permissions)
+    target_scope_set = set(requested_profile.scopes)
+    if not exact_permissions and account_id is not None:
+        target_scope_set.update(current_scopes)
+    force_custom = (
+        requested_profile.capability_bundle == GOOGLE_CUSTOM_CAPABILITY_BUNDLE
+        or (not exact_permissions and current_bundle == GOOGLE_CUSTOM_CAPABILITY_BUNDLE)
     )
-    target_profile = GOOGLE_PROFILE_CONFIGS_BY_WRITE_PERMISSIONS.get(target_permissions)
-    if target_profile is None:
-        raise GoogleWorkspaceError(
-            "No allowlisted Google Workspace profile preserves the existing permissions."
-        )
-
-    missing_permissions = frozenset(target_permissions - current_permissions)
-    if missing_permissions:
-        missing_profile = GOOGLE_PROFILE_CONFIGS_BY_WRITE_PERMISSIONS.get(missing_permissions)
-        if missing_profile is None:
-            raise GoogleWorkspaceError(
-                "No allowlisted Google Workspace profile describes the permission upgrade."
-            )
-        expected_confirmation_id = _permission_confirmation_id(
-            action="set_permissions" if exact_permissions else "connect",
-            account_id=account_id,
-            target_profile=target_profile.name,
-            credential_generation=current_generation,
-        )
-        if (
-            not confirmed
-            or not isinstance(confirmation_id, str)
-            or not hmac.compare_digest(confirmation_id, expected_confirmation_id)
-        ):
-            raise GoogleWorkspacePermissionConfirmationRequired(
-                requested_profile=target_profile,
-                missing_profile=missing_profile,
-                confirmation_id=expected_confirmation_id,
-            )
+    target_profile = _profile_for_scope_set(
+        tuple(target_scope_set),
+        force_custom=force_custom,
+        reason=requested_profile.reason,
+    )
     return target_profile, client, platform_auth
-
-
-def _permission_confirmation_id(
-    *,
-    action: str,
-    account_id: str | None,
-    target_profile: str,
-    credential_generation: str | None = None,
-) -> str:
-    canonical = json.dumps(
-        {
-            "account_id": account_id,
-            "action": action,
-            "credential_generation": credential_generation,
-            "target_profile": target_profile,
-        },
-        ensure_ascii=False,
-        separators=(",", ":"),
-        sort_keys=True,
-    )
-    return hashlib.sha256(canonical.encode()).hexdigest()
 
 
 def _start_connection(
     *,
     profile: GoogleWorkspaceProfile | None = None,
-    confirmed: bool = False,
-    confirmation_id: Any = None,
     account_id: str | None = None,
     exact_permissions: bool = False,
 ) -> dict[str, Any]:
-    requested_profile = profile or GOOGLE_PROFILE_CONFIGS[GOOGLE_WORKSPACE_PROFILE_READONLY]
+    if exact_permissions and account_id is None:
+        raise GoogleWorkspaceError("Exact Google permission changes require an account id.")
+    requested_profile = profile or GOOGLE_PROFILE_CONFIGS[GOOGLE_WORKSPACE_PROFILE_RECOMMENDED]
     # Serialize the complete start transition. A disconnect that begins after
     # this connect waits until its marker exists, then cancels it. A second
     # connect supersedes the first marker before either worker may install.
@@ -687,8 +949,6 @@ def _start_connection(
         _wipe_invalid_credentials_and_pending_handoffs_locked()
         requested_profile, client, platform_auth = _resolve_profile_for_connection_locked(
             requested_profile,
-            confirmed=confirmed,
-            confirmation_id=confirmation_id,
             account_id=account_id,
             exact_permissions=exact_permissions,
         )
@@ -709,7 +969,7 @@ def _start_connection(
         connection_action = "replace" if account_id is not None else "add"
         button_label = _google_authorization_button_label(
             requested_profile,
-            permission_change=exact_permissions,
+            permission_change=account_id is not None,
         )
         start_payload: dict[str, Any] = {
             "public_key_pem": public_key_pem,
@@ -736,9 +996,9 @@ def _start_connection(
             handoff.get("capability_bundle"),
             expected=requested_profile.capability_bundle,
         )
-        services = _normalize_workspace_services(
+        services = _normalize_profile_services(
+            requested_profile,
             handoff.get("services"),
-            expected=requested_profile.services,
         )
         scopes = _normalize_workspace_scopes(
             handoff.get("scopes"),
@@ -773,19 +1033,11 @@ def _start_connection(
                     expected_connection_id=returned_connection_id,
                 )
             raise
-        if exact_permissions:
-            button_result = _send_google_connect_button(
-                authorization_url,
-                profile=requested_profile.name,
-                permission_change=True,
-            )
-        elif requested_profile.name == GOOGLE_WORKSPACE_PROFILE_READONLY:
-            button_result = _send_google_connect_button(authorization_url)
-        else:
-            button_result = _send_google_connect_button(
-                authorization_url,
-                profile=requested_profile.name,
-            )
+        button_result = _send_google_connect_button(
+            authorization_url,
+            profile=requested_profile,
+            permission_change=account_id is not None,
+        )
         if not button_result.get("ok"):
             with contextlib.suppress(Exception):
                 _claim_handoff(
@@ -806,12 +1058,21 @@ def _start_connection(
         "connection_action": connection_action,
         "profile": requested_profile.name,
         "capability_bundle": requested_profile.capability_bundle,
+        "services": list(requested_profile.services),
+        "scopes": list(requested_profile.scopes),
+        **(
+            {"reason": requested_profile.reason}
+            if requested_profile.reason is not None
+            else {}
+        ),
         "status": "waiting_for_user",
         "button_sent": True,
         "poll_after_ms": poll_after_ms,
         "message": (
             f"I sent a native {button_label} button in Telegram. Use that button "
-            f"to approve {requested_profile.access_label} plus basic identity. "
+            f"to review {requested_profile.access_label} on Google's consent screen. "
+            "Google shows the permissions being requested, and you decide whether "
+            "to grant them or return and ask for narrower access. "
             "No plain authorization link is returned. Existing accounts and the "
             "selected account's current credential stay usable unless this encrypted "
             "handoff completes successfully."
@@ -871,6 +1132,7 @@ def _validated_authorization_url(
         and parsed.path == TINYHAT_GOOGLE_PREPARE_PATH
         and not parsed.query
         and GOOGLE_LAUNCH_TICKET_RE.fullmatch(parsed.fragment) is not None
+        and len(parsed.fragment) <= GOOGLE_LAUNCH_TICKET_MAX_LENGTH
         and platform_url.scheme == "https"
         and platform_url.hostname is not None
         and platform_url.username is None
@@ -888,11 +1150,13 @@ def _validated_authorization_url(
 def _send_google_connect_button(
     authorization_url: str,
     *,
-    profile: str = GOOGLE_WORKSPACE_PROFILE_READONLY,
+    profile: GoogleWorkspaceProfile | str = GOOGLE_WORKSPACE_PROFILE_RECOMMENDED,
     permission_change: bool = False,
 ) -> dict[str, bool]:
     """Send the platform URL only inside a native Telegram button."""
-    requested_profile = _requested_profile(profile)
+    requested_profile = (
+        profile if isinstance(profile, GoogleWorkspaceProfile) else _requested_profile(profile)
+    )
     button_label = _google_authorization_button_label(
         requested_profile,
         permission_change=permission_change,
@@ -900,8 +1164,6 @@ def _send_google_connect_button(
     action_label = (
         "Change Google Workspace permissions"
         if permission_change
-        else "Upgrade Google Workspace"
-        if requested_profile.write_permissions
         else "Connect Google Workspace"
     )
     try:
@@ -931,16 +1193,19 @@ def _google_authorization_button_label(
     """Distinguish first connection from a permission expansion in Telegram."""
     if permission_change:
         return "Change Google access"
-    if profile.write_permissions:
-        return "Upgrade Google access"
     return "Connect Google"
 
 
 def _validated_capability_bundle(value: Any, *, expected: str | None = None) -> str:
-    profile = _profile_for_capability_bundle(value)
-    if expected is not None and profile.capability_bundle != expected:
+    allowed = {
+        GOOGLE_CUSTOM_CAPABILITY_BUNDLE,
+        *(profile.capability_bundle for profile in GOOGLE_PROFILE_CONFIGS.values()),
+    }
+    if not isinstance(value, str) or value not in allowed:
         raise GoogleWorkspaceError("Platform returned an unexpected capability bundle.")
-    return profile.capability_bundle
+    if expected is not None and value != expected:
+        raise GoogleWorkspaceError("Platform returned an unexpected capability bundle.")
+    return value
 
 
 def _normalize_workspace_services(
@@ -951,6 +1216,16 @@ def _normalize_workspace_services(
     if value != list(expected):
         raise GoogleWorkspaceError("Platform returned unexpected Google services.")
     return list(expected)
+
+
+def _normalize_profile_services(
+    profile: GoogleWorkspaceProfile,
+    value: Any,
+) -> list[str]:
+    """Derive custom display metadata while keeping fixed bundles exact."""
+    if profile.capability_bundle == GOOGLE_CUSTOM_CAPABILITY_BUNDLE:
+        return list(profile.services)
+    return _normalize_workspace_services(value, expected=profile.services)
 
 
 def _poll_after_ms(value: Any) -> int:
@@ -2521,6 +2796,11 @@ def _poll_and_install(handoff: GoogleWorkspaceWorkerHandoff) -> None:
                 # This is the one reviewed platform error safe to surface as a
                 # duplicate. Arbitrary platform error text remains generic.
                 terminal_state = "duplicate_account"
+            elif terminal_state == "failed" and state.get("error_code") == "invalid_scope":
+                # Google may grant fewer, extra, or historically merged scopes.
+                # Keep exact-grant validation and give the user a useful,
+                # narrower-permission recovery path instead of an identical retry.
+                terminal_state = "scope_mismatch"
             if terminal_state == "ready":
                 outcome = _install_ready_credentials(handoff=handoff, state=state)
                 if outcome == "superseded":
@@ -2611,6 +2891,10 @@ TERMINAL_HANDOFF_MESSAGES = {
     "expired": "Google sign-in expired. Start connect again for a fresh link.",
     "superseded": "This Google sign-in was replaced by a newer connection attempt.",
     "duplicate_account": "That Google account is already connected on this Computer.",
+    "scope_mismatch": (
+        "Google returned different permissions than requested. Tinyhat saved no new "
+        "Computer credential. Retry only after the user chooses the exact narrower access."
+    ),
 }
 
 TELEGRAM_NOTICE_MESSAGES = {
@@ -2633,6 +2917,18 @@ TELEGRAM_NOTICE_MESSAGES = {
         "Gmail, Calendar, and Drive access remains available, Gmail sending and "
         "Calendar event changes are now enabled, and I will still ask before each write."
     ),
+    "ready_workspace_recommended": (
+        "Google Workspace is connected on this Computer with Gmail reading, composing, "
+        "sending, and inbox/draft/label management while messages and threads cannot "
+        "bypass Trash for immediate permanent deletion, Calendar event management, and "
+        "read-only Drive access. I will still ask before "
+        "external write actions such as sending email."
+    ),
+    "ready_workspace_custom": (
+        "Google Workspace permissions were updated on this Computer with the exact "
+        "access approved on Google's consent screen. I will still ask before external "
+        "write actions."
+    ),
     "cancelled": (
         "Google Workspace connection was cancelled. Ask me to connect Google "
         "again when you are ready."
@@ -2649,6 +2945,11 @@ TELEGRAM_NOTICE_MESSAGES = {
     "duplicate_account": (
         "That Google account is already connected on this Computer. Use its existing "
         "account when changing permissions."
+    ),
+    "scope_mismatch": (
+        "Google returned different permissions than requested, so Tinyhat saved no new "
+        "credential on this Computer. Tell me the exact narrower Google access you want, "
+        "and I can make a new permission request."
     ),
 }
 
@@ -2746,7 +3047,11 @@ def _write_install_receipt(
 ) -> Path:
     if phase not in {"install_pending", "claim_pending"}:
         raise GoogleWorkspaceError("Google install receipt phase is invalid.")
-    profile = _profile_for_capability_bundle(credentials.get("capability_bundle"))
+    profile = _profile_for_capability_bundle(
+        credentials.get("capability_bundle"),
+        scopes=credentials.get("scopes"),
+        services=credentials.get("services"),
+    )
     notice_state = (
         "ready" if not profile.write_permissions else f"ready_{profile.name}"
     )
@@ -2806,6 +3111,8 @@ def _read_install_receipt(path: Path) -> dict[str, str]:
         "ready_gmail_send",
         "ready_calendar_write",
         "ready_gmail_send_calendar_write",
+        "ready_workspace_recommended",
+        "ready_workspace_custom",
     }:
         raise GoogleWorkspaceError("Google install receipt notice is invalid.")
     created_at = str(value.get("created_at") or "")
@@ -3087,14 +3394,19 @@ def _normalize_credentials(value: Any) -> dict[str, Any]:
         "email",
         "tinyhat_assignment_binding",
     )
-    profile = _profile_for_capability_bundle(value.get("capability_bundle"))
+    scopes = _normalize_workspace_scopes(value.get("scopes"))
+    profile = _profile_for_capability_bundle(
+        value.get("capability_bundle"),
+        scopes=scopes,
+        services=value.get("services"),
+    )
+    # Custom scopes are authoritative. Persist the current plugin's derived
+    # service projection so mapping changes cannot strand old Computers.
+    normalized_services = _normalize_profile_services(profile, value.get("services"))
     normalized: dict[str, Any] = {
         "schema": GOOGLE_WORKSPACE_CREDENTIAL_SCHEMA,
         "capability_bundle": profile.capability_bundle,
-        "services": _normalize_workspace_services(
-            value.get("services"),
-            expected=profile.services,
-        ),
+        "services": normalized_services,
         "token_uri": _validated_token_uri(value.get("token_uri")),
         "tinyhat_connection_id": _validated_connection_id(
             value.get("tinyhat_connection_id")
@@ -3110,9 +3422,6 @@ def _normalize_credentials(value: Any) -> dict[str, Any]:
         raise GoogleWorkspaceError("Google credential envelope token type was invalid.")
     normalized["token_type"] = "Bearer"
 
-    scopes = value.get("scopes")
-    if not isinstance(scopes, list) or not scopes:
-        raise GoogleWorkspaceError("Google credential envelope was missing scopes.")
     normalized["scopes"] = _normalize_workspace_scopes(
         scopes,
         expected=profile.scopes,
@@ -3139,7 +3448,7 @@ def _normalize_workspace_scopes(
     for profile in GOOGLE_PROFILE_CONFIGS.values():
         if scopes == list(profile.scopes):
             return list(profile.scopes)
-    raise GoogleWorkspaceError("Platform returned unexpected Google Workspace scopes.")
+    return list(_canonical_custom_grant_scopes(scopes))
 
 
 def _validated_token_uri(value: Any) -> str:
@@ -3339,7 +3648,11 @@ def _read_all_credentials() -> list[dict[str, Any]]:
 
 
 def _safe_account_metadata(credentials: dict[str, Any]) -> dict[str, Any]:
-    profile = _profile_for_capability_bundle(credentials["capability_bundle"])
+    profile = _profile_for_capability_bundle(
+        credentials["capability_bundle"],
+        scopes=credentials.get("scopes"),
+        services=credentials.get("services"),
+    )
     connection_id = _validated_connection_id(
         credentials.get("tinyhat_connection_id"),
         required=False,
@@ -3408,16 +3721,15 @@ def _normalize_saved_credentials(
     if value.get("token_uri") != GOOGLE_TOKEN_URI:
         raise GoogleWorkspaceError("Saved Google credentials use an invalid token endpoint.")
     try:
-        profile = _profile_for_capability_bundle(value.get("capability_bundle"))
+        normalized_scopes = _normalize_workspace_scopes(value.get("scopes"))
+        profile = _profile_for_capability_bundle(
+            value.get("capability_bundle"),
+            scopes=normalized_scopes,
+            services=value.get("services"),
+        )
         value["capability_bundle"] = profile.capability_bundle
-        value["services"] = _normalize_workspace_services(
-            value.get("services"),
-            expected=profile.services,
-        )
-        normalized_scopes = _normalize_workspace_scopes(
-            value.get("scopes"),
-            expected=profile.scopes,
-        )
+        value["services"] = _normalize_profile_services(profile, value.get("services"))
+        normalized_scopes = _normalize_workspace_scopes(normalized_scopes, expected=profile.scopes)
     except GoogleWorkspaceError as exc:
         raise GoogleWorkspaceError("Saved Google credential metadata is invalid.") from exc
     if value.get("email_verified") is not True:
@@ -3808,9 +4120,9 @@ def load_verified_google_workspace_credentials(
 ) -> dict[str, Any]:
     """Load credentials only after current-assignment verification.
 
-    Gmail, Calendar, or Drive read-only operations must use this helper rather
-    than reading the local file directly. The connection tool itself does not
-    expose service data.
+    Every Google Workspace operation must use this helper rather than reading
+    the local file directly. The connection tool itself does not expose service
+    data.
     """
     credentials, verification = _verified_credentials(account_id)
     if verification != "match" or credentials is None:
@@ -3829,7 +4141,11 @@ def refresh_verified_google_workspace_credentials(
         _migrate_legacy_credentials()
         credentials = load_verified_google_workspace_credentials(account_id)
     connection_id = _validated_connection_id(credentials.get("tinyhat_connection_id"))
-    profile = _profile_for_capability_bundle(credentials["capability_bundle"])
+    profile = _profile_for_capability_bundle(
+        credentials["capability_bundle"],
+        scopes=credentials.get("scopes"),
+        services=credentials.get("services"),
+    )
     private_key_pem, public_key_pem = _generate_key_pair()
     try:
         client, platform_auth = build_platform_client()
@@ -3885,7 +4201,7 @@ def _normalize_refresh_document(
     *,
     expected_connection_id: str,
     expected_assignment_binding: str,
-    expected_scopes: tuple[str, ...] | list[str] = GOOGLE_READONLY_SCOPES,
+    expected_scopes: tuple[str, ...] | list[str] = GOOGLE_RECOMMENDED_SCOPES,
 ) -> dict[str, Any]:
     if not isinstance(value, dict) or value.get("schema") != GOOGLE_WORKSPACE_REFRESH_SCHEMA:
         raise GoogleWorkspaceError("Refreshed Google access had an invalid schema.")

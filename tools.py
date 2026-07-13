@@ -158,7 +158,7 @@ def private_secret_handoff(args: dict[str, Any] | None = None, **kwargs: Any) ->
 
 
 def google_workspace(args: dict[str, Any] | None = None, **kwargs: Any) -> str:
-    """Connect, inspect, or disconnect Google Workspace on this Computer."""
+    """Connect, inspect, change, or disconnect Google access on this Computer."""
     return handle_google_workspace(args, **kwargs)
 
 

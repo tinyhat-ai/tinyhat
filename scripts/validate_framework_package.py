@@ -320,15 +320,17 @@ def validate_docs(root: Path) -> None:
         "skills/tinyhat-google-workspace/SKILL.md": (
             "existing Google account",
             "Connect my Google Workspace",
-            "google_workspace_readonly_v1",
-            "read-only Gmail, Calendar, and Drive",
+            "google_workspace_recommended_v1",
+            "gmail.modify",
+            "Google consent is the permission decision",
+            "Google-owned user-OAuth scopes",
             "native Telegram inline button",
             "Never print, paste, repeat",
             "does not revoke the shared Google",
             "tinyhat_google_workspace",
             "tinyhat_google_workspace_app",
             "Hermes's bundled `google-workspace` skill",
-            "Never claim that only Gmail is exposed",
+            "Never claim that only one service is exposed",
             "Never ask for a Google Cloud",
             "gws auth",
             "any second OAuth flow",
@@ -379,10 +381,37 @@ def validate_docs(root: Path) -> None:
         for phrase in phrases:
             require(phrase in text, f"{rel} missing phrase: {phrase}")
 
+    legacy_scope_disclosure_files = (
+        "README.md",
+        "schemas.py",
+        "skills/tinyhat-google-workspace/SKILL.md",
+        "skills/tinyhat-platform/SKILL.md",
+        "docs/capabilities.md",
+        "docs/runtime-boundary.md",
+        "docs/skill-authoring.md",
+    )
+    legacy_scope_disclosures = (
+        "full calendar read/write access including sharing and permanent deletion",
+        "full contacts read/write access including permanent deletion",
+        "https://mail.google.com/",
+        "full gmail access including permanent deletion",
+        "https://www.google.com/...",
+    )
+    for rel in legacy_scope_disclosure_files:
+        raw_text = (root / rel).read_text(encoding="utf-8").replace('"', "")
+        normalized = " ".join(raw_text.split()).lower()
+        for disclosure in legacy_scope_disclosures:
+            require(
+                disclosure in normalized,
+                f"{rel} missing legacy Google scope disclosure: {disclosure}",
+            )
+
 
 def validate_google_workspace_contract(root: Path) -> None:
     text = (root / "google_workspace.py").read_text(encoding="utf-8")
     required = (
+        'GOOGLE_RECOMMENDED_CAPABILITY_BUNDLE = "google_workspace_recommended_v1"',
+        'GOOGLE_CUSTOM_CAPABILITY_BUNDLE = "google_workspace_custom_v1"',
         'GOOGLE_READONLY_CAPABILITY_BUNDLE = "google_workspace_readonly_v1"',
         'GOOGLE_GMAIL_SEND_CAPABILITY_BUNDLE = "google_workspace_gmail_send_v1"',
         'GOOGLE_WORKSPACE_PROFILE_GMAIL_SEND = "gmail_send"',
@@ -390,18 +419,40 @@ def validate_google_workspace_contract(root: Path) -> None:
         "TINYHAT_GOOGLE_PREPARE_PATH =",
         "GOOGLE_LAUNCH_TICKET_RE = re.compile(",
         '"https://www.googleapis.com/auth/gmail.readonly"',
+        '"https://www.googleapis.com/auth/gmail.modify"',
         '"https://www.googleapis.com/auth/calendar.readonly"',
         '"https://www.googleapis.com/auth/drive.readonly"',
         '"https://www.googleapis.com/auth/gmail.send"',
         '"requested_services": list(requested_profile.services)',
         '"requested_scopes": list(requested_profile.scopes)',
+        "_canonical_requested_scopes(scopes)",
+        "_canonical_custom_grant_scopes(scopes)",
+        "GOOGLE_SCOPE_ALIASES",
+        'GOOGLE_CALENDAR_FEEDS_SCOPE = "https://www.google.com/calendar/feeds"',
+        'GOOGLE_CONTACTS_FEEDS_SCOPE = "https://www.google.com/m8/feeds"',
+        "GOOGLE_EXACT_SCOPE_SERVICES",
+        "GOOGLE_EXACT_SCOPE_LABELS",
+        '"Full Gmail access including permanent deletion"',
+        '"Full Calendar read/write access including sharing and permanent deletion"',
+        '"Full Contacts read/write access including permanent deletion"',
+        '"Full Drive access including creating, editing, and deleting files"',
+        '"Gmail forwarding and sharing settings management"',
+        '"Workspace user directory management including creating and deleting users"',
+        '"Broad Google Cloud access including viewing, changing, and deleting cloud data"',
+        '"BigQuery data viewing and management"',
+        "GOOGLE_SCOPE_MAX_COUNT = 32",
+        "GOOGLE_GRANT_SCOPE_MAX_COUNT = GOOGLE_SCOPE_MAX_COUNT + len(GOOGLE_IDENTITY_SCOPES)",
+        "GOOGLE_SCOPE_TOTAL_MAX_LENGTH = 4096",
+        "AUTHORIZATION_URL_MAX_LENGTH = 32 * 1024",
+        "GOOGLE_LAUNCH_TICKET_MAX_LENGTH = 32 * 1024",
+        "len(parsed.fragment) <= GOOGLE_LAUNCH_TICKET_MAX_LENGTH",
         '"button_sent": True',
         'platform_base_url=getattr(client, "base_url", None)',
         "parsed.hostname is not None",
         "platform_url.hostname is not None",
         "parsed.path == TINYHAT_GOOGLE_PREPARE_PATH",
         "GOOGLE_LAUNCH_TICKET_RE.fullmatch(parsed.fragment)",
-        "_send_google_connect_button(authorization_url)",
+        "profile=requested_profile",
         "_start_disconnect_intent(account_id=account_id)",
         "_start_disconnect_worker_process(",
         'f"{GOOGLE_WORKSPACE_DISCONNECT_INTENTS_SUFFIX}/{intent.intent_id}/activate"',
@@ -435,7 +486,8 @@ def validate_google_workspace_contract(root: Path) -> None:
         "load_verified_google_workspace_credentials",
         "refresh_verified_google_workspace_credentials",
         '"GOOGLE_WORKSPACE_CLI_TOKEN": access_token',
-        "ALLOWED_ROOT_COMMANDS",
+        "AUDITED_ALLOWED_ROOT_COMMANDS_BY_GWS_VERSION",
+        "root_command not in audited_allowed_commands",
         "verified_managed_gws_binary",
         "pass_fds=",
         "start_new_session=True",
@@ -443,7 +495,6 @@ def validate_google_workspace_contract(root: Path) -> None:
         '"--output"',
         '"--upload"',
         '"--attach"',
-        '"--draft"',
         '"--sanitize"',
         '"content_is_untrusted": True',
     ):
@@ -453,6 +504,7 @@ def validate_google_workspace_contract(root: Path) -> None:
         "shutil.which",
         "shell=True",
         'Path.home() / ".local"',
+        '"--draft"',
     ):
         require(
             phrase.lower() not in app_text.lower(),

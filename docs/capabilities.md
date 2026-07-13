@@ -9,7 +9,7 @@ The current capability list is intentionally small.
 | `tinyhat_tell_joke` | Available now | Proves Hermes loaded the Tinyhat plugin and can call a plugin tool. |
 | `tinyhat_skill_catalog` | Available now | Lists Tinyhat plugin skills with `tinyhat:<skill>` qualified names and unqualified aliases. |
 | `tinyhat_private_secret_handoff` | Available now | Lets a user enter a secret in a Telegram Mini App while Tinyhat stores only short-lived ciphertext. |
-| `tinyhat_google_workspace` | Available now | Connects multiple Google accounts, applies exact named permission profiles, and starts an account-targeted local disconnect ceremony. |
+| `tinyhat_google_workspace` | Available now | Connects multiple Google accounts, supports recommended, legacy, or caller-selected canonical Google scope sets, and starts an account-targeted local disconnect ceremony. |
 | `tinyhat_google_workspace_app` | Available now | Lends one selected account's assignment-verified Google access to one bounded `gws` invocation. |
 | `tinyhat_google_workspace_app_manager` | Available now | After approval, installs or removes the pinned integrity-verified `gws` app; Hermes supplies the operation skill. |
 | `tinyhat-codex-auth` skill | Available now | Teaches the agent to start and inspect the Tinyhat-installed OpenAI Codex / ChatGPT subscription auth flow. |
@@ -56,18 +56,34 @@ startup failure cannot leave a dead button. If Telegram delivery fails, the
 plugin claims the handoff as failed and the worker cleans its one-time state.
 The user signs into an existing Google account; they do not create or provide a
 Google Cloud project, OAuth client, secret, or server access. Every new account
-starts with identity plus read-only Gmail, Calendar, and Drive and requests no
-write scope.
+starts with recommended Gmail reading, composing, sending, and
+inbox/draft/label management while messages and threads cannot bypass Trash for
+immediate permanent deletion, Calendar
+event management, and read-only Drive access.
 
 The Computer creates a fresh RSA keypair for every attempt. Trusted plugin code
-requests only the allowlisted `google_workspace_readonly_v1` bundle. Its
+defaults to `google_workspace_recommended_v1`. Its
 canonical services are `identity`, `gmail`, `calendar`, and `drive`; its scopes
 are exactly `openid`, `email`, `profile`,
-`https://www.googleapis.com/auth/gmail.readonly`,
-`https://www.googleapis.com/auth/calendar.readonly`, and
-`https://www.googleapis.com/auth/drive.readonly`. The tool accepts no arbitrary
-scope or service input. The platform validates all three fields and returns the
-Google URL authored from its central Web OAuth client.
+`https://www.googleapis.com/auth/gmail.modify`,
+`https://www.googleapis.com/auth/calendar.events`, and
+`https://www.googleapis.com/auth/drive.readonly`. `gmail.modify` covers reading,
+composing, sending, and inbox/draft/label management, but not immediate permanent
+deletion. The tool accepts no arbitrary
+service metadata. For another capability, the agent may request canonical
+Google-owned user-OAuth `scopes` with a short `reason`. The plugin adds basic
+identity, enforces bounded canonical syntax and order, derives service metadata,
+and the platform validates the complete request before returning the Google URL
+authored from its central Web OAuth client. Common families include Gmail,
+Calendar, Drive, Docs, Sheets, Slides, People/Contacts, Tasks, Chat, Forms,
+Meet, Classroom, Keep, Apps Script, Cloud Search, and Workspace Admin APIs.
+Google's official legacy `https://www.google.com/calendar/feeds` and
+`https://www.google.com/m8/feeds` scopes are exact exceptions. They grant full
+Calendar read/write access including sharing and permanent deletion, and full
+Contacts read/write access including permanent deletion, respectively. They map
+to `calendar` and `people`. The separate `https://mail.google.com/` scope grants
+full Gmail access including permanent deletion. The plugin does not accept any
+other `https://www.google.com/...` legacy scope URL.
 
 `{"action": "status"}` returns safe metadata for all connected accounts. Each
 entry includes the platform's stable opaque connection id as `account_id`; the
@@ -75,23 +91,21 @@ agent uses it to select an account without seeing credentials. When more than
 one account exists, operations and mutations require the intended `account_id`
 instead of silently choosing one.
 
-Permission changes use `action=set_permissions`, the selected `account_id`, and
-an exact named profile: `workspace_readonly`, `gmail_send`, `calendar_write`, or
-`gmail_send_calendar_write`. These map
-to `google_workspace_gmail_send_v1`, `google_workspace_calendar_write_v1`, and
-`google_workspace_gmail_send_calendar_write_v1`; they add `gmail.send`,
-`calendar.events`, or both to the exact read-only baseline. They do not add
-restricted `gmail.compose` or broader Calendar settings access. Selecting
-`workspace_readonly` replaces the broader local credential, so this Computer
-stops using its write scopes without deleting the account; the combined profile
-retains both write capabilities. This does not perform provider-side granular
-scope revocation or erase Google's consent history. Adding a write permission
-requires explicit permission confirmation and an unchanged retry with the
-returned `confirmation_id`. Removing one does not require elevation
-confirmation. The existing credential remains usable
-unless the new encrypted credential completes successfully and replaces only
-that account atomically. Permission confirmation is separate from confirming
-an outbound email or Calendar event change.
+Permission changes accept either a named profile or custom `scopes` plus
+`reason`. `workspace_recommended`, `workspace_readonly`, `gmail_send`,
+`calendar_write`, and `gmail_send_calendar_write` preserve reviewed and legacy
+fixed bundles. `connect` with an explicit `account_id` unions that account's
+current and requested scopes; `action=set_permissions` replaces the selected
+credential with the exact profile or custom set. An exact narrower replacement
+makes this Computer stop using removed scopes without deleting the account.
+This does not perform provider-side granular scope revocation or erase Google's
+consent history. Google's consent screen is the permission decision: the user
+can grant the exact scopes or return and ask the agent for narrower access.
+There is no second plugin permission-upgrade confirmation ceremony. The existing
+credential remains usable unless the new encrypted credential completes
+successfully and replaces only that account atomically. Operation-level
+confirmation remains separate and is required for an outbound email, label or
+draft mutation, Calendar event change, or any other external Google write.
 
 The platform owns the callback, validates state, exchanges the code, verifies
 userinfo and the granted scope set, and encrypts the complete credential envelope
@@ -155,7 +169,7 @@ does not call Google's token-revocation endpoint or revoke the provider grant in
 the shared development OAuth project. Other Tinyhat Computers remain connected.
 
 The connection tool itself does not expose messages, events, or files, and this
-authentication plugin does not implement Gmail, Calendar, or Drive operations.
+authentication plugin does not implement Google service operations.
 Hermes's bundled `google-workspace` skill owns operation guidance and result
 interpretation. Its OAuth setup and scripts are bypassed; bounded raw API argv
 goes only through the generic `tinyhat_google_workspace_app` bridge.
@@ -170,7 +184,9 @@ token never enters argv, output, logs, or persistent gws state. The refresh toke
 client ID, client secret, credential path, inherited Google config, and
 application-default credentials never enter the child.
 
-Authentication/setup/login/export commands, persistent server mode, file-I/O
+Only Google API roots audited for the pinned `gws` release are accepted; a pin
+change requires a fresh root audit. Authentication/setup/login/export commands,
+local or synthetic roots, persistent server mode, dangerous file-I/O
 and external-sanitization flags, and `--page-all` are blocked. Legitimate Google
 API methods named `export` remain available because only the top-level credential
 flow is blocked. Execution time and output are bounded; timeout or overflow kills

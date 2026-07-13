@@ -15,11 +15,17 @@ context hook, and now includes the first real Tinyhat platform capability:
 a private secret handoff that lets the user enter a secret in a Telegram
 Mini App without sending the plaintext to Tinyhat's servers. It also
 connects multiple existing Google identities to a Computer without asking the user for
-a Google Cloud project, OAuth client, secret, or SSH access. The default
-profile includes identity plus read-only Gmail, Calendar, and Drive access.
-Named profiles can add Gmail sending or Calendar event changes, or return one
-account to read-only, without enabling Gmail draft management or broader
-Calendar settings access. It
+a Google Cloud project, OAuth client, secret, or SSH access. The recommended
+default includes Gmail reading, composing, sending, and inbox/draft/label
+management while messages and threads cannot bypass Trash for immediate
+permanent deletion, Calendar event management, and read-only Drive access.
+Agents may request canonical Google
+user-OAuth scopes for other Google services with a short reason; Google
+shows the exact request and the user decides whether to grant it or ask for
+narrower access. The caller may supply up to 32 permission scopes and 4 KiB of
+permission-scope text; Tinyhat adds three identity scopes, for up to 35 complete
+scopes. These are transport and abuse-resistance bounds, not a scope-value
+allowlist. It
 teaches the agent the Tinyhat-managed OpenAI Codex / ChatGPT subscription
 auth flow that is installed on each Hermes Computer.
 
@@ -32,7 +38,7 @@ auth flow that is installed on each Hermes Computer.
 | `hermes.plugin.json` | Tinyhat metadata for the Hermes adapter, skill, command, and release channels. |
 | `context.py` | Small Hermes `pre_llm_call` context hook for Tinyhat-sensitive turns. |
 | `tools.py` / `schemas.py` | Tinyhat tools: plugin version, safe platform status, joke proof, skill catalog, private secret handoff, Google identity connection, Codex auth setup/status helpers, and plugin update helper. |
-| `google_workspace.py` / `google_workspace_worker.py` | Platform-authored Google OAuth handoff, multi-account local custody, exact permission profiles, assignment-safe status, and targeted disconnect. |
+| `google_workspace.py` / `google_workspace_worker.py` | Platform-authored Google OAuth handoff, multi-account local custody, recommended/legacy/custom permission sets, assignment-safe status, and targeted disconnect. |
 | `google_workspace_app.py` | Account-selected credential bridge to the manifest-verified, root-owned managed `gws` app. |
 | `google_workspace_app_manager.py` | Confirmed install/status/uninstall for pinned official `gws` Linux artifacts. |
 | `skills/tinyhat-tell-joke/SKILL.md` | Deterministic joke proof. |
@@ -59,8 +65,9 @@ attested Computer identity. That identity lets the platform know which
 Computer, agent, user, and account are involved.
 
 This plugin does not mint identity. The Tinyhat platform owns one central Google
-Web OAuth client and callback, validates the fixed capability bundle, exchanges
-the one-time code, and encrypts the resulting credential envelope to the
+Web OAuth client and callback, validates the exact recommended, legacy, or
+canonical custom capability request, exchanges the one-time code, and encrypts
+the resulting credential envelope to the
 Computer's one-time RSA public key. The plugin stores credentials only after the
 assigned Computer decrypts and revalidates that envelope. It never prints or
 returns the code, private key, or tokens. The platform handles tokens transiently
@@ -125,14 +132,24 @@ Tinyhat storing or returning the value.
 `tinyhat-google-workspace` connects this Computer to existing Google accounts.
 Each connect without `account_id` adds an account while preserving the others.
 The Computer creates a fresh RSA keypair and asks the
-platform for the default `google_workspace_readonly_v1` bundle: services
-`identity`, `gmail`, `calendar`, and `drive`, with basic identity plus the
-official Gmail, Calendar, and Drive read-only scopes. These values come from
-trusted plugin code, not agent or user input. The platform returns its Google
-sign-in URL to the plugin, which places it only inside a native Telegram inline
-button labeled **Connect Google**. The tool never returns a plain authorization
-link. The user supplies only their existing Google account; they never provide a
-Google Cloud project, OAuth client, or secret.
+platform for the default `google_workspace_recommended_v1` bundle: services
+`identity`, `gmail`, `calendar`, and `drive`, with basic identity plus
+`gmail.modify`, `calendar.events`, and `drive.readonly`. For another Google
+capability, the agent can supply canonical Google-owned user-OAuth scopes and a
+short user-facing reason. The plugin adds identity scopes, canonicalizes and
+bounds the request, derives its service metadata, and sends the exact set to the
+platform for validation. It also exact-allows Google's official legacy Calendar
+feed (`https://www.google.com/calendar/feeds`) and Contacts feed
+(`https://www.google.com/m8/feeds`) scopes. They grant full Calendar read/write
+access including sharing and permanent deletion, and full Contacts read/write
+access including permanent deletion, respectively. The separate
+`https://mail.google.com/` scope grants full Gmail access including permanent
+deletion. No other `https://www.google.com/...` legacy scope URL is accepted.
+The platform returns its Google sign-in URL to the plugin, which places it only
+inside a native Telegram inline button labeled **Connect Google**. The tool
+never returns a plain authorization link. The user supplies only their existing
+Google account; they never provide a Google Cloud project, OAuth client, or
+secret.
 
 Google posts the code to Tinyhat's fixed HTTPS callback. The platform validates
 state, exchanges the code through its central Web OAuth client, verifies the
@@ -175,19 +192,24 @@ Google's token-revocation endpoint or revoke the provider grant in the shared
 development OAuth project. Other Tinyhat Computers are unaffected, and the
 plugin must never claim that the Google account's provider grant was revoked.
 
-New accounts grant identity plus read-only Gmail, Calendar, and Drive by
-default. `action=set_permissions` replaces one selected account's local credential with
-the exact `workspace_readonly`, `gmail_send`, `calendar_write`, or
-`gmail_send_calendar_write` profile. Their fixed bundles add only `gmail.send`,
-`calendar.events`, or both to the baseline. Gmail draft management and broader
-Calendar settings remain out of scope. A read-only replacement makes this
-Computer stop using removed write scopes; it does not perform Google
-provider-side granular revocation or erase consent history. Adding write
-permission requires explicit confirmation and an unchanged retry with the
-returned `confirmation_id`; removing it does not. A cancelled, failed, or expired
-change leaves the existing local credential untouched; a valid encrypted
-credential replaces only the selected entry atomically. Permission confirmation
-never counts as confirmation for an actual email send or Calendar event change.
+New accounts use the recommended bundle by default. `gmail.modify` supports
+reading, composing, sending, and inbox/draft/label management while messages and
+threads cannot bypass Trash for immediate permanent deletion; `calendar.events`
+supports event management;
+Drive remains read-only. Legacy exact profiles stay
+available for compatibility. An agent may instead request any canonical
+Google-owned user-OAuth scope set with a short reason. `connect` with an
+`account_id` unions the requested scopes with that account's current set, while
+`action=set_permissions` replaces the selected account with the exact requested
+profile or custom scope set. A narrower replacement makes this Computer stop
+using removed scopes; it does not perform Google provider-side granular
+revocation or erase consent history. Google's consent screen is the permission
+decision. A cancelled, failed, or expired change leaves the existing local
+credential untouched; a valid encrypted credential replaces only the selected
+entry atomically. Google consent never counts as confirmation for an actual
+email send, label/draft mutation, Calendar event change, or other external write.
+If Google returns a different scope set, Tinyhat saves no new Computer credential
+and tells the user to choose the exact narrower access before another request.
 
 The authentication plugin does not implement mail, event, or file operations.
 Hermes's bundled `google-workspace` skill supplies operation semantics while the
@@ -199,13 +221,15 @@ bounded opaque argv from Hermes's native Google Workspace skill, selects the
 requested `account_id`, verifies the Computer assignment, refreshes only that
 entry through the platform broker when needed, and injects its access token only
 into one isolated, root-owned `gws` child process.
-The bridge accepts only
-`/opt/tinyhat/bin/gws` when the app manager's root-only manifest matches the
+The bridge accepts only the API namespaces audited for the pinned `gws` release
+and only executes `/opt/tinyhat/bin/gws` when the app manager's root-only manifest matches the
 hardcoded version, architecture, source, mode, and SHA-256. It never passes the refresh token,
 client secret, credential file, executable, environment, or working directory
 from agent input. The bridge blocks the complete `gws auth` namespace,
-setup/login/export credential flows, file-I/O and external-sanitization flags,
-persistent server mode, and unbounded pagination. Output and execution time are
+unaudited or synthetic roots, setup/login/export credential flows, file-I/O and
+external-sanitization flags, persistent server mode, and unbounded pagination.
+A Google scope can be connected before this pinned CLI exposes an operation for
+it. Output and execution time are
 hard-bounded, access-token values are defensively redacted, and every result is
 marked as untrusted external content.
 

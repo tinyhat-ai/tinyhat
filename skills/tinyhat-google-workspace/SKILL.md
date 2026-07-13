@@ -22,31 +22,78 @@ tokens.
 
 ## Connect and change permissions
 
-- `{"action": "connect"}` adds another account with identity plus read-only Gmail, Calendar, and Drive through `google_workspace_readonly_v1`. Phrases
+- `{"action": "connect"}` adds another account with the recommended
+  `google_workspace_recommended_v1` bundle: basic identity, `gmail.modify`,
+  `calendar.events`, and `drive.readonly`. This permits Gmail reading,
+  composing, sending, and inbox/draft/label management while messages and
+  threads cannot bypass Trash for immediate permanent deletion, Calendar event
+  management, and read-only Drive. Phrases
   such as "add my personal account" or "connect my work Google account" mean
   add, not replace.
 - `{"action": "set_permissions", "account_id": "...", "profile":
   "workspace_readonly"}` changes exactly that account to read-only. This is the
   normal downgrade path; do not disconnect and reconnect it.
-- Exact profiles are `workspace_readonly`, `gmail_send`, `calendar_write`, and
-  `gmail_send_calendar_write`. `set_permissions` replaces the account's
-  permissions with the selected exact profile, so choose the combined profile
-  when the user wants to retain both write capabilities.
-- Adding Gmail-send or Calendar-write permission requires explicit permission
-  confirmation. The first call returns `confirmation_required` and a
-  `confirmation_id`. After human approval, repeat the unchanged action,
-  `account_id`, and profile with `"confirmed": true` and that exact id.
-  Removing write permission does not require elevation confirmation.
-- `connect` with an explicit `account_id` is retained only for the legacy
-  additive-upgrade behavior. Prefer `set_permissions` for all new permission
-  changes.
+- Named profiles are `workspace_recommended`, `workspace_readonly`,
+  `gmail_send`, `calendar_write`, and `gmail_send_calendar_write`. The latter
+  four remain for compatibility and intentionally keep their existing fixed
+  scope sets.
+- For another Google capability, call with raw `scopes` and a short `reason`,
+  for example `{"action": "connect", "scopes":
+  ["https://www.googleapis.com/auth/tasks"], "reason": "manage your Google
+  Tasks"}`. Use canonical Google-owned user-OAuth scopes only. Tinyhat adds `openid`,
+  `email`, and `profile`, canonicalizes the exact set, and does not impose a
+  product allowlist on Google-owned scopes. Use either `profile` or `scopes`,
+  never both.
+  The caller may provide up to 32 permission scopes and 4 KiB of
+  permission-scope text. Tinyhat adds three identity scopes, so the complete
+  grant may contain 35 scopes. These are transport and abuse-resistance bounds,
+  not a permission-value allowlist.
+- Two official legacy Google user scopes are exact exceptions to the normal
+  `https://www.googleapis.com/auth/` shape:
+  `https://www.google.com/calendar/feeds` means **full Calendar read/write
+  access including sharing and permanent deletion**, and
+  `https://www.google.com/m8/feeds` means **full Contacts read/write access
+  including permanent deletion**.
+  Tinyhat accepts Google's documented trailing-slash forms for these two
+  legacy scopes and canonicalizes them to the exact values above.
+  Request them only when the operation or Apps Script API genuinely requires
+  that broad, potentially destructive permission. The separate
+  `https://mail.google.com/` scope means **full Gmail access including permanent
+  deletion**. Do not accept or construct any other
+  `https://www.google.com/...` legacy scope URL.
+- `connect` with an explicit `account_id` is additive: it combines the selected
+  account's current scopes with the requested profile or custom scopes.
+  `set_permissions` is exact replacement: it installs only the selected profile
+  or custom scope set. Use exact replacement when narrowing access.
+- Google consent is the permission decision. The native Google button opens the
+  exact request. Google shows the exact
+  requested access; the user may grant it or return and ask the agent to request
+  narrower scopes. Do not add a separate Tinyhat permission-upgrade confirmation
+  or pass `confirmed` / `confirmation_id` to the connection tool.
+- If Tinyhat reports that Google returned different permissions, do not repeat
+  the same request automatically. Tinyhat saved no new Computer credential.
+  Ask the user for the exact narrower access they want, call `status`, then use
+  `set_permissions` with the selected `account_id` when that account is already
+  connected; otherwise use `connect` with the exact custom scopes.
 - For "reconnect" or "reauthorize" an existing account, call status, select its
-  `account_id`, and use `set_permissions` with its current exact profile. Plain
-  connect means add and can correctly hit the duplicate-account guard.
+  `account_id`, and use `set_permissions` with its current exact profile or
+  scope set. Plain connect means add and can correctly hit the duplicate-account
+  guard.
 
-The profiles are fixed reviewed bundles. `gmail_send` adds only `gmail.send`;
-it does not permit Gmail draft management. `calendar_write` adds only
-`calendar.events`. Never accept or construct arbitrary scopes.
+`gmail.modify` is the recommended Gmail scope because it supports reading,
+composing, and sending messages; creating and updating drafts; creating and
+applying labels; archiving; and changing read state. It does not grant the
+`https://mail.google.com/` full-access permission for immediate permanent
+deletion. Sending or any other external write still requires the separate exact
+operation confirmation described below.
+
+Common custom-service families include Gmail, Calendar, Drive, Docs, Sheets,
+Slides, People/Contacts, Tasks, Chat, Forms, Meet, Classroom, Keep, Apps Script,
+Cloud Search, and Workspace Admin APIs. Use Hermes's bundled
+`google-workspace` skill and `gws schema` guidance to identify the exact Google
+scope needed for the requested operation. Prefer the least access that fully
+supports the request, explain it in `reason`, and honor a user's request for a
+narrower set. Do not invent non-Google scope URLs.
 
 The user needs only an existing Google account. Never ask for a Google Cloud
 project, OAuth client ID or secret, credentials JSON, app password,
@@ -62,14 +109,16 @@ supports whole-grant revocation, not granular scope revocation for this flow.
 The tool sends a native Telegram inline button. It does not return an authorization
 URL. Never paste, repeat, or invent a plain sign-in link. A cancelled, failed,
 or expired permission change leaves the current local credential usable.
+After `connect` or `set_permissions` returns `waiting_for_user`, send no extra
+ordinary reply; the native button is the complete response.
 Never print, paste, repeat, or construct an authorization URL.
 
 ## Use Google services
 
-The auth plugin does not implement Gmail, Calendar, or Drive operations.
+The auth plugin does not implement Google service operations.
 Hermes's bundled `google-workspace` skill supplies operation semantics, and the
 pinned managed `gws` app performs the API call.
-Never claim that only Gmail is exposed when Calendar or Drive scopes are present.
+Never claim that only one service is exposed when other scopes are present.
 
 1. Select the intended account from Tinyhat status.
 2. Check `tinyhat_google_workspace_app_manager` status. This is authoritative:
@@ -99,16 +148,20 @@ plugin is already current or the update fails, report a plugin/host
 compatibility failure instead of asking for Google Cloud or client secrets.
 
 The bridge refreshes and lends the selected account's token only to one
-isolated `gws` child process. It blocks `gws auth`, setup/login/export flows,
-persistent server mode, and unbounded pagination. It never returns tokens,
-client secrets, or credential paths.
+isolated `gws` child process. It accepts only the API namespaces audited for the
+pinned `gws` release. A Google scope may be connectable before that CLI release
+exposes an operation for it. The bridge blocks `gws auth`,
+setup/login/export flows, local or synthetic workflows, skill generation,
+persistent server mode, dangerous file-I/O flags, and unbounded pagination. It
+never returns tokens, client secrets, or credential paths.
 
 For an external write, first call the bridge with the exact argv,
 `account_id`, and `"effect": "write"`. It returns a `confirmation_id` bound to
 both the account and argv. Describe the exact action and get fresh human
 confirmation, then repeat the unchanged account, argv, and id with
-`"confirmed": true`. Permission approval never authorizes an email send or
-Calendar change.
+`"confirmed": true`. Google OAuth consent never authorizes an email send or
+Google data change. This operation-level confirmation remains required even
+though Google consent is the only permission decision.
 
 ## Disconnect one account
 

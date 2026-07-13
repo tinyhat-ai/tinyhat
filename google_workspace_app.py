@@ -28,10 +28,11 @@ from .google_workspace import (
     _install_credential_generation,
     _lifecycle_lock,
     _read_credentials,
+    _validated_connection_id,
     load_verified_google_workspace_credentials,
     refresh_verified_google_workspace_credentials,
-    _validated_connection_id,
 )
+from .google_workspace_app_manager import PINNED_GWS_VERSION
 from .platform import build_platform_client
 from .tool_errors import tool_error_json
 
@@ -49,8 +50,35 @@ PIPE_DRAIN_SECONDS = 0.2
 KILLED_PIPE_DRAIN_SECONDS = 1.0
 MIN_PRINTABLE_CODEPOINT = 0x20
 DELETE_CODEPOINT = 0x7F
-FORBIDDEN_ROOT_COMMANDS = {"auth", "setup", "login", "export", "mcp"}
-ALLOWED_ROOT_COMMANDS = {"schema", "gmail", "calendar", "drive"}
+AUDITED_ALLOWED_ROOT_COMMANDS_BY_GWS_VERSION = {
+    # Audited against googleworkspace/cli v0.22.5 main.rs and services.rs.
+    # `schema` reads public Discovery metadata. Every other entry is a normal
+    # API alias; local auth/skill-generation/version and synthetic workflows
+    # are intentionally absent.
+    "0.22.5": frozenset(
+        {
+            "schema",
+            "drive",
+            "sheets",
+            "gmail",
+            "calendar",
+            "admin-reports",
+            "reports",
+            "docs",
+            "slides",
+            "tasks",
+            "people",
+            "chat",
+            "classroom",
+            "forms",
+            "keep",
+            "meet",
+            "events",
+            "modelarmor",
+            "script",
+        }
+    )
+}
 ALLOWED_READ_HELPERS = {("calendar", "+agenda"), ("gmail", "+read")}
 ALLOWED_WRITE_HELPERS = {("gmail", "+send")}
 READ_METHOD_NAMES = {
@@ -64,7 +92,6 @@ READ_METHOD_NAMES = {
 }
 FORBIDDEN_FLAGS = {
     "--attach",
-    "--draft",
     "--output",
     "--page-all",
     "--sanitize",
@@ -255,8 +282,8 @@ def google_workspace_app(args: dict[str, Any] | None = None, **_: Any) -> str:
                 error_name="confirmation_required",
                 message=(
                     "Show or describe the exact recipients/content/effect and ask the "
-                    "user to confirm this external write. Permission-upgrade approval "
-                    "does not count. After confirmation, repeat the unchanged argv, "
+                    "user to confirm this external write. Google OAuth consent does "
+                    "not count. After confirmation, repeat the unchanged argv, "
                     "confirmed=true, and this confirmation_id."
                 ),
                 expected={"confirmation_id": confirmation_id},
@@ -347,16 +374,17 @@ def _normalize_argv(value: Any) -> list[str]:  # noqa: PLR0912
             "blocked_command",
             "argv must start with the gws command namespace supplied by the installed skill.",
         )
-    if root_command in FORBIDDEN_ROOT_COMMANDS:
+    audited_allowed_commands = AUDITED_ALLOWED_ROOT_COMMANDS_BY_GWS_VERSION.get(PINNED_GWS_VERSION)
+    if audited_allowed_commands is None:
         raise GoogleWorkspaceAppError(
             "blocked_command",
-            "Authentication, setup, export, and persistent-server commands are not allowed here. "
-            "Use Tinyhat Google connection instead of a second OAuth flow.",
+            "The pinned gws command surface has not been reviewed for this bridge.",
         )
-    if root_command not in ALLOWED_ROOT_COMMANDS:
+    if root_command not in audited_allowed_commands:
         raise GoogleWorkspaceAppError(
             "blocked_command",
-            "Only pinned Gmail, Calendar, Drive, and schema operation namespaces are allowed.",
+            "Only pin-audited gws schema and Google API namespaces are allowed. "
+            "Use Tinyhat Google connection instead of local auth or setup commands.",
         )
     if len(normalized) > 1 and normalized[1].startswith("+"):
         helper = (root_command, normalized[1].lower())

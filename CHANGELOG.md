@@ -6,6 +6,18 @@ All notable changes to the Tinyhat plugin are documented here.
 
 ### Changed
 
+- Bump the Hermes plugin package to `0.21.5`; make the recommended Google
+  Workspace connection useful for Gmail reading, composing, sending, and
+  inbox/draft/label management with `gmail.modify` (messages and threads cannot
+  bypass Trash for immediate permanent deletion), Calendar event management,
+  and read-only Drive; accept
+  bounded canonical Google-owned custom scope sets with a user-facing reason;
+  exact-allow Google's official legacy Calendar and Contacts feed scopes with
+  explicit disclosure of their full read/write and permanent-deletion power;
+  preserve exact legacy profiles; coordinate prepare URL and launch-ticket
+  validation with the backend's 32 KiB ceiling so maximum bounded custom scope
+  sets survive; and widen the guarded `gws` bridge to bounded Google service
+  namespaces while retaining operation-level write confirmation.
 - Bump the Hermes plugin package to `0.21.4` for portable, integrity-verified
   `gws` execution from the verified file descriptor and clearer managed-install
   guidance.
