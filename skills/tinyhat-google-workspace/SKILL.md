@@ -49,6 +49,8 @@ tokens.
   access including sharing and permanent deletion**, and
   `https://www.google.com/m8/feeds` means **full Contacts read/write access
   including permanent deletion**.
+  Tinyhat accepts Google's documented trailing-slash forms for these two
+  legacy scopes and canonicalizes them to the exact values above.
   Request them only when the operation or Apps Script API genuinely requires
   that broad, potentially destructive permission. The separate
   `https://mail.google.com/` scope means **full Gmail access including permanent
