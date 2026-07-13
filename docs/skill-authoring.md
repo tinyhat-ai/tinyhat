@@ -108,28 +108,36 @@ to add or save an API key, token, password, or credential.
 `tinyhat-google-workspace` is the default way to connect existing Google
 accounts. Calling connect without `account_id` adds an account. Status exposes
 safe metadata and the stable opaque `account_id` used to select an account;
-skills must never guess between multiple accounts. The default profile grants
-identity plus read-only Gmail, Calendar, and Drive access. Exact named
+skills must never guess between multiple accounts. The recommended default
+grants identity plus Gmail reading, composing, sending, and inbox/draft/label
+management without immediate permanent deletion, Calendar event management,
+and read-only Drive access. Named `workspace_recommended`,
 `workspace_readonly`, `gmail_send`, `calendar_write`, and
-`gmail_send_calendar_write` profiles let the user replace one local credential
-so the Computer adds or stops using write access without disconnecting. This is
-not provider-side granular scope revocation. Adding write permission requires
-explicit elevation confirmation plus an unchanged retry carrying the returned
-`confirmation_id`; removing it does not. The plugin never accepts raw scopes, and
-the Gmail profile does not add draft management. The skill calls
+`gmail_send_calendar_write` profiles preserve reviewed and legacy fixed sets.
+For another Google Workspace capability, the skill may request canonical
+Google-owned user-OAuth `scopes` with a short `reason`; use either a profile or
+scopes, never both. Connect with an account id is additive, while
+`set_permissions` is exact replacement and can narrow local access without
+disconnecting. This is not provider-side granular scope revocation. Google
+Calendar/Contacts integrations may also request the exact official legacy
+`https://www.google.com/calendar/feeds` or `https://www.google.com/m8/feeds`
+scope; no other `google.com` scope URL is accepted. Google
+consent is the permission decision; do not add a plugin elevation confirmation
+or pass `confirmed` / `confirmation_id` to permission changes. The skill calls
 `tinyhat_google_workspace` instead of
 asking for Google Cloud setup, OAuth values, SSH access, or a manual credential
-file. The plugin requests a fixed reviewed bundle and places the platform-authored
+file. The plugin places the platform-authored
 Google URL only inside a native Telegram **Connect Google** button. Tool output
 and agent replies must never expose a plain authorization link. The platform
 owns the central Web OAuth client, callback, exchange,
 identity validation, and RSA-encrypted credential delivery; the Computer keeps
 the one-time private key and stores the decrypted credentials locally.
-The auth skill does not contain Gmail, Calendar, or Drive operations. It routes
+The auth skill does not contain Google service operations. It routes
 connected service requests through Hermes's bundled `google-workspace` skill for
 operation semantics and then through `tinyhat_google_workspace_app` with the
-selected `account_id` for bounded execution. Write confirmation binds account
-and argv. The native skill's OAuth setup and scripts are not used on Tinyhat
+selected `account_id` for bounded execution across Google service namespaces.
+Operation-level write confirmation binds account and argv and remains required
+independently of OAuth consent. The native skill's OAuth setup and scripts are not used on Tinyhat
 Computers. The generic bridge owns credential injection, process bounds, and
 redaction. Never send users into `gws auth`, Google Cloud setup, credentials
 JSON, or a second OAuth flow.

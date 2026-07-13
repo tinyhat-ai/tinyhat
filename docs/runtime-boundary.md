@@ -26,32 +26,38 @@ belongs in this repo. If it is "keep the Computer alive and trusted", it
 belongs in the runtime.
 
 Google identity connection is a concrete example: the plugin supplies the
-agent tool, one-time Computer key, fixed named capability request, detached
-poll/decrypt worker, owner-only multi-account credential registry, account
-selection, and user-facing skill. The platform owns stable connection ids, the
-central Web OAuth client, callback, code exchange, identity and allowlist
-validation, and short-lived encrypted credential handoff.
-The default profile fixes `google_workspace_readonly_v1` to services `identity`,
-`gmail`, `calendar`, and `drive`, with basic identity plus the official Gmail,
-Calendar, and Drive read-only scopes. Neither the user nor agent can supply
-arbitrary scopes. A separately confirmed `google_workspace_gmail_send_v1`
-upgrade adds only `gmail.send`; it does not add `gmail.compose`, and permission
-upgrade is not confirmation for an actual send. Separately confirmed
-`google_workspace_calendar_write_v1` and
-`google_workspace_gmail_send_calendar_write_v1` bundles add only
-`calendar.events` or the two write permissions together. The plugin can replace
-one selected account's local credential with any exact named profile, including
-the read-only profile so the Computer stops using earlier write scopes. This is
-not Google provider-side granular scope revocation and does not erase consent
-history. Adding write permission needs explicit elevation confirmation bound to
-the action, account, current credential generation, and exact target profile;
-removing it does not. Consumer skills and
+agent tool, one-time Computer key, recommended and legacy profiles, bounded
+canonical custom-scope handling, detached poll/decrypt worker, owner-only
+multi-account credential registry, account selection, and user-facing skill.
+The platform owns stable connection ids, the central Web OAuth client, callback,
+code exchange, identity and exact-grant validation, and short-lived encrypted
+credential handoff.
+The default `google_workspace_recommended_v1` bundle fixes services `identity`,
+`gmail`, `calendar`, and `drive`, with basic identity plus `gmail.modify`,
+`calendar.events`, and `drive.readonly`. The Gmail scope covers reading,
+composing, sending, and inbox/draft/label management while excluding immediate
+permanent deletion. For other Workspace capabilities, the
+agent may request bounded canonical Google-owned user-OAuth scopes with a short
+reason. The plugin adds identity, canonicalizes the set, derives its services,
+and sends exact metadata for platform validation. Two official legacy scopes
+are exact exceptions: `https://www.google.com/calendar/feeds` maps to Calendar
+feed access and `https://www.google.com/m8/feeds` maps to Contacts/People feed
+access. Other `google.com` scope URLs remain invalid. Legacy fixed profiles remain
+readable. `connect` with one account id unions current and requested scopes;
+`set_permissions` replaces one selected account's local credential with the
+exact profile or custom set. A narrower replacement stops the Computer from
+using removed scopes, but is not Google provider-side granular revocation and
+does not erase consent history. Google consent is the permission decision, so
+there is no separate plugin elevation ceremony. Consumer skills and
 scripts can evolve across the same plugin/platform boundary while the runtime
 continues to supply only the existing Computer identity and plugin lifecycle.
-The auth plugin does not implement Gmail, Calendar, or Drive operations. A
+The auth plugin does not implement Google service operations. A
 generic `tinyhat_google_workspace_app` bridge lends one selected account's
 current access token to an isolated, manifest-verified root-owned `gws` child.
-Its write confirmation binds both account id and argv. Hermes's bundled
+It accepts bounded Google service namespaces while retaining root auth/setup/
+login/export/mcp blocks and process/output limits. Its operation-level write
+confirmation binds both account id and argv and remains required independently
+of OAuth consent. Hermes's bundled
 `google-workspace` skill owns operation guidance; its local-client OAuth setup
 and scripts are bypassed. The platform uses the central OAuth client secret for
 encrypted token refresh. No runtime change is involved.
