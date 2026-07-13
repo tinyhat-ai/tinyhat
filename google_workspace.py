@@ -2796,6 +2796,11 @@ def _poll_and_install(handoff: GoogleWorkspaceWorkerHandoff) -> None:
                 # This is the one reviewed platform error safe to surface as a
                 # duplicate. Arbitrary platform error text remains generic.
                 terminal_state = "duplicate_account"
+            elif terminal_state == "failed" and state.get("error_code") == "invalid_scope":
+                # Google may grant fewer, extra, or historically merged scopes.
+                # Keep exact-grant validation and give the user a useful,
+                # narrower-permission recovery path instead of an identical retry.
+                terminal_state = "scope_mismatch"
             if terminal_state == "ready":
                 outcome = _install_ready_credentials(handoff=handoff, state=state)
                 if outcome == "superseded":
@@ -2886,6 +2891,10 @@ TERMINAL_HANDOFF_MESSAGES = {
     "expired": "Google sign-in expired. Start connect again for a fresh link.",
     "superseded": "This Google sign-in was replaced by a newer connection attempt.",
     "duplicate_account": "That Google account is already connected on this Computer.",
+    "scope_mismatch": (
+        "Google returned different permissions than requested. Tinyhat saved no new "
+        "Computer credential. Retry only after the user chooses the exact narrower access."
+    ),
 }
 
 TELEGRAM_NOTICE_MESSAGES = {
@@ -2936,6 +2945,11 @@ TELEGRAM_NOTICE_MESSAGES = {
     "duplicate_account": (
         "That Google account is already connected on this Computer. Use its existing "
         "account when changing permissions."
+    ),
+    "scope_mismatch": (
+        "Google returned different permissions than requested, so Tinyhat saved no new "
+        "credential on this Computer. Tell me the exact narrower Google access you want, "
+        "and I can make a new permission request."
     ),
 }
 

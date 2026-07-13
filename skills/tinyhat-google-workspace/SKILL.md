@@ -70,6 +70,11 @@ tokens.
   requested access; the user may grant it or return and ask the agent to request
   narrower scopes. Do not add a separate Tinyhat permission-upgrade confirmation
   or pass `confirmed` / `confirmation_id` to the connection tool.
+- If Tinyhat reports that Google returned different permissions, do not repeat
+  the same request automatically. Tinyhat saved no new Computer credential.
+  Ask the user for the exact narrower access they want, call `status`, then use
+  `set_permissions` with the selected `account_id` when that account is already
+  connected; otherwise use `connect` with the exact custom scopes.
 - For "reconnect" or "reauthorize" an existing account, call status, select its
   `account_id`, and use `set_permissions` with its current exact profile or
   scope set. Plain connect means add and can correctly hit the duplicate-account

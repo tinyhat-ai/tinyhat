@@ -3079,6 +3079,52 @@ class GoogleWorkspaceTests(unittest.TestCase):
             },
         )
 
+    def test_platform_scope_mismatch_prompts_exact_narrower_recovery(self) -> None:
+        client = PollingClient([{"terminal_state": "failed", "error_code": "invalid_scope"}])
+        handoff = self._worker_handoff(client=client)
+        with (
+            tempfile.TemporaryDirectory() as tmp,
+            self._patched_state(Path(tmp)),
+            self._captured_notices() as notices,
+            mock.patch.object(
+                workspace,
+                "_decrypt_ciphertext",
+                side_effect=AssertionError("a rejected grant must not decrypt"),
+            ),
+        ):
+            workspace._atomic_save_credentials(
+                workspace._normalize_credentials(
+                    credential_envelope(
+                        bundle=READONLY_BUNDLE,
+                        scopes=READONLY_SCOPES,
+                    )
+                )
+            )
+            before = workspace._read_account_store()[0]
+            before_generation = workspace._install_credential_generation(before)
+            self._activate_handoff()
+            workspace._poll_and_install(handoff)
+            saved = workspace._read_account_store()[0]
+
+        self.assertEqual(notices, ["scope_mismatch"])
+        self.assertFalse(workspace.ACTIVE_HANDOFF_PATH.exists())
+        self.assertEqual(saved["scopes"], READONLY_SCOPES)
+        self.assertEqual(
+            workspace._install_credential_generation(saved),
+            before_generation,
+        )
+        self.assertEqual(
+            client.posts[-1][1],
+            {
+                "installed": False,
+                "message": workspace.TERMINAL_HANDOFF_MESSAGES["scope_mismatch"],
+            },
+        )
+        self.assertIn(
+            "exact narrower Google access",
+            workspace.TELEGRAM_NOTICE_MESSAGES["scope_mismatch"],
+        )
+
     def test_successful_gmail_send_upgrade_atomically_replaces_connection(self) -> None:
         client = PollingClient(
             [

@@ -208,6 +208,8 @@ decision. A cancelled, failed, or expired change leaves the existing local
 credential untouched; a valid encrypted credential replaces only the selected
 entry atomically. Google consent never counts as confirmation for an actual
 email send, label/draft mutation, Calendar event change, or other external write.
+If Google returns a different scope set, Tinyhat saves no new Computer credential
+and tells the user to choose the exact narrower access before another request.
 
 The authentication plugin does not implement mail, event, or file operations.
 Hermes's bundled `google-workspace` skill supplies operation semantics while the
