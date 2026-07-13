@@ -66,8 +66,9 @@ delivery fails, report the safe failure and let the user retry.
 
 The default connection uses `google_workspace_recommended_v1`: identity,
 `gmail.modify`, `calendar.events`, and `drive.readonly`. It supports normal
-Gmail reading, composing, sending, and inbox/draft/label management without
-immediate permanent deletion; Calendar event management; and read-only Drive
+Gmail reading, composing, sending, and inbox/draft/label management while
+messages and threads cannot bypass Trash for immediate permanent deletion;
+Calendar event management; and read-only Drive
 access. Google shows the exact requested permissions on its
 consent screen, where the user can grant them or return and ask for narrower
 access.

@@ -17,11 +17,13 @@ Mini App without sending the plaintext to Tinyhat's servers. It also
 connects multiple existing Google identities to a Computer without asking the user for
 a Google Cloud project, OAuth client, secret, or SSH access. The recommended
 default includes Gmail reading, composing, sending, and inbox/draft/label
-management without immediate permanent deletion, Calendar event management,
-and read-only Drive access. Agents may request canonical Google
+management while messages and threads cannot bypass Trash for immediate
+permanent deletion, Calendar event management, and read-only Drive access.
+Agents may request canonical Google
 user-OAuth scopes for other Workspace capabilities with a short reason; Google
 shows the exact request and the user decides whether to grant it or ask for
-narrower access. It
+narrower access. The 32-scope and 4 KiB request ceilings are transport and
+abuse-resistance bounds, not a scope-value allowlist. It
 teaches the agent the Tinyhat-managed OpenAI Codex / ChatGPT subscription
 auth flow that is installed on each Hermes Computer.
 
@@ -189,8 +191,9 @@ development OAuth project. Other Tinyhat Computers are unaffected, and the
 plugin must never claim that the Google account's provider grant was revoked.
 
 New accounts use the recommended bundle by default. `gmail.modify` supports
-reading, composing, sending, and inbox/draft/label management while excluding
-immediate permanent deletion; `calendar.events` supports event management;
+reading, composing, sending, and inbox/draft/label management while messages and
+threads cannot bypass Trash for immediate permanent deletion; `calendar.events`
+supports event management;
 Drive remains read-only. Legacy exact profiles stay
 available for compatibility. An agent may instead request any canonical
 Google-owned user-OAuth scope set with a short reason. `connect` with an

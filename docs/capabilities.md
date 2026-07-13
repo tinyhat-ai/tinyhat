@@ -57,7 +57,8 @@ plugin claims the handoff as failed and the worker cleans its one-time state.
 The user signs into an existing Google account; they do not create or provide a
 Google Cloud project, OAuth client, secret, or server access. Every new account
 starts with recommended Gmail reading, composing, sending, and
-inbox/draft/label management without immediate permanent deletion, Calendar
+inbox/draft/label management while messages and threads cannot bypass Trash for
+immediate permanent deletion, Calendar
 event management, and read-only Drive access.
 
 The Computer creates a fresh RSA keypair for every attempt. Trusted plugin code

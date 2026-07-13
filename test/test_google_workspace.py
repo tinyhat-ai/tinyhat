@@ -449,7 +449,7 @@ class GoogleWorkspaceTests(unittest.TestCase):
             "composing",
             "sending",
             "inbox/draft/label management",
-            "without immediate permanent deletion",
+            "cannot bypass Trash for immediate permanent deletion",
         )
         recommended = workspace.GOOGLE_PROFILE_CONFIGS["workspace_recommended"]
         for surface in (

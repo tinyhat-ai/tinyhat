@@ -25,8 +25,9 @@ tokens.
 - `{"action": "connect"}` adds another account with the recommended
   `google_workspace_recommended_v1` bundle: basic identity, `gmail.modify`,
   `calendar.events`, and `drive.readonly`. This permits Gmail reading,
-  composing, sending, and inbox/draft/label management without immediate
-  permanent deletion, Calendar event management, and read-only Drive. Phrases
+  composing, sending, and inbox/draft/label management while messages and
+  threads cannot bypass Trash for immediate permanent deletion, Calendar event
+  management, and read-only Drive. Phrases
   such as "add my personal account" or "connect my work Google account" mean
   add, not replace.
 - `{"action": "set_permissions", "account_id": "...", "profile":
@@ -43,6 +44,8 @@ tokens.
   `email`, and `profile`, canonicalizes the exact set, and does not impose a
   product allowlist on Google-owned scopes. Use either `profile` or `scopes`,
   never both.
+  The 32-scope and 4 KiB request ceilings are transport and abuse-resistance
+  bounds, not a permission-value allowlist.
 - Two official legacy Google user scopes are exact exceptions to the normal
   `https://www.googleapis.com/auth/` shape:
   `https://www.google.com/calendar/feeds` means **full Calendar read/write

@@ -243,8 +243,9 @@ GOOGLE_PROFILE_CONFIGS = {
         services=GOOGLE_REQUESTED_SERVICES,
         scopes=GOOGLE_RECOMMENDED_SCOPES,
         access_label=(
-            "Gmail reading, composing, sending, and inbox/draft/label management "
-            "without immediate permanent deletion, Calendar event management, and "
+            "Gmail reading, composing, sending, and inbox/draft/label management while "
+            "messages and threads cannot bypass Trash for immediate permanent deletion, "
+            "Calendar event management, and "
             "read-only Drive access"
         ),
         write_permissions=frozenset(
@@ -2822,8 +2823,9 @@ TELEGRAM_NOTICE_MESSAGES = {
     ),
     "ready_workspace_recommended": (
         "Google Workspace is connected on this Computer with Gmail reading, composing, "
-        "sending, and inbox/draft/label management without immediate permanent deletion, "
-        "Calendar event management, and read-only Drive access. I will still ask before "
+        "sending, and inbox/draft/label management while messages and threads cannot "
+        "bypass Trash for immediate permanent deletion, Calendar event management, and "
+        "read-only Drive access. I will still ask before "
         "external write actions such as sending email."
     ),
     "ready_workspace_custom": (

@@ -110,7 +110,7 @@ accounts. Calling connect without `account_id` adds an account. Status exposes
 safe metadata and the stable opaque `account_id` used to select an account;
 skills must never guess between multiple accounts. The recommended default
 grants identity plus Gmail reading, composing, sending, and inbox/draft/label
-management without immediate permanent deletion, Calendar event management,
+management while messages and threads cannot bypass Trash for immediate permanent deletion, Calendar event management,
 and read-only Drive access. Named `workspace_recommended`,
 `workspace_readonly`, `gmail_send`, `calendar_write`, and
 `gmail_send_calendar_write` profiles preserve reviewed and legacy fixed sets.

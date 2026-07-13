@@ -71,8 +71,9 @@ TINYHAT_GOOGLE_WORKSPACE_SCHEMA = {
     "description": (
         "Connect, inspect, change permissions for, or disconnect Google Workspace "
         "accounts on this Tinyhat Computer. The recommended default includes Gmail "
-        "reading, composing, sending, and inbox/draft/label management without "
-        "immediate permanent deletion, Calendar event management, and read-only Drive "
+        "reading, composing, sending, and inbox/draft/label management while messages "
+        "and threads cannot bypass Trash for immediate permanent deletion, Calendar "
+        "event management, and read-only Drive "
         "access. For other Google Workspace capabilities, request any canonical "
         "Google-owned OAuth scopes with a short reason; the user reviews the exact "
         "request on Google's consent screen and decides whether to grant it or ask "
