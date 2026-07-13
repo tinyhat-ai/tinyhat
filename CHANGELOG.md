@@ -6,6 +6,9 @@ All notable changes to the Tinyhat plugin are documented here.
 
 ### Changed
 
+- Bump the Hermes plugin package to `0.21.4` for portable, integrity-verified
+  `gws` execution from the verified file descriptor and clearer managed-install
+  guidance.
 - Bump the Hermes plugin package to `0.21.3` and expose the existing safe,
   attested Computer platform-status endpoint as `tinyhat_get_platform_status`.
 - Bump the Hermes plugin package to `0.21.2` so Google connection buttons can
