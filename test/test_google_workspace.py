@@ -3552,6 +3552,7 @@ class GoogleWorkspaceTests(unittest.TestCase):
         self.assertIn("Never substitute action=status", result["context"])
         self.assertIn("never claim an earlier button is still usable", result["context"])
         self.assertIn("native Connect Google Telegram button", result["context"])
+        self.assertIn("send no extra ordinary reply", result["context"])
         self.assertIn(
             "Never paste, repeat, or return a plain authorization link", result["context"]
         )

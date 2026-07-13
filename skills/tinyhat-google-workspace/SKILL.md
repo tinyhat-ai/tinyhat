@@ -97,6 +97,8 @@ supports whole-grant revocation, not granular scope revocation for this flow.
 The tool sends a native Telegram inline button. It does not return an authorization
 URL. Never paste, repeat, or invent a plain sign-in link. A cancelled, failed,
 or expired permission change leaves the current local credential usable.
+After `connect` or `set_permissions` returns `waiting_for_user`, send no extra
+ordinary reply; the native button is the complete response.
 Never print, paste, repeat, or construct an authorization URL.
 
 ## Use Google services
