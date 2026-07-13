@@ -119,18 +119,37 @@ GOOGLE_EXACT_SCOPE_SERVICES = {
 }
 GOOGLE_EXACT_SCOPE_LABELS = {
     GOOGLE_MAIL_SCOPE: "Full Gmail access including permanent deletion",
-    GOOGLE_CALENDAR_FEEDS_SCOPE: (
+    f"{GOOGLE_SCOPE_PREFIX}calendar": (
         "Full Calendar read/write access including sharing and permanent deletion"
     ),
-    GOOGLE_CONTACTS_FEEDS_SCOPE: (
+    f"{GOOGLE_SCOPE_PREFIX}contacts": (
         "Full Contacts read/write access including permanent deletion"
     ),
+    f"{GOOGLE_SCOPE_PREFIX}drive": (
+        "Full Drive access including creating, editing, and deleting files"
+    ),
+    f"{GOOGLE_SCOPE_PREFIX}gmail.settings.sharing": (
+        "Gmail forwarding and sharing settings management"
+    ),
+    f"{GOOGLE_SCOPE_PREFIX}admin.directory.user": (
+        "Workspace user directory management including creating and deleting users"
+    ),
+    f"{GOOGLE_SCOPE_PREFIX}cloud-platform": (
+        "Broad Google Cloud access including viewing, changing, and deleting cloud data"
+    ),
+    f"{GOOGLE_SCOPE_PREFIX}bigquery": "BigQuery data viewing and management",
+}
+GOOGLE_SCOPE_DISCLOSURE_KEYS = {
+    GOOGLE_CALENDAR_FEEDS_SCOPE: f"{GOOGLE_SCOPE_PREFIX}calendar",
+    GOOGLE_CONTACTS_FEEDS_SCOPE: f"{GOOGLE_SCOPE_PREFIX}contacts",
 }
 GOOGLE_SCOPE_ALIASES = {
     f"{GOOGLE_SCOPE_PREFIX}userinfo.email": "email",
     f"{GOOGLE_SCOPE_PREFIX}userinfo.profile": "profile",
 }
 GOOGLE_SCOPE_MAX_COUNT = 32
+GOOGLE_GRANT_SCOPE_MAX_COUNT = GOOGLE_SCOPE_MAX_COUNT + len(GOOGLE_IDENTITY_SCOPES)
+GOOGLE_ACCESS_PAIR_COUNT = 2
 GOOGLE_SCOPE_MAX_LENGTH = 512
 GOOGLE_SCOPE_TOTAL_MAX_LENGTH = 4096
 GOOGLE_REASON_MAX_LENGTH = 280
@@ -156,6 +175,25 @@ GOOGLE_SERVICE_ORDER = (
     "admin",
     "google",
 )
+GOOGLE_SERVICE_LABELS = {
+    "gmail": "Gmail",
+    "calendar": "Calendar",
+    "drive": "Drive",
+    "docs": "Docs",
+    "sheets": "Sheets",
+    "slides": "Slides",
+    "people": "People and Contacts",
+    "tasks": "Tasks",
+    "chat": "Chat",
+    "forms": "Forms",
+    "meet": "Meet",
+    "classroom": "Classroom",
+    "keep": "Keep",
+    "apps_script": "Apps Script",
+    "cloud_search": "Cloud Search",
+    "admin": "Workspace Admin",
+    "google": "other Google services",
+}
 GOOGLE_AUTHORIZATION_HOST = "accounts.google.com"
 GOOGLE_AUTHORIZATION_PATH = "/o/oauth2/v2/auth"
 TINYHAT_GOOGLE_PREPARE_PATH = (
@@ -552,62 +590,89 @@ def _account_selection_error(
     )
 
 
-def _validated_scope_values(value: Any) -> tuple[str, ...]:
-    if not isinstance(value, list) or not value or len(value) > GOOGLE_SCOPE_MAX_COUNT:
+def _validated_scope_values(
+    value: Any,
+    *,
+    completed_grant: bool = False,
+) -> tuple[str, ...]:
+    if not isinstance(value, list) or not value:
         raise GoogleWorkspaceError("Google Workspace scopes must be a non-empty bounded list.")
     normalized: list[str] = []
     seen: set[str] = set()
-    total_length = 0
     for item in value:
-        if not isinstance(item, str) or not item or item != item.strip():
-            raise GoogleWorkspaceError("Google Workspace scopes must be canonical strings.")
-        if not item.isascii() or len(item.encode("utf-8")) > GOOGLE_SCOPE_MAX_LENGTH:
-            raise GoogleWorkspaceError("Google Workspace scope is too long.")
-        total_length += len(item.encode("utf-8"))
-        if total_length > GOOGLE_SCOPE_TOTAL_MAX_LENGTH:
-            raise GoogleWorkspaceError("Google Workspace scopes are too large.")
-        if any(
-            character.isspace()
-            or ord(character) < CONTROL_CODEPOINT_LIMIT
-            or ord(character) == DELETE_CODEPOINT
-            for character in item
-        ):
-            raise GoogleWorkspaceError("Google Workspace scopes cannot contain whitespace or controls.")
-        canonical_item = GOOGLE_SCOPE_ALIASES.get(item, item)
+        canonical_item = _canonical_scope_item(item)
         if canonical_item in seen:
             raise GoogleWorkspaceError("Google Workspace scopes cannot contain duplicates.")
-        if (
-            canonical_item not in GOOGLE_IDENTITY_SCOPES
-            and canonical_item != GOOGLE_MAIL_SCOPE
-            and canonical_item not in GOOGLE_EXACT_SCOPE_SERVICES
-        ):
-            if not canonical_item.startswith(GOOGLE_SCOPE_PREFIX):
-                raise GoogleWorkspaceError("Google Workspace scope is not owned by Google.")
-            suffix = canonical_item[len(GOOGLE_SCOPE_PREFIX) :]
-            if (
-                not suffix
-                or suffix.startswith((".", "/"))
-                or suffix.endswith((".", "/"))
-                or any(
-                    character
-                    not in "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789._-/"
-                    for character in suffix
-                )
-            ):
-                raise GoogleWorkspaceError("Google Workspace scope is not canonical.")
         seen.add(canonical_item)
         normalized.append(canonical_item)
+    bounded_scopes = (
+        [scope for scope in normalized if scope not in GOOGLE_IDENTITY_SCOPES]
+        if completed_grant
+        else normalized
+    )
+    if completed_grant and len(normalized) > GOOGLE_GRANT_SCOPE_MAX_COUNT:
+        raise GoogleWorkspaceError("Google Workspace completed grant is too large.")
+    if len(bounded_scopes) > GOOGLE_SCOPE_MAX_COUNT:
+        raise GoogleWorkspaceError(
+            "Google Workspace scopes may contain at most 32 requested permissions."
+        )
+    if sum(len(scope.encode("utf-8")) for scope in bounded_scopes) > GOOGLE_SCOPE_TOTAL_MAX_LENGTH:
+        raise GoogleWorkspaceError("Google Workspace scopes are too large.")
     return tuple(normalized)
+
+
+def _canonical_scope_item(value: Any) -> str:
+    if not isinstance(value, str) or not value or value != value.strip():
+        raise GoogleWorkspaceError("Google Workspace scopes must be canonical strings.")
+    if not value.isascii() or len(value.encode("utf-8")) > GOOGLE_SCOPE_MAX_LENGTH:
+        raise GoogleWorkspaceError("Google Workspace scope is too long.")
+    if any(
+        character.isspace()
+        or ord(character) < CONTROL_CODEPOINT_LIMIT
+        or ord(character) == DELETE_CODEPOINT
+        for character in value
+    ):
+        raise GoogleWorkspaceError("Google Workspace scopes cannot contain whitespace or controls.")
+    canonical = GOOGLE_SCOPE_ALIASES.get(value, value)
+    legacy_aliases = {
+        f"{GOOGLE_CALENDAR_FEEDS_SCOPE}/",
+        f"{GOOGLE_CONTACTS_FEEDS_SCOPE}/",
+    }
+    if canonical in legacy_aliases:
+        canonical = canonical.removesuffix("/")
+    if (
+        canonical in GOOGLE_IDENTITY_SCOPES
+        or canonical == GOOGLE_MAIL_SCOPE
+        or canonical in GOOGLE_EXACT_SCOPE_SERVICES
+    ):
+        return canonical
+    if not canonical.startswith(GOOGLE_SCOPE_PREFIX):
+        raise GoogleWorkspaceError("Google Workspace scope is not owned by Google.")
+    suffix = canonical[len(GOOGLE_SCOPE_PREFIX) :]
+    if (
+        not suffix
+        or suffix.startswith((".", "/"))
+        or suffix.endswith((".", "/"))
+        or any(
+            character not in "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789._-/"
+            for character in suffix
+        )
+    ):
+        raise GoogleWorkspaceError("Google Workspace scope is not canonical.")
+    return canonical
 
 
 def _canonical_requested_scopes(value: Any) -> tuple[str, ...]:
     requested = _validated_scope_values(value)
     non_identity = sorted(scope for scope in requested if scope not in GOOGLE_IDENTITY_SCOPES)
-    return _validated_scope_values([*GOOGLE_IDENTITY_SCOPES, *non_identity])
+    return _validated_scope_values(
+        [*GOOGLE_IDENTITY_SCOPES, *non_identity],
+        completed_grant=True,
+    )
 
 
 def _canonical_custom_grant_scopes(value: Any) -> tuple[str, ...]:
-    scopes = _validated_scope_values(value)
+    scopes = _validated_scope_values(value, completed_grant=True)
     if not set(GOOGLE_IDENTITY_SCOPES).issubset(scopes):
         raise GoogleWorkspaceError("Google Workspace custom scopes are missing basic identity.")
     canonical = (
@@ -680,25 +745,35 @@ def _services_for_scopes(scopes: tuple[str, ...] | list[str]) -> tuple[str, ...]
     return tuple(service for service in GOOGLE_SERVICE_ORDER if service in present)
 
 
+def _google_access_label(service_labels: list[str]) -> str:
+    if not service_labels:
+        return "Google identity access"
+    if len(service_labels) == 1:
+        joined = service_labels[0]
+    elif len(service_labels) == GOOGLE_ACCESS_PAIR_COUNT:
+        joined = f"{service_labels[0]} and {service_labels[1]}"
+    else:
+        joined = f"{', '.join(service_labels[:-1])}, and {service_labels[-1]}"
+    return f"Google access for {joined}"
+
+
 def _custom_profile(
     scopes: Any,
     *,
     reason: str | None = None,
-    services: Any = None,
 ) -> GoogleWorkspaceProfile:
     canonical_scopes = _canonical_custom_grant_scopes(scopes)
     canonical_services = _services_for_scopes(canonical_scopes)
-    if services is not None and services != list(canonical_services):
-        raise GoogleWorkspaceError("Platform returned unexpected Google services.")
     exact_scope_labels = [
-        GOOGLE_EXACT_SCOPE_LABELS[scope]
+        GOOGLE_EXACT_SCOPE_LABELS[GOOGLE_SCOPE_DISCLOSURE_KEYS.get(scope, scope)]
         for scope in canonical_scopes
-        if scope in GOOGLE_EXACT_SCOPE_LABELS
+        if GOOGLE_SCOPE_DISCLOSURE_KEYS.get(scope, scope) in GOOGLE_EXACT_SCOPE_LABELS
+    ]
+    service_labels = [
+        GOOGLE_SERVICE_LABELS[service] for service in canonical_services if service != "identity"
     ]
     access_label = (
-        f"Google permissions needed to {reason}"
-        if reason
-        else "the requested Google permissions"
+        f"Google permissions needed to {reason}" if reason else _google_access_label(service_labels)
     )
     if exact_scope_labels:
         access_label = f"{access_label}: {'; '.join(exact_scope_labels)}"
@@ -746,7 +821,9 @@ def _profile_for_capability_bundle(
     services: Any = None,
 ) -> GoogleWorkspaceProfile:
     if value == GOOGLE_CUSTOM_CAPABILITY_BUNDLE:
-        return _custom_profile(scopes, services=services)
+        # Scopes are the authority. Service names are a derived display/index
+        # projection and may evolve independently across platform/plugin versions.
+        return _custom_profile(scopes)
     for profile in GOOGLE_PROFILE_CONFIGS.values():
         if value == profile.capability_bundle:
             if scopes is not None and scopes != list(profile.scopes):
@@ -763,7 +840,7 @@ def _profile_for_scope_set(
     force_custom: bool,
     reason: str | None = None,
 ) -> GoogleWorkspaceProfile:
-    scope_set = set(_validated_scope_values(list(scopes)))
+    scope_set = set(_validated_scope_values(list(scopes), completed_grant=True))
     if not set(GOOGLE_IDENTITY_SCOPES).issubset(scope_set):
         raise GoogleWorkspaceError("Google Workspace scopes are missing basic identity.")
     if not force_custom:
@@ -919,9 +996,9 @@ def _start_connection(
             handoff.get("capability_bundle"),
             expected=requested_profile.capability_bundle,
         )
-        services = _normalize_workspace_services(
+        services = _normalize_profile_services(
+            requested_profile,
             handoff.get("services"),
-            expected=requested_profile.services,
         )
         scopes = _normalize_workspace_scopes(
             handoff.get("scopes"),
@@ -1139,6 +1216,16 @@ def _normalize_workspace_services(
     if value != list(expected):
         raise GoogleWorkspaceError("Platform returned unexpected Google services.")
     return list(expected)
+
+
+def _normalize_profile_services(
+    profile: GoogleWorkspaceProfile,
+    value: Any,
+) -> list[str]:
+    """Derive custom display metadata while keeping fixed bundles exact."""
+    if profile.capability_bundle == GOOGLE_CUSTOM_CAPABILITY_BUNDLE:
+        return list(profile.services)
+    return _normalize_workspace_services(value, expected=profile.services)
 
 
 def _poll_after_ms(value: Any) -> int:
@@ -3299,13 +3386,13 @@ def _normalize_credentials(value: Any) -> dict[str, Any]:
         scopes=scopes,
         services=value.get("services"),
     )
+    # Custom scopes are authoritative. Persist the current plugin's derived
+    # service projection so mapping changes cannot strand old Computers.
+    normalized_services = _normalize_profile_services(profile, value.get("services"))
     normalized: dict[str, Any] = {
         "schema": GOOGLE_WORKSPACE_CREDENTIAL_SCHEMA,
         "capability_bundle": profile.capability_bundle,
-        "services": _normalize_workspace_services(
-            value.get("services"),
-            expected=profile.services,
-        ),
+        "services": normalized_services,
         "token_uri": _validated_token_uri(value.get("token_uri")),
         "tinyhat_connection_id": _validated_connection_id(
             value.get("tinyhat_connection_id")
@@ -3627,13 +3714,8 @@ def _normalize_saved_credentials(
             services=value.get("services"),
         )
         value["capability_bundle"] = profile.capability_bundle
-        value["services"] = _normalize_workspace_services(
-            value.get("services"),
-            expected=profile.services,
-        )
-        normalized_scopes = _normalize_workspace_scopes(
-            normalized_scopes, expected=profile.scopes
-        )
+        value["services"] = _normalize_profile_services(profile, value.get("services"))
+        normalized_scopes = _normalize_workspace_scopes(normalized_scopes, expected=profile.scopes)
     except GoogleWorkspaceError as exc:
         raise GoogleWorkspaceError("Saved Google credential metadata is invalid.") from exc
     if value.get("email_verified") is not True:

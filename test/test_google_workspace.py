@@ -442,6 +442,8 @@ class GoogleWorkspaceTests(unittest.TestCase):
         )
         self.assertIn("inbox/draft/label management", schema["description"])
         self.assertIn("Google-owned OAuth scopes", schema["description"])
+        self.assertEqual(schema["properties"]["scopes"]["maxItems"], 32)
+        self.assertIn("at most 35 complete scopes", schema["properties"]["scopes"]["description"])
         self.assertEqual(schema["properties"]["reason"]["maxLength"], 280)
         self.assertIn("never trusts", schema["properties"]["action"]["description"])
         disclosure_fragments = (
@@ -651,25 +653,25 @@ class GoogleWorkspaceTests(unittest.TestCase):
                     reason="Verify my Google identity",
                 )
 
-        twenty_nine = [
+        thirty_two = [
             f"https://www.googleapis.com/auth/example.scope{index:02d}"
-            for index in range(29)
+            for index in range(workspace.GOOGLE_SCOPE_MAX_COUNT)
         ]
         maximum = workspace._requested_profile(
             None,
-            scopes=twenty_nine,
+            scopes=thirty_two,
             reason="Exercise a broad Google Workspace workflow",
         )
-        self.assertEqual(len(maximum.scopes), 32)
+        self.assertEqual(len(maximum.scopes), workspace.GOOGLE_GRANT_SCOPE_MAX_COUNT)
         with self.assertRaisesRegex(
             workspace.GoogleWorkspaceError,
-            "bounded list",
+            "at most 32",
         ):
             workspace._requested_profile(
                 None,
                 scopes=[
-                    *twenty_nine,
-                    "https://www.googleapis.com/auth/example.scope29",
+                    *thirty_two,
+                    "https://www.googleapis.com/auth/example.scope32",
                 ],
                 reason="Exercise a broad Google Workspace workflow",
             )
@@ -717,31 +719,73 @@ class GoogleWorkspaceTests(unittest.TestCase):
 
         self.assertEqual(list(requested.scopes), LEGACY_FEED_SCOPES)
         self.assertEqual(list(requested.services), LEGACY_FEED_SERVICES)
-        self.assertEqual(
-            workspace.GOOGLE_EXACT_SCOPE_LABELS[workspace.GOOGLE_CALENDAR_FEEDS_SCOPE],
-            CALENDAR_FEEDS_DISCLOSURE,
-        )
-        self.assertEqual(
-            workspace.GOOGLE_EXACT_SCOPE_LABELS[workspace.GOOGLE_CONTACTS_FEEDS_SCOPE],
-            CONTACTS_FEEDS_DISCLOSURE,
-        )
         self.assertIn(CALENDAR_FEEDS_DISCLOSURE, requested.access_label)
         self.assertIn(CONTACTS_FEEDS_DISCLOSURE, requested.access_label)
 
+        modern = workspace._requested_profile(
+            None,
+            scopes=[
+                "https://www.googleapis.com/auth/calendar",
+                "https://www.googleapis.com/auth/contacts",
+            ],
+            reason="Manage Calendar and Contacts",
+        )
+        self.assertIn(CALENDAR_FEEDS_DISCLOSURE, modern.access_label)
+        self.assertIn(CONTACTS_FEEDS_DISCLOSURE, modern.access_label)
+
+        trailing_slash = workspace._requested_profile(
+            None,
+            scopes=[
+                "https://www.google.com/calendar/feeds/",
+                "https://www.google.com/m8/feeds/",
+            ],
+            reason="Manage legacy Calendar and Contacts integrations",
+        )
+        self.assertEqual(list(trailing_slash.scopes), LEGACY_FEED_SCOPES)
+
         for scope in (
-            "https://www.google.com/calendar/feeds/",
-            "https://www.google.com/m8/feeds/",
             "https://www.google.com/drive",
             "https://www.google.com/calendar",
         ):
-            with self.subTest(scope=scope), self.assertRaises(
-                workspace.GoogleWorkspaceError
-            ):
+            with self.subTest(scope=scope), self.assertRaises(workspace.GoogleWorkspaceError):
                 workspace._requested_profile(
                     None,
                     scopes=[scope],
                     reason="Request an unrecognized Google scope",
                 )
+
+    def test_high_risk_modern_scopes_have_explicit_preconsent_disclosures(self) -> None:
+        expected_fragments = {
+            "https://www.googleapis.com/auth/drive": "deleting files",
+            "https://www.googleapis.com/auth/admin.directory.user": "deleting users",
+            "https://www.googleapis.com/auth/gmail.settings.sharing": "forwarding",
+            "https://www.googleapis.com/auth/cloud-platform": "Broad Google Cloud",
+            "https://www.googleapis.com/auth/bigquery": "BigQuery data",
+        }
+
+        for scope, disclosure in expected_fragments.items():
+            with self.subTest(scope=scope):
+                requested = workspace._requested_profile(
+                    None,
+                    scopes=[scope],
+                    reason="perform the requested high-impact operation",
+                )
+                self.assertIn(disclosure, requested.access_label)
+
+    def test_custom_platform_response_normalizes_services_from_authoritative_scopes(
+        self,
+    ) -> None:
+        envelope = credential_envelope(
+            bundle=CUSTOM_BUNDLE,
+            scopes=CUSTOM_SCOPES,
+        )
+        envelope["services"] = ["identity", "stale_platform_mapping"]
+
+        normalized = workspace._normalize_credentials(envelope)
+        normalized["services"] = ["identity", "stale_saved_mapping"]
+        reloaded = workspace._normalize_saved_credentials(normalized)
+
+        self.assertEqual(reloaded["services"], CUSTOM_SERVICES)
 
     def test_legacy_feed_scopes_round_trip_through_provider_start(self) -> None:
         class Client:
@@ -753,7 +797,7 @@ class GoogleWorkspaceTests(unittest.TestCase):
                 return start_response(
                     bundle=CUSTOM_BUNDLE,
                     scopes=LEGACY_FEED_SCOPES,
-                    services=LEGACY_FEED_SERVICES,
+                    services=["identity", "stale_platform_mapping"],
                 )
 
         profile = workspace._requested_profile(
@@ -1464,6 +1508,11 @@ class GoogleWorkspaceTests(unittest.TestCase):
                 "https://www.googleapis.com/auth/gmail.readonly",
             ],
         )
+        self.assertEqual(
+            expanded.access_label,
+            "Google access for Gmail, Calendar, and Drive",
+        )
+        self.assertNotIn("the requested Google permissions", expanded.access_label)
         self.assertEqual(retained.name, "calendar_write")
 
     def test_upgrade_does_not_preserve_write_permissions_from_stale_assignment(self) -> None:
@@ -2079,22 +2128,23 @@ class GoogleWorkspaceTests(unittest.TestCase):
             self.assertLess(len(base), length)
             return f"{base}{'x' * (length - len(base))}"
 
-        identity_length = sum(len(scope) for scope in workspace.GOOGLE_IDENTITY_SCOPES)
-        non_identity_total = workspace.GOOGLE_SCOPE_TOTAL_MAX_LENGTH - identity_length
-        scope_lengths = [140] * 28
-        scope_lengths.append(non_identity_total - sum(scope_lengths))
+        scope_lengths = [120] * (workspace.GOOGLE_SCOPE_MAX_COUNT - 1)
+        scope_lengths.append(workspace.GOOGLE_SCOPE_TOTAL_MAX_LENGTH - sum(scope_lengths))
         requested_scopes = [
-            scope_with_length(index, length)
-            for index, length in enumerate(scope_lengths)
+            scope_with_length(index, length) for index, length in enumerate(scope_lengths)
         ]
         profile = workspace._requested_profile(
             None,
             scopes=requested_scopes,
             reason="exercise the maximum bounded Google scope request",
         )
-        self.assertEqual(len(profile.scopes), workspace.GOOGLE_SCOPE_MAX_COUNT)
+        self.assertEqual(len(profile.scopes), workspace.GOOGLE_GRANT_SCOPE_MAX_COUNT)
         self.assertEqual(
-            sum(len(scope.encode("utf-8")) for scope in profile.scopes),
+            sum(
+                len(scope.encode("utf-8"))
+                for scope in profile.scopes
+                if scope not in workspace.GOOGLE_IDENTITY_SCOPES
+            ),
             workspace.GOOGLE_SCOPE_TOTAL_MAX_LENGTH,
         )
 
@@ -5061,6 +5111,50 @@ class GoogleWorkspaceTests(unittest.TestCase):
             self.assertFalse(key_path.parent.exists())
             self.assertFalse(workspace.ACTIVE_HANDOFF_PATH.exists())
             self.assertEqual(notices, ["cancelled"])
+
+    def test_detached_custom_worker_derives_services_before_polling(self) -> None:
+        client = PollingClient([{"terminal_state": "cancelled"}])
+        generation = "generation-value-that-is-long-enough-custom"
+        with (
+            tempfile.TemporaryDirectory() as tmp,
+            self._patched_state(Path(tmp)),
+            mock.patch.object(
+                google_workspace_worker,
+                "build_platform_client",
+                return_value=(client, "local_dev"),
+            ),
+            self._captured_notices() as notices,
+        ):
+            key_path = workspace._write_worker_state(
+                handoff_id="gwo_workercustom123",
+                private_key_pem="private-key",
+                generation=generation,
+                handoff_metadata={
+                    "capability_bundle": CUSTOM_BUNDLE,
+                    "services": ["identity", "stale_platform_mapping"],
+                    "scopes": CUSTOM_SCOPES,
+                    "connection_action": "add",
+                    "target_connection_id": "gwo_connection123",
+                },
+            )
+            workspace._write_active_handoff_marker(
+                handoff_id="gwo_workercustom123",
+                owner_token=workspace._handoff_owner_token(generation),
+            )
+
+            google_workspace_worker.run_worker(
+                handoff_id="gwo_workercustom123",
+                key_path=key_path,
+            )
+
+            self.assertFalse(key_path.parent.exists())
+            self.assertFalse(workspace.ACTIVE_HANDOFF_PATH.exists())
+            self.assertEqual(notices, ["cancelled"])
+            self.assertEqual(client.posts[-1][1]["installed"], False)
+            self.assertEqual(
+                client.posts[-1][1]["message"],
+                workspace.TERMINAL_HANDOFF_MESSAGES["cancelled"],
+            )
 
     def test_detached_worker_preserves_install_receipt_across_claim_outage(self) -> None:
         class FailingClaimClient(PollingClient):

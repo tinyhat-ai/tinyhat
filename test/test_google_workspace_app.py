@@ -975,8 +975,12 @@ class GoogleRefreshTransportTests(unittest.TestCase):
             "email",
             "profile",
             "https://www.googleapis.com/auth/admin.directory.user.readonly",
-            "https://www.googleapis.com/auth/tasks",
+            *[
+                f"https://www.googleapis.com/auth/tasks.scope{index:02d}"
+                for index in range(31)
+            ],
         ]
+        self.assertEqual(len(custom_scopes), google_workspace.GOOGLE_GRANT_SCOPE_MAX_COUNT)
         custom_services = ["identity", "tasks", "admin"]
         client = Client()
         refresh_document = {

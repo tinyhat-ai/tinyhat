@@ -29,8 +29,8 @@ from .google_workspace import (
     _cleanup_worker_state,
     _handoff_owner_token,
     _lifecycle_lock,
+    _normalize_profile_services,
     _normalize_workspace_scopes,
-    _normalize_workspace_services,
     _poll_and_install,
     _profile_for_capability_bundle,
     _remove_active_handoff_marker_if_matches,
@@ -61,16 +61,16 @@ def run_worker(*, handoff_id: str, key_path: Path) -> None:
             )
             if not isinstance(metadata, dict):
                 raise GoogleWorkspaceError("The one-time handoff metadata is invalid.")
-            capability_bundle = _validated_capability_bundle(
-                metadata.get("capability_bundle")
+            capability_bundle = _validated_capability_bundle(metadata.get("capability_bundle"))
+            raw_scopes = _normalize_workspace_scopes(metadata.get("scopes"))
+            profile = _profile_for_capability_bundle(
+                capability_bundle,
+                scopes=raw_scopes,
+                services=metadata.get("services"),
             )
-            profile = _profile_for_capability_bundle(capability_bundle)
-            services = _normalize_workspace_services(
-                metadata.get("services"),
-                expected=profile.services,
-            )
+            services = _normalize_profile_services(profile, metadata.get("services"))
             scopes = _normalize_workspace_scopes(
-                metadata.get("scopes"),
+                raw_scopes,
                 expected=profile.scopes,
             )
             connection_action = metadata.get("connection_action")
