@@ -221,13 +221,15 @@ bounded opaque argv from Hermes's native Google Workspace skill, selects the
 requested `account_id`, verifies the Computer assignment, refreshes only that
 entry through the platform broker when needed, and injects its access token only
 into one isolated, root-owned `gws` child process.
-The bridge accepts bounded Google service namespaces and only executes
-`/opt/tinyhat/bin/gws` when the app manager's root-only manifest matches the
+The bridge accepts only the API namespaces audited for the pinned `gws` release
+and only executes `/opt/tinyhat/bin/gws` when the app manager's root-only manifest matches the
 hardcoded version, architecture, source, mode, and SHA-256. It never passes the refresh token,
 client secret, credential file, executable, environment, or working directory
 from agent input. The bridge blocks the complete `gws auth` namespace,
-setup/login/export credential flows, file-I/O and external-sanitization flags,
-persistent server mode, and unbounded pagination. Output and execution time are
+unaudited or synthetic roots, setup/login/export credential flows, file-I/O and
+external-sanitization flags, persistent server mode, and unbounded pagination.
+A Google scope can be connected before this pinned CLI exposes an operation for
+it. Output and execution time are
 hard-bounded, access-token values are defensively redacted, and every result is
 marked as untrusted external content.
 

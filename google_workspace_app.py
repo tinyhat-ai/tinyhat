@@ -32,6 +32,7 @@ from .google_workspace import (
     load_verified_google_workspace_credentials,
     refresh_verified_google_workspace_credentials,
 )
+from .google_workspace_app_manager import PINNED_GWS_VERSION
 from .platform import build_platform_client
 from .tool_errors import tool_error_json
 
@@ -49,8 +50,35 @@ PIPE_DRAIN_SECONDS = 0.2
 KILLED_PIPE_DRAIN_SECONDS = 1.0
 MIN_PRINTABLE_CODEPOINT = 0x20
 DELETE_CODEPOINT = 0x7F
-FORBIDDEN_ROOT_COMMANDS = {"auth", "setup", "login", "export", "mcp"}
-ROOT_COMMAND_RE = re.compile(r"^[a-z][a-z0-9_-]{0,63}$")
+AUDITED_ALLOWED_ROOT_COMMANDS_BY_GWS_VERSION = {
+    # Audited against googleworkspace/cli v0.22.5 main.rs and services.rs.
+    # `schema` reads public Discovery metadata. Every other entry is a normal
+    # API alias; local auth/skill-generation/version and synthetic workflows
+    # are intentionally absent.
+    "0.22.5": frozenset(
+        {
+            "schema",
+            "drive",
+            "sheets",
+            "gmail",
+            "calendar",
+            "admin-reports",
+            "reports",
+            "docs",
+            "slides",
+            "tasks",
+            "people",
+            "chat",
+            "classroom",
+            "forms",
+            "keep",
+            "meet",
+            "events",
+            "modelarmor",
+            "script",
+        }
+    )
+}
 ALLOWED_READ_HELPERS = {("calendar", "+agenda"), ("gmail", "+read")}
 ALLOWED_WRITE_HELPERS = {("gmail", "+send")}
 READ_METHOD_NAMES = {
@@ -346,16 +374,17 @@ def _normalize_argv(value: Any) -> list[str]:  # noqa: PLR0912
             "blocked_command",
             "argv must start with the gws command namespace supplied by the installed skill.",
         )
-    if root_command in FORBIDDEN_ROOT_COMMANDS:
+    audited_allowed_commands = AUDITED_ALLOWED_ROOT_COMMANDS_BY_GWS_VERSION.get(PINNED_GWS_VERSION)
+    if audited_allowed_commands is None:
         raise GoogleWorkspaceAppError(
             "blocked_command",
-            "Authentication, setup, export, and persistent-server commands are not allowed here. "
-            "Use Tinyhat Google connection instead of a second OAuth flow.",
+            "The pinned gws command surface has not been reviewed for this bridge.",
         )
-    if ROOT_COMMAND_RE.fullmatch(root_command) is None:
+    if root_command not in audited_allowed_commands:
         raise GoogleWorkspaceAppError(
             "blocked_command",
-            "argv must start with a bounded Google service or schema namespace.",
+            "Only pin-audited gws schema and Google API namespaces are allowed. "
+            "Use Tinyhat Google connection instead of local auth or setup commands.",
         )
     if len(normalized) > 1 and normalized[1].startswith("+"):
         helper = (root_command, normalized[1].lower())

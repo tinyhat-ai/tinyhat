@@ -148,11 +148,12 @@ plugin is already current or the update fails, report a plugin/host
 compatibility failure instead of asking for Google Cloud or client secrets.
 
 The bridge refreshes and lends the selected account's token only to one
-isolated `gws` child process. It accepts bounded Google service namespaces,
-including newly supported Workspace APIs, while blocking `gws auth`,
-setup/login/export flows, persistent server mode, dangerous file-I/O flags, and
-unbounded pagination. It never returns tokens, client secrets, or credential
-paths.
+isolated `gws` child process. It accepts only the API namespaces audited for the
+pinned `gws` release. A Google scope may be connectable before that CLI release
+exposes an operation for it. The bridge blocks `gws auth`,
+setup/login/export flows, local or synthetic workflows, skill generation,
+persistent server mode, dangerous file-I/O flags, and unbounded pagination. It
+never returns tokens, client secrets, or credential paths.
 
 For an external write, first call the bridge with the exact argv,
 `account_id`, and `"effect": "write"`. It returns a `confirmation_id` bound to

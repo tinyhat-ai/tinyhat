@@ -148,7 +148,7 @@ class GoogleWorkspaceAppTests(unittest.TestCase):
                     self.assertEqual(result["error"], "invalid_parameter")
             load.assert_not_called()
 
-    def test_blocks_auth_process_and_file_modes_but_allows_api_and_future_namespaces(
+    def test_blocks_local_unbounded_and_unaudited_roots_but_allows_audited_apis(
         self,
     ) -> None:
         blocked = (
@@ -162,14 +162,19 @@ class GoogleWorkspaceAppTests(unittest.TestCase):
             ["login"],
             ["export"],
             ["mcp"],
-            ["future-service", "resource", "list", "--page-all"],
-            ["future-service", "resource", "list", "--page-all=true"],
-            ["future-service", "resource", "get", "--output", "/tmp/value"],
-            ["future-service", "resource", "get", "--output=/tmp/value"],
-            ["future-service", "resource", "get", "-o/tmp/value"],
-            ["future-service", "resource", "create", "--upload", "/etc/passwd"],
-            ["future-service", "resource", "create", "--upload-content-type=text/plain"],
-            ["future-service", "resource", "get", "--sanitize=projects/example/template"],
+            ["generate-skills"],
+            ["version"],
+            ["workflow", "daily-brief"],
+            ["wf", "daily-brief"],
+            ["future-service", "resource", "list", "--params", "{}"],
+            ["drive", "files", "list", "--page-all"],
+            ["drive", "files", "list", "--page-all=true"],
+            ["drive", "files", "get", "--output", "/tmp/value"],
+            ["drive", "files", "get", "--output=/tmp/value"],
+            ["drive", "files", "get", "-o/tmp/value"],
+            ["drive", "files", "create", "--upload", "/etc/passwd"],
+            ["drive", "files", "create", "--upload-content-type=text/plain"],
+            ["drive", "files", "get", "--sanitize=projects/example/template"],
             ["gmail", "+send", "--attach", "/etc/passwd"],
             ["gmail", "+send", "--attach=/etc/passwd"],
             ["gmail", "+send", "-a", "/etc/passwd"],
@@ -187,17 +192,49 @@ class GoogleWorkspaceAppTests(unittest.TestCase):
             ["drive", "files", "export", "--params", '{"fileId":"safe-id"}'],
         )
         self.assertEqual(
-            google_workspace_app._normalize_argv(
-                ["future-service", "resource", "list", "--params", "{}"]
-            ),
-            ["future-service", "resource", "list", "--params", "{}"],
+            google_workspace_app._normalize_argv(["tasks", "tasks", "list", "--params", "{}"]),
+            ["tasks", "tasks", "list", "--params", "{}"],
         )
         self.assertEqual(
-            google_workspace_app._normalize_argv(
-                ["gmail", "+send", "--draft"]
-            ),
+            google_workspace_app._normalize_argv(["gmail", "+send", "--draft"]),
             ["gmail", "+send", "--draft"],
         )
+
+    def test_pinned_gws_root_command_audit_fails_closed_on_version_drift(
+        self,
+    ) -> None:
+        self.assertEqual(google_workspace_app.PINNED_GWS_VERSION, "0.22.5")
+        self.assertEqual(
+            google_workspace_app.AUDITED_ALLOWED_ROOT_COMMANDS_BY_GWS_VERSION["0.22.5"],
+            {
+                "schema",
+                "drive",
+                "sheets",
+                "gmail",
+                "calendar",
+                "admin-reports",
+                "reports",
+                "docs",
+                "slides",
+                "tasks",
+                "people",
+                "chat",
+                "classroom",
+                "forms",
+                "keep",
+                "meet",
+                "events",
+                "modelarmor",
+                "script",
+            },
+        )
+        with (
+            mock.patch.object(google_workspace_app, "PINNED_GWS_VERSION", "0.22.6"),
+            self.assertRaises(google_workspace_app.GoogleWorkspaceAppError) as raised,
+        ):
+            google_workspace_app._normalize_argv(["drive", "files", "list"])
+
+        self.assertEqual(raised.exception.code, "blocked_command")
 
     def test_child_receives_only_access_token_and_output_is_redacted(self) -> None:
         script = """

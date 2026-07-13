@@ -62,8 +62,9 @@ continues to supply only the existing Computer identity and plugin lifecycle.
 The auth plugin does not implement Google service operations. A
 generic `tinyhat_google_workspace_app` bridge lends one selected account's
 current access token to an isolated, manifest-verified root-owned `gws` child.
-It accepts bounded Google service namespaces while retaining root auth/setup/
-login/export/mcp blocks and process/output limits. Its operation-level write
+It accepts only the API namespaces audited for the pinned `gws` release while
+retaining local, synthetic, auth/setup/login/export/mcp blocks and process/output
+limits. A granted scope may precede CLI operation support. Its operation-level write
 confirmation binds both account id and argv and remains required independently
 of OAuth consent. Hermes's bundled
 `google-workspace` skill owns operation guidance; its local-client OAuth setup

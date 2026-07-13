@@ -163,8 +163,9 @@ TINYHAT_GOOGLE_WORKSPACE_APP_SCHEMA = {
         "Run bounded argv through Tinyhat's pinned gws app using this Computer's "
         "assignment-verified Google access. Hermes's native Google Workspace skill "
         "supplies service-specific operation guidance across Google Workspace; "
-        "Tinyhat bridges any bounded Google service namespace while blocking auth, "
-        "setup, export, persistent-server, unsafe file-I/O, and unbounded operations."
+        "Tinyhat bridges only API roots audited for the pinned gws release while "
+        "blocking auth, setup, export, persistent-server, unsafe file-I/O, and "
+        "unbounded operations."
     ),
     "properties": {
         "argv": {
@@ -175,8 +176,8 @@ TINYHAT_GOOGLE_WORKSPACE_APP_SCHEMA = {
             "description": (
                 "Opaque gws arguments supplied by Hermes's native Google Workspace "
                 "skill. Do not include the gws executable, auth/setup/login/export/mcp "
-                "commands, unsafe file-I/O flags, or unbounded pagination such as "
-                "--page-all."
+                "commands, unaudited/local/synthetic API roots, unsafe file-I/O flags, "
+                "or unbounded pagination such as --page-all."
             ),
         },
         "effect": {

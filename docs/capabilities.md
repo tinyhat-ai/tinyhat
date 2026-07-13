@@ -184,8 +184,9 @@ token never enters argv, output, logs, or persistent gws state. The refresh toke
 client ID, client secret, credential path, inherited Google config, and
 application-default credentials never enter the child.
 
-Bounded Google service namespaces are accepted. Authentication/setup/login/export
-commands, persistent server mode, dangerous file-I/O
+Only Google API roots audited for the pinned `gws` release are accepted; a pin
+change requires a fresh root audit. Authentication/setup/login/export commands,
+local or synthetic roots, persistent server mode, dangerous file-I/O
 and external-sanitization flags, and `--page-all` are blocked. Legitimate Google
 API methods named `export` remain available because only the top-level credential
 flow is blocked. Execution time and output are bounded; timeout or overflow kills

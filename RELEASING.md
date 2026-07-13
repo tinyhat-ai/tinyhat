@@ -59,6 +59,14 @@ git push origin channels/lts --force-with-lease
 
 ## Verify
 
+Before changing `PINNED_GWS_VERSION`, audit that release's local roots, API
+aliases, synthetic helpers, and global flags in `googleworkspace/cli` source.
+Update `AUDITED_ALLOWED_ROOT_COMMANDS_BY_GWS_VERSION` and its exact-set test in
+the same PR. Keep public `schema` plus ordinary Discovery API aliases; auth,
+setup, synthetic workflow, skill-generation, export, and server commands must
+remain blocked. An unaudited version intentionally fails closed for every bridge
+command.
+
 ```bash
 git ls-remote --heads origin channels/lts channels/latest
 gh release list --repo tinyhat-ai/tinyhat --limit 10
