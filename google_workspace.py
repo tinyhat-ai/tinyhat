@@ -170,15 +170,17 @@ DISCONNECT_ORPHAN_SWEEP_DELETE_LIMIT = 8
 INSTALL_RECEIPT_SCAN_LIMIT = 32
 CONTEXT_ASSIGNMENT_CHECK_TTL_SECONDS = 30.0
 CONTEXT_ASSIGNMENT_CHECK_TIMEOUT_SECONDS = 2
-AUTHORIZATION_URL_MAX_LENGTH = 16_384
+AUTHORIZATION_URL_MAX_LENGTH = 32 * 1024
 PUBLIC_CLIENT_ID_MAX_LENGTH = 512
 GOOGLE_TOKEN_VALUE_MAX_LENGTH = 16_384
 GOOGLE_TOKEN_EXPIRY_MAX_LENGTH = 64
 OWNER_ONLY_FILE_MODE = 0o600
 HANDOFF_ID_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_.-]{0,127}$")
 GOOGLE_CONNECTION_ID_RE = re.compile(r"^gwo_[A-Za-z0-9_-]{1,60}$")
+GOOGLE_LAUNCH_TICKET_MAX_LENGTH = 32 * 1024
 GOOGLE_LAUNCH_TICKET_RE = re.compile(
-    r"^gwol1\.[1-9][0-9]{0,9}\.[A-Za-z0-9_-]{32,16000}$"
+    rf"^gwol1\.[1-9][0-9]{{0,9}}\."
+    rf"[A-Za-z0-9_-]{{32,{GOOGLE_LAUNCH_TICKET_MAX_LENGTH}}}$"
 )
 DISCONNECT_OWNER_TOKEN_RE = re.compile(r"^[A-Za-z0-9_-]{32,256}$")
 DISCONNECT_GENERATION_RE = re.compile(r"^[0-9a-f]{64}$")
@@ -1047,6 +1049,7 @@ def _validated_authorization_url(
         and parsed.path == TINYHAT_GOOGLE_PREPARE_PATH
         and not parsed.query
         and GOOGLE_LAUNCH_TICKET_RE.fullmatch(parsed.fragment) is not None
+        and len(parsed.fragment) <= GOOGLE_LAUNCH_TICKET_MAX_LENGTH
         and platform_url.scheme == "https"
         and platform_url.hostname is not None
         and platform_url.username is None

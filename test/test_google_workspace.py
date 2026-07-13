@@ -2006,6 +2006,91 @@ class GoogleWorkspaceTests(unittest.TestCase):
             direct_google_url,
         )
 
+    def test_backend_valid_maximum_custom_request_survives_prepare_url_round_trip(
+        self,
+    ) -> None:
+        def scope_with_length(index: int, length: int) -> str:
+            base = f"{workspace.GOOGLE_SCOPE_PREFIX}maximum.scope{index:02d}."
+            self.assertLess(len(base), length)
+            return f"{base}{'x' * (length - len(base))}"
+
+        identity_length = sum(len(scope) for scope in workspace.GOOGLE_IDENTITY_SCOPES)
+        non_identity_total = workspace.GOOGLE_SCOPE_TOTAL_MAX_LENGTH - identity_length
+        scope_lengths = [140] * 28
+        scope_lengths.append(non_identity_total - sum(scope_lengths))
+        requested_scopes = [
+            scope_with_length(index, length)
+            for index, length in enumerate(scope_lengths)
+        ]
+        profile = workspace._requested_profile(
+            None,
+            scopes=requested_scopes,
+            reason="exercise the maximum bounded Google scope request",
+        )
+        self.assertEqual(len(profile.scopes), workspace.GOOGLE_SCOPE_MAX_COUNT)
+        self.assertEqual(
+            sum(len(scope.encode("utf-8")) for scope in profile.scopes),
+            workspace.GOOGLE_SCOPE_TOTAL_MAX_LENGTH,
+        )
+
+        # A platform-sealed launch ticket for this maximum request is roughly
+        # 23 KiB. This exceeds the old plugin caps while remaining below the
+        # backend's coordinated 32 KiB authorization URL ceiling.
+        ticket_length = 22_986
+        ticket_prefix = "gwol1.1."
+        launch_ticket = f"{ticket_prefix}{'a' * (ticket_length - len(ticket_prefix))}"
+        authorization_url = f"{PLATFORM_BASE_URL}{PREPARE_PATH}#{launch_ticket}"
+        self.assertGreater(len(authorization_url), 16_384)
+        self.assertLessEqual(
+            len(authorization_url),
+            workspace.AUTHORIZATION_URL_MAX_LENGTH,
+        )
+
+        class Client:
+            base_url = PLATFORM_BASE_URL
+
+            def post_json(
+                self,
+                _path: str,
+                _payload: dict[str, object],
+            ) -> dict[str, object]:
+                return start_response(
+                    bundle=CUSTOM_BUNDLE,
+                    scopes=list(profile.scopes),
+                    services=list(profile.services),
+                    authorization_url=authorization_url,
+                )
+
+        with (
+            tempfile.TemporaryDirectory() as tmp,
+            self._patched_state(Path(tmp)),
+            mock.patch.object(
+                workspace,
+                "build_platform_client",
+                return_value=(Client(), "local_dev"),
+            ),
+            mock.patch.object(
+                workspace,
+                "_generate_key_pair",
+                return_value=("one-time-private-key", "one-time-public-key"),
+            ),
+            mock.patch.object(workspace, "_start_worker_process"),
+            mock.patch.object(
+                workspace,
+                "_send_google_connect_button",
+                return_value={"sent": True, "ok": True},
+            ) as send_button,
+        ):
+            result = workspace._start_connection(profile=profile)
+
+        self.assertEqual(result["status"], "waiting_for_user")
+        self.assertEqual(result["scopes"], list(profile.scopes))
+        send_button.assert_called_once_with(
+            authorization_url,
+            profile=profile,
+            permission_change=False,
+        )
+
     def test_authorization_url_rejects_untrusted_prepare_shapes(self) -> None:
         ticket = f"gwol1.1.{'a' * 64}"
         invalid_urls = (
@@ -2017,7 +2102,10 @@ class GoogleWorkspaceTests(unittest.TestCase):
             f"{PLATFORM_BASE_URL}{PREPARE_PATH}",
             f"{PLATFORM_BASE_URL}{PREPARE_PATH}#gwol1.0.{'a' * 64}",
             f"{PLATFORM_BASE_URL}{PREPARE_PATH}#gwol1.1.too-short",
-            f"{PLATFORM_BASE_URL}{PREPARE_PATH}#gwol1.1.{'a' * 16001}",
+            (
+                f"{PLATFORM_BASE_URL}{PREPARE_PATH}#gwol1.1."
+                f"{'a' * workspace.GOOGLE_LAUNCH_TICKET_MAX_LENGTH}"
+            ),
         )
         for authorization_url in invalid_urls:
             with (
@@ -2034,6 +2122,13 @@ class GoogleWorkspaceTests(unittest.TestCase):
                 f"https://{PREPARE_PATH}#{ticket}",
                 platform_base_url="https://",
             )
+
+        oversized_direct_google_url = (
+            "https://accounts.google.com/o/oauth2/v2/auth?scope="
+            f"{'a' * workspace.AUTHORIZATION_URL_MAX_LENGTH}"
+        )
+        with self.assertRaises(workspace.GoogleWorkspaceError):
+            workspace._validated_authorization_url(oversized_direct_google_url)
 
     def test_connect_rejects_platform_url_or_capability_drift(self) -> None:
         variants = []
