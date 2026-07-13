@@ -36,12 +36,14 @@ The default `google_workspace_recommended_v1` bundle fixes services `identity`,
 `gmail`, `calendar`, and `drive`, with basic identity plus `gmail.modify`,
 `calendar.events`, and `drive.readonly`. The Gmail scope covers reading,
 composing, sending, and inbox/draft/label management while messages and threads
-cannot bypass Trash for immediate permanent deletion. For other Workspace
+cannot bypass Trash for immediate permanent deletion. For other Google
 capabilities, the agent may request bounded canonical Google-owned user-OAuth
 scopes with a short reason. The plugin adds identity, canonicalizes the set,
 derives its services, and sends exact metadata for platform validation. The
-32-scope and 4 KiB ceilings are transport and abuse-resistance bounds, not a
-scope-value allowlist. Two official legacy scopes
+caller may provide up to 32 permission scopes and 4 KiB of permission-scope
+text; the complete grant may contain 35 scopes after Tinyhat adds identity.
+These ceilings are transport and abuse-resistance bounds, not a scope-value
+allowlist. Two official legacy scopes
 are exact exceptions: `https://www.google.com/calendar/feeds` grants full
 Calendar read/write access including sharing and permanent deletion, while
 `https://www.google.com/m8/feeds` grants full Contacts read/write access including

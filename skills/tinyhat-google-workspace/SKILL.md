@@ -44,8 +44,10 @@ tokens.
   `email`, and `profile`, canonicalizes the exact set, and does not impose a
   product allowlist on Google-owned scopes. Use either `profile` or `scopes`,
   never both.
-  The 32-scope and 4 KiB request ceilings are transport and abuse-resistance
-  bounds, not a permission-value allowlist.
+  The caller may provide up to 32 permission scopes and 4 KiB of
+  permission-scope text. Tinyhat adds three identity scopes, so the complete
+  grant may contain 35 scopes. These are transport and abuse-resistance bounds,
+  not a permission-value allowlist.
 - Two official legacy Google user scopes are exact exceptions to the normal
   `https://www.googleapis.com/auth/` shape:
   `https://www.google.com/calendar/feeds` means **full Calendar read/write

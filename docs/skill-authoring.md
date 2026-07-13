@@ -114,9 +114,9 @@ management while messages and threads cannot bypass Trash for immediate permanen
 and read-only Drive access. Named `workspace_recommended`,
 `workspace_readonly`, `gmail_send`, `calendar_write`, and
 `gmail_send_calendar_write` profiles preserve reviewed and legacy fixed sets.
-For another Google Workspace capability, the skill may request canonical
-Google-owned user-OAuth `scopes` with a short `reason`; use either a profile or
-scopes, never both. Connect with an account id is additive, while
+For another Google API capability, the skill may request canonical Google-owned
+user-OAuth `scopes`, including non-Workspace Google APIs, with a short precise
+`reason`; use either a profile or scopes, never both. Connect with an account id is additive, while
 `set_permissions` is exact replacement and can narrow local access without
 disconnecting. This is not provider-side granular scope revocation. Google
 Calendar/Contacts integrations may also request the exact official legacy

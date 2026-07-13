@@ -442,6 +442,7 @@ class GoogleWorkspaceTests(unittest.TestCase):
         )
         self.assertIn("inbox/draft/label management", schema["description"])
         self.assertIn("Google-owned OAuth scopes", schema["description"])
+        self.assertIn("non-Workspace Google APIs", tinyhat_context.TINYHAT_CONTEXT)
         self.assertEqual(schema["properties"]["scopes"]["maxItems"], 32)
         self.assertIn("at most 35 complete scopes", schema["properties"]["scopes"]["description"])
         self.assertEqual(schema["properties"]["reason"]["maxLength"], 280)

@@ -20,10 +20,12 @@ default includes Gmail reading, composing, sending, and inbox/draft/label
 management while messages and threads cannot bypass Trash for immediate
 permanent deletion, Calendar event management, and read-only Drive access.
 Agents may request canonical Google
-user-OAuth scopes for other Workspace capabilities with a short reason; Google
+user-OAuth scopes for other Google services with a short reason; Google
 shows the exact request and the user decides whether to grant it or ask for
-narrower access. The 32-scope and 4 KiB request ceilings are transport and
-abuse-resistance bounds, not a scope-value allowlist. It
+narrower access. The caller may supply up to 32 permission scopes and 4 KiB of
+permission-scope text; Tinyhat adds three identity scopes, for up to 35 complete
+scopes. These are transport and abuse-resistance bounds, not a scope-value
+allowlist. It
 teaches the agent the Tinyhat-managed OpenAI Codex / ChatGPT subscription
 auth flow that is installed on each Hermes Computer.
 
@@ -132,7 +134,7 @@ Each connect without `account_id` adds an account while preserving the others.
 The Computer creates a fresh RSA keypair and asks the
 platform for the default `google_workspace_recommended_v1` bundle: services
 `identity`, `gmail`, `calendar`, and `drive`, with basic identity plus
-`gmail.modify`, `calendar.events`, and `drive.readonly`. For another Workspace
+`gmail.modify`, `calendar.events`, and `drive.readonly`. For another Google
 capability, the agent can supply canonical Google-owned user-OAuth scopes and a
 short user-facing reason. The plugin adds identity scopes, canonicalizes and
 bounds the request, derives its service metadata, and sends the exact set to the
