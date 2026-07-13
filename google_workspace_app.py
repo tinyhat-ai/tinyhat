@@ -28,9 +28,9 @@ from .google_workspace import (
     _install_credential_generation,
     _lifecycle_lock,
     _read_credentials,
+    _validated_connection_id,
     load_verified_google_workspace_credentials,
     refresh_verified_google_workspace_credentials,
-    _validated_connection_id,
 )
 from .platform import build_platform_client
 from .tool_errors import tool_error_json
@@ -50,7 +50,7 @@ KILLED_PIPE_DRAIN_SECONDS = 1.0
 MIN_PRINTABLE_CODEPOINT = 0x20
 DELETE_CODEPOINT = 0x7F
 FORBIDDEN_ROOT_COMMANDS = {"auth", "setup", "login", "export", "mcp"}
-ALLOWED_ROOT_COMMANDS = {"schema", "gmail", "calendar", "drive"}
+ROOT_COMMAND_RE = re.compile(r"^[a-z][a-z0-9_-]{0,63}$")
 ALLOWED_READ_HELPERS = {("calendar", "+agenda"), ("gmail", "+read")}
 ALLOWED_WRITE_HELPERS = {("gmail", "+send")}
 READ_METHOD_NAMES = {
@@ -64,7 +64,6 @@ READ_METHOD_NAMES = {
 }
 FORBIDDEN_FLAGS = {
     "--attach",
-    "--draft",
     "--output",
     "--page-all",
     "--sanitize",
@@ -255,8 +254,8 @@ def google_workspace_app(args: dict[str, Any] | None = None, **_: Any) -> str:
                 error_name="confirmation_required",
                 message=(
                     "Show or describe the exact recipients/content/effect and ask the "
-                    "user to confirm this external write. Permission-upgrade approval "
-                    "does not count. After confirmation, repeat the unchanged argv, "
+                    "user to confirm this external write. Google OAuth consent does "
+                    "not count. After confirmation, repeat the unchanged argv, "
                     "confirmed=true, and this confirmation_id."
                 ),
                 expected={"confirmation_id": confirmation_id},
@@ -353,10 +352,10 @@ def _normalize_argv(value: Any) -> list[str]:  # noqa: PLR0912
             "Authentication, setup, export, and persistent-server commands are not allowed here. "
             "Use Tinyhat Google connection instead of a second OAuth flow.",
         )
-    if root_command not in ALLOWED_ROOT_COMMANDS:
+    if ROOT_COMMAND_RE.fullmatch(root_command) is None:
         raise GoogleWorkspaceAppError(
             "blocked_command",
-            "Only pinned Gmail, Calendar, Drive, and schema operation namespaces are allowed.",
+            "argv must start with a bounded Google service or schema namespace.",
         )
     if len(normalized) > 1 and normalized[1].startswith("+"):
         helper = (root_command, normalized[1].lower())
