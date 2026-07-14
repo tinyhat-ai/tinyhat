@@ -6,6 +6,13 @@ All notable changes to the Tinyhat plugin are documented here.
 
 ### Changed
 
+- Bump the Hermes plugin package to `0.21.6`; make a bare Google connection
+  identity-only; define five reviewed, composable Workspace access presets in a
+  packaged public scope manifest; limit Custom access to manifest-listed
+  scopes; and return `review_required` before Google for unknown or unreviewed
+  requests. Legacy `profile` values remain compatibility inputs. Merge this
+  plugin without promoting release channels; deploy the matching platform
+  enforcement before advancing `channels/lts` or `channels/latest`.
 - Bump the Hermes plugin package to `0.21.5`; make the recommended Google
   Workspace connection useful for Gmail reading, composing, sending, and
   inbox/draft/label management with `gmail.modify` (messages and threads cannot

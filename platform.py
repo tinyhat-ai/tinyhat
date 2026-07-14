@@ -25,7 +25,18 @@ DEFAULT_ENV_FILES = (
 
 
 class PlatformError(RuntimeError):
-    """The Tinyhat platform request failed."""
+    """The Tinyhat platform request failed with optional HTTP details."""
+
+    def __init__(
+        self,
+        message: str,
+        *,
+        status_code: int | None = None,
+        response: dict[str, Any] | None = None,
+    ) -> None:
+        self.status_code = status_code
+        self.response = response
+        super().__init__(message)
 
 
 class CachedGoogleIdentityToken:
@@ -58,9 +69,7 @@ class CachedGoogleIdentityToken:
             with request.urlopen(req, timeout=self.timeout_seconds) as response:
                 return response.read().decode("utf-8").strip()
         except error.URLError as exc:
-            raise PlatformError(
-                f"failed to fetch Google identity token: {exc.reason}"
-            ) from exc
+            raise PlatformError(f"failed to fetch Google identity token: {exc.reason}") from exc
 
 
 class PlatformClient:
@@ -114,8 +123,17 @@ class PlatformClient:
                 raw = response.read()
         except error.HTTPError as exc:
             detail = exc.read().decode("utf-8", errors="replace")
+            response: dict[str, Any] | None = None
+            try:
+                decoded = json.loads(detail)
+            except json.JSONDecodeError:
+                decoded = None
+            if isinstance(decoded, dict):
+                response = decoded
             raise PlatformError(
-                f"{method} {path} failed with HTTP {exc.code}: {detail}"
+                f"{method} {path} failed with HTTP {exc.code}: {detail}",
+                status_code=exc.code,
+                response=response,
             ) from exc
         except error.URLError as exc:
             raise PlatformError(f"{method} {path} failed: {exc.reason}") from exc

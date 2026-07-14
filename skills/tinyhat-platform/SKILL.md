@@ -16,7 +16,7 @@ Use this as the default routing map:
 | Add or save an API key, token, password, webhook secret, or credential | Call `tinyhat_private_secret_handoff` once. |
 | Say "Connect Google", add a personal/work Google account, or sign in with Google | Load `tinyhat:tinyhat-google-workspace` and call `tinyhat_google_workspace` with `{"action": "connect"}`. This adds an account; it does not replace another account. The tool sends the native Telegram button itself. |
 | Use Gmail, Calendar, Drive, or another granted Google Workspace service | Load `tinyhat:tinyhat-google-workspace`, get safe status, and select the intended `account_id`. Use Hermes's built-in `google-workspace` skill for operation guidance and run the operation through `tinyhat_google_workspace_app`. |
-| Change a Google account's permissions, including making it read-only or adding another Workspace service | Select its `account_id`, then call `tinyhat_google_workspace` with `action=set_permissions` and either an exact named profile or canonical Google `scopes` plus a short `reason`. Google consent is the permission decision. |
+| Change a Google account's permissions, including making it read-only or adding another Workspace service | Select its `account_id`, then call `tinyhat_google_workspace` with `action=set_permissions` and the smallest reviewed `presets` combination, optionally extended by exact manifest-listed `scopes` plus a short `reason`. Google consent is the permission decision. |
 | Revoke or disconnect one Google account from this Computer | Select its `account_id`, then call `tinyhat_google_workspace` with `action=disconnect`. The tool sends the native Telegram button and owns final confirmation; do not pass `confirmed`, expose a URL, or send a duplicate reply. |
 | Ask which Tinyhat plugin is running | Call `tinyhat_plugin_version`. |
 | Check this Computer's Tinyhat platform state, assignment, or installed packages | Call `tinyhat_get_platform_status`. |
@@ -64,39 +64,42 @@ The tool sends one native Telegram inline button labeled **Connect Google**.
 Do not print, paste, repeat, or ask for a plain authorization link. If button
 delivery fails, report the safe failure and let the user retry.
 
-The default connection uses `google_workspace_recommended_v1`: identity,
-`gmail.modify`, `calendar.events`, and `drive.readonly`. It supports normal
-Gmail reading, composing, sending, and inbox/draft/label management while
-messages and threads cannot bypass Trash for immediate permanent deletion;
-Calendar event management; and read-only Drive
-access. Google shows the exact requested permissions on its
-consent screen, where the user can grant them or return and ask for narrower
-access.
+Bare connect requests identity only: `openid`, `email`, and `profile`. Add
+Workspace access only when the user's task needs it. Use the five reviewed
+presets through the composable `presets` array:
 
-For permission changes, call `action=set_permissions` with the selected
-`account_id` and either an exact `profile` or custom `scopes` plus `reason`.
-Profiles are `workspace_recommended`, `workspace_readonly`, `gmail_send`,
-`calendar_write`, and `gmail_send_calendar_write`; legacy profiles retain their
-existing fixed bundles. Custom scopes may target canonical Google user-OAuth
-permissions across Gmail, Calendar, Drive, Docs, Sheets, Slides,
-People/Contacts, Tasks, Chat, Forms, Meet, Classroom, Keep, Apps Script, Cloud
-Search, Workspace Admin, and other Google services. Tinyhat adds basic identity
-scopes and does not impose a product allowlist on Google-owned scopes.
-The exact official legacy scopes `https://www.google.com/calendar/feeds` and
-`https://www.google.com/m8/feeds` remain available as full Calendar read/write
-access including sharing and permanent deletion, and full Contacts read/write
-access including permanent deletion, respectively. The separate
-`https://mail.google.com/` scope grants full Gmail access including permanent
-deletion. No other `https://www.google.com/...` legacy scope URL is accepted.
+- Workspace Reader (`workspace_reader`): read Gmail messages, threads, and settings,
+  Calendar events, and Drive.
+- Mail Writer (`mail_writer`): create and manage drafts and send email through
+  `gmail.compose`.
+- Inbox Manager (`inbox_manager`): read, compose, send, draft, label, archive,
+  and change read state through `gmail.modify`; it cannot bypass Trash for
+  immediate permanent deletion.
+- Calendar Coordinator (`calendar_coordinator`): read and manage Calendar events.
+- File Collaborator (`file_collaborator`): work with Drive files Tinyhat creates
+  or files you explicitly share with the app, not other Drive files.
 
-`connect` with `account_id` adds the requested scopes to that account's current
-set. `set_permissions` replaces them exactly, so use it to narrow access. Use
-either `profile` or `scopes`, never both. Do not add a separate permission
-confirmation step or pass `confirmed` / `confirmation_id` to this connection
-tool: the Google consent screen is the permission decision. That consent never
-authorizes an external write; get separate exact-operation confirmation for
-every email send, Calendar change, draft/label mutation, or other Google data
-change through the app bridge.
+For Custom access, supply an exact subset or union of manifest-listed canonical
+`scopes` and a short `reason`. Custom scopes may extend a presets selection.
+Tinyhat normalizes redundant supersets: `gmail.modify` replaces Gmail read, compose, send, and
+label-only scopes; `gmail.compose` replaces `gmail.send`; and `calendar.events`
+replaces `calendar.events.readonly`.
+
+Unknown scopes, or scopes not reviewed for the active OAuth client, return a
+structured `review_required` result before Tinyhat creates OAuth state, starts
+a worker, or sends a Google button. Explain the result and do not retry with
+broader access.
+Historical `profile` values remain compatibility inputs only. `profile` is
+mutually exclusive with `presets` and `scopes`.
+
+`connect` with `account_id` adds the requested access to that account's current
+set. `set_permissions` replaces it exactly, plus identity, so use it to narrow
+access. Do not add a separate permission confirmation step or pass `confirmed`
+or `confirmation_id` to this connection tool: the Google consent screen is the
+permission decision. That consent never authorizes an external write; get
+separate exact-operation confirmation for every email send, Calendar change,
+draft or label mutation, Drive write, or other Google data change through the
+app bridge.
 
 Making an account read-only replaces its broader local credential, so this
 Computer stops using removed write permissions. It does not perform granular

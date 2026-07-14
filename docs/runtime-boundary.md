@@ -26,39 +26,52 @@ belongs in this repo. If it is "keep the Computer alive and trusted", it
 belongs in the runtime.
 
 Google identity connection is a concrete example: the plugin supplies the
-agent tool, one-time Computer key, recommended and legacy profiles, bounded
-canonical custom-scope handling, detached poll/decrypt worker, owner-only
+agent tool, one-time Computer key, a packaged public scope manifest, reviewed
+presets, approved Custom-scope handling, detached poll/decrypt worker, owner-only
 multi-account credential registry, account selection, and user-facing skill.
 The platform owns stable connection ids, the central Web OAuth client, callback,
 code exchange, identity and exact-grant validation, and short-lived encrypted
 credential handoff.
-The default `google_workspace_recommended_v1` bundle fixes services `identity`,
-`gmail`, `calendar`, and `drive`, with basic identity plus `gmail.modify`,
-`calendar.events`, and `drive.readonly`. The Gmail scope covers reading,
-composing, sending, and inbox/draft/label management while messages and threads
-cannot bypass Trash for immediate permanent deletion. For other Google
-capabilities, the agent may request bounded canonical Google-owned user-OAuth
-scopes with a short reason. The plugin adds identity, canonicalizes the set,
-derives its services, and sends exact metadata for platform validation. The
-caller may provide up to 32 permission scopes and 4 KiB of permission-scope
-text; the complete grant may contain 35 scopes after Tinyhat adds identity.
-These ceilings are transport and abuse-resistance bounds, not a scope-value
-allowlist. Two official legacy scopes
-are exact exceptions: `https://www.google.com/calendar/feeds` grants full
-Calendar read/write access including sharing and permanent deletion, while
-`https://www.google.com/m8/feeds` grants full Contacts read/write access including
-permanent deletion. They map to `calendar` and `people`. The separate
-`https://mail.google.com/` scope grants full Gmail access including permanent
-deletion; other `https://www.google.com/...` legacy scope URLs remain invalid.
-Legacy fixed profiles remain readable. `connect` with one account id unions
-current and requested scopes;
+Bare connect requests only `openid`, `email`, and `profile`. The manifest then
+defines five composable access presets: Workspace Reader (`workspace_reader`),
+Mail Writer (`mail_writer`), Inbox Manager (`inbox_manager`), Calendar
+Coordinator (`calendar_coordinator`), and File Collaborator
+(`file_collaborator`). Custom access can add exact manifest-listed scopes.
+Workspace Reader's `gmail.readonly` also exposes Gmail settings.
+`gmail.compose` covers drafts and sending; `gmail.modify` covers reading,
+composing, sending, drafts, labels, archive, and read state without immediate
+permanent deletion; and the implemented `drive.file` workflow covers files
+Tinyhat creates or files the user explicitly shares with the app, not other
+Drive files.
+
+The plugin normalizes redundant scopes and sends exact manifest metadata for
+platform validation. The plugin's preliminary client-policy selection defaults
+to `tinyhat-development` intentionally: the Computer cannot know which central
+OAuth client the attested platform will select, and a production default would
+reject reviewed development requests before the platform could decide. This
+fallback does not authorize OAuth. The platform preflight is authoritative for
+the exact final scopes and stamps the actual manifest and client policy before
+the plugin may create local state, a worker, an authorization URL, or a Google
+button. A missing preflight endpoint or malformed review rejection therefore
+stops with a non-transient platform-not-ready result instead of inviting a retry.
+Unknown scopes, or scopes not reviewed for the active OAuth client, produce
+`review_required` before OAuth state, a detached worker, or a Google button
+exists. Historical profiles remain readable compatibility inputs. Separate
+compatibility scope disclosures only label risks in historical grants or blocked
+requests; they cannot become presets, approved Custom scopes, or implemented
+capabilities. `connect` with one account id unions current and requested access;
 `set_permissions` replaces one selected account's local credential with the
-exact profile or custom set. A narrower replacement stops the Computer from
-using removed scopes, but is not Google provider-side granular revocation and
-does not erase consent history. Google consent is the permission decision, so
-there is no separate plugin elevation ceremony. Consumer skills and
-scripts can evolve across the same plugin/platform boundary while the runtime
-continues to supply only the existing Computer identity and plugin lifecycle.
+exact presets and approved Custom set, plus identity. A narrower replacement
+stops the Computer from using removed scopes, but is not Google provider-side
+granular revocation and does not erase consent history. Google consent is the
+permission decision, so there is no separate plugin elevation ceremony.
+Consumer skills and scripts can evolve across the same plugin/platform
+boundary while the runtime continues to supply only the existing Computer
+identity and plugin lifecycle.
+
+Deployment preserves that boundary: merge and tag the plugin first without
+promoting a channel, deploy the compatible platform enforcement, and only then
+advance `channels/latest` or `channels/lts` to the new plugin commit.
 The auth plugin does not implement Google service operations. A
 generic `tinyhat_google_workspace_app` bridge lends one selected account's
 current access token to an isolated, manifest-verified root-owned `gws` child.

@@ -40,6 +40,9 @@ description: Tell a short Tinyhat wiring-test joke when the user asks for proof 
 - For Tinyhat-managed Hermes behavior that should be visible before a
   specific skill loads, use a short `pre_llm_call` context hook and keep
   the longer playbook in a skill.
+- For Google access, add or revise the public scope manifest first. Skill copy
+  may explain manifest presets and scopes, but it must not make an unknown or
+  unreviewed scope sound immediately requestable.
 - For capability-discovery skills, include concrete trigger examples in
   the frontmatter description. Example: `tinyhat-codex-auth` names
   "connect you to my ChatGPT account", "use my Codex subscription", and
@@ -108,24 +111,39 @@ to add or save an API key, token, password, or credential.
 `tinyhat-google-workspace` is the default way to connect existing Google
 accounts. Calling connect without `account_id` adds an account. Status exposes
 safe metadata and the stable opaque `account_id` used to select an account;
-skills must never guess between multiple accounts. The recommended default
-grants identity plus Gmail reading, composing, sending, and inbox/draft/label
-management while messages and threads cannot bypass Trash for immediate permanent deletion, Calendar event management,
-and read-only Drive access. Named `workspace_recommended`,
-`workspace_readonly`, `gmail_send`, `calendar_write`, and
-`gmail_send_calendar_write` profiles preserve reviewed and legacy fixed sets.
-For another Google API capability, the skill may request canonical Google-owned
-user-OAuth `scopes`, including non-Workspace Google APIs, with a short precise
-`reason`; use either a profile or scopes, never both. Connect with an account id is additive, while
-`set_permissions` is exact replacement and can narrow local access without
-disconnecting. This is not provider-side granular scope revocation. Google
-Calendar/Contacts integrations may also request the exact official legacy
-`https://www.google.com/calendar/feeds` or `https://www.google.com/m8/feeds`
-scope. They grant full Calendar read/write access including sharing and
-permanent deletion, or full Contacts read/write access including permanent
-deletion, respectively. The separate `https://mail.google.com/` scope grants
-full Gmail access including permanent deletion. No other
-`https://www.google.com/...` legacy scope URL is accepted. Google consent is the
+skills must never guess between multiple accounts. Bare connect requests only
+`openid`, `email`, and `profile`.
+
+When the user needs Workspace data, the skill chooses the smallest composable
+`presets` array from Workspace Reader (`workspace_reader`), Mail Writer
+(`mail_writer`), Inbox Manager (`inbox_manager`), Calendar Coordinator
+(`calendar_coordinator`), and File Collaborator (`file_collaborator`). Mail
+Writer's `gmail.compose` includes drafts and sending. Inbox Manager's
+`gmail.modify` includes reading, composing, sending, drafts, labels, archive,
+and read state, but not immediate permanent deletion. Workspace Reader's
+`gmail.readonly` also exposes Gmail settings. File Collaborator's implemented
+`drive.file` workflow covers files Tinyhat creates or files the user explicitly
+shares with the app, not other Drive files.
+
+Custom `scopes` must be exact manifest-listed canonical values with a short
+precise `reason`; they may compose with presets. Unknown or unreviewed scopes
+return `review_required` before Google, so a skill must explain the result and
+must not retry with broader access. Historical `profile` values are
+compatibility inputs only and cannot be combined with `presets` or `scopes`.
+Do not duplicate scope membership in a new skill: read it from the packaged
+manifest and loader. Preserve its normalization rules, including
+`gmail.modify` over narrower Gmail scopes, `gmail.compose` over `gmail.send`,
+and `calendar.events` over `calendar.events.readonly`.
+The separate `compatibility_scope_disclosures` records are risk labels for
+historical grants and blocked requests only. They must never be presented as
+implemented capabilities or selectable permissions. Package validation scans
+literal and statically constructed production-Python scope URLs against both
+manifest collections and validates the exact structured scope and capability
+marker inventories in `docs/capabilities.md`; it does not infer claims from
+arbitrary prose.
+Connect with an account id is additive, while `set_permissions` is exact
+replacement plus identity and can narrow local access without disconnecting.
+This is not provider-side granular scope revocation. Google consent is the
 permission decision; do not add a plugin elevation confirmation or pass
 `confirmed` / `confirmation_id` to permission changes. The skill calls
 `tinyhat_google_workspace` instead of

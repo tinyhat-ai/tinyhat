@@ -22,78 +22,76 @@ tokens.
 
 ## Connect and change permissions
 
-- `{"action": "connect"}` adds another account with the recommended
-  `google_workspace_recommended_v1` bundle: basic identity, `gmail.modify`,
-  `calendar.events`, and `drive.readonly`. This permits Gmail reading,
-  composing, sending, and inbox/draft/label management while messages and
-  threads cannot bypass Trash for immediate permanent deletion, Calendar event
-  management, and read-only Drive. Phrases
-  such as "add my personal account" or "connect my work Google account" mean
-  add, not replace.
-- `{"action": "set_permissions", "account_id": "...", "profile":
-  "workspace_readonly"}` changes exactly that account to read-only. This is the
-  normal downgrade path; do not disconnect and reconnect it.
-- Named profiles are `workspace_recommended`, `workspace_readonly`,
-  `gmail_send`, `calendar_write`, and `gmail_send_calendar_write`. The latter
-  four remain for compatibility and intentionally keep their existing fixed
-  scope sets.
-- For another Google capability, call with raw `scopes` and a short `reason`,
-  for example `{"action": "connect", "scopes":
-  ["https://www.googleapis.com/auth/tasks"], "reason": "manage your Google
-  Tasks"}`. Use canonical Google-owned user-OAuth scopes only. Tinyhat adds `openid`,
-  `email`, and `profile`, canonicalizes the exact set, and does not impose a
-  product allowlist on Google-owned scopes. Use either `profile` or `scopes`,
-  never both.
-  The caller may provide up to 32 permission scopes and 4 KiB of
-  permission-scope text. Tinyhat adds three identity scopes, so the complete
-  grant may contain 35 scopes. These are transport and abuse-resistance bounds,
-  not a permission-value allowlist.
-- Two official legacy Google user scopes are exact exceptions to the normal
-  `https://www.googleapis.com/auth/` shape:
-  `https://www.google.com/calendar/feeds` means **full Calendar read/write
-  access including sharing and permanent deletion**, and
-  `https://www.google.com/m8/feeds` means **full Contacts read/write access
-  including permanent deletion**.
-  Tinyhat accepts Google's documented trailing-slash forms for these two
-  legacy scopes and canonicalizes them to the exact values above.
-  Request them only when the operation or Apps Script API genuinely requires
-  that broad, potentially destructive permission. The separate
-  `https://mail.google.com/` scope means **full Gmail access including permanent
-  deletion**. Do not accept or construct any other
-  `https://www.google.com/...` legacy scope URL.
-- `connect` with an explicit `account_id` is additive: it combines the selected
-  account's current scopes with the requested profile or custom scopes.
-  `set_permissions` is exact replacement: it installs only the selected profile
-  or custom scope set. Use exact replacement when narrowing access.
-- Google consent is the permission decision. The native Google button opens the
-  exact request. Google shows the exact
-  requested access; the user may grant it or return and ask the agent to request
-  narrower scopes. Do not add a separate Tinyhat permission-upgrade confirmation
-  or pass `confirmed` / `confirmation_id` to the connection tool.
-- If Tinyhat reports that Google returned different permissions, do not repeat
-  the same request automatically. Tinyhat saved no new Computer credential.
-  Ask the user for the exact narrower access they want, call `status`, then use
-  `set_permissions` with the selected `account_id` when that account is already
-  connected; otherwise use `connect` with the exact custom scopes.
-- For "reconnect" or "reauthorize" an existing account, call status, select its
-  `account_id`, and use `set_permissions` with its current exact profile or
-  scope set. Plain connect means add and can correctly hit the duplicate-account
-  guard.
+`{"action": "connect"}` adds another account with identity only: `openid`,
+`email`, and `profile`. Phrases such as "add my personal account" or "connect my
+work Google account" mean add, not replace. Do not add Workspace data access
+unless the user's request needs it.
 
-`gmail.modify` is the recommended Gmail scope because it supports reading,
-composing, and sending messages; creating and updating drafts; creating and
-applying labels; archiving; and changing read state. It does not grant the
-`https://mail.google.com/` full-access permission for immediate permanent
-deletion. Sending or any other external write still requires the separate exact
-operation confirmation described below.
+Use the `presets` array for common access. Presets compose, so request the
+smallest combination that supports the user's task:
 
-Common custom-service families include Gmail, Calendar, Drive, Docs, Sheets,
-Slides, People/Contacts, Tasks, Chat, Forms, Meet, Classroom, Keep, Apps Script,
-Cloud Search, and Workspace Admin APIs. Use Hermes's bundled
-`google-workspace` skill and `gws schema` guidance to identify the exact Google
-scope needed for the requested operation. Prefer the least access that fully
-supports the request, explain it in `reason`, and honor a user's request for a
-narrower set. Do not invent non-Google scope URLs.
+| Preset | Id | Access |
+| --- | --- | --- |
+| Workspace Reader | `workspace_reader` | Read Gmail messages, threads, and settings, Calendar events, and Drive files. |
+| Mail Writer | `mail_writer` | Create and manage Gmail drafts and send email through `gmail.compose`. |
+| Inbox Manager | `inbox_manager` | Read, compose, send, draft, label, archive, and change read state through `gmail.modify`; it cannot bypass Trash for immediate permanent deletion. |
+| Calendar Coordinator | `calendar_coordinator` | Read, create, update, and delete Calendar events through `calendar.events`. |
+| File Collaborator | `file_collaborator` | Work with Drive files Tinyhat creates or files you explicitly share with the app through `drive.file`; it does not grant access to other Drive files. |
+
+Examples:
+
+```json
+{"action": "connect", "presets": ["workspace_reader"]}
+```
+
+```json
+{"action": "set_permissions", "account_id": "...", "presets": ["mail_writer", "calendar_coordinator"]}
+```
+
+For Custom access, supply an exact subset or union of manifest-listed canonical
+`scopes` and a short `reason`. Custom scopes may extend a `presets` selection.
+Tinyhat always includes the identity baseline and normalizes redundant scopes
+before it prepares consent:
+
+- `gmail.modify` supersedes Gmail read, compose, send, and label-only scopes.
+- `gmail.compose` supersedes `gmail.send`.
+- `calendar.events` supersedes `calendar.events.readonly`.
+
+The public manifest is the source of truth for which scopes are known and which
+OAuth clients may request them. If a scope is unknown or is not reviewed for
+the current client, the tool returns a structured `review_required` result
+before creating OAuth state, starting a worker, or sending a Google button.
+Explain that result and do not retry with a broader permission. A
+manifest-listed scope can therefore be
+documented before it is available for a production connection.
+
+The historical `profile` field and its values remain compatibility inputs for
+older callers and saved grants. Do not choose a legacy profile for a new
+request when `presets` or `scopes` can express the intent. `profile` is
+mutually exclusive with `presets` and `scopes`.
+
+`connect` with an explicit `account_id` is additive: it combines the selected
+account's current scopes with the requested presets and Custom scopes.
+`set_permissions` is exact replacement: it installs only the selected presets
+and Custom scopes, plus identity. Use exact replacement when narrowing access.
+
+Google consent is the permission decision. The native Google button opens the
+exact request. The user may grant it or return and ask for narrower access. Do
+not add a separate Tinyhat permission-upgrade confirmation or pass `confirmed`
+or `confirmation_id` to the connection tool. OAuth consent does not authorize
+an email send, draft or label mutation, Calendar change, file write, or other
+external operation; those writes still require the separate exact-operation
+confirmation described below.
+
+If Tinyhat reports that Google returned different permissions, do not repeat
+the same request automatically. Tinyhat saved no new Computer credential. Ask
+the user for the exact narrower access they want, call `status`, then use
+`set_permissions` for an existing account or `connect` for a new account.
+
+For "reconnect" or "reauthorize" an existing account, call status, select its
+`account_id`, and use `set_permissions` with its current exact presets or
+manifest scopes. Plain connect means add and can correctly hit the
+duplicate-account guard.
 
 The user needs only an existing Google account. Never ask for a Google Cloud
 project, OAuth client ID or secret, credentials JSON, app password,

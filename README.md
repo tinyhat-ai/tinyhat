@@ -9,23 +9,19 @@ the part that can evolve faster. It adds the agent-facing skills and tools
 that explain how to use Tinyhat platform capabilities without exposing
 private platform URLs, machine credentials, bot tokens, or tenant data.
 
-For the first v0.20 version, this repo is deliberately small. It supports
-Hermes only, ships a compact set of packaged skills, a small Tinyhat
+This repo is deliberately small. It supports Hermes only, ships a compact set
+of packaged skills, a small Tinyhat
 context hook, and now includes the first real Tinyhat platform capability:
 a private secret handoff that lets the user enter a secret in a Telegram
 Mini App without sending the plaintext to Tinyhat's servers. It also
-connects multiple existing Google identities to a Computer without asking the user for
-a Google Cloud project, OAuth client, secret, or SSH access. The recommended
-default includes Gmail reading, composing, sending, and inbox/draft/label
-management while messages and threads cannot bypass Trash for immediate
-permanent deletion, Calendar event management, and read-only Drive access.
-Agents may request canonical Google
-user-OAuth scopes for other Google services with a short reason; Google
-shows the exact request and the user decides whether to grant it or ask for
-narrower access. The caller may supply up to 32 permission scopes and 4 KiB of
-permission-scope text; Tinyhat adds three identity scopes, for up to 35 complete
-scopes. These are transport and abuse-resistance bounds, not a scope-value
-allowlist. It
+connects multiple existing Google identities to a Computer without asking the
+user for a Google Cloud project, OAuth client, secret, or SSH access. A bare
+connection requests identity only. Five composable presets cover common
+read-only Workspace access, mail writing, inbox management, Calendar event
+management, and limited file collaboration. Custom requests can select only
+scopes listed in the packaged public manifest and reviewed for the active OAuth
+client. Google shows the exact request and the user decides whether to grant it
+or ask for narrower access. It
 teaches the agent the Tinyhat-managed OpenAI Codex / ChatGPT subscription
 auth flow that is installed on each Hermes Computer.
 
@@ -38,7 +34,8 @@ auth flow that is installed on each Hermes Computer.
 | `hermes.plugin.json` | Tinyhat metadata for the Hermes adapter, skill, command, and release channels. |
 | `context.py` | Small Hermes `pre_llm_call` context hook for Tinyhat-sensitive turns. |
 | `tools.py` / `schemas.py` | Tinyhat tools: plugin version, safe platform status, joke proof, skill catalog, private secret handoff, Google identity connection, Codex auth setup/status helpers, and plugin update helper. |
-| `google_workspace.py` / `google_workspace_worker.py` | Platform-authored Google OAuth handoff, multi-account local custody, recommended/legacy/custom permission sets, assignment-safe status, and targeted disconnect. |
+| `google_workspace.py` / `google_workspace_worker.py` | Platform-authored Google OAuth handoff, multi-account local custody, manifest-governed access selection, assignment-safe status, and targeted disconnect. |
+| `google_workspace_scope_manifest.json` / `google_workspace_scope_manifest.py` | Versioned public Google scope contract and dependency-free loader. |
 | `google_workspace_app.py` | Account-selected credential bridge to the manifest-verified, root-owned managed `gws` app. |
 | `google_workspace_app_manager.py` | Confirmed install/status/uninstall for pinned official `gws` Linux artifacts. |
 | `skills/tinyhat-tell-joke/SKILL.md` | Deterministic joke proof. |
@@ -65,8 +62,8 @@ attested Computer identity. That identity lets the platform know which
 Computer, agent, user, and account are involved.
 
 This plugin does not mint identity. The Tinyhat platform owns one central Google
-Web OAuth client and callback, validates the exact recommended, legacy, or
-canonical custom capability request, exchanges the one-time code, and encrypts
+Web OAuth client and callback, validates the exact manifest-approved capability
+request, exchanges the one-time code, and encrypts
 the resulting credential envelope to the
 Computer's one-time RSA public key. The plugin stores credentials only after the
 assigned Computer decrypts and revalidates that envelope. It never prints or
@@ -132,19 +129,40 @@ Tinyhat storing or returning the value.
 `tinyhat-google-workspace` connects this Computer to existing Google accounts.
 Each connect without `account_id` adds an account while preserving the others.
 The Computer creates a fresh RSA keypair and asks the
-platform for the default `google_workspace_recommended_v1` bundle: services
-`identity`, `gmail`, `calendar`, and `drive`, with basic identity plus
-`gmail.modify`, `calendar.events`, and `drive.readonly`. For another Google
-capability, the agent can supply canonical Google-owned user-OAuth scopes and a
-short user-facing reason. The plugin adds identity scopes, canonicalizes and
-bounds the request, derives its service metadata, and sends the exact set to the
-platform for validation. It also exact-allows Google's official legacy Calendar
-feed (`https://www.google.com/calendar/feeds`) and Contacts feed
-(`https://www.google.com/m8/feeds`) scopes. They grant full Calendar read/write
-access including sharing and permanent deletion, and full Contacts read/write
-access including permanent deletion, respectively. The separate
-`https://mail.google.com/` scope grants full Gmail access including permanent
-deletion. No other `https://www.google.com/...` legacy scope URL is accepted.
+platform for identity only: `openid`, `email`, and `profile`. Workspace data
+access is explicit and comes from the versioned
+`google_workspace_scope_manifest.json` contract (schema
+`tinyhat_google_workspace_scope_manifest_v1`, manifest version `1.0.0`). It
+defines these composable presets:
+
+| Preset | Id | Exact data scope |
+| --- | --- | --- |
+| Workspace Reader | `workspace_reader` | `https://www.googleapis.com/auth/gmail.readonly` for messages, threads, and Gmail settings; `https://www.googleapis.com/auth/calendar.events.readonly`; and `https://www.googleapis.com/auth/drive.readonly` |
+| Mail Writer | `mail_writer` | `https://www.googleapis.com/auth/gmail.compose` for drafts and sending |
+| Inbox Manager | `inbox_manager` | `https://www.googleapis.com/auth/gmail.modify` for reading, composing, sending, drafts, labels, archive, and read state, without immediate permanent deletion |
+| Calendar Coordinator | `calendar_coordinator` | `https://www.googleapis.com/auth/calendar.events` for event read/write |
+| File Collaborator | `file_collaborator` | `https://www.googleapis.com/auth/drive.file` for files Tinyhat creates or files you explicitly share with the app; no access to other Drive files |
+
+Custom access is an exact subset or union of manifest-listed scopes and may be
+combined with presets. The loader normalizes redundant scopes so
+`gmail.modify` supersedes Gmail read, compose, send, and label-only access;
+`gmail.compose` supersedes `gmail.send`; and `calendar.events` supersedes
+`calendar.events.readonly`. Historical `profile` values remain compatibility
+inputs for older callers and saved grants, not the path for new requests.
+
+Every manifest scope records a stable id, canonical URL, Google classification,
+enabled API, implemented features and operations, data read or written,
+narrower alternatives, user copy, demo steps, and per-client request and
+verification states. Unknown scopes, or known scopes not reviewed for the
+active OAuth client, return a structured `review_required` result before OAuth
+state is created, a worker starts, or a Google button is sent. This lets Tinyhat
+document a future capability without making it requestable in production.
+Historical saved grants and blocked requests can also use the manifest's
+separate `compatibility_scope_disclosures` risk labels. These disclosure-only
+records define no capability or operation and can never make a scope
+requestable. Package validation checks literal and statically constructed
+production scope URLs against those two explicit collections.
+
 The platform returns its Google sign-in URL to the plugin, which places it only
 inside a native Telegram inline button labeled **Connect Google**. The tool
 never returns a plain authorization link. The user supplies only their existing
@@ -192,23 +210,22 @@ Google's token-revocation endpoint or revoke the provider grant in the shared
 development OAuth project. Other Tinyhat Computers are unaffected, and the
 plugin must never claim that the Google account's provider grant was revoked.
 
-New accounts use the recommended bundle by default. `gmail.modify` supports
-reading, composing, sending, and inbox/draft/label management while messages and
-threads cannot bypass Trash for immediate permanent deletion; `calendar.events`
-supports event management;
-Drive remains read-only. Legacy exact profiles stay
-available for compatibility. An agent may instead request any canonical
-Google-owned user-OAuth scope set with a short reason. `connect` with an
-`account_id` unions the requested scopes with that account's current set, while
-`action=set_permissions` replaces the selected account with the exact requested
-profile or custom scope set. A narrower replacement makes this Computer stop
-using removed scopes; it does not perform Google provider-side granular
-revocation or erase consent history. Google's consent screen is the permission
-decision. A cancelled, failed, or expired change leaves the existing local
-credential untouched; a valid encrypted credential replaces only the selected
-entry atomically. Google consent never counts as confirmation for an actual
-email send, label/draft mutation, Calendar event change, or other external write.
-If Google returns a different scope set, Tinyhat saves no new Computer credential
+`presets` is an array because common jobs often need more than one capability.
+For example, Mail Writer and Calendar Coordinator can be requested together
+without adding inbox-management or broad Drive access. Manifest-listed Custom
+scopes can be included in the same request with a short user-facing reason.
+`connect` with an `account_id` unions the requested access with that account's
+current set, while `action=set_permissions` replaces the selected account with
+the exact requested presets and Custom scopes, plus identity. A narrower
+replacement makes this Computer stop using removed scopes; it does not perform
+Google provider-side granular revocation or erase consent history.
+
+Google's consent screen is the permission decision. A cancelled, failed, or
+expired change leaves the existing local credential untouched; a valid
+encrypted credential replaces only the selected entry atomically. Google
+consent never counts as confirmation for an actual email send, label or draft
+mutation, Calendar event change, Drive write, or other external operation. If
+Google returns a different scope set, Tinyhat saves no new Computer credential
 and tells the user to choose the exact narrower access before another request.
 
 The authentication plugin does not implement mail, event, or file operations.
@@ -316,7 +333,7 @@ For development or manual testing, use `channels/latest` or an exact tag:
 
 ```bash
 TINYHAT_PLUGIN_REF=channels/latest
-TINYHAT_PLUGIN_REF=v0.20.10
+TINYHAT_PLUGIN_REF=v0.21.6
 ```
 
 ## Channels
@@ -325,11 +342,12 @@ TINYHAT_PLUGIN_REF=v0.20.10
 | --- | --- |
 | `channels/lts` | Conservative default for managed Computers. |
 | `channels/latest` | Newest promoted final version, used when we want faster adoption. |
-| exact tag, for example `v0.20.3` | Immutable version for tests, rollbacks, and audits. |
+| exact tag, for example `v0.21.6` | Immutable version for tests, rollbacks, and audits. |
 
-During the v0.20 build-out, both channels may point at this reviewed
-branch so Computers can install the fresh Hermes plugin shape before it
-replaces `main`.
+For v0.21.6, merge and tag the public plugin without advancing either channel.
+Deploy the platform enforcement that validates the same manifest contract,
+then promote `channels/latest` and `channels/lts`. This order prevents an older
+platform from accepting a request the plugin now describes as reviewed.
 
 ## Local Checks
 
