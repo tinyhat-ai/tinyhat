@@ -71,7 +71,7 @@ Five composable presets cover common jobs:
 | Mail Writer | `mail_writer` | `https://www.googleapis.com/auth/gmail.compose` for creating and managing drafts and sending email |
 | Inbox Manager | `inbox_manager` | `https://www.googleapis.com/auth/gmail.modify` for reading, composing, sending, drafts, labels, archive, and read state; no immediate permanent deletion |
 | Calendar Coordinator | `calendar_coordinator` | `https://www.googleapis.com/auth/calendar.events` for reading, creating, updating, and deleting events |
-| File Collaborator | `file_collaborator` | `https://www.googleapis.com/auth/drive.file` for files Tinyhat creates; no unrelated existing Drive files |
+| File Collaborator | `file_collaborator` | `https://www.googleapis.com/auth/drive.file` for files Tinyhat creates or files you explicitly share with the app; no access to other Drive files |
 
 The `presets` input is an array and may be combined with exact
 manifest-listed Custom `scopes` plus a short `reason`. Custom access is an exact
@@ -93,6 +93,25 @@ enabled API, implemented features and operations, data read or written,
 narrower alternatives, user copy, demo steps, and per-client request and
 verification states. Documentation and future verification evidence should be
 validated against that contract instead of treating prose as another authority.
+
+The manifest's separate `compatibility_scope_disclosures` collection contains
+only risk labels for scopes that can appear in historical saved grants or
+blocked requests. Those records have no capabilities or operations and cannot
+be selected by a preset or approved as Custom access. Package validation scans
+literal and statically constructed scope URLs in production Python and requires
+each one to be either an implemented manifest scope or one of these explicit
+disclosure-only records. Natural-language prose is not treated as mechanically
+complete; the structured scope and capability markers below are the exact
+documentation inventory checked in CI.
+
+The manifest scope ids checked by package validation are:
+`google-scope:openid`, `google-scope:email`, `google-scope:profile`,
+`google-scope:gmail.readonly`, `google-scope:gmail.send`,
+`google-scope:gmail.compose`, `google-scope:gmail.labels`,
+`google-scope:gmail.modify`, `google-scope:calendar.events.readonly`,
+`google-scope:calendar.events`, `google-scope:drive.file`,
+`google-scope:drive.readonly`, `google-scope:tasks`, and
+`google-scope:calendar.readonly`.
 
 The manifest-derived capability identifiers checked by package validation are:
 `google-capability:account_identity`, `google-capability:calendar_event_read`,

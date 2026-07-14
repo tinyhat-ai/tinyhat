@@ -76,8 +76,8 @@ presets through the composable `presets` array:
   and change read state through `gmail.modify`; it cannot bypass Trash for
   immediate permanent deletion.
 - Calendar Coordinator (`calendar_coordinator`): read and manage Calendar events.
-- File Collaborator (`file_collaborator`): work with Drive files Tinyhat creates,
-  not unrelated existing Drive files.
+- File Collaborator (`file_collaborator`): work with Drive files Tinyhat creates
+  or files you explicitly share with the app, not other Drive files.
 
 For Custom access, supply an exact subset or union of manifest-listed canonical
 `scopes` and a short `reason`. Custom scopes may extend a presets selection.

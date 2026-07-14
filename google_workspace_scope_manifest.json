@@ -13,6 +13,78 @@
     "unknown_scope_verification_state": "not_listed",
     "user_copy": "Tinyhat can describe any canonical Google OAuth scope, but only manifest-listed scopes approved for the selected OAuth client can start authorization."
   },
+  "compatibility_scope_disclosures": [
+    {
+      "canonical_url": "https://mail.google.com/",
+      "service": "gmail",
+      "status": "historical_disclosure_only",
+      "user_copy": "Full Gmail access including permanent deletion",
+      "rationale": "Preserves an explicit warning when this exact legacy scope appears in a historical saved grant or a blocked request; it is not an implemented or requestable capability."
+    },
+    {
+      "canonical_url": "https://www.google.com/calendar/feeds",
+      "service": "calendar",
+      "status": "historical_disclosure_only",
+      "user_copy": "Full Calendar read/write access including sharing and permanent deletion",
+      "rationale": "Preserves an explicit warning when this exact legacy scope appears in a historical saved grant or a blocked request; it is not an implemented or requestable capability."
+    },
+    {
+      "canonical_url": "https://www.google.com/m8/feeds",
+      "service": "people",
+      "status": "historical_disclosure_only",
+      "user_copy": "Full Contacts read/write access including permanent deletion",
+      "rationale": "Preserves an explicit warning when this exact legacy scope appears in a historical saved grant or a blocked request; it is not an implemented or requestable capability."
+    },
+    {
+      "canonical_url": "https://www.googleapis.com/auth/calendar",
+      "service": "calendar",
+      "status": "historical_disclosure_only",
+      "user_copy": "Full Calendar read/write access including sharing and permanent deletion",
+      "rationale": "Provides a truthful risk label for historical saved grants and blocked unknown-scope requests; it does not make this scope an implemented or requestable capability."
+    },
+    {
+      "canonical_url": "https://www.googleapis.com/auth/contacts",
+      "service": "people",
+      "status": "historical_disclosure_only",
+      "user_copy": "Full Contacts read/write access including permanent deletion",
+      "rationale": "Provides a truthful risk label for historical saved grants and blocked unknown-scope requests; it does not make this scope an implemented or requestable capability."
+    },
+    {
+      "canonical_url": "https://www.googleapis.com/auth/drive",
+      "service": "drive",
+      "status": "historical_disclosure_only",
+      "user_copy": "Full Drive access including creating, editing, and deleting files",
+      "rationale": "Provides a truthful risk label for historical saved grants and blocked unknown-scope requests; it does not make this scope an implemented or requestable capability."
+    },
+    {
+      "canonical_url": "https://www.googleapis.com/auth/gmail.settings.sharing",
+      "service": "gmail",
+      "status": "historical_disclosure_only",
+      "user_copy": "Gmail forwarding and sharing settings management",
+      "rationale": "Provides a truthful risk label for historical saved grants and blocked unknown-scope requests; it does not make this scope an implemented or requestable capability."
+    },
+    {
+      "canonical_url": "https://www.googleapis.com/auth/admin.directory.user",
+      "service": "admin",
+      "status": "historical_disclosure_only",
+      "user_copy": "Workspace user directory management including creating and deleting users",
+      "rationale": "Provides a truthful risk label for historical saved grants and blocked unknown-scope requests; it does not make this scope an implemented or requestable capability."
+    },
+    {
+      "canonical_url": "https://www.googleapis.com/auth/cloud-platform",
+      "service": "google",
+      "status": "historical_disclosure_only",
+      "user_copy": "Broad Google Cloud access including viewing, changing, and deleting cloud data",
+      "rationale": "Provides a truthful risk label for historical saved grants and blocked unknown-scope requests; it does not make this scope an implemented or requestable capability."
+    },
+    {
+      "canonical_url": "https://www.googleapis.com/auth/bigquery",
+      "service": "google",
+      "status": "historical_disclosure_only",
+      "user_copy": "BigQuery data viewing and management",
+      "rationale": "Provides a truthful risk label for historical saved grants and blocked unknown-scope requests; it does not make this scope an implemented or requestable capability."
+    }
+  ],
   "client_policies": [
     {
       "id": "tinyhat-development",
@@ -297,20 +369,20 @@
       "canonical_url": "https://www.googleapis.com/auth/drive.file",
       "aliases": [],
       "service": "drive",
-      "display_name": "Work with Tinyhat-created Drive files",
+      "display_name": "Work with selected Drive files",
       "classification": "non_sensitive",
       "access_mode": "write",
       "read_only": false,
       "enabled_api": "Google Drive API",
-      "implemented_feature": "Create Drive files and continue reading, updating, or deleting files Tinyhat created.",
+      "implemented_feature": "Create Drive files and read, update, or delete files Tinyhat creates or files the user explicitly shares with the app.",
       "capabilities": ["drive_file_collaboration"],
-      "operations": ["Create files", "Read Tinyhat-created files", "Update Tinyhat-created files", "Delete Tinyhat-created files"],
-      "data_read": ["Files Tinyhat creates"],
-      "data_written": ["Files Tinyhat creates"],
+      "operations": ["Create files", "Read files Tinyhat creates or the user explicitly shares with the app", "Update files Tinyhat creates or the user explicitly shares with the app", "Delete files Tinyhat creates or the user explicitly shares with the app"],
+      "data_read": ["Files Tinyhat creates or files the user explicitly shares with the app"],
+      "data_written": ["Files Tinyhat creates or files the user explicitly shares with the app"],
       "narrower_alternatives": [],
       "why_narrower_insufficient": "Creating and maintaining files through Tinyhat requires file-scoped write access; read-only access cannot create or update them.",
-      "user_copy": "Create files and work with files Tinyhat creates; this does not grant access to unrelated existing Drive files.",
-      "demo_steps": ["Create a test file, read it, update it, delete it, and confirm an unrelated existing Drive file is not available."],
+      "user_copy": "Create files and work with files Tinyhat creates or files you explicitly share with the app; this does not grant access to other Drive files.",
+      "demo_steps": ["Create a test file, read it, update it, delete it, explicitly share an existing test file with the app and update it, then confirm another Drive file is not available."],
       "verification_status": "phase_one_evidence_required",
       "supersedes": [],
       "client_states": {
@@ -447,7 +519,7 @@
       "display_name": "File Collaborator",
       "capability_bundle": "google_workspace_file_collaborator_v1",
       "scope_ids": ["drive.file"],
-      "user_copy": "Create files and work with files Tinyhat creates, without access to unrelated existing Drive files.",
+      "user_copy": "Create files and work with files Tinyhat creates or files you explicitly share with the app, without access to other Drive files.",
       "risk_class": "non_sensitive",
       "recommended": true,
       "default": false,

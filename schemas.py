@@ -132,7 +132,8 @@ TINYHAT_GOOGLE_WORKSPACE_SCHEMA = {
                 "Mail Writer prepares and sends "
                 "mail; Inbox Manager reads and manages Gmail messages, drafts, and "
                 "labels; Calendar Coordinator manages events; File Collaborator "
-                "works with files Tinyhat creates, not unrelated Drive files. Tinyhat "
+                "works with files Tinyhat creates or files you explicitly share with "
+                "the app, not other Drive files. Tinyhat "
                 "normalizes overlapping scopes to the narrowest equivalent request."
             ),
         },

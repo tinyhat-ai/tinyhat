@@ -122,8 +122,8 @@ Writer's `gmail.compose` includes drafts and sending. Inbox Manager's
 `gmail.modify` includes reading, composing, sending, drafts, labels, archive,
 and read state, but not immediate permanent deletion. Workspace Reader's
 `gmail.readonly` also exposes Gmail settings. File Collaborator's implemented
-`drive.file` workflow covers files Tinyhat creates, not unrelated existing
-Drive files.
+`drive.file` workflow covers files Tinyhat creates or files the user explicitly
+shares with the app, not other Drive files.
 
 Custom `scopes` must be exact manifest-listed canonical values with a short
 precise `reason`; they may compose with presets. Unknown or unreviewed scopes
@@ -134,6 +134,13 @@ Do not duplicate scope membership in a new skill: read it from the packaged
 manifest and loader. Preserve its normalization rules, including
 `gmail.modify` over narrower Gmail scopes, `gmail.compose` over `gmail.send`,
 and `calendar.events` over `calendar.events.readonly`.
+The separate `compatibility_scope_disclosures` records are risk labels for
+historical grants and blocked requests only. They must never be presented as
+implemented capabilities or selectable permissions. Package validation scans
+literal and statically constructed production-Python scope URLs against both
+manifest collections and validates the exact structured scope and capability
+marker inventories in `docs/capabilities.md`; it does not infer claims from
+arbitrary prose.
 Connect with an account id is additive, while `set_permissions` is exact
 replacement plus identity and can narrow local access without disconnecting.
 This is not provider-side granular scope revocation. Google consent is the

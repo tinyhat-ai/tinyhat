@@ -3,6 +3,7 @@
 
 from __future__ import annotations
 
+import ast
 import importlib.util
 import json
 import re
@@ -104,13 +105,24 @@ GOOGLE_MANIFEST_DOC_PATHS = (
     "skills/tinyhat-google-workspace/SKILL.md",
     "skills/tinyhat-platform/SKILL.md",
 )
-GOOGLE_MANIFEST_CLAIM_PATHS = (*GOOGLE_MANIFEST_DOC_PATHS, "google_workspace.py", "platform.py")
 GOOGLE_SCOPE_URL_PATTERN = re.compile(
-    r"https://www\.googleapis\.com/auth/[A-Za-z0-9][A-Za-z0-9._/-]*"
+    r"(?:https://www\.googleapis\.com/auth/[A-Za-z0-9][A-Za-z0-9._/-]*"
+    r"|https://mail\.google\.com/"
+    r"|https://www\.google\.com/(?:calendar/feeds|m8/feeds))"
 )
 GOOGLE_BUNDLE_ID_PATTERN = re.compile(r"\bgoogle_workspace_[a-z0-9_]+_v[0-9]+\b")
-GOOGLE_CAPABILITY_MARKER_PATTERN = re.compile(
-    r"\bgoogle-capability:([a-z][a-z0-9_]*)\b"
+GOOGLE_CAPABILITY_MARKER_PATTERN = re.compile(r"\bgoogle-capability:([a-z][a-z0-9_]*)\b")
+GOOGLE_SCOPE_MARKER_PATTERN = re.compile(r"\bgoogle-scope:([a-z][a-z0-9_.-]*)\b")
+GOOGLE_DRIVE_FILE_COPY_PATHS = (
+    GOOGLE_SCOPE_MANIFEST_PATH,
+    "README.md",
+    "schemas.py",
+    "google_workspace.py",
+    "docs/capabilities.md",
+    "docs/runtime-boundary.md",
+    "docs/skill-authoring.md",
+    "skills/tinyhat-google-workspace/SKILL.md",
+    "skills/tinyhat-platform/SKILL.md",
 )
 
 
@@ -134,12 +146,20 @@ def unknown_google_manifest_claims(
     allowed_scope_urls: set[str],
     allowed_bundle_ids: set[str],
     allowed_capabilities: set[str],
+    python_source: bool = False,
 ) -> tuple[str, ...]:
     """Return structured Google scope, bundle, or capability claims absent from the manifest."""
 
+    scope_urls = set(GOOGLE_SCOPE_URL_PATTERN.findall(text))
+    if python_source:
+        scope_urls.update(_statically_constructed_google_scope_urls(text))
     unknown = {
-        *(f"scope:{value}" for value in GOOGLE_SCOPE_URL_PATTERN.findall(text) if value not in allowed_scope_urls),
-        *(f"bundle:{value}" for value in GOOGLE_BUNDLE_ID_PATTERN.findall(text) if value not in allowed_bundle_ids),
+        *(f"scope:{value}" for value in scope_urls if value not in allowed_scope_urls),
+        *(
+            f"bundle:{value}"
+            for value in GOOGLE_BUNDLE_ID_PATTERN.findall(text)
+            if value not in allowed_bundle_ids
+        ),
         *(
             f"capability:{value}"
             for value in GOOGLE_CAPABILITY_MARKER_PATTERN.findall(text)
@@ -147,6 +167,74 @@ def unknown_google_manifest_claims(
         ),
     }
     return tuple(sorted(unknown))
+
+
+def _static_python_string(node: ast.AST, constants: Mapping[str, str]) -> str | None:
+    if isinstance(node, ast.Constant) and isinstance(node.value, str):
+        return node.value
+    if isinstance(node, ast.Name):
+        return constants.get(node.id)
+    if isinstance(node, ast.JoinedStr):
+        parts: list[str] = []
+        for value in node.values:
+            if isinstance(value, ast.FormattedValue):
+                part = _static_python_string(value.value, constants)
+            else:
+                part = _static_python_string(value, constants)
+            if part is None:
+                return None
+            parts.append(part)
+        return "".join(parts)
+    if isinstance(node, ast.BinOp) and isinstance(node.op, ast.Add):
+        left = _static_python_string(node.left, constants)
+        right = _static_python_string(node.right, constants)
+        if left is not None and right is not None:
+            return left + right
+    return None
+
+
+def _statically_constructed_python_strings(text: str) -> set[str]:
+    """Resolve the statically knowable strings in one Python module."""
+
+    try:
+        tree = ast.parse(text)
+    except SyntaxError as exc:
+        fail(f"could not parse Python while checking Google scope claims: {exc}")
+    assignments: list[tuple[str, ast.AST]] = []
+    for statement in tree.body:
+        if isinstance(statement, (ast.Assign, ast.AnnAssign)):
+            value = statement.value
+            targets = statement.targets if isinstance(statement, ast.Assign) else [statement.target]
+            if value is None:
+                continue
+            assignments.extend(
+                (target.id, value) for target in targets if isinstance(target, ast.Name)
+            )
+    constants: dict[str, str] = {}
+    for _ in range(len(assignments) + 1):
+        changed = False
+        for name, value_node in assignments:
+            value = _static_python_string(value_node, constants)
+            if value is not None and constants.get(name) != value:
+                constants[name] = value
+                changed = True
+        if not changed:
+            break
+    strings: set[str] = set()
+    for node in ast.walk(tree):
+        value = _static_python_string(node, constants)
+        if value is not None:
+            strings.add(value)
+    return strings
+
+
+def _statically_constructed_google_scope_urls(text: str) -> set[str]:
+    """Find literal or constructed Google scope claims in one Python module."""
+
+    urls: set[str] = set()
+    for value in _statically_constructed_python_strings(text):
+        urls.update(GOOGLE_SCOPE_URL_PATTERN.findall(value))
+    return urls
 
 
 def read_json(path: Path) -> dict:
@@ -333,6 +421,49 @@ def validate_google_scope_manifest(root: Path) -> None:  # noqa: PLR0912, PLR091
             f"scope {scope_id} is requestable before its verification state allows it",
         )
 
+    compatibility_rows = manifest.get("compatibility_scope_disclosures")
+    require(
+        isinstance(compatibility_rows, list),
+        "compatibility_scope_disclosures must be a list",
+    )
+    compatibility_by_url: dict[str, dict[str, object]] = {}
+    compatibility_keys = {
+        "canonical_url",
+        "service",
+        "status",
+        "user_copy",
+        "rationale",
+    }
+    for row in compatibility_rows:
+        require(isinstance(row, dict), "compatibility scope disclosures must be objects")
+        require(
+            set(row) == compatibility_keys,
+            "compatibility scope disclosures must remain disclosure-only records",
+        )
+        scope_url = row.get("canonical_url")
+        require(
+            isinstance(scope_url, str) and scope_url,
+            "compatibility scope disclosures need canonical URLs",
+        )
+        require(
+            scope_url not in compatibility_by_url,
+            f"duplicate compatibility scope disclosure {scope_url}",
+        )
+        require(
+            scope_url not in canonical_urls,
+            f"compatibility disclosure {scope_url} cannot be an implemented scope",
+        )
+        require(
+            row.get("status") == "historical_disclosure_only",
+            f"compatibility disclosure {scope_url} must remain historical_disclosure_only",
+        )
+        for field in ("service", "user_copy", "rationale"):
+            require(
+                isinstance(row.get(field), str) and row[field],
+                f"compatibility disclosure {scope_url} needs {field}",
+            )
+        compatibility_by_url[scope_url] = row
+
     expected_supersets = {
         "gmail.modify": ("gmail.readonly", "gmail.compose", "gmail.send", "gmail.labels"),
         "gmail.compose": ("gmail.send",),
@@ -347,7 +478,12 @@ def validate_google_scope_manifest(root: Path) -> None:  # noqa: PLR0912, PLR091
 
     presets = index_objects_by_id(manifest.get("presets"), label="presets")
     require(list(presets) == list(GOOGLE_REQUIRED_PRESETS), "Google preset id or order drift")
-    for preset_id, (display_name, bundle_id, scope_ids, risk_class) in GOOGLE_REQUIRED_PRESETS.items():
+    for preset_id, (
+        display_name,
+        bundle_id,
+        scope_ids,
+        risk_class,
+    ) in GOOGLE_REQUIRED_PRESETS.items():
         preset = presets[preset_id]
         require(preset.get("display_name") == display_name, f"{preset_id} display name drift")
         require(preset.get("capability_bundle") == bundle_id, f"{preset_id} bundle id drift")
@@ -426,6 +562,10 @@ def validate_google_scope_manifest(root: Path) -> None:  # noqa: PLR0912, PLR091
         set(loader.get("LEGACY_BUNDLES_BY_ID", {})) == set(legacy_bundles),
         "loader legacy bundle index drift",
     )
+    require(
+        set(loader.get("COMPATIBILITY_SCOPE_DISCLOSURES_BY_URL", {})) == set(compatibility_by_url),
+        "loader compatibility disclosure index drift",
+    )
     for helper in (
         "load_manifest",
         "normalize_scope_urls",
@@ -436,12 +576,26 @@ def validate_google_scope_manifest(root: Path) -> None:  # noqa: PLR0912, PLR091
     ):
         require(callable(loader.get(helper)), f"scope loader is missing {helper}")
 
+    resolve_scope_request = loader["resolve_scope_request"]
+    for scope_url in compatibility_by_url:
+        resolution = resolve_scope_request(
+            scope_urls=(scope_url,),
+            client_policy_id="tinyhat-development",
+        )
+        require(
+            not resolution.approved
+            and len(resolution.blocked) == 1
+            and resolution.blocked[0].scope_id is None,
+            f"compatibility disclosure {scope_url} became requestable or implemented",
+        )
+
     allowed_scope_urls = {
         value
         for scope in scopes.values()
         for value in (scope["canonical_url"], *scope.get("aliases", []))
         if isinstance(value, str)
     }
+    allowed_scope_urls.update(compatibility_by_url)
     allowed_bundle_ids = {
         GOOGLE_IDENTITY_BUNDLE_ID,
         GOOGLE_CUSTOM_BUNDLE_ID,
@@ -449,17 +603,21 @@ def validate_google_scope_manifest(root: Path) -> None:  # noqa: PLR0912, PLR091
         *(str(preset["capability_bundle"]) for preset in presets.values()),
     }
     allowed_capabilities = {
-        str(value)
-        for scope in scopes.values()
-        for value in scope.get("capabilities", [])
+        str(value) for scope in scopes.values() for value in scope.get("capabilities", [])
     }
-    for rel in GOOGLE_MANIFEST_CLAIM_PATHS:
-        claim_text = (root / rel).read_text(encoding="utf-8")
+    claim_paths = {
+        *(root / rel for rel in GOOGLE_MANIFEST_DOC_PATHS),
+        *root.glob("*.py"),
+    }
+    for claim_path in sorted(claim_paths):
+        rel = claim_path.relative_to(root).as_posix()
+        claim_text = claim_path.read_text(encoding="utf-8")
         unknown_claims = unknown_google_manifest_claims(
             claim_text,
             allowed_scope_urls=allowed_scope_urls,
             allowed_bundle_ids=allowed_bundle_ids,
             allowed_capabilities=allowed_capabilities,
+            python_source=claim_path.suffix == ".py",
         )
         require(
             not unknown_claims,
@@ -473,6 +631,26 @@ def validate_google_scope_manifest(root: Path) -> None:  # noqa: PLR0912, PLR091
         and len(documented_capabilities) == len(allowed_capabilities),
         "docs/capabilities.md Google capability marker drift",
     )
+    documented_scope_ids = GOOGLE_SCOPE_MARKER_PATTERN.findall(capability_doc)
+    require(
+        set(documented_scope_ids) == set(scopes) and len(documented_scope_ids) == len(scopes),
+        "docs/capabilities.md Google scope marker drift",
+    )
+
+    for rel in GOOGLE_DRIVE_FILE_COPY_PATHS:
+        copy_path = root / rel
+        copy_text = copy_path.read_text(encoding="utf-8")
+        if copy_path.suffix == ".py":
+            copy_text = "\n".join((copy_text, *_statically_constructed_python_strings(copy_text)))
+        normalized_copy = " ".join(copy_text.lower().split())
+        explicit_share_copy = (
+            "files you explicitly share with the app" in normalized_copy
+            or "files the user explicitly shares with the app" in normalized_copy
+        )
+        require(
+            "files tinyhat creates" in normalized_copy and explicit_share_copy,
+            f"{rel} must explain both drive.file access paths",
+        )
 
     for rel in GOOGLE_MANIFEST_DOC_PATHS:
         text = (root / rel).read_text(encoding="utf-8")

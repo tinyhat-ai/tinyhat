@@ -17,7 +17,7 @@ CUSTOM_BUNDLE_ID = "google_workspace_custom_v1"
 DEFAULT_CLIENT_POLICY_ID = "tinyhat-production"
 MAX_SAVED_SCOPE_LENGTH = 512
 MIN_VISIBLE_ASCII_CODEPOINT = 0x21
-HISTORICAL_CANONICAL_SCOPE_URLS = frozenset(
+_EXACT_LEGACY_SCOPE_URLS = frozenset(
     {
         "https://mail.google.com/",
         "https://www.google.com/calendar/feeds",
@@ -81,6 +81,9 @@ _CLIENT_POLICY_KEYS = frozenset(
 )
 _LEGACY_BUNDLE_KEYS = frozenset(
     {"id", "profile_ids", "scope_source", "scope_ids", "requestable", "description"}
+)
+_COMPATIBILITY_SCOPE_DISCLOSURE_KEYS = frozenset(
+    {"canonical_url", "service", "status", "user_copy", "rationale"}
 )
 _EXPECTED_PRESETS = {
     "workspace_reader": (
@@ -214,6 +217,7 @@ def _validate_manifest(  # noqa: PLR0912, PLR0915
                 "identity_capability_bundle",
                 "identity_scope_ids",
                 "custom_scope_policy",
+                "compatibility_scope_disclosures",
                 "client_policies",
                 "scopes",
                 "presets",
@@ -266,6 +270,41 @@ def _validate_manifest(  # noqa: PLR0912, PLR0915
         "$.custom_scope_policy.unknown_scope_verification_state",
     )
     _string(custom_policy["user_copy"], "$.custom_scope_policy.user_copy")
+
+    compatibility_scope_urls: list[str] = []
+    for index, item in enumerate(
+        _sequence(
+            raw["compatibility_scope_disclosures"],
+            "$.compatibility_scope_disclosures",
+        )
+    ):
+        location = f"$.compatibility_scope_disclosures[{index}]"
+        disclosure = _mapping(item, location)
+        _exact_keys(disclosure, _COMPATIBILITY_SCOPE_DISCLOSURE_KEYS, location)
+        canonical_url = _string(disclosure["canonical_url"], f"{location}.canonical_url")
+        if canonical_url not in _EXACT_LEGACY_SCOPE_URLS and (
+            not canonical_url.startswith(prefix) or canonical_url == prefix
+        ):
+            _fail(
+                f"{location}.canonical_url",
+                "must be a canonical Google API scope URL or an exact supported legacy scope",
+            )
+        compatibility_scope_urls.append(canonical_url)
+        _id(disclosure["service"], f"{location}.service")
+        if disclosure["status"] != "historical_disclosure_only":
+            _fail(f"{location}.status", "must be historical_disclosure_only")
+        _string(disclosure["user_copy"], f"{location}.user_copy")
+        _string(disclosure["rationale"], f"{location}.rationale")
+    if len(compatibility_scope_urls) != len(set(compatibility_scope_urls)):
+        _fail(
+            "$.compatibility_scope_disclosures",
+            "canonical scope URLs must be unique",
+        )
+    if not set(compatibility_scope_urls) >= _EXACT_LEGACY_SCOPE_URLS:
+        _fail(
+            "$.compatibility_scope_disclosures",
+            "must declare every exact supported legacy scope",
+        )
 
     policy_ids: list[str] = []
     for index, item in enumerate(_sequence(raw["client_policies"], "$.client_policies")):
@@ -394,6 +433,11 @@ def _validate_manifest(  # noqa: PLR0912, PLR0915
         _fail("$.scopes", "canonical scope URLs must be unique")
     if len(aliases) != len(set(aliases)) or set(aliases) & set(canonical_urls):
         _fail("$.scopes", "aliases must be unique and must not duplicate canonical URLs")
+    if set(compatibility_scope_urls) & (set(canonical_urls) | set(aliases)):
+        _fail(
+            "$.compatibility_scope_disclosures",
+            "disclosure-only scope URLs cannot also be implemented scope URLs or aliases",
+        )
     scope_id_set = set(scope_ids)
     if not set(identity_scope_ids) <= scope_id_set:
         _fail("$.identity_scope_ids", "identity scopes must exist in scopes")
@@ -518,6 +562,13 @@ def load_manifest(path: str | Path | None = None) -> Mapping[str, Any]:
 
 MANIFEST = load_manifest()
 IDENTITY_BUNDLE_ID = str(MANIFEST["identity_capability_bundle"])
+COMPATIBILITY_SCOPE_DISCLOSURES_BY_URL = MappingProxyType(
+    {
+        str(disclosure["canonical_url"]): disclosure
+        for disclosure in MANIFEST["compatibility_scope_disclosures"]
+    }
+)
+HISTORICAL_CANONICAL_SCOPE_URLS = frozenset(COMPATIBILITY_SCOPE_DISCLOSURES_BY_URL)
 SCOPES_BY_ID = MappingProxyType({str(scope["id"]): scope for scope in MANIFEST["scopes"]})
 SCOPES_BY_URL = MappingProxyType(
     {str(scope["canonical_url"]): scope for scope in MANIFEST["scopes"]}
@@ -820,6 +871,7 @@ __all__ = [
     "ALIASES_TO_SCOPE_URL",
     "CANONICAL_GOOGLE_SCOPE_PREFIX",
     "CLIENT_POLICIES_BY_ID",
+    "COMPATIBILITY_SCOPE_DISCLOSURES_BY_URL",
     "CUSTOM_BUNDLE_ID",
     "DEFAULT_CLIENT_POLICY_ID",
     "HISTORICAL_CANONICAL_SCOPE_URLS",

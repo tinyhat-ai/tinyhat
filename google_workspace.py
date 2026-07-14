@@ -30,6 +30,7 @@ from urllib import parse
 
 from .google_workspace_scope_manifest import (
     CLIENT_POLICIES_BY_ID,
+    COMPATIBILITY_SCOPE_DISCLOSURES_BY_URL,
     IDENTITY_BUNDLE_ID,
     IDENTITY_SCOPE_URLS,
     MANIFEST,
@@ -157,34 +158,12 @@ GOOGLE_MAIL_SCOPE = "https://mail.google.com/"
 GOOGLE_CALENDAR_FEEDS_SCOPE = "https://www.google.com/calendar/feeds"
 GOOGLE_CONTACTS_FEEDS_SCOPE = "https://www.google.com/m8/feeds"
 GOOGLE_EXACT_SCOPE_SERVICES = {
-    GOOGLE_CALENDAR_FEEDS_SCOPE: "calendar",
-    GOOGLE_CONTACTS_FEEDS_SCOPE: "people",
+    scope_url: str(disclosure["service"])
+    for scope_url, disclosure in COMPATIBILITY_SCOPE_DISCLOSURES_BY_URL.items()
 }
 GOOGLE_EXACT_SCOPE_LABELS = {
-    GOOGLE_MAIL_SCOPE: "Full Gmail access including permanent deletion",
-    f"{GOOGLE_SCOPE_PREFIX}calendar": (
-        "Full Calendar read/write access including sharing and permanent deletion"
-    ),
-    f"{GOOGLE_SCOPE_PREFIX}contacts": (
-        "Full Contacts read/write access including permanent deletion"
-    ),
-    f"{GOOGLE_SCOPE_PREFIX}drive": (
-        "Full Drive access including creating, editing, and deleting files"
-    ),
-    f"{GOOGLE_SCOPE_PREFIX}gmail.settings.sharing": (
-        "Gmail forwarding and sharing settings management"
-    ),
-    f"{GOOGLE_SCOPE_PREFIX}admin.directory.user": (
-        "Workspace user directory management including creating and deleting users"
-    ),
-    f"{GOOGLE_SCOPE_PREFIX}cloud-platform": (
-        "Broad Google Cloud access including viewing, changing, and deleting cloud data"
-    ),
-    f"{GOOGLE_SCOPE_PREFIX}bigquery": "BigQuery data viewing and management",
-}
-GOOGLE_SCOPE_DISCLOSURE_KEYS = {
-    GOOGLE_CALENDAR_FEEDS_SCOPE: f"{GOOGLE_SCOPE_PREFIX}calendar",
-    GOOGLE_CONTACTS_FEEDS_SCOPE: f"{GOOGLE_SCOPE_PREFIX}contacts",
+    scope_url: str(disclosure["user_copy"])
+    for scope_url, disclosure in COMPATIBILITY_SCOPE_DISCLOSURES_BY_URL.items()
 }
 GOOGLE_SCOPE_ALIASES = {
     f"{GOOGLE_SCOPE_PREFIX}userinfo.email": "email",
@@ -859,8 +838,6 @@ def _scope_service(scope: str) -> str | None:
         return str(manifest_scope["service"])
     if scope in GOOGLE_EXACT_SCOPE_SERVICES:
         return GOOGLE_EXACT_SCOPE_SERVICES[scope]
-    if scope == GOOGLE_MAIL_SCOPE:
-        return "gmail"
     suffix = scope[len(GOOGLE_SCOPE_PREFIX) :]
     mappings = (
         (("gmail",), "gmail"),
@@ -920,9 +897,9 @@ def _custom_profile(
     canonical_scopes = _canonical_custom_grant_scopes(scopes)
     canonical_services = _services_for_scopes(canonical_scopes)
     exact_scope_labels = [
-        GOOGLE_EXACT_SCOPE_LABELS[GOOGLE_SCOPE_DISCLOSURE_KEYS.get(scope, scope)]
+        GOOGLE_EXACT_SCOPE_LABELS[scope]
         for scope in canonical_scopes
-        if GOOGLE_SCOPE_DISCLOSURE_KEYS.get(scope, scope) in GOOGLE_EXACT_SCOPE_LABELS
+        if scope in GOOGLE_EXACT_SCOPE_LABELS
     ]
     service_labels = [
         GOOGLE_SERVICE_LABELS.get(service, service.replace("_", " ").title())
@@ -1043,11 +1020,7 @@ def _scope_review_required_payload(
 ) -> dict[str, Any]:
     blocked: list[dict[str, Any]] = []
     for item in profile.blocked_scopes:
-        disclosure_key = GOOGLE_SCOPE_DISCLOSURE_KEYS.get(
-            item.scope_url,
-            item.scope_url,
-        )
-        disclosure = GOOGLE_EXACT_SCOPE_LABELS.get(disclosure_key)
+        disclosure = GOOGLE_EXACT_SCOPE_LABELS.get(item.scope_url)
         blocked.append(
             {
                 "scope": item.scope_url,
@@ -3454,7 +3427,8 @@ TELEGRAM_NOTICE_MESSAGES = {
     ),
     "ready_file_collaborator": (
         "Google Workspace File Collaborator access is connected on this Computer for "
-        "files Tinyhat creates, without access to unrelated existing Drive files. "
+        "files Tinyhat creates or files you explicitly share with the app, without "
+        "access to other Drive files. "
         "I will still ask before each write."
     ),
     "ready_gmail_send": (

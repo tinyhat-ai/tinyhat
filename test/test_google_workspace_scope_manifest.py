@@ -3,12 +3,16 @@
 from __future__ import annotations
 
 import importlib.util
+import io
 import json
+import shutil
 import sys
 import tempfile
 import unittest
+from contextlib import redirect_stderr
 from pathlib import Path
 from types import MappingProxyType
+from unittest import mock
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 PARENT = REPO_ROOT.parent
@@ -123,6 +127,7 @@ class GoogleWorkspaceScopeManifestTests(unittest.TestCase):
         allowed_scope_urls = {
             str(scope["canonical_url"]) for scope in manifest.SCOPES_BY_ID.values()
         }
+        allowed_scope_urls.update(manifest.COMPATIBILITY_SCOPE_DISCLOSURES_BY_URL)
         allowed_bundle_ids = {
             manifest.IDENTITY_BUNDLE_ID,
             manifest.CUSTOM_BUNDLE_ID,
@@ -148,7 +153,7 @@ class GoogleWorkspaceScopeManifestTests(unittest.TestCase):
         )
         self.assertEqual(
             validator.unknown_google_manifest_claims(
-                "https://www.googleapis.com/auth/contacts "
+                "https://www.googleapis.com/auth/contacts.readonly "
                 "google_workspace_contacts_manager_v1 "
                 "google-capability:contacts_management",
                 allowed_scope_urls=allowed_scope_urls,
@@ -158,9 +163,70 @@ class GoogleWorkspaceScopeManifestTests(unittest.TestCase):
             (
                 "bundle:google_workspace_contacts_manager_v1",
                 "capability:contacts_management",
-                "scope:https://www.googleapis.com/auth/contacts",
+                "scope:https://www.googleapis.com/auth/contacts.readonly",
             ),
         )
+
+    def test_compatibility_disclosures_never_become_capabilities_or_requests(self) -> None:
+        implemented_urls = set(manifest.SCOPES_BY_URL)
+        compatibility_urls = set(manifest.COMPATIBILITY_SCOPE_DISCLOSURES_BY_URL)
+        self.assertTrue(compatibility_urls)
+        self.assertFalse(implemented_urls & compatibility_urls)
+        for scope_url, disclosure in manifest.COMPATIBILITY_SCOPE_DISCLOSURES_BY_URL.items():
+            with self.subTest(scope_url=scope_url):
+                self.assertEqual(disclosure["status"], "historical_disclosure_only")
+                self.assertNotIn("capabilities", disclosure)
+                self.assertNotIn("operations", disclosure)
+                resolution = manifest.resolve_scope_request(
+                    scope_urls=(scope_url,),
+                    client_policy_id="tinyhat-development",
+                )
+                self.assertFalse(resolution.approved)
+                self.assertEqual(len(resolution.blocked), 1)
+                self.assertIsNone(resolution.blocked[0].scope_id)
+
+    def test_drive_file_copy_includes_both_google_access_paths(self) -> None:
+        drive_file = manifest.SCOPES_BY_ID["drive.file"]
+        data_read = " ".join(drive_file["data_read"])
+        self.assertIn("Files Tinyhat creates", data_read)
+        self.assertIn("files the user explicitly shares with the app", data_read)
+        self.assertIn("files you explicitly share with the app", drive_file["user_copy"])
+        self.assertIn(
+            "files you explicitly share with the app",
+            manifest.PRESETS_BY_ID["file_collaborator"]["user_copy"],
+        )
+
+    def test_validator_entrypoints_reject_constructed_undeclared_scope_claim(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            copied_root = Path(directory) / "tinyhat"
+            shutil.copytree(
+                REPO_ROOT,
+                copied_root,
+                ignore=shutil.ignore_patterns(".git", "__pycache__", "*.pyc"),
+            )
+            workspace_path = copied_root / "google_workspace.py"
+            workspace_path.write_text(
+                workspace_path.read_text(encoding="utf-8")
+                + '\nGOOGLE_UNDECLARED_SCOPE = f"{GOOGLE_SCOPE_PREFIX}contacts.readonly"\n',
+                encoding="utf-8",
+            )
+
+            with mock.patch.object(validator, "repo_root", return_value=copied_root):
+                direct_stderr = io.StringIO()
+                with redirect_stderr(direct_stderr), self.assertRaises(SystemExit):
+                    validator.validate_google_scope_manifest(copied_root)
+                self.assertIn(
+                    "scope:https://www.googleapis.com/auth/contacts.readonly",
+                    direct_stderr.getvalue(),
+                )
+
+                main_stderr = io.StringIO()
+                with redirect_stderr(main_stderr), self.assertRaises(SystemExit):
+                    validator.main()
+                self.assertIn(
+                    "scope:https://www.googleapis.com/auth/contacts.readonly",
+                    main_stderr.getvalue(),
+                )
 
     def test_phase_one_atoms_and_review_only_entries_are_explicit(self) -> None:
         phase_one = {

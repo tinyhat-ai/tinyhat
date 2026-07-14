@@ -41,13 +41,16 @@ Workspace Reader's `gmail.readonly` also exposes Gmail settings.
 `gmail.compose` covers drafts and sending; `gmail.modify` covers reading,
 composing, sending, drafts, labels, archive, and read state without immediate
 permanent deletion; and the implemented `drive.file` workflow covers files
-Tinyhat creates, not unrelated existing Drive files.
+Tinyhat creates or files the user explicitly shares with the app, not other
+Drive files.
 
 The plugin normalizes redundant scopes and sends exact manifest metadata for
 platform validation. Unknown scopes, or scopes not reviewed for the active
 OAuth client, produce `review_required` before OAuth state, a detached worker,
 or a Google button exists. Historical profiles remain readable compatibility
-inputs. `connect` with one account id unions current and requested access;
+inputs. Separate compatibility scope disclosures only label risks in historical
+grants or blocked requests; they cannot become presets, approved Custom scopes,
+or implemented capabilities. `connect` with one account id unions current and requested access;
 `set_permissions` replaces one selected account's local credential with the
 exact presets and approved Custom set, plus identity. A narrower replacement
 stops the Computer from using removed scopes, but is not Google provider-side

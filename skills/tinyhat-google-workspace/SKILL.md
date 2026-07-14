@@ -36,7 +36,7 @@ smallest combination that supports the user's task:
 | Mail Writer | `mail_writer` | Create and manage Gmail drafts and send email through `gmail.compose`. |
 | Inbox Manager | `inbox_manager` | Read, compose, send, draft, label, archive, and change read state through `gmail.modify`; it cannot bypass Trash for immediate permanent deletion. |
 | Calendar Coordinator | `calendar_coordinator` | Read, create, update, and delete Calendar events through `calendar.events`. |
-| File Collaborator | `file_collaborator` | Work with Drive files Tinyhat creates through `drive.file`; it does not grant access to unrelated existing Drive files. |
+| File Collaborator | `file_collaborator` | Work with Drive files Tinyhat creates or files you explicitly share with the app through `drive.file`; it does not grant access to other Drive files. |
 
 Examples:
 

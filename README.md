@@ -141,7 +141,7 @@ defines these composable presets:
 | Mail Writer | `mail_writer` | `https://www.googleapis.com/auth/gmail.compose` for drafts and sending |
 | Inbox Manager | `inbox_manager` | `https://www.googleapis.com/auth/gmail.modify` for reading, composing, sending, drafts, labels, archive, and read state, without immediate permanent deletion |
 | Calendar Coordinator | `calendar_coordinator` | `https://www.googleapis.com/auth/calendar.events` for event read/write |
-| File Collaborator | `file_collaborator` | `https://www.googleapis.com/auth/drive.file` for files Tinyhat creates; no access to unrelated existing Drive files |
+| File Collaborator | `file_collaborator` | `https://www.googleapis.com/auth/drive.file` for files Tinyhat creates or files you explicitly share with the app; no access to other Drive files |
 
 Custom access is an exact subset or union of manifest-listed scopes and may be
 combined with presets. The loader normalizes redundant scopes so
@@ -157,6 +157,11 @@ verification states. Unknown scopes, or known scopes not reviewed for the
 active OAuth client, return a structured `review_required` result before OAuth
 state is created, a worker starts, or a Google button is sent. This lets Tinyhat
 document a future capability without making it requestable in production.
+Historical saved grants and blocked requests can also use the manifest's
+separate `compatibility_scope_disclosures` risk labels. These disclosure-only
+records define no capability or operation and can never make a scope
+requestable. Package validation checks literal and statically constructed
+production scope URLs against those two explicit collections.
 
 The platform returns its Google sign-in URL to the plugin, which places it only
 inside a native Telegram inline button labeled **Connect Google**. The tool
