@@ -59,26 +59,31 @@ GOOGLE_REQUIRED_PRESETS = {
         "Workspace Reader",
         "google_workspace_workspace_reader_v1",
         ("gmail.readonly", "calendar.events.readonly", "drive.readonly"),
+        "restricted",
     ),
     "mail_writer": (
         "Mail Writer",
         "google_workspace_mail_writer_v1",
         ("gmail.compose",),
+        "restricted",
     ),
     "inbox_manager": (
         "Inbox Manager",
         "google_workspace_inbox_manager_v1",
         ("gmail.modify",),
+        "restricted",
     ),
     "calendar_coordinator": (
         "Calendar Coordinator",
         "google_workspace_calendar_coordinator_v1",
         ("calendar.events",),
+        "sensitive",
     ),
     "file_collaborator": (
         "File Collaborator",
         "google_workspace_file_collaborator_v1",
         ("drive.file",),
+        "non_sensitive",
     ),
 }
 GOOGLE_REQUIRED_LEGACY_BUNDLES = {
@@ -99,6 +104,14 @@ GOOGLE_MANIFEST_DOC_PATHS = (
     "skills/tinyhat-google-workspace/SKILL.md",
     "skills/tinyhat-platform/SKILL.md",
 )
+GOOGLE_MANIFEST_CLAIM_PATHS = (*GOOGLE_MANIFEST_DOC_PATHS, "google_workspace.py", "platform.py")
+GOOGLE_SCOPE_URL_PATTERN = re.compile(
+    r"https://www\.googleapis\.com/auth/[A-Za-z0-9][A-Za-z0-9._/-]*"
+)
+GOOGLE_BUNDLE_ID_PATTERN = re.compile(r"\bgoogle_workspace_[a-z0-9_]+_v[0-9]+\b")
+GOOGLE_CAPABILITY_MARKER_PATTERN = re.compile(
+    r"\bgoogle-capability:([a-z][a-z0-9_]*)\b"
+)
 
 
 def fail(message: str) -> None:
@@ -113,6 +126,27 @@ def repo_root() -> Path:
 def require(condition: bool, message: str) -> None:
     if not condition:
         fail(message)
+
+
+def unknown_google_manifest_claims(
+    text: str,
+    *,
+    allowed_scope_urls: set[str],
+    allowed_bundle_ids: set[str],
+    allowed_capabilities: set[str],
+) -> tuple[str, ...]:
+    """Return structured Google scope, bundle, or capability claims absent from the manifest."""
+
+    unknown = {
+        *(f"scope:{value}" for value in GOOGLE_SCOPE_URL_PATTERN.findall(text) if value not in allowed_scope_urls),
+        *(f"bundle:{value}" for value in GOOGLE_BUNDLE_ID_PATTERN.findall(text) if value not in allowed_bundle_ids),
+        *(
+            f"capability:{value}"
+            for value in GOOGLE_CAPABILITY_MARKER_PATTERN.findall(text)
+            if value not in allowed_capabilities
+        ),
+    }
+    return tuple(sorted(unknown))
 
 
 def read_json(path: Path) -> dict:
@@ -313,11 +347,14 @@ def validate_google_scope_manifest(root: Path) -> None:  # noqa: PLR0912, PLR091
 
     presets = index_objects_by_id(manifest.get("presets"), label="presets")
     require(list(presets) == list(GOOGLE_REQUIRED_PRESETS), "Google preset id or order drift")
-    for preset_id, (display_name, bundle_id, scope_ids) in GOOGLE_REQUIRED_PRESETS.items():
+    for preset_id, (display_name, bundle_id, scope_ids, risk_class) in GOOGLE_REQUIRED_PRESETS.items():
         preset = presets[preset_id]
         require(preset.get("display_name") == display_name, f"{preset_id} display name drift")
         require(preset.get("capability_bundle") == bundle_id, f"{preset_id} bundle id drift")
         require(preset.get("scope_ids") == list(scope_ids), f"{preset_id} scope membership drift")
+        require(preset.get("risk_class") == risk_class, f"{preset_id} risk class drift")
+        require(preset.get("recommended") is True, f"{preset_id} must remain recommended")
+        require(preset.get("default") is False, f"{preset_id} must not become the default")
         for scope_id in scope_ids:
             require(scope_id in scopes, f"{preset_id} references unknown scope {scope_id}")
 
@@ -399,10 +436,48 @@ def validate_google_scope_manifest(root: Path) -> None:  # noqa: PLR0912, PLR091
     ):
         require(callable(loader.get(helper)), f"scope loader is missing {helper}")
 
+    allowed_scope_urls = {
+        value
+        for scope in scopes.values()
+        for value in (scope["canonical_url"], *scope.get("aliases", []))
+        if isinstance(value, str)
+    }
+    allowed_bundle_ids = {
+        GOOGLE_IDENTITY_BUNDLE_ID,
+        GOOGLE_CUSTOM_BUNDLE_ID,
+        *legacy_bundles,
+        *(str(preset["capability_bundle"]) for preset in presets.values()),
+    }
+    allowed_capabilities = {
+        str(value)
+        for scope in scopes.values()
+        for value in scope.get("capabilities", [])
+    }
+    for rel in GOOGLE_MANIFEST_CLAIM_PATHS:
+        claim_text = (root / rel).read_text(encoding="utf-8")
+        unknown_claims = unknown_google_manifest_claims(
+            claim_text,
+            allowed_scope_urls=allowed_scope_urls,
+            allowed_bundle_ids=allowed_bundle_ids,
+            allowed_capabilities=allowed_capabilities,
+        )
+        require(
+            not unknown_claims,
+            f"{rel} claims Google access absent from the manifest: {', '.join(unknown_claims)}",
+        )
+
+    capability_doc = (root / "docs/capabilities.md").read_text(encoding="utf-8")
+    documented_capabilities = GOOGLE_CAPABILITY_MARKER_PATTERN.findall(capability_doc)
+    require(
+        set(documented_capabilities) == allowed_capabilities
+        and len(documented_capabilities) == len(allowed_capabilities),
+        "docs/capabilities.md Google capability marker drift",
+    )
+
     for rel in GOOGLE_MANIFEST_DOC_PATHS:
         text = (root / rel).read_text(encoding="utf-8")
         normalized_text = " ".join(text.split())
-        for preset_id, (display_name, _, _) in GOOGLE_REQUIRED_PRESETS.items():
+        for preset_id, (display_name, _, _, _) in GOOGLE_REQUIRED_PRESETS.items():
             require(preset_id in normalized_text, f"{rel} missing Google preset {preset_id}")
             if rel != "context.py":
                 require(

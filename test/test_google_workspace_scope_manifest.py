@@ -28,6 +28,15 @@ if REPO_ROOT.name != "tinyhat":
 
 from tinyhat import google_workspace_scope_manifest as manifest  # noqa: E402
 
+VALIDATOR_SPEC = importlib.util.spec_from_file_location(
+    "tinyhat_validate_framework_package",
+    REPO_ROOT / "scripts" / "validate_framework_package.py",
+)
+if VALIDATOR_SPEC is None or VALIDATOR_SPEC.loader is None:
+    raise RuntimeError("Could not load the framework package validator for tests.")
+validator = importlib.util.module_from_spec(VALIDATOR_SPEC)
+VALIDATOR_SPEC.loader.exec_module(validator)
+
 
 class GoogleWorkspaceScopeManifestTests(unittest.TestCase):
     def raw_manifest(self) -> dict[str, object]:
@@ -66,18 +75,21 @@ class GoogleWorkspaceScopeManifestTests(unittest.TestCase):
     def test_five_presets_have_the_required_exact_scope_membership(self) -> None:
         expected = {
             "workspace_reader": (
-                "gmail.readonly",
-                "calendar.events.readonly",
-                "drive.readonly",
+                ("gmail.readonly", "calendar.events.readonly", "drive.readonly"),
+                "restricted",
             ),
-            "mail_writer": ("gmail.compose",),
-            "inbox_manager": ("gmail.modify",),
-            "calendar_coordinator": ("calendar.events",),
-            "file_collaborator": ("drive.file",),
+            "mail_writer": (("gmail.compose",), "restricted"),
+            "inbox_manager": (("gmail.modify",), "restricted"),
+            "calendar_coordinator": (("calendar.events",), "sensitive"),
+            "file_collaborator": (("drive.file",), "non_sensitive"),
         }
         self.assertEqual(set(manifest.PRESETS_BY_ID), set(expected))
-        for preset_id, scope_ids in expected.items():
-            self.assertEqual(tuple(manifest.PRESETS_BY_ID[preset_id]["scope_ids"]), scope_ids)
+        for preset_id, (scope_ids, risk_class) in expected.items():
+            preset = manifest.PRESETS_BY_ID[preset_id]
+            self.assertEqual(tuple(preset["scope_ids"]), scope_ids)
+            self.assertEqual(preset["risk_class"], risk_class)
+            self.assertIs(preset["recommended"], True)
+            self.assertIs(preset["default"], False)
 
     def test_every_scope_carries_verification_and_data_use_evidence(self) -> None:
         required = {
@@ -104,6 +116,51 @@ class GoogleWorkspaceScopeManifestTests(unittest.TestCase):
                     {"tinyhat-development", "tinyhat-production"},
                 )
                 self.assertEqual(scope["read_only"], scope["access_mode"] == "read")
+
+    def test_validator_rejects_scope_bundle_and_capability_claims_absent_from_manifest(
+        self,
+    ) -> None:
+        allowed_scope_urls = {
+            str(scope["canonical_url"]) for scope in manifest.SCOPES_BY_ID.values()
+        }
+        allowed_bundle_ids = {
+            manifest.IDENTITY_BUNDLE_ID,
+            manifest.CUSTOM_BUNDLE_ID,
+            *(str(preset["capability_bundle"]) for preset in manifest.PRESETS_BY_ID.values()),
+            *manifest.LEGACY_BUNDLES_BY_ID,
+        }
+        allowed_capabilities = {
+            str(value)
+            for scope in manifest.SCOPES_BY_ID.values()
+            for value in scope["capabilities"]
+        }
+
+        self.assertEqual(
+            validator.unknown_google_manifest_claims(
+                "https://www.googleapis.com/auth/gmail.modify "
+                "google_workspace_inbox_manager_v1 "
+                "google-capability:gmail_inbox_management",
+                allowed_scope_urls=allowed_scope_urls,
+                allowed_bundle_ids=allowed_bundle_ids,
+                allowed_capabilities=allowed_capabilities,
+            ),
+            (),
+        )
+        self.assertEqual(
+            validator.unknown_google_manifest_claims(
+                "https://www.googleapis.com/auth/contacts "
+                "google_workspace_contacts_manager_v1 "
+                "google-capability:contacts_management",
+                allowed_scope_urls=allowed_scope_urls,
+                allowed_bundle_ids=allowed_bundle_ids,
+                allowed_capabilities=allowed_capabilities,
+            ),
+            (
+                "bundle:google_workspace_contacts_manager_v1",
+                "capability:contacts_management",
+                "scope:https://www.googleapis.com/auth/contacts",
+            ),
+        )
 
     def test_phase_one_atoms_and_review_only_entries_are_explicit(self) -> None:
         phase_one = {
@@ -338,6 +395,17 @@ class GoogleWorkspaceScopeManifestTests(unittest.TestCase):
         raw = self.raw_manifest()
         raw["presets"][0]["scope_ids"] = ["gmail.readonly"]  # type: ignore[index]
         with self.assertRaisesRegex(ValueError, "required preset contract"):
+            self.load_changed(raw)
+
+    def test_strict_loader_rejects_preset_risk_or_default_drift(self) -> None:
+        raw = self.raw_manifest()
+        raw["presets"][0]["risk_class"] = "sensitive"  # type: ignore[index]
+        with self.assertRaisesRegex(ValueError, "highest-risk member scope"):
+            self.load_changed(raw)
+
+        raw = self.raw_manifest()
+        raw["presets"][0]["default"] = True  # type: ignore[index]
+        with self.assertRaisesRegex(ValueError, "default status drifted"):
             self.load_changed(raw)
 
 

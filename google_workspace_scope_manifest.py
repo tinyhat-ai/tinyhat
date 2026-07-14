@@ -28,6 +28,7 @@ HISTORICAL_CANONICAL_SCOPE_URLS = frozenset(
 _ID_RE = re.compile(r"^[a-z][a-z0-9_.-]*$")
 _VERSION_RE = re.compile(r"^[1-9][0-9]*\.[0-9]+\.[0-9]+$")
 _CLASSIFICATIONS = frozenset({"non_sensitive", "sensitive", "restricted"})
+_CLASSIFICATION_PRIORITY = {"non_sensitive": 0, "sensitive": 1, "restricted": 2}
 _ACCESS_MODES = frozenset({"read", "write"})
 _REQUEST_STATES = frozenset({"approved", "review_required", "legacy_only"})
 _SCOPE_KEYS = frozenset(
@@ -62,6 +63,9 @@ _PRESET_KEYS = frozenset(
         "capability_bundle",
         "scope_ids",
         "user_copy",
+        "risk_class",
+        "recommended",
+        "default",
         "read_only",
     }
 )
@@ -80,14 +84,15 @@ _LEGACY_BUNDLE_KEYS = frozenset(
 )
 _EXPECTED_PRESETS = {
     "workspace_reader": (
-        "gmail.readonly",
-        "calendar.events.readonly",
-        "drive.readonly",
+        ("gmail.readonly", "calendar.events.readonly", "drive.readonly"),
+        "restricted",
+        True,
+        False,
     ),
-    "mail_writer": ("gmail.compose",),
-    "inbox_manager": ("gmail.modify",),
-    "calendar_coordinator": ("calendar.events",),
-    "file_collaborator": ("drive.file",),
+    "mail_writer": (("gmail.compose",), "restricted", True, False),
+    "inbox_manager": (("gmail.modify",), "restricted", True, False),
+    "calendar_coordinator": (("calendar.events",), "sensitive", True, False),
+    "file_collaborator": (("drive.file",), "non_sensitive", True, False),
 }
 _EXPECTED_POLICIES = frozenset({"tinyhat-development", "tinyhat-production"})
 _EXPECTED_LEGACY_BUNDLES = frozenset(
@@ -419,13 +424,33 @@ def _validate_manifest(  # noqa: PLR0912, PLR0915
         if set(preset_scope_ids) - scope_id_set:
             _fail(f"{location}.scope_ids", "contains unknown scope ids")
         _string(preset["user_copy"], f"{location}.user_copy")
+        risk_class = _string(preset["risk_class"], f"{location}.risk_class")
+        if risk_class not in _CLASSIFICATIONS:
+            _fail(f"{location}.risk_class", "must be a known Google classification")
+        computed_risk_class = max(
+            (str(scope_by_id[item]["classification"]) for item in preset_scope_ids),
+            key=_CLASSIFICATION_PRIORITY.__getitem__,
+        )
+        if risk_class != computed_risk_class:
+            _fail(f"{location}.risk_class", "must equal the highest-risk member scope")
+        recommended = _boolean(preset["recommended"], f"{location}.recommended")
+        default = _boolean(preset["default"], f"{location}.default")
         declared_read_only = _boolean(preset["read_only"], f"{location}.read_only")
         computed_read_only = all(bool(scope_by_id[item]["read_only"]) for item in preset_scope_ids)
         if declared_read_only != computed_read_only:
             _fail(f"{location}.read_only", "must agree with member scopes")
         expected = _EXPECTED_PRESETS.get(preset_id)
-        if expected is None or preset_scope_ids != expected:
+        if expected is None:
+            _fail(location, "does not match the required preset contract")
+        expected_scope_ids, expected_risk, expected_recommended, expected_default = expected
+        if preset_scope_ids != expected_scope_ids:
             _fail(f"{location}.scope_ids", "does not match the required preset contract")
+        if (risk_class, recommended, default) != (
+            expected_risk,
+            expected_recommended,
+            expected_default,
+        ):
+            _fail(location, "risk, recommendation, or default status drifted")
     if set(preset_ids) != set(_EXPECTED_PRESETS) or len(preset_ids) != len(set(preset_ids)):
         _fail("$.presets", "must define the five required preset ids exactly once")
     if len(bundles) != len(set(bundles)):

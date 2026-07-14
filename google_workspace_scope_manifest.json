@@ -404,6 +404,9 @@
       "capability_bundle": "google_workspace_workspace_reader_v1",
       "scope_ids": ["gmail.readonly", "calendar.events.readonly", "drive.readonly"],
       "user_copy": "Read Gmail messages, threads, and settings, calendar events, and Drive files without changing them.",
+      "risk_class": "restricted",
+      "recommended": true,
+      "default": false,
       "read_only": true
     },
     {
@@ -412,6 +415,9 @@
       "capability_bundle": "google_workspace_mail_writer_v1",
       "scope_ids": ["gmail.compose"],
       "user_copy": "Prepare and manage Gmail drafts and send confirmed messages.",
+      "risk_class": "restricted",
+      "recommended": true,
+      "default": false,
       "read_only": false
     },
     {
@@ -420,6 +426,9 @@
       "capability_bundle": "google_workspace_inbox_manager_v1",
       "scope_ids": ["gmail.modify"],
       "user_copy": "Read and manage Gmail messages, drafts, labels, and mailbox state.",
+      "risk_class": "restricted",
+      "recommended": true,
+      "default": false,
       "read_only": false
     },
     {
@@ -428,6 +437,9 @@
       "capability_bundle": "google_workspace_calendar_coordinator_v1",
       "scope_ids": ["calendar.events"],
       "user_copy": "Read and manage calendar events.",
+      "risk_class": "sensitive",
+      "recommended": true,
+      "default": false,
       "read_only": false
     },
     {
@@ -436,6 +448,9 @@
       "capability_bundle": "google_workspace_file_collaborator_v1",
       "scope_ids": ["drive.file"],
       "user_copy": "Create files and work with files Tinyhat creates, without access to unrelated existing Drive files.",
+      "risk_class": "non_sensitive",
+      "recommended": true,
+      "default": false,
       "read_only": false
     }
   ],

@@ -94,6 +94,14 @@ narrower alternatives, user copy, demo steps, and per-client request and
 verification states. Documentation and future verification evidence should be
 validated against that contract instead of treating prose as another authority.
 
+The manifest-derived capability identifiers checked by package validation are:
+`google-capability:account_identity`, `google-capability:calendar_event_read`,
+`google-capability:calendar_event_write`, `google-capability:calendar_read_legacy`,
+`google-capability:drive_file_collaboration`, `google-capability:drive_read`,
+`google-capability:gmail_drafts`, `google-capability:gmail_inbox_management`,
+`google-capability:gmail_label_definitions`, `google-capability:gmail_read`,
+`google-capability:gmail_send`, and `google-capability:tasks_management`.
+
 `{"action": "status"}` returns safe metadata for all connected accounts. Each
 entry includes the platform's stable opaque connection id as `account_id`; the
 agent uses it to select an account without seeing credentials. When more than
