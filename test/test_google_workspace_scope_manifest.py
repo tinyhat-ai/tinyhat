@@ -288,6 +288,46 @@ class GoogleWorkspaceScopeManifestTests(unittest.TestCase):
             ),
         )
 
+    def test_normalization_removes_transitive_supersession_independent_of_order(self) -> None:
+        modify_url = "https://www.googleapis.com/auth/gmail.modify"
+        compose_url = "https://www.googleapis.com/auth/gmail.compose"
+        send_url = "https://www.googleapis.com/auth/gmail.send"
+        modify = dict(manifest.SCOPES_BY_ID["gmail.modify"])
+        modify["supersedes"] = ("gmail.compose",)
+        modified_by_id = dict(manifest.SCOPES_BY_ID)
+        modified_by_id["gmail.modify"] = MappingProxyType(modify)
+        modified_by_url = dict(manifest.SCOPES_BY_URL)
+        modified_by_url[modify_url] = modified_by_id["gmail.modify"]
+        ancestor_first_order = (
+            *manifest.IDENTITY_SCOPE_URLS,
+            modify_url,
+            compose_url,
+            send_url,
+            *(
+                scope_url
+                for scope_url in manifest.SCOPE_ORDER
+                if scope_url
+                not in {*manifest.IDENTITY_SCOPE_URLS, modify_url, compose_url, send_url}
+            ),
+        )
+
+        with (
+            mock.patch.object(
+                manifest,
+                "SCOPES_BY_ID",
+                MappingProxyType(modified_by_id),
+            ),
+            mock.patch.object(
+                manifest,
+                "SCOPES_BY_URL",
+                MappingProxyType(modified_by_url),
+            ),
+            mock.patch.object(manifest, "SCOPE_ORDER", ancestor_first_order),
+        ):
+            normalized = manifest.normalize_scope_urls((send_url, compose_url, modify_url))
+
+        self.assertEqual(normalized, (*manifest.IDENTITY_SCOPE_URLS, modify_url))
+
     def test_normalization_preserves_arbitrary_canonical_scopes_for_review(self) -> None:
         normalized = manifest.normalize_scope_urls(
             (

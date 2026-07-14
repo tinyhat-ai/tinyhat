@@ -694,17 +694,33 @@ def _dedupe(values: Iterable[str]) -> tuple[str, ...]:
     return tuple(dict.fromkeys(values))
 
 
+def _transitively_superseded_scope_urls(selected: set[str]) -> set[str]:
+    """Return the complete supersession closure for the selected scopes."""
+
+    pending = [
+        str(scope["id"])
+        for scope_url in selected
+        if (scope := SCOPES_BY_URL.get(scope_url)) is not None
+    ]
+    visited = set(pending)
+    superseded_ids: set[str] = set()
+    while pending:
+        scope_id = pending.pop()
+        for child_value in SCOPES_BY_ID[scope_id]["supersedes"]:
+            child_id = str(child_value)
+            superseded_ids.add(child_id)
+            if child_id not in visited:
+                visited.add(child_id)
+                pending.append(child_id)
+    return {str(SCOPES_BY_ID[scope_id]["canonical_url"]) for scope_id in superseded_ids}
+
+
 def normalize_scope_urls(scope_urls: Iterable[str]) -> tuple[str, ...]:
     """Canonicalize, add identity, remove superseded scopes, and order deterministically."""
 
     selected = set(IDENTITY_SCOPE_URLS)
     selected.update(_canonicalize_scope_url(scope_url) for scope_url in scope_urls)
-    for scope_url in SCOPE_ORDER:
-        if scope_url not in selected:
-            continue
-        scope = SCOPES_BY_URL[scope_url]
-        for superseded_id in scope["supersedes"]:
-            selected.discard(str(SCOPES_BY_ID[str(superseded_id)]["canonical_url"]))
+    selected.difference_update(_transitively_superseded_scope_urls(selected))
     ordered_known = [scope_url for scope_url in SCOPE_ORDER if scope_url in selected]
     unknown = sorted(selected - set(SCOPE_ORDER))
     return tuple(ordered_known + unknown)
