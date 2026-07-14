@@ -55,6 +55,7 @@ from .tool_errors import tool_error_json
 
 GOOGLE_WORKSPACE_ACTIONS = ("connect", "status", "set_permissions", "disconnect")
 HTTP_FORBIDDEN = 403
+HTTP_NOT_FOUND = 404
 GOOGLE_WORKSPACE_CREDENTIAL_SCHEMA = "tinyhat_google_workspace_credentials_v1"
 GOOGLE_WORKSPACE_ACCOUNTS_SCHEMA = "tinyhat_google_workspace_accounts_v1"
 GOOGLE_WORKSPACE_CONNECTIONS_SCHEMA = "tinyhat_google_workspace_connections_v1"
@@ -122,6 +123,11 @@ GOOGLE_CALENDAR_WRITE_CAPABILITY_BUNDLE = "google_workspace_calendar_write_v1"
 GOOGLE_GMAIL_SEND_CALENDAR_WRITE_CAPABILITY_BUNDLE = "google_workspace_gmail_send_calendar_write_v1"
 GOOGLE_IDENTITY_SCOPES = tuple(IDENTITY_SCOPE_URLS)
 GOOGLE_REQUESTED_SERVICES = ("identity", "gmail", "calendar", "drive")
+# The plugin cannot know which central OAuth client the attested platform will
+# select, so this local fallback intentionally permits manifest-reviewed
+# development requests to reach preflight. It never authorizes OAuth: platform
+# preflight is authoritative and stamps the actual client policy before any
+# local state, worker, authorization URL, or Google button can be created.
 GOOGLE_WORKSPACE_PLUGIN_POLICY_FALLBACK = "tinyhat-development"
 GOOGLE_RECOMMENDED_SCOPES = (
     *GOOGLE_IDENTITY_SCOPES,
@@ -289,6 +295,14 @@ class GoogleWorkspaceScopeReviewRequired(GoogleWorkspaceError):
 
 class GoogleWorkspacePlatformSyncPending(GoogleWorkspaceError):
     """A durable credential-install acknowledgement must settle first."""
+
+
+class GoogleWorkspacePlatformNotReady(GoogleWorkspaceError):
+    """The platform permanently cannot review this OAuth request as deployed."""
+
+    def __init__(self, *, error_code: str, message: str) -> None:
+        self.error_code = error_code
+        super().__init__(message)
 
 
 @dataclass(frozen=True)
@@ -675,6 +689,15 @@ def google_workspace(  # noqa: PLR0911, PLR0912
                 ),
                 example_call={"action": "status"},
             )
+        except GoogleWorkspacePlatformNotReady as exc:
+            result = {
+                "schema": "tinyhat_google_workspace_action_v1",
+                "action": action,
+                "status": "platform_not_ready",
+                "button_sent": False,
+                "error_code": exc.error_code,
+                "message": str(exc),
+            }
         except GoogleWorkspaceAccountSelectionRequired as exc:
             return _account_selection_error(
                 tool="tinyhat_google_workspace",
@@ -1136,6 +1159,27 @@ def _platform_review_required_profile(
     )
 
 
+def _malformed_platform_review_error(
+    exc: PlatformError,
+) -> GoogleWorkspacePlatformNotReady | None:
+    """Explain a declared review rejection that cannot be trusted or retried."""
+
+    if exc.status_code != HTTP_FORBIDDEN or not isinstance(exc.response, dict):
+        return None
+    detail = exc.response.get("detail")
+    if not isinstance(detail, dict) or detail.get("error_code") != "review_required":
+        return None
+    return GoogleWorkspacePlatformNotReady(
+        error_code="invalid_scope_review_response",
+        message=(
+            "Google sign-in was rejected by the Tinyhat platform, but its "
+            "permission-review response was incomplete or invalid. The platform "
+            "and plugin must be brought to a compatible policy version before this "
+            "request can start; retrying the same request will not help."
+        ),
+    )
+
+
 def _profile_with_authoritative_policy(
     profile: GoogleWorkspaceProfile,
     *,
@@ -1361,6 +1405,19 @@ def _preflight_connection_request(
         blocked_profile = _platform_review_required_profile(profile, exc)
         if blocked_profile is not None:
             raise GoogleWorkspaceScopeReviewRequired(blocked_profile) from exc
+        malformed_review = _malformed_platform_review_error(exc)
+        if malformed_review is not None:
+            raise malformed_review from exc
+        if exc.status_code == HTTP_NOT_FOUND:
+            raise GoogleWorkspacePlatformNotReady(
+                error_code="scope_preflight_unavailable",
+                message=(
+                    "Google sign-in is not available because this Tinyhat platform "
+                    "does not provide the required permission-review endpoint. Deploy "
+                    "the compatible platform before starting this request; retrying "
+                    "the same request will not help."
+                ),
+            ) from exc
         raise
 
     _validated_capability_bundle(
@@ -1490,6 +1547,9 @@ def _start_connection(  # noqa: PLR0912, PLR0915
             )
             if blocked_profile is not None:
                 raise GoogleWorkspaceScopeReviewRequired(blocked_profile) from exc
+            malformed_review = _malformed_platform_review_error(exc)
+            if malformed_review is not None:
+                raise malformed_review from exc
             raise
         handoff_id = _validated_handoff_id(handoff.get("handoff_id"))
         returned_connection_id = _validated_connection_id(handoff.get("connection_id"))

@@ -853,6 +853,94 @@ class GoogleWorkspaceTests(unittest.TestCase):
             ],
         )
 
+    def test_permanent_preflight_failures_return_platform_not_ready(self) -> None:
+        cases = (
+            (
+                404,
+                {"detail": "Not Found"},
+                "scope_preflight_unavailable",
+                "does not provide the required permission-review endpoint",
+            ),
+            (
+                403,
+                {
+                    "detail": {
+                        "error_code": "review_required",
+                        "scope_manifest_version": "backend-manifest-9",
+                        "client_policy_id": "tinyhat-production",
+                        "capability_bundle": IDENTITY_BUNDLE,
+                    }
+                },
+                "invalid_scope_review_response",
+                "permission-review response was incomplete or invalid",
+            ),
+        )
+
+        for status_code, response, error_code, message_fragment in cases:
+            with self.subTest(status_code=status_code, error_code=error_code):
+
+                class Client:
+                    def __init__(
+                        self,
+                        failure_status_code: int,
+                        failure_response: dict[str, object],
+                    ) -> None:
+                        self.failure_status_code = failure_status_code
+                        self.failure_response = failure_response
+                        self.posts: list[tuple[str, dict[str, object]]] = []
+
+                    def post_json(
+                        self,
+                        path: str,
+                        payload: dict[str, object],
+                    ) -> dict[str, object]:
+                        self.posts.append((path, payload))
+                        raise workspace.PlatformError(
+                            "permanent preflight failure",
+                            status_code=self.failure_status_code,
+                            response=self.failure_response,
+                        )
+
+                client = Client(status_code, response)
+                with (
+                    mock.patch.object(
+                        workspace,
+                        "_preflight_connection_request",
+                        REAL_PREFLIGHT_CONNECTION_REQUEST,
+                    ),
+                    mock.patch.object(
+                        workspace,
+                        "build_platform_client",
+                        return_value=(client, "local_dev"),
+                    ),
+                    mock.patch.object(workspace, "_lifecycle_lock") as lifecycle_lock,
+                    mock.patch.object(
+                        workspace,
+                        "_resume_retained_install_receipts",
+                    ) as resume_install,
+                    mock.patch.object(
+                        workspace,
+                        "_resume_retained_disconnect_workers",
+                    ) as resume_disconnect,
+                    mock.patch.object(workspace, "_start_worker_process") as start_worker,
+                    mock.patch.object(workspace, "_send_google_connect_button") as send_button,
+                ):
+                    result = json.loads(tools.google_workspace({"action": "connect"}))
+
+                self.assertEqual(result["status"], "platform_not_ready")
+                self.assertFalse(result["button_sent"])
+                self.assertEqual(result["error_code"], error_code)
+                self.assertIn(message_fragment, result["message"])
+                self.assertIn("retrying the same request will not help", result["message"])
+                self.assertNotIn("Please try again", result["message"])
+                self.assertEqual(len(client.posts), 1)
+                self.assertTrue(client.posts[0][0].endswith("/preflight"))
+                lifecycle_lock.assert_not_called()
+                resume_install.assert_not_called()
+                resume_disconnect.assert_not_called()
+                start_worker.assert_not_called()
+                send_button.assert_not_called()
+
     def test_start_calls_preflight_before_creating_the_oauth_handoff(self) -> None:
         class Client:
             def __init__(self) -> None:
