@@ -70,15 +70,13 @@ TINYHAT_GOOGLE_WORKSPACE_SCHEMA = {
     "type": "object",
     "description": (
         "Connect, inspect, change permissions for, or disconnect Google Workspace "
-        "accounts on this Tinyhat Computer. The recommended default includes Gmail "
-        "reading, composing, sending, and inbox/draft/label management while messages "
-        "and threads cannot bypass Trash for immediate permanent deletion, Calendar "
-        "event management, and read-only Drive "
-        "access. For other Google services, request any canonical "
-        "Google-owned OAuth scopes with a short reason; the user reviews the exact "
-        "request on Google's consent screen and decides whether to grant it or ask "
-        "for narrower access. Legacy named profiles remain available. The user "
-        "provides no Google Cloud project or OAuth secret."
+        "accounts on this Tinyhat Computer. A bare connect requests identity only. "
+        "Workspace data access must be selected explicitly with one or more reviewed "
+        "presets or an exact custom subset of the public scope manifest. Requests that "
+        "are valid but not approved for the production OAuth client stop before an "
+        "authorization URL or worker is created and return review_required. Legacy "
+        "named profiles remain available for compatibility. The user provides no "
+        "Google Cloud project or OAuth secret."
     ),
     "properties": {
         "action": {
@@ -106,9 +104,36 @@ TINYHAT_GOOGLE_WORKSPACE_SCHEMA = {
                 "gmail_send_calendar_write",
             ],
             "description": (
-                "Optional reviewed permission profile for action=connect or "
-                "action=set_permissions. Omit for workspace_recommended. Use either "
-                "profile or scopes, never both. Legacy profiles remain supported."
+                "Deprecated legacy permission profile for action=connect or "
+                "action=set_permissions. New requests should use presets or scopes. "
+                "Do not combine profile with presets or scopes. Omission means "
+                "identity-only for connect; set_permissions requires an explicit "
+                "selection."
+            ),
+        },
+        "presets": {
+            "type": "array",
+            "minItems": 1,
+            "maxItems": 5,
+            "uniqueItems": True,
+            "items": {
+                "type": "string",
+                "enum": [
+                    "workspace_reader",
+                    "mail_writer",
+                    "inbox_manager",
+                    "calendar_coordinator",
+                    "file_collaborator",
+                ],
+            },
+            "description": (
+                "One or more composable reviewed presets: Workspace Reader reads "
+                "Gmail messages, threads, and settings, Calendar events, and Drive; "
+                "Mail Writer prepares and sends "
+                "mail; Inbox Manager reads and manages Gmail messages, drafts, and "
+                "labels; Calendar Coordinator manages events; File Collaborator "
+                "works with files Tinyhat creates, not unrelated Drive files. Tinyhat "
+                "normalizes overlapping scopes to the narrowest equivalent request."
             ),
         },
         "scopes": {
@@ -117,21 +142,13 @@ TINYHAT_GOOGLE_WORKSPACE_SCHEMA = {
             "maxItems": 32,
             "items": {"type": "string", "minLength": 1, "maxLength": 512},
             "description": (
-                "Canonical Google user-OAuth scopes requested with action=connect or "
-                "action=set_permissions, for example "
-                "https://www.googleapis.com/auth/tasks. Tinyhat adds openid, email, "
-                "and profile, canonicalizes the set, and accepts Google-owned scopes "
-                "without a product profile ceiling. Up to 32 caller-selected scopes "
-                "become at most 35 complete scopes after identity is added. The exact "
-                "official legacy scopes "
-                "https://www.google.com/calendar/feeds and "
-                "https://www.google.com/m8/feeds are also supported. They grant full "
-                "Calendar read/write access including sharing and permanent deletion, "
-                "and full Contacts read/write access including permanent deletion, "
-                "respectively. The separate https://mail.google.com/ scope grants full "
-                "Gmail access including permanent deletion. No other "
-                "https://www.google.com/... legacy scope URL is accepted. "
-                "Requires reason and cannot be combined with profile."
+                "Exact custom Google OAuth scopes requested with action=connect or "
+                "action=set_permissions. Tinyhat adds openid, email, and profile, "
+                "normalizes superseded scopes, and allows only scopes declared in the "
+                "versioned public manifest. Approved subsets and unions may launch; a "
+                "declared but unreviewed scope returns review_required before OAuth. "
+                "Requires reason; it may extend presets but cannot be combined with "
+                "the deprecated profile input."
             ),
         },
         "reason": {

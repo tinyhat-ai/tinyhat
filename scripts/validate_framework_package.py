@@ -3,9 +3,11 @@
 
 from __future__ import annotations
 
+import importlib.util
 import json
 import re
 import sys
+from collections.abc import Mapping
 from pathlib import Path
 
 VERSION_SHAPE = re.compile(r"^\d+\.\d+\.\d+$")
@@ -45,6 +47,58 @@ FORBIDDEN_PATHS = (
     "roadmap",
 )
 FORBIDDEN_TEXT = ("CLAUDE_PLUGIN_DATA",)
+
+GOOGLE_SCOPE_MANIFEST_PATH = "google_workspace_scope_manifest.json"
+GOOGLE_SCOPE_MANIFEST_LOADER_PATH = "google_workspace_scope_manifest.py"
+GOOGLE_SCOPE_MANIFEST_SCHEMA = "tinyhat_google_workspace_scope_manifest_v1"
+GOOGLE_IDENTITY_BUNDLE_ID = "google_workspace_identity_v1"
+GOOGLE_CUSTOM_BUNDLE_ID = "google_workspace_custom_v1"
+GOOGLE_IDENTITY_SCOPE_IDS = ("openid", "email", "profile")
+GOOGLE_REQUIRED_PRESETS = {
+    "workspace_reader": (
+        "Workspace Reader",
+        "google_workspace_workspace_reader_v1",
+        ("gmail.readonly", "calendar.events.readonly", "drive.readonly"),
+    ),
+    "mail_writer": (
+        "Mail Writer",
+        "google_workspace_mail_writer_v1",
+        ("gmail.compose",),
+    ),
+    "inbox_manager": (
+        "Inbox Manager",
+        "google_workspace_inbox_manager_v1",
+        ("gmail.modify",),
+    ),
+    "calendar_coordinator": (
+        "Calendar Coordinator",
+        "google_workspace_calendar_coordinator_v1",
+        ("calendar.events",),
+    ),
+    "file_collaborator": (
+        "File Collaborator",
+        "google_workspace_file_collaborator_v1",
+        ("drive.file",),
+    ),
+}
+GOOGLE_REQUIRED_LEGACY_BUNDLES = {
+    "google_workspace_recommended_v1": ("workspace_recommended",),
+    "google_workspace_readonly_v1": ("workspace_readonly",),
+    "google_workspace_gmail_send_v1": ("gmail_send",),
+    "google_workspace_calendar_write_v1": ("calendar_write",),
+    "google_workspace_gmail_send_calendar_write_v1": ("gmail_send_calendar_write",),
+    "google_workspace_custom_v1": ("workspace_custom",),
+}
+GOOGLE_MANIFEST_DOC_PATHS = (
+    "README.md",
+    "schemas.py",
+    "context.py",
+    "docs/capabilities.md",
+    "docs/runtime-boundary.md",
+    "docs/skill-authoring.md",
+    "skills/tinyhat-google-workspace/SKILL.md",
+    "skills/tinyhat-platform/SKILL.md",
+)
 
 
 def fail(message: str) -> None:
@@ -99,9 +153,272 @@ def read_plugin_yaml(root: Path) -> dict[str, object]:
     return data
 
 
+def index_objects_by_id(items: object, *, label: str) -> dict[str, dict[str, object]]:
+    require(isinstance(items, list), f"{label} must be a list")
+    indexed: dict[str, dict[str, object]] = {}
+    for item in items:
+        require(isinstance(item, dict), f"{label} entries must be objects")
+        item_id = item.get("id")
+        require(isinstance(item_id, str) and item_id, f"{label} entries need string ids")
+        require(item_id not in indexed, f"{label} contains duplicate id {item_id}")
+        indexed[item_id] = item
+    return indexed
+
+
+def load_python_module_namespace(path: Path) -> dict[str, object]:
+    module_name = "_tinyhat_scope_manifest_package_validator"
+    spec = importlib.util.spec_from_file_location(module_name, path)
+    require(spec is not None and spec.loader is not None, f"could not load {path.name}")
+    module = importlib.util.module_from_spec(spec)
+    sys.modules[module_name] = module
+    try:
+        spec.loader.exec_module(module)
+    finally:
+        sys.modules.pop(module_name, None)
+    return vars(module)
+
+
+def validate_google_scope_manifest(root: Path) -> None:  # noqa: PLR0912, PLR0915
+    manifest_path = root / GOOGLE_SCOPE_MANIFEST_PATH
+    loader_path = root / GOOGLE_SCOPE_MANIFEST_LOADER_PATH
+    require(manifest_path.is_file(), f"{GOOGLE_SCOPE_MANIFEST_PATH} is missing")
+    require(loader_path.is_file(), f"{GOOGLE_SCOPE_MANIFEST_LOADER_PATH} is missing")
+
+    manifest = read_json(manifest_path)
+    require(manifest.get("schema") == GOOGLE_SCOPE_MANIFEST_SCHEMA, "Google scope schema drift")
+    manifest_version = manifest.get("manifest_version")
+    require(
+        isinstance(manifest_version, str) and VERSION_SHAPE.fullmatch(manifest_version),
+        "Google scope manifest version must be semantic MAJOR.MINOR.PATCH",
+    )
+    require(
+        manifest.get("identity_scope_ids") == list(GOOGLE_IDENTITY_SCOPE_IDS),
+        "Google identity baseline drift",
+    )
+    require(
+        manifest.get("identity_capability_bundle") == GOOGLE_IDENTITY_BUNDLE_ID,
+        "Google identity bundle id drift",
+    )
+
+    custom_policy = manifest.get("custom_scope_policy")
+    require(isinstance(custom_policy, dict), "custom_scope_policy must be an object")
+    require(
+        custom_policy.get("unknown_scope_request_state") == "review_required",
+        "unknown Google scopes must stop with review_required",
+    )
+
+    clients = index_objects_by_id(manifest.get("client_policies"), label="client_policies")
+    require(
+        set(clients) == {"tinyhat-development", "tinyhat-production"},
+        "Google OAuth client policy ids drift",
+    )
+    production_client = clients["tinyhat-production"]
+    require(
+        production_client.get("environment") == "production",
+        "tinyhat-production client policy must target production",
+    )
+    production_allowed_states = production_client.get("allowed_request_states")
+    require(
+        production_allowed_states == ["approved"],
+        "production Google requests must require the approved client state",
+    )
+    production_allowed_verification_states = production_client.get("allowed_verification_states")
+    require(
+        production_allowed_verification_states == ["not_required", "verified"],
+        "production Google requests must require a completed verification state",
+    )
+
+    scopes = index_objects_by_id(manifest.get("scopes"), label="scopes")
+    canonical_urls: set[str] = set()
+    required_scope_fields = (
+        "canonical_url",
+        "classification",
+        "enabled_api",
+        "implemented_feature",
+        "operations",
+        "data_read",
+        "data_written",
+        "narrower_alternatives",
+        "user_copy",
+        "demo_steps",
+        "verification_status",
+        "supersedes",
+        "client_states",
+    )
+    for scope_id, scope in scopes.items():
+        for field in required_scope_fields:
+            require(field in scope, f"scope {scope_id} is missing {field}")
+        canonical_url = scope.get("canonical_url")
+        require(
+            isinstance(canonical_url, str) and canonical_url,
+            f"scope {scope_id} needs a canonical_url",
+        )
+        require(canonical_url not in canonical_urls, f"duplicate canonical scope {canonical_url}")
+        canonical_urls.add(canonical_url)
+        require(
+            scope.get("classification") in {"non_sensitive", "sensitive", "restricted"},
+            f"scope {scope_id} has an invalid Google classification",
+        )
+        for field in (
+            "operations",
+            "data_read",
+            "data_written",
+            "narrower_alternatives",
+            "demo_steps",
+            "supersedes",
+        ):
+            require(isinstance(scope.get(field), list), f"scope {scope_id} {field} must be a list")
+        require(scope.get("operations"), f"scope {scope_id} needs implemented operations")
+        require(scope.get("demo_steps"), f"scope {scope_id} needs demo steps")
+        client_states = scope.get("client_states")
+        require(
+            isinstance(client_states, dict), f"scope {scope_id} client_states must be an object"
+        )
+        require(
+            set(client_states) == set(clients), f"scope {scope_id} client policy coverage drift"
+        )
+        for client_id, state in client_states.items():
+            require(
+                isinstance(state, dict), f"scope {scope_id} {client_id} state must be an object"
+            )
+            require(
+                isinstance(state.get("request_state"), str),
+                f"scope {scope_id} {client_id} needs request_state",
+            )
+            require(
+                isinstance(state.get("verification_state"), str),
+                f"scope {scope_id} {client_id} needs verification_state",
+            )
+        production_state = client_states["tinyhat-production"]
+        request_allowed = production_state["request_state"] in set(production_allowed_states)
+        verification_allowed = production_state["verification_state"] in set(
+            production_allowed_verification_states
+        )
+        require(
+            not request_allowed or verification_allowed,
+            f"scope {scope_id} is requestable before its verification state allows it",
+        )
+
+    expected_supersets = {
+        "gmail.modify": ("gmail.readonly", "gmail.compose", "gmail.send", "gmail.labels"),
+        "gmail.compose": ("gmail.send",),
+        "calendar.events": ("calendar.events.readonly",),
+    }
+    for scope_id, superseded in expected_supersets.items():
+        require(scope_id in scopes, f"normalizing scope {scope_id} is missing")
+        require(
+            scopes[scope_id].get("supersedes") == list(superseded),
+            f"scope normalization drift for {scope_id}",
+        )
+
+    presets = index_objects_by_id(manifest.get("presets"), label="presets")
+    require(list(presets) == list(GOOGLE_REQUIRED_PRESETS), "Google preset id or order drift")
+    for preset_id, (display_name, bundle_id, scope_ids) in GOOGLE_REQUIRED_PRESETS.items():
+        preset = presets[preset_id]
+        require(preset.get("display_name") == display_name, f"{preset_id} display name drift")
+        require(preset.get("capability_bundle") == bundle_id, f"{preset_id} bundle id drift")
+        require(preset.get("scope_ids") == list(scope_ids), f"{preset_id} scope membership drift")
+        for scope_id in scope_ids:
+            require(scope_id in scopes, f"{preset_id} references unknown scope {scope_id}")
+
+    tasks = scopes.get("tasks")
+    require(tasks is not None, "manifest needs the Google Tasks review-required proof scope")
+    require(
+        tasks.get("canonical_url") == "https://www.googleapis.com/auth/tasks",
+        "Google Tasks proof scope URL drift",
+    )
+    require(
+        tasks["client_states"]["tinyhat-production"]["request_state"] == "review_required",
+        "Google Tasks must remain blocked before production OAuth",
+    )
+
+    legacy_bundles = index_objects_by_id(manifest.get("legacy_bundles"), label="legacy_bundles")
+    require(
+        set(legacy_bundles) == set(GOOGLE_REQUIRED_LEGACY_BUNDLES),
+        "historical Google bundle ids drift",
+    )
+    for bundle_id, profile_ids in GOOGLE_REQUIRED_LEGACY_BUNDLES.items():
+        bundle = legacy_bundles[bundle_id]
+        require(
+            bundle.get("profile_ids") == list(profile_ids), f"{bundle_id} profile mapping drift"
+        )
+        require(bundle.get("requestable") is False, f"{bundle_id} must be compatibility-only")
+        bundle_scope_ids = bundle.get("scope_ids")
+        require(isinstance(bundle_scope_ids, list), f"{bundle_id} scope_ids must be a list")
+        for scope_id in bundle_scope_ids:
+            require(scope_id in scopes, f"{bundle_id} references unknown scope {scope_id}")
+
+    loader = load_python_module_namespace(loader_path)
+    loader_manifest = loader.get("MANIFEST")
+    require(isinstance(loader_manifest, Mapping), "loader MANIFEST missing")
+    require(
+        Path(loader.get("MANIFEST_PATH", "")).resolve() == manifest_path.resolve(),
+        "scope loader MANIFEST_PATH drift",
+    )
+    load_manifest = loader.get("load_manifest")
+    require(callable(load_manifest), "scope loader is missing load_manifest")
+    require(
+        load_manifest(manifest_path) == loader_manifest,
+        "scope loader does not reproduce its packaged manifest",
+    )
+    require(
+        loader_manifest.get("schema") == manifest.get("schema"), "scope loader schema bytes drift"
+    )
+    require(
+        loader_manifest.get("manifest_version") == manifest.get("manifest_version"),
+        "scope loader version bytes drift",
+    )
+    require(loader.get("MANIFEST_SCHEMA") == GOOGLE_SCOPE_MANIFEST_SCHEMA, "loader schema drift")
+    require(
+        loader.get("IDENTITY_BUNDLE_ID") == GOOGLE_IDENTITY_BUNDLE_ID,
+        "loader identity bundle drift",
+    )
+    require(loader.get("CUSTOM_BUNDLE_ID") == GOOGLE_CUSTOM_BUNDLE_ID, "loader custom bundle drift")
+    require(
+        loader.get("IDENTITY_SCOPE_IDS") == GOOGLE_IDENTITY_SCOPE_IDS, "loader identity ids drift"
+    )
+    require(
+        loader.get("PRESET_ORDER") == tuple(GOOGLE_REQUIRED_PRESETS), "loader preset order drift"
+    )
+    require(set(loader.get("SCOPES_BY_ID", {})) == set(scopes), "loader scope index drift")
+    require(set(loader.get("PRESETS_BY_ID", {})) == set(presets), "loader preset index drift")
+    require(
+        set(loader.get("CLIENT_POLICIES_BY_ID", {})) == set(clients), "loader client index drift"
+    )
+    require(
+        set(loader.get("LEGACY_BUNDLES_BY_ID", {})) == set(legacy_bundles),
+        "loader legacy bundle index drift",
+    )
+    for helper in (
+        "load_manifest",
+        "normalize_scope_urls",
+        "preset_scope_urls",
+        "blocked_scope_details",
+        "resolve_scope_request",
+        "approved_scope_urls",
+    ):
+        require(callable(loader.get(helper)), f"scope loader is missing {helper}")
+
+    for rel in GOOGLE_MANIFEST_DOC_PATHS:
+        text = (root / rel).read_text(encoding="utf-8")
+        normalized_text = " ".join(text.split())
+        for preset_id, (display_name, _, _) in GOOGLE_REQUIRED_PRESETS.items():
+            require(preset_id in normalized_text, f"{rel} missing Google preset {preset_id}")
+            if rel != "context.py":
+                require(
+                    display_name in normalized_text,
+                    f"{rel} missing Google preset {display_name}",
+                )
+        require(
+            "review_required" in normalized_text,
+            f"{rel} missing review_required stop guidance",
+        )
+
+
 def validate_versions(root: Path) -> str:
     package = read_json(root / "package.json")
     hermes = read_json(root / "hermes.plugin.json")
+    release_please = read_json(root / ".release-please-manifest.json")
     yaml_data = read_plugin_yaml(root)
     require(
         yaml_data.get("kind") == "standalone",
@@ -114,12 +431,14 @@ def validate_versions(root: Path) -> str:
         ("hermes.plugin.json version", hermes.get("version")),
         ("plugin.yaml version", yaml_data.get("version")),
         ("pyproject.toml project.version", read_pyproject_version(root)),
+        (".release-please-manifest.json version", release_please.get(".")),
     ):
         require(found == version, f"{label} must match package.json version {version}")
     return version
 
 
 def validate_hermes_adapter(root: Path) -> None:
+    package = read_json(root / "package.json")
     hermes = read_json(root / "hermes.plugin.json")
     yaml_data = read_plugin_yaml(root)
     require(hermes.get("schema") == "tinyhat.framework-adapter.v1", "adapter schema drift")
@@ -134,6 +453,8 @@ def validate_hermes_adapter(root: Path) -> None:
         "schemas.py",
         "tools.py",
         "platform.py",
+        GOOGLE_SCOPE_MANIFEST_PATH,
+        GOOGLE_SCOPE_MANIFEST_LOADER_PATH,
         "google_workspace.py",
         "google_workspace_app.py",
         "google_workspace_app_manager.py",
@@ -143,6 +464,11 @@ def validate_hermes_adapter(root: Path) -> None:
         "secret_handoff_worker.py",
     ):
         require((root / rel).is_file(), f"{rel} is missing")
+
+    package_files = package.get("files")
+    require(isinstance(package_files, list), "package.json files must be a list")
+    for rel in (GOOGLE_SCOPE_MANIFEST_PATH, GOOGLE_SCOPE_MANIFEST_LOADER_PATH):
+        require(rel in package_files, f"package.json files must include {rel}")
 
     codex_screenshot = (
         root
@@ -245,6 +571,8 @@ def validate_fresh_surface(root: Path) -> None:
         root / "__init__.py",
         root / "platform.py",
         root / "context.py",
+        root / GOOGLE_SCOPE_MANIFEST_PATH,
+        root / GOOGLE_SCOPE_MANIFEST_LOADER_PATH,
         root / "google_workspace.py",
         root / "google_workspace_app.py",
         root / "google_workspace_app_manager.py",
@@ -320,10 +648,16 @@ def validate_docs(root: Path) -> None:
         "skills/tinyhat-google-workspace/SKILL.md": (
             "existing Google account",
             "Connect my Google Workspace",
-            "google_workspace_recommended_v1",
+            "identity only",
+            "workspace_reader",
+            "mail_writer",
+            "inbox_manager",
+            "calendar_coordinator",
+            "file_collaborator",
+            "review_required",
             "gmail.modify",
             "Google consent is the permission decision",
-            "Google-owned user-OAuth scopes",
+            "manifest-listed canonical",
             "native Telegram inline button",
             "Never print, paste, repeat",
             "does not revoke the shared Google",
@@ -381,65 +715,28 @@ def validate_docs(root: Path) -> None:
         for phrase in phrases:
             require(phrase in text, f"{rel} missing phrase: {phrase}")
 
-    legacy_scope_disclosure_files = (
-        "README.md",
-        "schemas.py",
-        "skills/tinyhat-google-workspace/SKILL.md",
-        "skills/tinyhat-platform/SKILL.md",
-        "docs/capabilities.md",
-        "docs/runtime-boundary.md",
-        "docs/skill-authoring.md",
-    )
-    legacy_scope_disclosures = (
-        "full calendar read/write access including sharing and permanent deletion",
-        "full contacts read/write access including permanent deletion",
-        "https://mail.google.com/",
-        "full gmail access including permanent deletion",
-        "https://www.google.com/...",
-    )
-    for rel in legacy_scope_disclosure_files:
-        raw_text = (root / rel).read_text(encoding="utf-8").replace('"', "")
-        normalized = " ".join(raw_text.split()).lower()
-        for disclosure in legacy_scope_disclosures:
-            require(
-                disclosure in normalized,
-                f"{rel} missing legacy Google scope disclosure: {disclosure}",
-            )
-
 
 def validate_google_workspace_contract(root: Path) -> None:
     text = (root / "google_workspace.py").read_text(encoding="utf-8")
     required = (
-        'GOOGLE_RECOMMENDED_CAPABILITY_BUNDLE = "google_workspace_recommended_v1"',
-        'GOOGLE_CUSTOM_CAPABILITY_BUNDLE = "google_workspace_custom_v1"',
-        'GOOGLE_READONLY_CAPABILITY_BUNDLE = "google_workspace_readonly_v1"',
-        'GOOGLE_GMAIL_SEND_CAPABILITY_BUNDLE = "google_workspace_gmail_send_v1"',
-        'GOOGLE_WORKSPACE_PROFILE_GMAIL_SEND = "gmail_send"',
-        'GOOGLE_REQUESTED_SERVICES = ("identity", "gmail", "calendar", "drive")',
+        "from .google_workspace_scope_manifest import (",
+        "GOOGLE_WORKSPACE_PRESETS = tuple(PRESET_ORDER)",
+        "GOOGLE_LEGACY_PROFILE_CONFIGS = {",
+        "legacy_profile=True",
+        'raw_presets = payload.get("presets")',
+        "resolve_scope_request(",
+        "blocked_scope_details(",
+        "class GoogleWorkspaceScopeReviewRequired",
+        "_scope_review_required_payload(",
+        '"status": "review_required"',
+        '"button_sent": False',
+        "_profile_for_capability_bundle(",
+        "_profile_for_scope_set(",
         "TINYHAT_GOOGLE_PREPARE_PATH =",
         "GOOGLE_LAUNCH_TICKET_RE = re.compile(",
-        '"https://www.googleapis.com/auth/gmail.readonly"',
-        '"https://www.googleapis.com/auth/gmail.modify"',
-        '"https://www.googleapis.com/auth/calendar.readonly"',
-        '"https://www.googleapis.com/auth/drive.readonly"',
-        '"https://www.googleapis.com/auth/gmail.send"',
         '"requested_services": list(requested_profile.services)',
         '"requested_scopes": list(requested_profile.scopes)',
-        "_canonical_requested_scopes(scopes)",
         "_canonical_custom_grant_scopes(scopes)",
-        "GOOGLE_SCOPE_ALIASES",
-        'GOOGLE_CALENDAR_FEEDS_SCOPE = "https://www.google.com/calendar/feeds"',
-        'GOOGLE_CONTACTS_FEEDS_SCOPE = "https://www.google.com/m8/feeds"',
-        "GOOGLE_EXACT_SCOPE_SERVICES",
-        "GOOGLE_EXACT_SCOPE_LABELS",
-        '"Full Gmail access including permanent deletion"',
-        '"Full Calendar read/write access including sharing and permanent deletion"',
-        '"Full Contacts read/write access including permanent deletion"',
-        '"Full Drive access including creating, editing, and deleting files"',
-        '"Gmail forwarding and sharing settings management"',
-        '"Workspace user directory management including creating and deleting users"',
-        '"Broad Google Cloud access including viewing, changing, and deleting cloud data"',
-        '"BigQuery data viewing and management"',
         "GOOGLE_SCOPE_MAX_COUNT = 32",
         "GOOGLE_GRANT_SCOPE_MAX_COUNT = GOOGLE_SCOPE_MAX_COUNT + len(GOOGLE_IDENTITY_SCOPES)",
         "GOOGLE_SCOPE_TOTAL_MAX_LENGTH = 4096",
@@ -550,6 +847,7 @@ def main() -> int:
     version = validate_versions(root)
     validate_hermes_adapter(root)
     validate_fresh_surface(root)
+    validate_google_scope_manifest(root)
     validate_docs(root)
     validate_google_workspace_contract(root)
     print(f"framework-package: ok (version {version})")

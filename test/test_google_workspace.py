@@ -5,6 +5,7 @@ from __future__ import annotations
 import contextlib
 import importlib.util
 import json
+import os
 import stat
 import sys
 import tempfile
@@ -42,8 +43,40 @@ from tinyhat import (  # noqa: E402
     tools,
 )
 
+REAL_PREFLIGHT_CONNECTION_REQUEST = workspace._preflight_connection_request
+
 READONLY_BUNDLE = "google_workspace_readonly_v1"
 READONLY_SERVICES = ["identity", "gmail", "calendar", "drive"]
+IDENTITY_BUNDLE = "google_workspace_identity_v1"
+IDENTITY_SERVICES = ["identity"]
+IDENTITY_SCOPES = ["openid", "email", "profile"]
+WORKSPACE_READER_BUNDLE = "google_workspace_workspace_reader_v1"
+WORKSPACE_READER_SCOPES = [
+    *IDENTITY_SCOPES,
+    "https://www.googleapis.com/auth/gmail.readonly",
+    "https://www.googleapis.com/auth/calendar.events.readonly",
+    "https://www.googleapis.com/auth/drive.readonly",
+]
+MAIL_WRITER_BUNDLE = "google_workspace_mail_writer_v1"
+MAIL_WRITER_SCOPES = [
+    *IDENTITY_SCOPES,
+    "https://www.googleapis.com/auth/gmail.compose",
+]
+INBOX_MANAGER_BUNDLE = "google_workspace_inbox_manager_v1"
+INBOX_MANAGER_SCOPES = [
+    *IDENTITY_SCOPES,
+    "https://www.googleapis.com/auth/gmail.modify",
+]
+CALENDAR_COORDINATOR_BUNDLE = "google_workspace_calendar_coordinator_v1"
+CALENDAR_COORDINATOR_SCOPES = [
+    *IDENTITY_SCOPES,
+    "https://www.googleapis.com/auth/calendar.events",
+]
+FILE_COLLABORATOR_BUNDLE = "google_workspace_file_collaborator_v1"
+FILE_COLLABORATOR_SCOPES = [
+    *IDENTITY_SCOPES,
+    "https://www.googleapis.com/auth/drive.file",
+]
 READONLY_SCOPES = [
     "openid",
     "email",
@@ -93,13 +126,6 @@ LEGACY_FEED_SCOPES = [
     "https://www.google.com/m8/feeds",
 ]
 LEGACY_FEED_SERVICES = ["identity", "calendar", "people"]
-GMAIL_FULL_DISCLOSURE = "Full Gmail access including permanent deletion"
-CALENDAR_FEEDS_DISCLOSURE = (
-    "Full Calendar read/write access including sharing and permanent deletion"
-)
-CONTACTS_FEEDS_DISCLOSURE = (
-    "Full Contacts read/write access including permanent deletion"
-)
 PLATFORM_BASE_URL = "https://api.example.test"
 PREPARE_PATH = "/hapi/v1/public/tinyhat/google-workspace/oauth/prepare/v1"
 
@@ -110,9 +136,26 @@ def prepare_authorization_url() -> str:
 
 def direct_google_authorization_url() -> str:
     return (
-        "https://accounts.google.com/o/oauth2/v2/auth?"
-        "client_id=central-public-client&state=opaque"
+        "https://accounts.google.com/o/oauth2/v2/auth?client_id=central-public-client&state=opaque"
     )
+
+
+def state_tree_snapshot(root: Path) -> dict[str, tuple[str, int, bytes | str]]:
+    """Capture durable state contents and modes without following links."""
+    if not root.exists():
+        return {}
+    snapshot: dict[str, tuple[str, int, bytes | str]] = {}
+    for path in sorted(root.rglob("*")):
+        relative = path.relative_to(root).as_posix()
+        path_stat = path.lstat()
+        mode = stat.S_IMODE(path_stat.st_mode)
+        if path.is_symlink():
+            snapshot[relative] = ("symlink", mode, os.readlink(path))
+        elif path.is_dir():
+            snapshot[relative] = ("directory", mode, b"")
+        else:
+            snapshot[relative] = ("file", mode, path.read_bytes())
+    return snapshot
 
 
 def credential_envelope(
@@ -144,7 +187,7 @@ def credential_envelope(
 
 def start_response(
     *,
-    bundle: str = RECOMMENDED_BUNDLE,
+    bundle: str = IDENTITY_BUNDLE,
     scopes: list[str] | None = None,
     services: list[str] | None = None,
     authorization_url: str | None = None,
@@ -156,8 +199,8 @@ def start_response(
         "status": "pending",
         "authorization_url": authorization_url or direct_google_authorization_url(),
         "capability_bundle": bundle,
-        "services": list(services or READONLY_SERVICES),
-        "scopes": list(scopes or RECOMMENDED_SCOPES),
+        "services": list(services or IDENTITY_SERVICES),
+        "scopes": list(scopes or IDENTITY_SCOPES),
         "expires_at": "2030-01-01T00:00:00+00:00",
         "poll_after_ms": 2500,
     }
@@ -292,6 +335,32 @@ class PollingClient:
 
 
 class GoogleWorkspaceTests(unittest.TestCase):
+    def setUp(self) -> None:
+        policy = mock.patch.dict(
+            os.environ,
+            {"TINYHAT_GOOGLE_WORKSPACE_CLIENT_POLICY_ID": "tinyhat-development"},
+        )
+        policy.start()
+        self.addCleanup(policy.stop)
+
+        def allow_preflight(
+            profile: workspace.GoogleWorkspaceProfile,
+        ) -> tuple[
+            workspace.GoogleWorkspaceProfile,
+            workspace.PlatformClient,
+            str,
+        ]:
+            client, platform_auth = workspace.build_platform_client()
+            return profile, client, platform_auth
+
+        preflight = mock.patch.object(
+            workspace,
+            "_preflight_connection_request",
+            side_effect=allow_preflight,
+        )
+        preflight.start()
+        self.addCleanup(preflight.stop)
+
     @contextlib.contextmanager
     def _patched_state(self, root: Path):
         state = root / "google-workspace"
@@ -309,12 +378,10 @@ class GoogleWorkspaceTests(unittest.TestCase):
         with contextlib.ExitStack() as stack:
             for name, value in paths.items():
                 stack.enter_context(mock.patch.object(workspace, name, value))
-            stack.enter_context(
-                mock.patch.object(workspace, "_context_assignment_check_cache", {})
-            )
+            stack.enter_context(mock.patch.object(workspace, "_context_assignment_check_cache", {}))
             yield
 
-    def _worker_handoff(
+    def _worker_handoff(  # noqa: PLR0913
         self,
         *,
         client: PollingClient,
@@ -417,14 +484,14 @@ class GoogleWorkspaceTests(unittest.TestCase):
         )
         self.assertIn("tinyhat-google-workspace", ctx.skills)
 
-    def test_schema_defaults_to_recommended_and_accepts_custom_google_scopes(self) -> None:
+    def test_schema_defaults_to_identity_and_exposes_presets_and_custom_scopes(self) -> None:
         schema = schemas.TINYHAT_GOOGLE_WORKSPACE_SCHEMA
 
         self.assertEqual(schema["required"], ["action"])
         self.assertFalse(schema["additionalProperties"])
         self.assertEqual(
             set(schema["properties"]),
-            {"action", "profile", "scopes", "reason", "account_id"},
+            {"action", "profile", "presets", "scopes", "reason", "account_id"},
         )
         self.assertEqual(
             schema["properties"]["action"]["enum"],
@@ -440,42 +507,410 @@ class GoogleWorkspaceTests(unittest.TestCase):
                 "gmail_send_calendar_write",
             ],
         )
-        self.assertIn("inbox/draft/label management", schema["description"])
-        self.assertIn("Google-owned OAuth scopes", schema["description"])
-        self.assertIn("non-Workspace Google APIs", tinyhat_context.TINYHAT_CONTEXT)
+        self.assertEqual(
+            schema["properties"]["presets"]["items"]["enum"],
+            [
+                "workspace_reader",
+                "mail_writer",
+                "inbox_manager",
+                "calendar_coordinator",
+                "file_collaborator",
+            ],
+        )
+        self.assertIn("bare connect requests identity only", schema["description"])
+        self.assertIn("review_required", schema["description"])
+        self.assertIn("versioned public manifest", schema["properties"]["scopes"]["description"])
+        self.assertIn("Bare connect requests identity only", tinyhat_context.TINYHAT_CONTEXT)
+        self.assertIn("presets compose with each other", tinyhat_context.TINYHAT_CONTEXT)
         self.assertEqual(schema["properties"]["scopes"]["maxItems"], 32)
-        self.assertIn("at most 35 complete scopes", schema["properties"]["scopes"]["description"])
         self.assertEqual(schema["properties"]["reason"]["maxLength"], 280)
+        self.assertIn("Required with scopes", schema["properties"]["reason"]["description"])
         self.assertIn("never trusts", schema["properties"]["action"]["description"])
-        disclosure_fragments = (
-            "reading",
-            "composing",
-            "sending",
-            "inbox/draft/label management",
-            "cannot bypass Trash for immediate permanent deletion",
+
+    def test_five_current_presets_resolve_to_exact_manifest_bundles(self) -> None:
+        expected = {
+            "workspace_reader": (
+                WORKSPACE_READER_BUNDLE,
+                WORKSPACE_READER_SCOPES,
+                READONLY_SERVICES,
+            ),
+            "mail_writer": (
+                MAIL_WRITER_BUNDLE,
+                MAIL_WRITER_SCOPES,
+                ["identity", "gmail"],
+            ),
+            "inbox_manager": (
+                INBOX_MANAGER_BUNDLE,
+                INBOX_MANAGER_SCOPES,
+                ["identity", "gmail"],
+            ),
+            "calendar_coordinator": (
+                CALENDAR_COORDINATOR_BUNDLE,
+                CALENDAR_COORDINATOR_SCOPES,
+                ["identity", "calendar"],
+            ),
+            "file_collaborator": (
+                FILE_COLLABORATOR_BUNDLE,
+                FILE_COLLABORATOR_SCOPES,
+                ["identity", "drive"],
+            ),
+        }
+        for preset_id, (bundle, scopes, services) in expected.items():
+            with self.subTest(preset_id=preset_id):
+                profile = workspace._requested_profile(None, presets=[preset_id])
+                self.assertEqual(profile.name, preset_id)
+                self.assertEqual(profile.capability_bundle, bundle)
+                self.assertEqual(list(profile.scopes), scopes)
+                self.assertEqual(list(profile.services), services)
+                self.assertEqual(profile.blocked_scopes, ())
+
+    def test_presets_and_custom_scopes_compose_and_normalize_supersession(self) -> None:
+        profile = workspace._requested_profile(
+            None,
+            presets=["mail_writer", "calendar_coordinator"],
+            scopes=[
+                "https://www.googleapis.com/auth/gmail.send",
+                "https://www.googleapis.com/auth/gmail.labels",
+            ],
+            reason="Prepare mail, maintain label definitions, and coordinate events",
         )
-        recommended = workspace.GOOGLE_PROFILE_CONFIGS["workspace_recommended"]
-        for surface in (
-            recommended.access_label,
-            schema["description"],
-            tinyhat_context.TINYHAT_CONTEXT,
-            workspace.TELEGRAM_NOTICE_MESSAGES["ready_workspace_recommended"],
+
+        self.assertEqual(profile.name, "workspace_custom")
+        self.assertEqual(profile.capability_bundle, CUSTOM_BUNDLE)
+        self.assertEqual(
+            list(profile.scopes),
+            [
+                *IDENTITY_SCOPES,
+                "https://www.googleapis.com/auth/gmail.compose",
+                "https://www.googleapis.com/auth/gmail.labels",
+                "https://www.googleapis.com/auth/calendar.events",
+            ],
+        )
+        self.assertNotIn("https://www.googleapis.com/auth/gmail.send", profile.scopes)
+        self.assertEqual(profile.blocked_scopes, ())
+
+        labels_only = workspace._requested_profile(
+            None,
+            scopes=["https://www.googleapis.com/auth/gmail.labels"],
+            reason="Maintain custom Gmail label definitions",
+        )
+        self.assertIn("https://www.googleapis.com/auth/gmail.labels", labels_only.scopes)
+        self.assertNotIn("https://www.googleapis.com/auth/gmail.modify", labels_only.scopes)
+        self.assertEqual(labels_only.blocked_scopes, ())
+
+    def test_production_workspace_request_stops_before_lifecycle_side_effects(self) -> None:
+        with (
+            mock.patch.dict(
+                os.environ,
+                {"TINYHAT_GOOGLE_WORKSPACE_CLIENT_POLICY_ID": "tinyhat-production"},
+            ),
+            mock.patch.object(workspace, "build_platform_client") as build_client,
+            mock.patch.object(workspace, "_start_worker_process") as start_worker,
+            mock.patch.object(workspace, "_send_google_connect_button") as send_button,
         ):
-            with self.subTest(surface=surface[:40]):
-                for fragment in disclosure_fragments:
-                    self.assertIn(fragment, surface)
+            result = json.loads(
+                tools.google_workspace({"action": "connect", "presets": ["workspace_reader"]})
+            )
 
-        custom_scope_description = schema["properties"]["scopes"]["description"]
-        normalized_scope_description = custom_scope_description.lower()
-        self.assertIn(CALENDAR_FEEDS_DISCLOSURE.lower(), normalized_scope_description)
-        self.assertIn(CONTACTS_FEEDS_DISCLOSURE.lower(), normalized_scope_description)
-        self.assertIn(GMAIL_FULL_DISCLOSURE.lower(), normalized_scope_description)
-        self.assertIn(
-            "No other https://www.google.com/... legacy scope URL is accepted",
-            custom_scope_description,
+        self.assertEqual(result["status"], "review_required")
+        self.assertFalse(result["button_sent"])
+        self.assertEqual(len(result["blocked_scopes"]), 3)
+        self.assertTrue(
+            all(
+                item["verification_state"] == "preparing_submission"
+                for item in result["blocked_scopes"]
+            )
+        )
+        build_client.assert_not_called()
+        start_worker.assert_not_called()
+        send_button.assert_not_called()
+
+    def test_tasks_and_unknown_scopes_stop_before_lifecycle_side_effects(self) -> None:
+        cases = (
+            ("https://www.googleapis.com/auth/tasks", "tasks"),
+            ("https://www.googleapis.com/auth/future.unreviewed", None),
+        )
+        for scope_url, scope_id in cases:
+            with (
+                self.subTest(scope_url=scope_url),
+                mock.patch.object(workspace, "build_platform_client") as build_client,
+                mock.patch.object(workspace, "_start_worker_process") as start_worker,
+                mock.patch.object(workspace, "_send_google_connect_button") as send_button,
+            ):
+                result = json.loads(
+                    tools.google_workspace(
+                        {
+                            "action": "connect",
+                            "scopes": [scope_url],
+                            "reason": "Exercise the scope review gate",
+                        }
+                    )
+                )
+                self.assertEqual(result["status"], "review_required")
+                self.assertFalse(result["button_sent"])
+                self.assertEqual(result["blocked_scopes"][0]["scope"], scope_url)
+                self.assertEqual(result["blocked_scopes"][0]["scope_id"], scope_id)
+                build_client.assert_not_called()
+                start_worker.assert_not_called()
+                send_button.assert_not_called()
+
+    def test_set_permissions_requires_an_explicit_selection(self) -> None:
+        with mock.patch.object(workspace, "build_platform_client") as build_client:
+            result = json.loads(
+                tools.google_workspace(
+                    {
+                        "action": "set_permissions",
+                        "account_id": "gwo_connection123",
+                    }
+                )
+            )
+
+        self.assertEqual(result["error"], "invalid_parameter")
+        self.assertIn("requires presets, scopes, or a legacy profile", result["message"])
+        build_client.assert_not_called()
+
+    def test_backend_review_required_preflight_preserves_all_local_state(self) -> None:
+        authoritative_blocked = {
+            "scope": "https://www.googleapis.com/auth/drive.file",
+            "scope_id": "drive.file",
+            "display_name": "Backend-reviewed Drive collaboration",
+            "request_state": "review_required",
+            "verification_state": "backend_policy_pending",
+            "reason": "The backend OAuth client has not approved this exact scope.",
+        }
+
+        class Client:
+            def __init__(self) -> None:
+                self.gets: list[str] = []
+                self.posts: list[tuple[str, dict[str, object]]] = []
+
+            def get_json(self, path: str) -> dict[str, object]:
+                self.gets.append(path)
+                raise AssertionError(f"Unexpected GET {path}")
+
+            def post_json(self, path: str, payload: dict[str, object]) -> dict[str, object]:
+                self.posts.append((path, payload))
+                raise workspace.PlatformError(
+                    "scope review required",
+                    status_code=403,
+                    response={
+                        "detail": {
+                            "error_code": "review_required",
+                            "scope_manifest_version": "backend-manifest-7",
+                            "client_policy_id": "tinyhat-production",
+                            "capability_bundle": CUSTOM_BUNDLE,
+                            "blocked_scopes": [authoritative_blocked],
+                        }
+                    },
+                )
+
+        client = Client()
+        with (
+            tempfile.TemporaryDirectory() as tmp,
+            self._patched_state(Path(tmp)),
+        ):
+            workspace._atomic_save_credentials(
+                workspace._normalize_credentials(
+                    credential_envelope(
+                        bundle=WORKSPACE_READER_BUNDLE,
+                        scopes=WORKSPACE_READER_SCOPES,
+                    )
+                )
+            )
+            workspace._ensure_private_directory(workspace.HANDOFFS_DIR)
+            workspace._ensure_private_directory(workspace.INSTALL_RECEIPTS_DIR)
+            workspace._write_private_file(
+                workspace.ACTIVE_HANDOFF_PATH,
+                "existing-active-handoff",
+            )
+            workspace._write_private_file(
+                workspace.ACTIVE_DISCONNECT_PATH,
+                "existing-active-disconnect",
+            )
+            workspace._write_private_file(
+                workspace.LIFECYCLE_LOCK_PATH,
+                "existing-lifecycle-lock",
+            )
+            workspace._write_private_file(
+                workspace.HANDOFFS_DIR / "existing-worker-state",
+                "worker-state-must-survive",
+            )
+            workspace._write_private_file(
+                workspace.INSTALL_RECEIPTS_DIR / "existing-install-receipt",
+                "receipt-must-survive",
+            )
+            requested = workspace._requested_profile(
+                None,
+                scopes=["https://www.googleapis.com/auth/drive.file"],
+                reason="Collaborate on app-created Drive files",
+            )
+            expected_target = workspace._resolve_profile_for_connection_read_only(
+                requested,
+                account_id="gwo_connection123",
+            )
+            before = state_tree_snapshot(workspace.STATE_DIR)
+
+            with (
+                mock.patch.object(
+                    workspace,
+                    "_preflight_connection_request",
+                    REAL_PREFLIGHT_CONNECTION_REQUEST,
+                ),
+                mock.patch.object(
+                    workspace,
+                    "build_platform_client",
+                    return_value=(client, "local_dev"),
+                ) as build_client,
+                mock.patch.object(workspace, "_lifecycle_lock") as lifecycle_lock,
+                mock.patch.object(workspace, "_resume_retained_install_receipts") as resume_install,
+                mock.patch.object(
+                    workspace,
+                    "_resume_retained_disconnect_workers",
+                ) as resume_disconnect,
+                mock.patch.object(workspace, "_generate_key_pair") as generate_key_pair,
+                mock.patch.object(workspace, "_start_worker_process") as start_worker,
+                mock.patch.object(workspace, "_send_google_connect_button") as send_button,
+            ):
+                result = json.loads(
+                    tools.google_workspace(
+                        {
+                            "action": "connect",
+                            "account_id": "gwo_connection123",
+                            "scopes": ["https://www.googleapis.com/auth/drive.file"],
+                            "reason": "Collaborate on app-created Drive files",
+                        }
+                    )
+                )
+                after = state_tree_snapshot(workspace.STATE_DIR)
+
+        self.assertEqual(result["status"], "review_required")
+        self.assertEqual(result["manifest_version"], "backend-manifest-7")
+        self.assertEqual(result["client_policy_id"], "tinyhat-production")
+        self.assertEqual(result["capability_bundle"], CUSTOM_BUNDLE)
+        self.assertEqual(result["blocked_scopes"], [authoritative_blocked])
+        self.assertEqual(result["scopes"], list(expected_target.scopes))
+        self.assertEqual(before, after)
+        build_client.assert_called_once_with()
+        self.assertEqual(client.gets, [])
+        self.assertEqual(
+            client.posts,
+            [
+                (
+                    "/hapi/v1/computers/local-dev/google-workspace-oauth/v1/preflight",
+                    {
+                        "capability_bundle": expected_target.capability_bundle,
+                        "requested_services": list(expected_target.services),
+                        "requested_scopes": list(expected_target.scopes),
+                    },
+                )
+            ],
+        )
+        lifecycle_lock.assert_not_called()
+        resume_install.assert_not_called()
+        resume_disconnect.assert_not_called()
+        generate_key_pair.assert_not_called()
+        start_worker.assert_not_called()
+        send_button.assert_not_called()
+
+    def test_preflight_accepts_exact_normalized_response_and_stamps_profile(self) -> None:
+        profile = workspace._requested_profile(None)
+        posts: list[tuple[str, dict[str, object]]] = []
+
+        class Client:
+            def post_json(self, path: str, payload: dict[str, object]) -> dict[str, object]:
+                posts.append((path, payload))
+                return {
+                    "capability_bundle": IDENTITY_BUNDLE,
+                    "services": IDENTITY_SERVICES,
+                    "scopes": IDENTITY_SCOPES,
+                    "scope_manifest_version": "backend-manifest-8",
+                    "client_policy_id": "tinyhat-production",
+                }
+
+        client = Client()
+        with mock.patch.object(
+            workspace,
+            "build_platform_client",
+            return_value=(client, "gcloud"),
+        ):
+            reviewed, returned_client, platform_auth = REAL_PREFLIGHT_CONNECTION_REQUEST(profile)
+
+        self.assertIs(returned_client, client)
+        self.assertEqual(platform_auth, "gcloud")
+        self.assertEqual(reviewed.manifest_version, "backend-manifest-8")
+        self.assertEqual(reviewed.client_policy_id, "tinyhat-production")
+        self.assertEqual(
+            posts,
+            [
+                (
+                    "/hapi/v1/computers/me/google-workspace-oauth/v1/preflight",
+                    {
+                        "capability_bundle": IDENTITY_BUNDLE,
+                        "requested_services": IDENTITY_SERVICES,
+                        "requested_scopes": IDENTITY_SCOPES,
+                    },
+                )
+            ],
         )
 
-    def test_set_permissions_downgrades_one_account_to_exact_readonly_profile(self) -> None:
+    def test_start_calls_preflight_before_creating_the_oauth_handoff(self) -> None:
+        class Client:
+            def __init__(self) -> None:
+                self.posts: list[tuple[str, dict[str, object]]] = []
+
+            def post_json(self, path: str, payload: dict[str, object]) -> dict[str, object]:
+                self.posts.append((path, payload))
+                if path.endswith("/preflight"):
+                    return {
+                        "capability_bundle": IDENTITY_BUNDLE,
+                        "services": IDENTITY_SERVICES,
+                        "scopes": IDENTITY_SCOPES,
+                        "scope_manifest_version": "backend-manifest-9",
+                        "client_policy_id": "tinyhat-production",
+                    }
+                return start_response()
+
+        client = Client()
+        with (
+            tempfile.TemporaryDirectory() as tmp,
+            self._patched_state(Path(tmp)),
+            mock.patch.object(
+                workspace,
+                "_preflight_connection_request",
+                REAL_PREFLIGHT_CONNECTION_REQUEST,
+            ),
+            mock.patch.object(
+                workspace,
+                "build_platform_client",
+                return_value=(client, "local_dev"),
+            ) as build_client,
+            mock.patch.object(
+                workspace,
+                "_generate_key_pair",
+                return_value=("one-time-private-key", "one-time-public-key"),
+            ),
+            mock.patch.object(workspace, "_start_worker_process"),
+            mock.patch.object(
+                workspace,
+                "_send_google_connect_button",
+                return_value={"sent": True, "ok": True},
+            ),
+        ):
+            result = workspace._start_connection()
+
+        self.assertEqual(result["status"], "waiting_for_user")
+        self.assertEqual(result["manifest_version"], "backend-manifest-9")
+        self.assertEqual(result["client_policy_id"], "tinyhat-production")
+        build_client.assert_called_once_with()
+        self.assertEqual(
+            [path for path, _payload in client.posts],
+            [
+                "/hapi/v1/computers/local-dev/google-workspace-oauth/v1/preflight",
+                "/hapi/v1/computers/local-dev/google-workspace-oauth/v1",
+            ],
+        )
+
+    def test_set_permissions_downgrades_one_account_to_workspace_reader(self) -> None:
         class Client:
             def __init__(self) -> None:
                 self.posts: list[tuple[str, dict[str, object]]] = []
@@ -486,7 +921,11 @@ class GoogleWorkspaceTests(unittest.TestCase):
 
             def post_json(self, path: str, payload: dict[str, object]) -> dict[str, object]:
                 self.posts.append((path, payload))
-                return start_response(bundle=READONLY_BUNDLE, scopes=READONLY_SCOPES)
+                return start_response(
+                    bundle=WORKSPACE_READER_BUNDLE,
+                    scopes=WORKSPACE_READER_SCOPES,
+                    services=READONLY_SERVICES,
+                )
 
         client = Client()
         with (
@@ -522,7 +961,7 @@ class GoogleWorkspaceTests(unittest.TestCase):
                     {
                         "action": "set_permissions",
                         "account_id": "gwo_connection123",
-                        "profile": "workspace_readonly",
+                        "presets": ["workspace_reader"],
                     }
                 )
             )
@@ -531,16 +970,16 @@ class GoogleWorkspaceTests(unittest.TestCase):
 
         self.assertEqual(result["status"], "waiting_for_user")
         self.assertEqual(result["action"], "set_permissions")
-        self.assertEqual(result["profile"], "workspace_readonly")
+        self.assertEqual(result["profile"], "workspace_reader")
         self.assertEqual(result["connection_action"], "replace")
         self.assertEqual(
             client.posts[0][1],
             {
                 "public_key_pem": "one-time-public-key",
                 "key_algorithm": workspace.KEY_ALGORITHM,
-                "capability_bundle": READONLY_BUNDLE,
+                "capability_bundle": WORKSPACE_READER_BUNDLE,
                 "requested_services": READONLY_SERVICES,
-                "requested_scopes": READONLY_SCOPES,
+                "requested_scopes": WORKSPACE_READER_SCOPES,
                 "connection_action": "replace",
                 "connection_id": "gwo_connection123",
             },
@@ -552,7 +991,7 @@ class GoogleWorkspaceTests(unittest.TestCase):
         )
         send_button.assert_called_once_with(
             start_response()["authorization_url"],
-            profile=workspace.GOOGLE_PROFILE_CONFIGS["workspace_readonly"],
+            profile=workspace.GOOGLE_PROFILE_CONFIGS["workspace_reader"],
             permission_change=True,
         )
 
@@ -563,8 +1002,9 @@ class GoogleWorkspaceTests(unittest.TestCase):
             def post_json(self, path: str, payload: dict[str, object]) -> dict[str, object]:
                 self.posts.append((path, payload))
                 return start_response(
-                    bundle=CALENDAR_WRITE_BUNDLE,
-                    scopes=CALENDAR_WRITE_SCOPES,
+                    bundle=CALENDAR_COORDINATOR_BUNDLE,
+                    scopes=CALENDAR_COORDINATOR_SCOPES,
+                    services=["identity", "calendar"],
                 )
 
         client = Client([])
@@ -601,35 +1041,46 @@ class GoogleWorkspaceTests(unittest.TestCase):
                     {
                         "action": "set_permissions",
                         "account_id": "gwo_connection123",
-                        "profile": "calendar_write",
+                        "presets": ["calendar_coordinator"],
                     }
                 )
             )
 
         self.assertEqual(result["status"], "waiting_for_user")
-        self.assertEqual(result["profile"], "calendar_write")
+        self.assertEqual(result["profile"], "calendar_coordinator")
         self.assertNotIn("confirmation_id", json.dumps(result))
         self.assertEqual(client.posts[0][1]["connection_action"], "replace")
-        self.assertEqual(client.posts[0][1]["requested_scopes"], CALENDAR_WRITE_SCOPES)
+        self.assertEqual(
+            client.posts[0][1]["requested_scopes"],
+            CALENDAR_COORDINATOR_SCOPES,
+        )
 
     def test_custom_scopes_are_google_owned_canonical_and_require_a_reason(self) -> None:
         requested = workspace._requested_profile(
             None,
             scopes=[
-                "https://www.googleapis.com/auth/tasks",
-                "https://www.googleapis.com/auth/admin.directory.user.readonly",
+                "https://www.googleapis.com/auth/gmail.send",
+                "https://www.googleapis.com/auth/drive.file",
             ],
-            reason="Manage Tasks and read the Workspace directory",
+            reason="Send confirmed mail and collaborate on selected files",
         )
 
         self.assertEqual(requested.name, "workspace_custom")
         self.assertEqual(requested.capability_bundle, CUSTOM_BUNDLE)
-        self.assertEqual(list(requested.scopes), CUSTOM_SCOPES)
-        self.assertEqual(list(requested.services), CUSTOM_SERVICES)
+        self.assertEqual(
+            list(requested.scopes),
+            [
+                *IDENTITY_SCOPES,
+                "https://www.googleapis.com/auth/gmail.send",
+                "https://www.googleapis.com/auth/drive.file",
+            ],
+        )
+        self.assertEqual(list(requested.services), ["identity", "gmail", "drive"])
         self.assertEqual(
             requested.reason,
-            "Manage Tasks and read the Workspace directory",
+            "Send confirmed mail and collaborate on selected files",
         )
+        self.assertEqual(requested.blocked_scopes, ())
         alias_only = workspace._requested_profile(
             None,
             scopes=[
@@ -644,9 +1095,12 @@ class GoogleWorkspaceTests(unittest.TestCase):
             ("https://www.googleapis.com/auth/userinfo.email", "email"),
             ("https://www.googleapis.com/auth/userinfo.profile", "profile"),
         ):
-            with self.subTest(alias=alias), self.assertRaisesRegex(
-                workspace.GoogleWorkspaceError,
-                "duplicates",
+            with (
+                self.subTest(alias=alias),
+                self.assertRaisesRegex(
+                    workspace.GoogleWorkspaceError,
+                    "duplicates",
+                ),
             ):
                 workspace._requested_profile(
                     None,
@@ -664,6 +1118,7 @@ class GoogleWorkspaceTests(unittest.TestCase):
             reason="Exercise a broad Google Workspace workflow",
         )
         self.assertEqual(len(maximum.scopes), workspace.GOOGLE_GRANT_SCOPE_MAX_COUNT)
+        self.assertEqual(len(maximum.blocked_scopes), workspace.GOOGLE_SCOPE_MAX_COUNT)
         with self.assertRaisesRegex(
             workspace.GoogleWorkspaceError,
             "at most 32",
@@ -699,9 +1154,7 @@ class GoogleWorkspaceTests(unittest.TestCase):
             {"reason": "Manage tasks"},
         )
         for request in invalid_requests:
-            with self.subTest(request=request), self.assertRaises(
-                workspace.GoogleWorkspaceError
-            ):
+            with self.subTest(request=request), self.assertRaises(workspace.GoogleWorkspaceError):
                 workspace._requested_profile(
                     request.get("value"),
                     scopes=request.get("scopes"),
@@ -718,31 +1171,15 @@ class GoogleWorkspaceTests(unittest.TestCase):
             reason="Manage legacy Calendar and Contacts integrations",
         )
 
-        self.assertEqual(list(requested.scopes), LEGACY_FEED_SCOPES)
-        self.assertEqual(list(requested.services), LEGACY_FEED_SERVICES)
-        self.assertIn(CALENDAR_FEEDS_DISCLOSURE, requested.access_label)
-        self.assertIn(CONTACTS_FEEDS_DISCLOSURE, requested.access_label)
-
-        modern = workspace._requested_profile(
-            None,
-            scopes=[
-                "https://www.googleapis.com/auth/calendar",
-                "https://www.googleapis.com/auth/contacts",
-            ],
-            reason="Manage Calendar and Contacts",
+        self.assertEqual(
+            list(requested.scopes),
+            [*IDENTITY_SCOPES, *sorted(LEGACY_FEED_SCOPES[3:])],
         )
-        self.assertIn(CALENDAR_FEEDS_DISCLOSURE, modern.access_label)
-        self.assertIn(CONTACTS_FEEDS_DISCLOSURE, modern.access_label)
-
-        trailing_slash = workspace._requested_profile(
-            None,
-            scopes=[
-                "https://www.google.com/calendar/feeds/",
-                "https://www.google.com/m8/feeds/",
-            ],
-            reason="Manage legacy Calendar and Contacts integrations",
+        self.assertEqual(list(requested.services), ["identity", "google"])
+        self.assertEqual(len(requested.blocked_scopes), 2)
+        self.assertTrue(
+            all(item.request_state == "review_required" for item in requested.blocked_scopes)
         )
-        self.assertEqual(list(trailing_slash.scopes), LEGACY_FEED_SCOPES)
 
         for scope in (
             "https://www.google.com/drive",
@@ -755,23 +1192,28 @@ class GoogleWorkspaceTests(unittest.TestCase):
                     reason="Request an unrecognized Google scope",
                 )
 
-    def test_high_risk_modern_scopes_have_explicit_preconsent_disclosures(self) -> None:
-        expected_fragments = {
-            "https://www.googleapis.com/auth/drive": "deleting files",
-            "https://www.googleapis.com/auth/admin.directory.user": "deleting users",
-            "https://www.googleapis.com/auth/gmail.settings.sharing": "forwarding",
-            "https://www.googleapis.com/auth/cloud-platform": "Broad Google Cloud",
-            "https://www.googleapis.com/auth/bigquery": "BigQuery data",
-        }
+    def test_unreviewed_high_risk_scopes_return_truthful_blocked_details(self) -> None:
+        scopes = (
+            "https://www.googleapis.com/auth/drive",
+            "https://www.googleapis.com/auth/admin.directory.user",
+            "https://www.googleapis.com/auth/gmail.settings.sharing",
+            "https://www.googleapis.com/auth/cloud-platform",
+            "https://www.googleapis.com/auth/bigquery",
+        )
 
-        for scope, disclosure in expected_fragments.items():
+        for scope in scopes:
             with self.subTest(scope=scope):
                 requested = workspace._requested_profile(
                     None,
                     scopes=[scope],
                     reason="perform the requested high-impact operation",
                 )
-                self.assertIn(disclosure, requested.access_label)
+                self.assertEqual(len(requested.blocked_scopes), 1)
+                blocked = requested.blocked_scopes[0]
+                self.assertEqual(blocked.scope_url, scope)
+                self.assertIsNone(blocked.scope_id)
+                self.assertEqual(blocked.request_state, "review_required")
+                self.assertIn("not listed", blocked.reason)
 
     def test_custom_platform_response_normalizes_services_from_authoritative_scopes(
         self,
@@ -788,7 +1230,24 @@ class GoogleWorkspaceTests(unittest.TestCase):
 
         self.assertEqual(reloaded["services"], CUSTOM_SERVICES)
 
-    def test_legacy_feed_scopes_round_trip_through_provider_start(self) -> None:
+    def test_historical_custom_grant_keeps_future_manifest_service(self) -> None:
+        future_scope = "https://www.googleapis.com/auth/future.service"
+        future_scope_definition = {
+            "service": "future_service",
+            "display_name": "Future service",
+        }
+
+        with mock.patch.object(
+            workspace,
+            "SCOPES_BY_URL",
+            {**workspace.SCOPES_BY_URL, future_scope: future_scope_definition},
+        ):
+            profile = workspace._custom_profile([*workspace.GOOGLE_IDENTITY_SCOPES, future_scope])
+
+        self.assertEqual(profile.services, ("identity", "future_service"))
+        self.assertIn("Future Service", profile.access_label)
+
+    def test_legacy_feed_scopes_stop_before_provider_start(self) -> None:
         class Client:
             def __init__(self) -> None:
                 self.posts: list[tuple[str, dict[str, object]]] = []
@@ -829,24 +1288,12 @@ class GoogleWorkspaceTests(unittest.TestCase):
                 "_send_google_connect_button",
                 return_value={"sent": True, "ok": True},
             ),
+            self.assertRaises(workspace.GoogleWorkspaceScopeReviewRequired),
         ):
-            result = workspace._start_connection(profile=profile)
+            workspace._start_connection(profile=profile)
 
-        request = client.posts[0][1]
-        self.assertEqual(request["requested_scopes"], LEGACY_FEED_SCOPES)
-        self.assertEqual(request["requested_services"], LEGACY_FEED_SERVICES)
-        self.assertEqual(result["scopes"], LEGACY_FEED_SCOPES)
-        self.assertEqual(result["services"], LEGACY_FEED_SERVICES)
-        self.assertIn(CALENDAR_FEEDS_DISCLOSURE, result["message"])
-        self.assertIn(CONTACTS_FEEDS_DISCLOSURE, result["message"])
-        self.assertEqual(
-            start_worker.call_args.kwargs["handoff_metadata"]["scopes"],
-            LEGACY_FEED_SCOPES,
-        )
-        self.assertEqual(
-            start_worker.call_args.kwargs["handoff_metadata"]["services"],
-            LEGACY_FEED_SERVICES,
-        )
+        self.assertEqual(client.posts, [])
+        start_worker.assert_not_called()
 
     def test_connect_is_additive_and_set_permissions_is_exact_for_custom_scopes(
         self,
@@ -866,8 +1313,8 @@ class GoogleWorkspaceTests(unittest.TestCase):
             )
             requested = workspace._requested_profile(
                 None,
-                scopes=["https://www.googleapis.com/auth/tasks"],
-                reason="Manage Google Tasks",
+                scopes=["https://www.googleapis.com/auth/drive.file"],
+                reason="Collaborate on selected Drive files",
             )
             with workspace._lifecycle_lock():
                 additive, _, _ = workspace._resolve_profile_for_connection_locked(
@@ -887,10 +1334,10 @@ class GoogleWorkspaceTests(unittest.TestCase):
                 "openid",
                 "email",
                 "profile",
-                "https://www.googleapis.com/auth/calendar.events",
-                "https://www.googleapis.com/auth/drive.readonly",
                 "https://www.googleapis.com/auth/gmail.modify",
-                "https://www.googleapis.com/auth/tasks",
+                "https://www.googleapis.com/auth/calendar.events",
+                "https://www.googleapis.com/auth/drive.file",
+                "https://www.googleapis.com/auth/drive.readonly",
             ],
         )
         self.assertEqual(exact.capability_bundle, CUSTOM_BUNDLE)
@@ -900,11 +1347,11 @@ class GoogleWorkspaceTests(unittest.TestCase):
                 "openid",
                 "email",
                 "profile",
-                "https://www.googleapis.com/auth/tasks",
+                "https://www.googleapis.com/auth/drive.file",
             ],
         )
 
-    def test_exact_named_profile_replaces_a_saved_custom_grant_as_named(self) -> None:
+    def test_exact_current_preset_replaces_a_saved_custom_grant_as_named(self) -> None:
         client = PollingClient([])
         with (
             tempfile.TemporaryDirectory() as tmp,
@@ -925,14 +1372,14 @@ class GoogleWorkspaceTests(unittest.TestCase):
             )
             with workspace._lifecycle_lock():
                 exact, _, _ = workspace._resolve_profile_for_connection_locked(
-                    workspace.GOOGLE_PROFILE_CONFIGS["workspace_readonly"],
+                    workspace.GOOGLE_PROFILE_CONFIGS["workspace_reader"],
                     account_id="gwo_connection123",
                     exact_permissions=True,
                 )
 
-        self.assertEqual(exact.name, "workspace_readonly")
-        self.assertEqual(exact.capability_bundle, READONLY_BUNDLE)
-        self.assertEqual(list(exact.scopes), READONLY_SCOPES)
+        self.assertEqual(exact.name, "workspace_reader")
+        self.assertEqual(exact.capability_bundle, WORKSPACE_READER_BUNDLE)
+        self.assertEqual(list(exact.scopes), WORKSPACE_READER_SCOPES)
 
     def test_status_lists_accounts_and_disconnect_never_guesses(self) -> None:
         with (
@@ -1027,8 +1474,7 @@ class GoogleWorkspaceTests(unittest.TestCase):
                 )
 
             accounts = {
-                item["tinyhat_connection_id"]: item
-                for item in workspace._read_account_store()
+                item["tinyhat_connection_id"]: item for item in workspace._read_account_store()
             }
 
         self.assertEqual(outcome, "installed")
@@ -1197,9 +1643,12 @@ class GoogleWorkspaceTests(unittest.TestCase):
                 workspace.LEGACY_CREDENTIALS_PATH,
                 json.dumps(legacy),
             )
-            with workspace._lifecycle_lock(), self.assertRaisesRegex(
-                workspace.GoogleWorkspaceError,
-                "exactly one",
+            with (
+                workspace._lifecycle_lock(),
+                self.assertRaisesRegex(
+                    workspace.GoogleWorkspaceError,
+                    "exactly one",
+                ),
             ):
                 workspace._migrate_legacy_credentials_locked(
                     client=Client(),
@@ -1221,23 +1670,23 @@ class GoogleWorkspaceTests(unittest.TestCase):
         self.assertEqual(invalid["error"], "invalid_parameter")
         self.assertEqual(invalid_account["error"], "invalid_parameter")
 
-    def test_legacy_gmail_send_profile_reaches_oauth_without_an_extra_gate(self) -> None:
-        expected = {"status": "waiting_for_user", "profile": "gmail_send"}
-        with mock.patch.object(
-            workspace,
-            "_start_connection",
-            return_value=expected,
-        ) as start_connection:
+    def test_legacy_gmail_send_profile_returns_review_required_without_start(self) -> None:
+        with (
+            mock.patch.object(workspace, "build_platform_client") as build_client,
+            mock.patch.object(workspace, "_start_worker_process") as start_worker,
+            mock.patch.object(workspace, "_send_google_connect_button") as send_button,
+        ):
             result = json.loads(
                 tools.google_workspace({"action": "connect", "profile": "gmail_send"})
             )
 
-        self.assertEqual(result, expected)
-        start_connection.assert_called_once_with(
-            profile=workspace.GOOGLE_PROFILE_CONFIGS["gmail_send"],
-            account_id=None,
-            exact_permissions=False,
-        )
+        self.assertEqual(result["status"], "review_required")
+        self.assertEqual(result["profile"], "gmail_send")
+        self.assertFalse(result["button_sent"])
+        self.assertTrue(result["blocked_scopes"])
+        build_client.assert_not_called()
+        start_worker.assert_not_called()
+        send_button.assert_not_called()
 
     def test_all_legacy_named_profiles_remain_available(self) -> None:
         self.assertEqual(
@@ -1248,13 +1697,24 @@ class GoogleWorkspaceTests(unittest.TestCase):
                 "gmail_send",
                 "calendar_write",
                 "gmail_send_calendar_write",
+                "identity_only",
+                "workspace_reader",
+                "mail_writer",
+                "inbox_manager",
+                "calendar_coordinator",
+                "file_collaborator",
             },
         )
 
     def test_start_response_connection_must_match_replaced_account(self) -> None:
         class Client(PollingClient):
             def post_json(self, _path: str, _payload: dict[str, object]) -> dict[str, object]:
-                return start_response(connection_id="gwo_personal456")
+                return start_response(
+                    bundle=WORKSPACE_READER_BUNDLE,
+                    scopes=WORKSPACE_READER_SCOPES,
+                    services=READONLY_SERVICES,
+                    connection_id="gwo_personal456",
+                )
 
         client = Client([])
         with (
@@ -1275,7 +1735,7 @@ class GoogleWorkspaceTests(unittest.TestCase):
                     {
                         "action": "set_permissions",
                         "account_id": "gwo_connection123",
-                        "profile": "workspace_readonly",
+                        "presets": ["workspace_reader"],
                     }
                 )
             )
@@ -1283,26 +1743,24 @@ class GoogleWorkspaceTests(unittest.TestCase):
         self.assertEqual(result["status"], "failed")
         start_worker.assert_not_called()
 
-    def test_calendar_write_profiles_reach_oauth_without_an_extra_gate(self) -> None:
+    def test_legacy_calendar_write_profiles_require_review_without_start(self) -> None:
         for profile in ("calendar_write", "gmail_send_calendar_write"):
             with (
                 self.subTest(profile=profile),
-                mock.patch.object(
-                    workspace,
-                    "_start_connection",
-                    return_value={"status": "waiting_for_user", "profile": profile},
-                ) as start_connection,
+                mock.patch.object(workspace, "build_platform_client") as build_client,
+                mock.patch.object(workspace, "_start_worker_process") as start_worker,
+                mock.patch.object(workspace, "_send_google_connect_button") as send_button,
             ):
                 result = json.loads(
                     tools.google_workspace({"action": "connect", "profile": profile})
                 )
 
-            self.assertEqual(result["status"], "waiting_for_user")
-            start_connection.assert_called_once_with(
-                profile=workspace.GOOGLE_PROFILE_CONFIGS[profile],
-                account_id=None,
-                exact_permissions=False,
-            )
+            self.assertEqual(result["status"], "review_required")
+            self.assertEqual(result["profile"], profile)
+            self.assertFalse(result["button_sent"])
+            build_client.assert_not_called()
+            start_worker.assert_not_called()
+            send_button.assert_not_called()
 
     def test_calendar_write_profiles_are_fixed_additive_bundles(self) -> None:
         calendar = workspace.GOOGLE_PROFILE_CONFIGS["calendar_write"]
@@ -1323,7 +1781,7 @@ class GoogleWorkspaceTests(unittest.TestCase):
             frozenset({"gmail_send", "calendar_events"}),
         )
 
-    def test_gmail_send_profile_requests_exact_legacy_scope_bundle(self) -> None:
+    def test_gmail_send_profile_does_not_request_legacy_scope_bundle(self) -> None:
         class FakeClient:
             def __init__(self) -> None:
                 self.calls: list[tuple[str, dict[str, object]]] = []
@@ -1355,40 +1813,15 @@ class GoogleWorkspaceTests(unittest.TestCase):
                 tools.google_workspace({"action": "connect", "profile": "gmail_send"})
             )
 
-        self.assertEqual(result["status"], "waiting_for_user")
+        self.assertEqual(result["status"], "review_required")
         self.assertEqual(result["profile"], "gmail_send")
         self.assertEqual(result["capability_bundle"], GMAIL_SEND_BUNDLE)
-        self.assertIn("native Connect Google button", result["message"])
-        self.assertNotIn("confirmation_id", json.dumps(result))
-        self.assertEqual(
-            client.calls[0][1],
-            {
-                "public_key_pem": "one-time-public-key",
-                "key_algorithm": workspace.KEY_ALGORITHM,
-                "capability_bundle": GMAIL_SEND_BUNDLE,
-                "requested_services": READONLY_SERVICES,
-                "requested_scopes": GMAIL_SEND_SCOPES,
-                "connection_action": "add",
-            },
-        )
-        start_worker.assert_called_once()
-        self.assertEqual(
-            start_worker.call_args.kwargs["handoff_metadata"],
-            {
-                "capability_bundle": GMAIL_SEND_BUNDLE,
-                "services": READONLY_SERVICES,
-                "scopes": GMAIL_SEND_SCOPES,
-                "connection_action": "add",
-                "target_connection_id": "gwo_connection123",
-            },
-        )
-        send_button.assert_called_once_with(
-            start_response()["authorization_url"],
-            profile=workspace.GOOGLE_PROFILE_CONFIGS["gmail_send"],
-            permission_change=False,
-        )
+        self.assertFalse(result["button_sent"])
+        self.assertEqual(client.calls, [])
+        start_worker.assert_not_called()
+        send_button.assert_not_called()
 
-    def test_calendar_write_upgrade_preserves_verified_gmail_send_permission(self) -> None:
+    def test_calendar_preset_adds_to_verified_mail_writer_permission(self) -> None:
         class UpgradeClient:
             def __init__(self) -> None:
                 self.gets: list[str] = []
@@ -1401,8 +1834,13 @@ class GoogleWorkspaceTests(unittest.TestCase):
             def post_json(self, path: str, payload: dict[str, object]) -> dict[str, object]:
                 self.posts.append((path, payload))
                 return start_response(
-                    bundle=GMAIL_SEND_CALENDAR_WRITE_BUNDLE,
-                    scopes=GMAIL_SEND_CALENDAR_WRITE_SCOPES,
+                    bundle=CUSTOM_BUNDLE,
+                    scopes=[
+                        *IDENTITY_SCOPES,
+                        "https://www.googleapis.com/auth/gmail.compose",
+                        "https://www.googleapis.com/auth/calendar.events",
+                    ],
+                    services=["identity", "gmail", "calendar"],
                 )
 
         client = UpgradeClient()
@@ -1424,47 +1862,46 @@ class GoogleWorkspaceTests(unittest.TestCase):
                 return_value={"sent": True, "ok": True},
             ) as send_button,
         ):
-            workspace._atomic_save_credentials(
-                workspace._normalize_credentials(
-                    credential_envelope(
-                        bundle=GMAIL_SEND_BUNDLE,
-                        scopes=GMAIL_SEND_SCOPES,
-                    )
-                )
+            current = credential_envelope(
+                bundle=MAIL_WRITER_BUNDLE,
+                scopes=MAIL_WRITER_SCOPES,
             )
+            current["services"] = ["identity", "gmail"]
+            workspace._atomic_save_credentials(workspace._normalize_credentials(current))
             result = json.loads(
                 tools.google_workspace(
                     {
                         "action": "connect",
-                        "profile": "calendar_write",
+                        "presets": ["calendar_coordinator"],
                         "account_id": "gwo_connection123",
                     }
                 )
             )
 
-        self.assertEqual(result["profile"], "gmail_send_calendar_write")
-        self.assertEqual(
-            result["capability_bundle"],
-            GMAIL_SEND_CALENDAR_WRITE_BUNDLE,
-        )
+        expected_scopes = [
+            *IDENTITY_SCOPES,
+            "https://www.googleapis.com/auth/gmail.compose",
+            "https://www.googleapis.com/auth/calendar.events",
+        ]
+        self.assertEqual(result["profile"], "workspace_custom")
+        self.assertEqual(result["capability_bundle"], CUSTOM_BUNDLE)
         self.assertEqual(len(client.gets), 1)
         self.assertEqual(
             client.posts[0][1]["requested_scopes"],
-            GMAIL_SEND_CALENDAR_WRITE_SCOPES,
+            expected_scopes,
         )
         self.assertEqual(
             start_worker.call_args.kwargs["handoff_metadata"]["scopes"],
-            GMAIL_SEND_CALENDAR_WRITE_SCOPES,
+            expected_scopes,
         )
         send_button.assert_called_once_with(
             start_response()["authorization_url"],
-            profile=workspace.GOOGLE_PROFILE_CONFIGS[
-                "gmail_send_calendar_write"
-            ],
+            profile=mock.ANY,
             permission_change=True,
         )
+        self.assertEqual(send_button.call_args.kwargs["profile"].name, "workspace_custom")
 
-    def test_default_reconnect_adds_recommended_scopes_to_existing_legacy_grant(
+    def test_default_reconnect_does_not_add_scopes_to_existing_legacy_grant(
         self,
     ) -> None:
         client = PollingClient([])
@@ -1487,7 +1924,7 @@ class GoogleWorkspaceTests(unittest.TestCase):
             )
             with workspace._lifecycle_lock():
                 expanded, _, _ = workspace._resolve_profile_for_connection_locked(
-                    workspace.GOOGLE_PROFILE_CONFIGS["workspace_recommended"],
+                    workspace.GOOGLE_PROFILE_CONFIGS["identity_only"],
                     account_id="gwo_connection123",
                 )
                 retained, _, _ = workspace._resolve_profile_for_connection_locked(
@@ -1496,25 +1933,9 @@ class GoogleWorkspaceTests(unittest.TestCase):
                 )
 
         self.assertEqual(expanded.capability_bundle, CUSTOM_BUNDLE)
-        self.assertEqual(
-            list(expanded.scopes),
-            [
-                "openid",
-                "email",
-                "profile",
-                "https://www.googleapis.com/auth/calendar.events",
-                "https://www.googleapis.com/auth/calendar.readonly",
-                "https://www.googleapis.com/auth/drive.readonly",
-                "https://www.googleapis.com/auth/gmail.modify",
-                "https://www.googleapis.com/auth/gmail.readonly",
-            ],
-        )
-        self.assertEqual(
-            expanded.access_label,
-            "Google access for Gmail, Calendar, and Drive",
-        )
-        self.assertNotIn("the requested Google permissions", expanded.access_label)
-        self.assertEqual(retained.name, "calendar_write")
+        self.assertEqual(set(expanded.scopes), set(CALENDAR_WRITE_SCOPES))
+        self.assertEqual(retained.name, "workspace_custom")
+        self.assertEqual(set(retained.scopes), set(CALENDAR_WRITE_SCOPES))
 
     def test_upgrade_does_not_preserve_write_permissions_from_stale_assignment(self) -> None:
         client = PollingClient([], binding="replacement-assignment-binding")
@@ -1535,9 +1956,12 @@ class GoogleWorkspaceTests(unittest.TestCase):
                     )
                 )
             )
-            with workspace._lifecycle_lock(), self.assertRaisesRegex(
-                workspace.GoogleWorkspaceError,
-                "assignment changed",
+            with (
+                workspace._lifecycle_lock(),
+                self.assertRaisesRegex(
+                    workspace.GoogleWorkspaceError,
+                    "assignment changed",
+                ),
             ):
                 workspace._resolve_profile_for_connection_locked(
                     workspace.GOOGLE_PROFILE_CONFIGS["calendar_write"],
@@ -1545,7 +1969,7 @@ class GoogleWorkspaceTests(unittest.TestCase):
                 )
             self.assertFalse(workspace.CREDENTIALS_PATH.exists())
 
-    def test_gmail_send_upgrade_preserves_verified_calendar_write_permission(self) -> None:
+    def test_mail_writer_preset_adds_to_verified_calendar_permission(self) -> None:
         client = PollingClient([])
         with (
             tempfile.TemporaryDirectory() as tmp,
@@ -1556,28 +1980,30 @@ class GoogleWorkspaceTests(unittest.TestCase):
                 return_value=(client, "local_dev"),
             ),
         ):
-            workspace._atomic_save_credentials(
-                workspace._normalize_credentials(
-                    credential_envelope(
-                        bundle=CALENDAR_WRITE_BUNDLE,
-                        scopes=CALENDAR_WRITE_SCOPES,
-                    )
-                )
+            current = credential_envelope(
+                bundle=CALENDAR_COORDINATOR_BUNDLE,
+                scopes=CALENDAR_COORDINATOR_SCOPES,
             )
+            current["services"] = ["identity", "calendar"]
+            workspace._atomic_save_credentials(workspace._normalize_credentials(current))
             with workspace._lifecycle_lock():
                 resolved, resolved_client, platform_auth = (
                     workspace._resolve_profile_for_connection_locked(
-                        workspace.GOOGLE_PROFILE_CONFIGS["gmail_send"],
+                        workspace.GOOGLE_PROFILE_CONFIGS["mail_writer"],
                         account_id="gwo_connection123",
                     )
                 )
 
-        self.assertEqual(resolved.name, "gmail_send_calendar_write")
+        self.assertEqual(resolved.name, "workspace_custom")
         self.assertIs(resolved_client, client)
         self.assertEqual(platform_auth, "local_dev")
         self.assertEqual(
             list(resolved.scopes),
-            GMAIL_SEND_CALENDAR_WRITE_SCOPES,
+            [
+                *IDENTITY_SCOPES,
+                "https://www.googleapis.com/auth/gmail.compose",
+                "https://www.googleapis.com/auth/calendar.events",
+            ],
         )
 
     def test_disconnect_winning_before_connect_resolution_starts_a_fresh_oauth_handoff(
@@ -1592,7 +2018,11 @@ class GoogleWorkspaceTests(unittest.TestCase):
 
             def post_json(self, path: str, payload: dict[str, object]) -> dict[str, object]:
                 self.posts.append((path, payload))
-                return start_response(bundle=GMAIL_SEND_BUNDLE, scopes=GMAIL_SEND_SCOPES)
+                return start_response(
+                    bundle=MAIL_WRITER_BUNDLE,
+                    scopes=MAIL_WRITER_SCOPES,
+                    services=["identity", "gmail"],
+                )
 
         client = Client()
         real_start_connection = workspace._start_connection
@@ -1622,20 +2052,18 @@ class GoogleWorkspaceTests(unittest.TestCase):
                 return_value={"sent": True, "ok": True},
             ) as send_button,
         ):
-            workspace._atomic_save_credentials(
-                workspace._normalize_credentials(
-                    credential_envelope(
-                        bundle=GMAIL_SEND_BUNDLE,
-                        scopes=GMAIL_SEND_SCOPES,
-                    )
-                )
+            current = credential_envelope(
+                bundle=MAIL_WRITER_BUNDLE,
+                scopes=MAIL_WRITER_SCOPES,
             )
+            current["services"] = ["identity", "gmail"]
+            workspace._atomic_save_credentials(workspace._normalize_credentials(current))
             result = json.loads(
-                tools.google_workspace({"action": "connect", "profile": "gmail_send"})
+                tools.google_workspace({"action": "connect", "presets": ["mail_writer"]})
             )
 
         self.assertEqual(result["status"], "waiting_for_user")
-        self.assertEqual(result["profile"], "gmail_send")
+        self.assertEqual(result["profile"], "mail_writer")
         self.assertNotIn("confirmation_id", json.dumps(result))
         self.assertEqual(len(client.posts), 1)
         build_client.assert_called_once()
@@ -1653,7 +2081,11 @@ class GoogleWorkspaceTests(unittest.TestCase):
 
             def post_json(self, path: str, payload: dict[str, object]) -> dict[str, object]:
                 self.posts.append((path, payload))
-                return start_response(bundle=GMAIL_SEND_BUNDLE, scopes=GMAIL_SEND_SCOPES)
+                return start_response(
+                    bundle=MAIL_WRITER_BUNDLE,
+                    scopes=MAIL_WRITER_SCOPES,
+                    services=["identity", "gmail"],
+                )
 
         client = Client()
         real_start_connection = workspace._start_connection
@@ -1678,16 +2110,14 @@ class GoogleWorkspaceTests(unittest.TestCase):
             mock.patch.object(workspace, "_start_worker_process") as start_worker,
             mock.patch.object(workspace, "_send_google_connect_button") as send_button,
         ):
-            workspace._atomic_save_credentials(
-                workspace._normalize_credentials(
-                    credential_envelope(
-                        bundle=GMAIL_SEND_BUNDLE,
-                        scopes=GMAIL_SEND_SCOPES,
-                    )
-                )
+            current = credential_envelope(
+                bundle=MAIL_WRITER_BUNDLE,
+                scopes=MAIL_WRITER_SCOPES,
             )
+            current["services"] = ["identity", "gmail"]
+            workspace._atomic_save_credentials(workspace._normalize_credentials(current))
             result = json.loads(
-                tools.google_workspace({"action": "connect", "profile": "gmail_send"})
+                tools.google_workspace({"action": "connect", "presets": ["mail_writer"]})
             )
 
             self.assertEqual(result["status"], "failed")
@@ -1700,11 +2130,11 @@ class GoogleWorkspaceTests(unittest.TestCase):
     def test_custom_scope_request_requires_reason_and_unknown_profile_is_rejected(
         self,
     ) -> None:
-        with mock.patch.object(
-            workspace,
-            "_start_connection",
-            return_value={"status": "waiting_for_user"},
-        ) as start:
+        with (
+            mock.patch.object(workspace, "build_platform_client") as build_client,
+            mock.patch.object(workspace, "_start_worker_process") as start_worker,
+            mock.patch.object(workspace, "_send_google_connect_button") as send_button,
+        ):
             raw = json.loads(
                 tools.google_workspace(
                     {
@@ -1724,19 +2154,13 @@ class GoogleWorkspaceTests(unittest.TestCase):
         )
         unknown = json.loads(tools.google_workspace({"action": "connect", "profile": "gmail_full"}))
 
-        self.assertEqual(raw["status"], "waiting_for_user")
-        self.assertEqual(
-            start.call_args.kwargs["profile"].name,
-            workspace.GOOGLE_WORKSPACE_PROFILE_CUSTOM,
-        )
-        self.assertEqual(
-            list(start.call_args.kwargs["profile"].scopes),
-            ["openid", "email", "profile", "https://mail.google.com/"],
-        )
-        self.assertIn(
-            GMAIL_FULL_DISCLOSURE,
-            start.call_args.kwargs["profile"].access_label,
-        )
+        self.assertEqual(raw["status"], "review_required")
+        self.assertFalse(raw["button_sent"])
+        self.assertEqual(raw["blocked_scopes"][0]["scope"], "https://mail.google.com/")
+        self.assertEqual(raw["blocked_scopes"][0]["request_state"], "review_required")
+        build_client.assert_not_called()
+        start_worker.assert_not_called()
+        send_button.assert_not_called()
         self.assertEqual(missing_reason["error"], "invalid_parameter")
         self.assertEqual(unknown["error"], "invalid_parameter")
 
@@ -1765,7 +2189,7 @@ class GoogleWorkspaceTests(unittest.TestCase):
             button_urls.append(url)
             self.assertEqual(
                 kwargs["profile"].name,
-                workspace.GOOGLE_WORKSPACE_PROFILE_RECOMMENDED,
+                workspace.GOOGLE_WORKSPACE_PROFILE_IDENTITY,
             )
             self.assertFalse(kwargs["permission_change"])
             return {"sent": True, "ok": True}
@@ -1809,9 +2233,9 @@ class GoogleWorkspaceTests(unittest.TestCase):
             {
                 "public_key_pem": "one-time-public-key",
                 "key_algorithm": workspace.KEY_ALGORITHM,
-                "capability_bundle": RECOMMENDED_BUNDLE,
-                "requested_services": READONLY_SERVICES,
-                "requested_scopes": RECOMMENDED_SCOPES,
+                "capability_bundle": IDENTITY_BUNDLE,
+                "requested_services": IDENTITY_SERVICES,
+                "requested_scopes": IDENTITY_SCOPES,
                 "connection_action": "add",
             },
         )
@@ -1821,9 +2245,9 @@ class GoogleWorkspaceTests(unittest.TestCase):
         self.assertEqual(
             worker_calls[0]["handoff_metadata"],
             {
-                "capability_bundle": RECOMMENDED_BUNDLE,
-                "services": READONLY_SERVICES,
-                "scopes": RECOMMENDED_SCOPES,
+                "capability_bundle": IDENTITY_BUNDLE,
+                "services": IDENTITY_SERVICES,
+                "scopes": IDENTITY_SCOPES,
                 "connection_action": "add",
                 "target_connection_id": "gwo_connection123",
             },
@@ -2016,39 +2440,31 @@ class GoogleWorkspaceTests(unittest.TestCase):
         )
         self.assertNotIn(authorization_url, str(sends[0]["text"]))
 
-    def test_connect_button_discloses_legacy_scope_power_before_consent(self) -> None:
-        sends: list[dict[str, object]] = []
-        authorization_url = prepare_authorization_url()
-        profile = workspace._requested_profile(
-            None,
-            scopes=[
-                workspace.GOOGLE_CALENDAR_FEEDS_SCOPE,
-                workspace.GOOGLE_CONTACTS_FEEDS_SCOPE,
-            ],
-            reason="synchronize legacy Calendar and Contacts data",
-        )
+    def test_legacy_feed_request_stops_before_connect_button(self) -> None:
         with (
-            mock.patch.object(
-                tools,
-                "_telegram_credentials",
-                return_value=("telegram-token", "chat-123"),
-            ),
-            mock.patch.object(
-                tools,
-                "_telegram_send_message",
-                side_effect=lambda **kwargs: sends.append(kwargs) or {"ok": True},
-            ),
+            mock.patch.object(workspace, "build_platform_client") as build_client,
+            mock.patch.object(workspace, "_start_worker_process") as start_worker,
+            mock.patch.object(workspace, "_send_google_connect_button") as send_button,
         ):
-            result = workspace._send_google_connect_button(
-                authorization_url,
-                profile=profile,
+            result = json.loads(
+                tools.google_workspace(
+                    {
+                        "action": "connect",
+                        "scopes": [
+                            workspace.GOOGLE_CALENDAR_FEEDS_SCOPE,
+                            workspace.GOOGLE_CONTACTS_FEEDS_SCOPE,
+                        ],
+                        "reason": "synchronize legacy Calendar and Contacts data",
+                    }
+                )
             )
 
-        self.assertEqual(result, {"sent": True, "ok": True})
-        self.assertEqual(len(sends), 1)
-        self.assertIn(CALENDAR_FEEDS_DISCLOSURE, str(sends[0]["text"]))
-        self.assertIn(CONTACTS_FEEDS_DISCLOSURE, str(sends[0]["text"]))
-        self.assertNotIn(authorization_url, str(sends[0]["text"]))
+        self.assertEqual(result["status"], "review_required")
+        self.assertFalse(result["button_sent"])
+        self.assertEqual(len(result["blocked_scopes"]), 2)
+        build_client.assert_not_called()
+        start_worker.assert_not_called()
+        send_button.assert_not_called()
 
     def test_permission_change_button_is_distinct_from_first_connect(self) -> None:
         sends: list[dict[str, object]] = []
@@ -2075,11 +2491,7 @@ class GoogleWorkspaceTests(unittest.TestCase):
         self.assertEqual(len(sends), 1)
         self.assertEqual(
             sends[0]["reply_markup"],
-            {
-                "inline_keyboard": [
-                    [{"text": "Change Google access", "url": authorization_url}]
-                ]
-            },
+            {"inline_keyboard": [[{"text": "Change Google access", "url": authorization_url}]]},
         )
         self.assertIn("Change Google Workspace permissions", str(sends[0]["text"]))
         self.assertNotIn(authorization_url, str(sends[0]["text"]))
@@ -2121,7 +2533,7 @@ class GoogleWorkspaceTests(unittest.TestCase):
             direct_google_url,
         )
 
-    def test_backend_valid_maximum_custom_request_survives_prepare_url_round_trip(
+    def test_maximum_unknown_custom_request_is_bounded_and_stops_before_oauth(
         self,
     ) -> None:
         def scope_with_length(index: int, length: int) -> str:
@@ -2148,6 +2560,7 @@ class GoogleWorkspaceTests(unittest.TestCase):
             ),
             workspace.GOOGLE_SCOPE_TOTAL_MAX_LENGTH,
         )
+        self.assertEqual(len(profile.blocked_scopes), workspace.GOOGLE_SCOPE_MAX_COUNT)
 
         # A platform-sealed launch ticket for this maximum request is roughly
         # 23 KiB. This exceeds the old plugin caps while remaining below the
@@ -2162,50 +2575,17 @@ class GoogleWorkspaceTests(unittest.TestCase):
             workspace.AUTHORIZATION_URL_MAX_LENGTH,
         )
 
-        class Client:
-            base_url = PLATFORM_BASE_URL
-
-            def post_json(
-                self,
-                _path: str,
-                _payload: dict[str, object],
-            ) -> dict[str, object]:
-                return start_response(
-                    bundle=CUSTOM_BUNDLE,
-                    scopes=list(profile.scopes),
-                    services=list(profile.services),
-                    authorization_url=authorization_url,
-                )
-
         with (
-            tempfile.TemporaryDirectory() as tmp,
-            self._patched_state(Path(tmp)),
-            mock.patch.object(
-                workspace,
-                "build_platform_client",
-                return_value=(Client(), "local_dev"),
-            ),
-            mock.patch.object(
-                workspace,
-                "_generate_key_pair",
-                return_value=("one-time-private-key", "one-time-public-key"),
-            ),
-            mock.patch.object(workspace, "_start_worker_process"),
-            mock.patch.object(
-                workspace,
-                "_send_google_connect_button",
-                return_value={"sent": True, "ok": True},
-            ) as send_button,
+            mock.patch.object(workspace, "build_platform_client") as build_client,
+            mock.patch.object(workspace, "_start_worker_process") as start_worker,
+            mock.patch.object(workspace, "_send_google_connect_button") as send_button,
+            self.assertRaises(workspace.GoogleWorkspaceScopeReviewRequired),
         ):
-            result = workspace._start_connection(profile=profile)
+            workspace._start_connection(profile=profile)
 
-        self.assertEqual(result["status"], "waiting_for_user")
-        self.assertEqual(result["scopes"], list(profile.scopes))
-        send_button.assert_called_once_with(
-            authorization_url,
-            profile=profile,
-            permission_change=False,
-        )
+        build_client.assert_not_called()
+        start_worker.assert_not_called()
+        send_button.assert_not_called()
 
     def test_authorization_url_rejects_untrusted_prepare_shapes(self) -> None:
         ticket = f"gwol1.1.{'a' * 64}"
@@ -2368,9 +2748,7 @@ class GoogleWorkspaceTests(unittest.TestCase):
                 scopes=LEGACY_FEED_SCOPES,
             )
             envelope["services"] = LEGACY_FEED_SERVICES
-            normalized = workspace._normalize_credentials(
-                envelope
-            )
+            normalized = workspace._normalize_credentials(envelope)
             workspace._atomic_save_credentials(normalized)
             saved = workspace._read_credentials("gwo_connection123")
             with mock.patch.object(
@@ -2870,15 +3248,17 @@ class GoogleWorkspaceTests(unittest.TestCase):
                     "_resume_retained_install_receipts",
                     return_value=0,
                 ),
-                mock.patch.object(workspace, "build_platform_client") as build_client,
+                mock.patch.object(
+                    workspace,
+                    "build_platform_client",
+                    return_value=(mock.Mock(), "local_dev"),
+                ) as build_client,
             ):
-                result = json.loads(
-                    tools.google_workspace({"action": "connect"})
-                )
+                result = json.loads(tools.google_workspace({"action": "connect"}))
 
             self.assertEqual(result["error"], "platform_sync_pending")
             self.assertTrue(receipt_path.exists())
-            build_client.assert_not_called()
+            build_client.assert_called_once_with()
 
     def test_start_rechecks_install_receipt_under_lifecycle_lock(self) -> None:
         with (
@@ -2892,15 +3272,19 @@ class GoogleWorkspaceTests(unittest.TestCase):
             mock.patch.object(
                 workspace,
                 "_has_unresolved_install_receipts",
-                side_effect=[False, True],
+                return_value=True,
             ) as pending,
-            mock.patch.object(workspace, "build_platform_client") as build_client,
+            mock.patch.object(
+                workspace,
+                "build_platform_client",
+                return_value=(mock.Mock(), "local_dev"),
+            ) as build_client,
         ):
             result = json.loads(tools.google_workspace({"action": "connect"}))
 
-        self.assertEqual(result["status"], "failed")
-        self.assertEqual(pending.call_count, 2)
-        build_client.assert_not_called()
+        self.assertEqual(result["error"], "platform_sync_pending")
+        pending.assert_called_once_with()
+        build_client.assert_called_once_with()
 
     def test_stale_receipt_is_removed_even_when_negative_ack_is_rejected(self) -> None:
         class RejectingClient(PollingClient):
@@ -2994,9 +3378,7 @@ class GoogleWorkspaceTests(unittest.TestCase):
             self.assertEqual(result["status"], "waiting_for_user")
             self.assertFalse(workspace.CREDENTIALS_PATH.exists())
             self.assertFalse(workspace._has_unresolved_install_receipts())
-            negative_claims = [
-                payload for path, payload in client.posts if path.endswith("/claim")
-            ]
+            negative_claims = [payload for path, payload in client.posts if path.endswith("/claim")]
             self.assertEqual(negative_claims[-1]["installed"], False)
 
     def test_plain_add_cannot_preserve_accounts_from_an_old_assignment(self) -> None:
@@ -3511,7 +3893,8 @@ class GoogleWorkspaceTests(unittest.TestCase):
 
         cleanup.assert_called_once_with()
         self.assertIn("existing Google account", result["context"])
-        self.assertIn("Gmail reading, composing, sending", result["context"])
+        self.assertIn("Bare connect requests identity only", result["context"])
+        self.assertIn("workspace_reader", result["context"])
 
     def test_irrelevant_pre_llm_turn_skips_assignment_network_check(self) -> None:
         with mock.patch.object(
@@ -3560,9 +3943,7 @@ class GoogleWorkspaceTests(unittest.TestCase):
         self.assertEqual(
             build_client.call_args_list,
             [
-                mock.call(
-                    timeout_seconds=workspace.CONTEXT_ASSIGNMENT_CHECK_TIMEOUT_SECONDS
-                ),
+                mock.call(timeout_seconds=workspace.CONTEXT_ASSIGNMENT_CHECK_TIMEOUT_SECONDS),
                 mock.call(),
             ],
         )
@@ -3605,9 +3986,7 @@ class GoogleWorkspaceTests(unittest.TestCase):
         for call in build_client.call_args_list:
             self.assertEqual(
                 call,
-                mock.call(
-                    timeout_seconds=workspace.CONTEXT_ASSIGNMENT_CHECK_TIMEOUT_SECONDS
-                ),
+                mock.call(timeout_seconds=workspace.CONTEXT_ASSIGNMENT_CHECK_TIMEOUT_SECONDS),
             )
 
     def test_context_assignment_check_does_not_cache_replaced_binding(self) -> None:
@@ -3619,9 +3998,7 @@ class GoogleWorkspaceTests(unittest.TestCase):
             replacement["tinyhat_assignment_binding"] = "replacement-binding-456"
 
             def replace_during_check(**_kwargs):
-                workspace._atomic_save_credentials(
-                    workspace._normalize_credentials(replacement)
-                )
+                workspace._atomic_save_credentials(workspace._normalize_credentials(replacement))
                 return "match"
 
             with mock.patch.object(
@@ -5276,7 +5653,7 @@ class GoogleWorkspaceTests(unittest.TestCase):
             self.assertFalse(receipt_path.exists())
             self.assertTrue(workspace.CREDENTIALS_PATH.exists())
             self.assertEqual(resumed_client.posts[-1][1]["installed"], True)
-            self.assertEqual(resumed_notices, ["ready"])
+            self.assertEqual(resumed_notices, ["ready_workspace_readonly"])
 
     def test_worker_cleans_scratch_when_platform_client_setup_fails(self) -> None:
         generation = "generation-value-that-is-long-enough-123"

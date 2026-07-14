@@ -9,7 +9,7 @@ The current capability list is intentionally small.
 | `tinyhat_tell_joke` | Available now | Proves Hermes loaded the Tinyhat plugin and can call a plugin tool. |
 | `tinyhat_skill_catalog` | Available now | Lists Tinyhat plugin skills with `tinyhat:<skill>` qualified names and unqualified aliases. |
 | `tinyhat_private_secret_handoff` | Available now | Lets a user enter a secret in a Telegram Mini App while Tinyhat stores only short-lived ciphertext. |
-| `tinyhat_google_workspace` | Available now | Connects multiple Google accounts, supports recommended, legacy, or caller-selected canonical Google scope sets, and starts an account-targeted local disconnect ceremony. |
+| `tinyhat_google_workspace` | Available now | Connects Google identity, composes reviewed access presets and approved Custom scopes, blocks unreviewed requests before OAuth, and starts an account-targeted local disconnect ceremony. |
 | `tinyhat_google_workspace_app` | Available now | Lends one selected account's assignment-verified Google access to one bounded `gws` invocation. |
 | `tinyhat_google_workspace_app_manager` | Available now | After approval, installs or removes the pinned integrity-verified `gws` app; Hermes supplies the operation skill. |
 | `tinyhat-codex-auth` skill | Available now | Teaches the agent to start and inspect the Tinyhat-installed OpenAI Codex / ChatGPT subscription auth flow. |
@@ -40,9 +40,9 @@ The plugin injects a short context note when the user asks about secrets,
 credentials, Tinyhat, Codex auth, usage limits, plugin updates, skill
 lookup, QA reports, or on the first turn of a session. The context tells
 the agent to prefer Tinyhat private secret entry for credentials,
-Tinyhat's installed Codex commands for OpenAI Codex auth, the plugin
-catalog for missing skill lookup, and runtime channel commands for stale
-installed plugins. The longer playbook lives in
+Tinyhat's installed Codex commands for OpenAI Codex auth, identity-only bare
+Google connect, reviewed Google access presets, the plugin catalog for missing
+skill lookup, and runtime channel commands for stale installed plugins. The longer playbook lives in
 `skills/tinyhat-platform/SKILL.md`.
 
 ## Google Workspace
@@ -55,35 +55,44 @@ plain link. The detached worker starts before the button is sent, so a worker
 startup failure cannot leave a dead button. If Telegram delivery fails, the
 plugin claims the handoff as failed and the worker cleans its one-time state.
 The user signs into an existing Google account; they do not create or provide a
-Google Cloud project, OAuth client, secret, or server access. Every new account
-starts with recommended Gmail reading, composing, sending, and
-inbox/draft/label management while messages and threads cannot bypass Trash for
-immediate permanent deletion, Calendar
-event management, and read-only Drive access.
+Google Cloud project, OAuth client, secret, or server access. Bare connect asks
+for the identity baseline only: `openid`, `email`, and `profile`.
 
-The Computer creates a fresh RSA keypair for every attempt. Trusted plugin code
-defaults to `google_workspace_recommended_v1`. Its
-canonical services are `identity`, `gmail`, `calendar`, and `drive`; its scopes
-are exactly `openid`, `email`, `profile`,
-`https://www.googleapis.com/auth/gmail.modify`,
-`https://www.googleapis.com/auth/calendar.events`, and
-`https://www.googleapis.com/auth/drive.readonly`. `gmail.modify` covers reading,
-composing, sending, and inbox/draft/label management, but not immediate permanent
-deletion. The tool accepts no arbitrary
-service metadata. For another capability, the agent may request canonical
-Google-owned user-OAuth `scopes` with a short `reason`. The plugin adds basic
-identity, enforces bounded canonical syntax and order, derives service metadata,
-and the platform validates the complete request before returning the Google URL
-authored from its central Web OAuth client. Common families include Gmail,
-Calendar, Drive, Docs, Sheets, Slides, People/Contacts, Tasks, Chat, Forms,
-Meet, Classroom, Keep, Apps Script, Cloud Search, and Workspace Admin APIs.
-Google's official legacy `https://www.google.com/calendar/feeds` and
-`https://www.google.com/m8/feeds` scopes are exact exceptions. They grant full
-Calendar read/write access including sharing and permanent deletion, and full
-Contacts read/write access including permanent deletion, respectively. They map
-to `calendar` and `people`. The separate `https://mail.google.com/` scope grants
-full Gmail access including permanent deletion. The plugin does not accept any
-other `https://www.google.com/...` legacy scope URL.
+The Computer creates a fresh RSA keypair for every attempt. The packaged
+`google_workspace_scope_manifest.json` and its dependency-free loader are the
+public source of truth for scopes, presets, normalization, user copy, and the
+request state of each OAuth client. The contract uses schema
+`tinyhat_google_workspace_scope_manifest_v1` and manifest version `1.0.0`.
+Five composable presets cover common jobs:
+
+| Preset | Id | Exact scopes and capability |
+| --- | --- | --- |
+| Workspace Reader | `workspace_reader` | `https://www.googleapis.com/auth/gmail.readonly` for messages, threads, and Gmail settings; `https://www.googleapis.com/auth/calendar.events.readonly`; and `https://www.googleapis.com/auth/drive.readonly` |
+| Mail Writer | `mail_writer` | `https://www.googleapis.com/auth/gmail.compose` for creating and managing drafts and sending email |
+| Inbox Manager | `inbox_manager` | `https://www.googleapis.com/auth/gmail.modify` for reading, composing, sending, drafts, labels, archive, and read state; no immediate permanent deletion |
+| Calendar Coordinator | `calendar_coordinator` | `https://www.googleapis.com/auth/calendar.events` for reading, creating, updating, and deleting events |
+| File Collaborator | `file_collaborator` | `https://www.googleapis.com/auth/drive.file` for files Tinyhat creates; no unrelated existing Drive files |
+
+The `presets` input is an array and may be combined with exact
+manifest-listed Custom `scopes` plus a short `reason`. Custom access is an exact
+subset or union of the manifest, not an escape hatch for arbitrary Google
+scopes. The loader deterministically removes redundant narrower permissions:
+`gmail.modify` supersedes Gmail read, compose, send, and label-only scopes;
+`gmail.compose` supersedes `gmail.send`; and `calendar.events` supersedes
+`calendar.events.readonly`.
+
+An unknown scope, or a known scope not reviewed for the active OAuth client,
+returns structured `review_required` before the plugin creates OAuth state,
+starts a worker, or sends a Google button. The result identifies the blocked
+scope and safe next step without exposing private OAuth configuration.
+Historical `profile` values remain compatibility inputs so old callers and
+saved grants reconstruct safely; new requests use `presets` and `scopes`.
+
+Each scope entry records its stable id, canonical URL, Google classification,
+enabled API, implemented features and operations, data read or written,
+narrower alternatives, user copy, demo steps, and per-client request and
+verification states. Documentation and future verification evidence should be
+validated against that contract instead of treating prose as another authority.
 
 `{"action": "status"}` returns safe metadata for all connected accounts. Each
 entry includes the platform's stable opaque connection id as `account_id`; the
@@ -91,13 +100,13 @@ agent uses it to select an account without seeing credentials. When more than
 one account exists, operations and mutations require the intended `account_id`
 instead of silently choosing one.
 
-Permission changes accept either a named profile or custom `scopes` plus
-`reason`. `workspace_recommended`, `workspace_readonly`, `gmail_send`,
-`calendar_write`, and `gmail_send_calendar_write` preserve reviewed and legacy
-fixed bundles. `connect` with an explicit `account_id` unions that account's
-current and requested scopes; `action=set_permissions` replaces the selected
-credential with the exact profile or custom set. An exact narrower replacement
-makes this Computer stop using removed scopes without deleting the account.
+Permission changes accept a composable `presets` array and optional approved
+Custom `scopes` plus `reason`. The legacy `profile` field is accepted only for
+compatibility and cannot be combined with either new field. `connect` with an
+explicit `account_id` unions that account's current and requested scopes;
+`action=set_permissions` replaces the selected credential with the exact
+presets and Custom set, plus identity. An exact narrower replacement makes this
+Computer stop using removed scopes without deleting the account.
 This does not perform provider-side granular scope revocation or erase Google's
 consent history. Google's consent screen is the permission decision: the user
 can grant the exact scopes or return and ask the agent for narrower access.

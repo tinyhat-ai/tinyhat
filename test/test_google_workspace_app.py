@@ -48,7 +48,7 @@ def invoke_without_assignment_guard(**kwargs):
     return google_workspace_app._invoke_gws(**kwargs)
 
 
-def credentials(
+def credentials(  # noqa: PLR0913
     *,
     expires_at: str = "2030-01-01T00:00:00+00:00",
     bundle: str = google_workspace.GOOGLE_RECOMMENDED_CAPABILITY_BUNDLE,
@@ -288,9 +288,7 @@ print("Bearer " + os.environ["GOOGLE_WORKSPACE_CLI_TOKEN"], file=sys.stderr)
                     side_effect=invoke_without_assignment_guard,
                 ),
             ):
-                result = json.loads(
-                    tools.google_workspace_app({"argv": argv, "effect": "read"})
-                )
+                result = json.loads(tools.google_workspace_app({"argv": argv, "effect": "read"}))
                 self.assertEqual(os.environ["GOOGLE_WORKSPACE_CLI_TOKEN"], "parent-token")
 
         self.assertEqual(result["status"], "ok")
@@ -474,9 +472,7 @@ else:
             "load_verified_google_workspace_credentials",
             return_value=credentials(),
         ) as load:
-            first = json.loads(
-                tools.google_workspace_app({"argv": argv, "effect": "write"})
-            )
+            first = json.loads(tools.google_workspace_app({"argv": argv, "effect": "write"}))
             confirmation_id = first["expected"]["confirmation_id"]
             changed = json.loads(
                 tools.google_workspace_app(
@@ -506,6 +502,7 @@ else:
             "--body",
             "Body",
         ]
+
         def load(account_id: str | None = None):
             return credentials(connection_id=account_id or "gwo_connection123")
 
@@ -563,9 +560,7 @@ else:
                 ),
             ],
         ):
-            first = json.loads(
-                tools.google_workspace_app({"argv": argv, "effect": "write"})
-            )
+            first = json.loads(tools.google_workspace_app({"argv": argv, "effect": "write"}))
             replay = json.loads(
                 tools.google_workspace_app(
                     {
@@ -598,18 +593,14 @@ else:
         initial = credentials(connection_id="gwo_connection123")
         replacement = dict(initial)
         replacement["connected_at"] = "2026-07-11T21:00:00+00:00"
-        replacement["capability_bundle"] = (
-            google_workspace.GOOGLE_GMAIL_SEND_CAPABILITY_BUNDLE
-        )
+        replacement["capability_bundle"] = google_workspace.GOOGLE_GMAIL_SEND_CAPABILITY_BUNDLE
         replacement["scopes"] = list(google_workspace.GOOGLE_GMAIL_SEND_SCOPES)
         with mock.patch.object(
             google_workspace_app,
             "load_verified_google_workspace_credentials",
             side_effect=[initial, replacement],
         ):
-            first = json.loads(
-                tools.google_workspace_app({"argv": argv, "effect": "write"})
-            )
+            first = json.loads(tools.google_workspace_app({"argv": argv, "effect": "write"}))
             replay = json.loads(
                 tools.google_workspace_app(
                     {
@@ -680,9 +671,7 @@ else:
             ),
         ):
             result = json.loads(
-                tools.google_workspace_app(
-                    {"argv": ["schema", "future"], "effect": "read"}
-                )
+                tools.google_workspace_app({"argv": ["schema", "future"], "effect": "read"})
             )
 
         self.assertEqual(result["error"], "account_selection_required")
@@ -920,9 +909,7 @@ class GoogleRefreshTransportTests(unittest.TestCase):
                     return_value=json.dumps(refresh_document),
                 ),
             ):
-                google_workspace.refresh_verified_google_workspace_credentials(
-                    "gwo_connection123"
-                )
+                google_workspace.refresh_verified_google_workspace_credentials("gwo_connection123")
             accounts = {
                 item["tinyhat_connection_id"]: item
                 for item in google_workspace._read_account_store()
@@ -1012,10 +999,7 @@ class GoogleRefreshTransportTests(unittest.TestCase):
             "email",
             "profile",
             "https://www.googleapis.com/auth/admin.directory.user.readonly",
-            *[
-                f"https://www.googleapis.com/auth/tasks.scope{index:02d}"
-                for index in range(31)
-            ],
+            *[f"https://www.googleapis.com/auth/tasks.scope{index:02d}" for index in range(31)],
         ]
         self.assertEqual(len(custom_scopes), google_workspace.GOOGLE_GRANT_SCOPE_MAX_COUNT)
         custom_services = ["identity", "tasks", "admin"]
@@ -1071,6 +1055,88 @@ class GoogleRefreshTransportTests(unittest.TestCase):
         self.assertEqual(updated["services"], custom_services)
         self.assertEqual(updated["scopes"], custom_scopes)
 
+    def test_historical_custom_grant_keeps_redundant_gmail_scopes_in_status_and_refresh(
+        self,
+    ) -> None:
+        class Client:
+            def __init__(self) -> None:
+                self.posts: list[tuple[str, dict[str, object]]] = []
+
+            def post_json(self, path: str, payload: dict[str, object]) -> dict[str, object]:
+                self.posts.append((path, payload))
+                return {"ciphertext_payload": {"algorithm": "RSA-OAEP-256"}}
+
+            def get_json(self, _path: str) -> dict[str, object]:
+                return {"tinyhat_assignment_binding": "assignment-binding-123"}
+
+        historical_scopes = [
+            "openid",
+            "email",
+            "profile",
+            "https://www.googleapis.com/auth/gmail.send",
+            "https://www.googleapis.com/auth/gmail.compose",
+        ]
+        refresh_document = {
+            "schema": "tinyhat_google_workspace_refresh_v1",
+            "tinyhat_connection_id": "gwo_connection123",
+            "access_token": "new-historical-custom-access-value",
+            "token_type": "Bearer",
+            "expires_at": "2030-01-01T01:00:00+00:00",
+            "scopes": historical_scopes,
+            "tinyhat_assignment_binding": "assignment-binding-123",
+        }
+        client = Client()
+        with tempfile.TemporaryDirectory() as tmp, self._patched_state(Path(tmp)):
+            initial = google_workspace._normalize_saved_credentials(
+                credentials(
+                    bundle=google_workspace.GOOGLE_CUSTOM_CAPABILITY_BUNDLE,
+                    scopes=historical_scopes,
+                )
+            )
+            google_workspace._atomic_save_credentials(initial)
+            saved = google_workspace._read_credentials("gwo_connection123")
+            with mock.patch.object(
+                google_workspace,
+                "_verified_accounts",
+                return_value=([saved], "match"),
+            ):
+                status = google_workspace._status_payload(account_id="gwo_connection123")
+            with (
+                mock.patch.object(
+                    google_workspace,
+                    "load_verified_google_workspace_credentials",
+                    return_value=dict(initial),
+                ),
+                mock.patch.object(
+                    google_workspace,
+                    "build_platform_client",
+                    return_value=(client, "local_dev"),
+                ),
+                mock.patch.object(
+                    google_workspace,
+                    "_generate_key_pair",
+                    return_value=("private", "public"),
+                ),
+                mock.patch.object(
+                    google_workspace,
+                    "_decrypt_ciphertext",
+                    return_value=json.dumps(refresh_document),
+                ),
+            ):
+                updated = google_workspace.refresh_verified_google_workspace_credentials()
+
+        payload = client.posts[0][1]
+        self.assertEqual(status["profile"], "workspace_custom")
+        self.assertEqual(status["services"], ["identity", "gmail"])
+        self.assertEqual(status["scopes"], historical_scopes)
+        self.assertEqual(
+            payload["capability_bundle"],
+            google_workspace.GOOGLE_CUSTOM_CAPABILITY_BUNDLE,
+        )
+        self.assertEqual(payload["requested_services"], ["identity", "gmail"])
+        self.assertEqual(payload["requested_scopes"], historical_scopes)
+        self.assertEqual(updated["scopes"], historical_scopes)
+
     def test_refresh_preserves_exact_legacy_feed_scopes(self) -> None:
         class Client:
             def __init__(self) -> None:
@@ -1107,9 +1173,7 @@ class GoogleRefreshTransportTests(unittest.TestCase):
                 scopes=legacy_scopes,
             )
             saved_credentials["services"] = legacy_services
-            initial = google_workspace._normalize_saved_credentials(
-                saved_credentials
-            )
+            initial = google_workspace._normalize_saved_credentials(saved_credentials)
             google_workspace._atomic_save_credentials(initial)
             with (
                 mock.patch.object(

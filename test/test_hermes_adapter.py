@@ -3,16 +3,17 @@
 from __future__ import annotations
 
 import contextlib
+import importlib.util
 import io
 import json
-import importlib.util
 import os
 import subprocess
 import sys
 import tempfile
 import unittest
 from pathlib import Path
-
+from unittest import mock
+from urllib import error
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 PARENT = REPO_ROOT.parent
@@ -30,11 +31,16 @@ if REPO_ROOT.name != "tinyhat":
     sys.modules["tinyhat"] = tinyhat
     spec.loader.exec_module(tinyhat)
 else:
-    import tinyhat  # noqa: E402
+    import tinyhat
 
-from tinyhat import schemas, secret_handoff, tools  # noqa: E402
 from tinyhat import context as tinyhat_context  # noqa: E402
-from tinyhat import secret_handoff_worker  # noqa: E402
+from tinyhat import (  # noqa: E402
+    platform,
+    schemas,
+    secret_handoff,
+    secret_handoff_worker,
+    tools,
+)
 
 
 class FakeHermesContext:
@@ -146,7 +152,7 @@ class HermesAdapterTests(unittest.TestCase):
 
         self.assertEqual(payload["schema"], "tinyhat_plugin_version_v1")
         self.assertEqual(payload["name"], "tinyhat")
-        self.assertEqual(payload["version"], "0.21.5")
+        self.assertEqual(payload["version"], "0.21.6")
 
     def test_platform_status_uses_attested_computer_endpoint(self) -> None:
         original_build = tools.build_platform_client
@@ -159,7 +165,7 @@ class HermesAdapterTests(unittest.TestCase):
                     "computer_id": 5359,
                     "state": "active",
                     "assigned": True,
-                    "package_inventory": {"plugin": {"version": "0.21.5"}},
+                    "package_inventory": {"plugin": {"version": "0.21.6"}},
                 }
 
         try:
@@ -172,7 +178,7 @@ class HermesAdapterTests(unittest.TestCase):
         self.assertEqual(payload["computer_id"], 5359)
         self.assertEqual(payload["state"], "active")
         self.assertTrue(payload["assigned"])
-        self.assertEqual(payload["package_inventory"]["plugin"]["version"], "0.21.5")
+        self.assertEqual(payload["package_inventory"]["plugin"]["version"], "0.21.6")
 
     def test_platform_status_returns_structured_platform_error(self) -> None:
         original_build = tools.build_platform_client
@@ -195,7 +201,7 @@ class HermesAdapterTests(unittest.TestCase):
 
         self.assertEqual(payload["schema"], "tinyhat_skill_catalog_v1")
         self.assertEqual(payload["plugin"]["name"], "tinyhat")
-        self.assertEqual(payload["plugin"]["version"], "0.21.5")
+        self.assertEqual(payload["plugin"]["version"], "0.21.6")
         by_name = {skill["name"]: skill for skill in payload["skills"]}
         self.assertEqual(
             by_name["tinyhat-codex-auth"]["qualified_name"],
@@ -245,7 +251,9 @@ class HermesAdapterTests(unittest.TestCase):
                 assert injected is not None
                 self.assertIn("tinyhat:tinyhat-codex-auth", injected["context"])
                 self.assertIn("Do not ask a multiple-choice clarification", injected["context"])
-                self.assertIn("call tinyhat_codex_auth once with action=prerequisite", injected["context"])
+                self.assertIn(
+                    "call tinyhat_codex_auth once with action=prerequisite", injected["context"]
+                )
                 self.assertIn("Do not send an extra text reply", injected["context"])
                 self.assertIn("/codex_auth", injected["context"])
                 self.assertIn("on its own line", injected["context"])
@@ -331,9 +339,12 @@ class HermesAdapterTests(unittest.TestCase):
                 "ok": True,
                 "mode": "photo",
             }
-            tools._start_runtime_codex_auth = lambda: start_calls.append(True) or {
-                "ok": True,
-            }
+            tools._start_runtime_codex_auth = lambda: (
+                start_calls.append(True)
+                or {
+                    "ok": True,
+                }
+            )
 
             payload = json.loads(tools.codex_auth({"action": "prerequisite"}))
         finally:
@@ -397,9 +408,12 @@ class HermesAdapterTests(unittest.TestCase):
         original_start = tools._start_runtime_codex_auth
         start_calls = []
         try:
-            tools._start_runtime_codex_auth = lambda: start_calls.append(True) or {
-                "ok": True,
-            }
+            tools._start_runtime_codex_auth = lambda: (
+                start_calls.append(True)
+                or {
+                    "ok": True,
+                }
+            )
 
             payload = json.loads(tools.codex_auth({"action": "start"}))
         finally:
@@ -421,10 +435,13 @@ class HermesAdapterTests(unittest.TestCase):
         original_start = tools._start_runtime_codex_auth
         prerequisite_calls = []
         try:
-            tools._send_codex_prerequisite = lambda: prerequisite_calls.append(True) or {
-                "ok": True,
-                "mode": "photo",
-            }
+            tools._send_codex_prerequisite = lambda: (
+                prerequisite_calls.append(True)
+                or {
+                    "ok": True,
+                    "mode": "photo",
+                }
+            )
             tools._start_runtime_codex_auth = lambda: {
                 "ok": True,
                 "returncode": 0,
@@ -446,12 +463,15 @@ class HermesAdapterTests(unittest.TestCase):
         original_run = tools._run_runtime_command
         calls: list[str] = []
         try:
-            tools._run_runtime_command = lambda script, **_: calls.append(script) or {
-                "ok": True,
-                "returncode": 0,
-                "stdout": "runtime output",
-                "stderr": "",
-            }
+            tools._run_runtime_command = lambda script, **_: (
+                calls.append(script)
+                or {
+                    "ok": True,
+                    "returncode": 0,
+                    "stdout": "runtime output",
+                    "stderr": "",
+                }
+            )
 
             status_payload = json.loads(tools.codex_auth({"action": "status"}))
             log_payload = json.loads(tools.codex_auth({"action": "log"}))
@@ -482,13 +502,16 @@ class HermesAdapterTests(unittest.TestCase):
         original_run = tools._run_runtime_json_command
         calls: list[str] = []
         try:
-            tools._run_runtime_json_command = lambda kind, **_: calls.append(kind) or {
-                "ok": True,
-                "command": kind,
-                "result": {"update_available": True, "decision": "target_ref_changed"},
-                "process": {"ok": True},
-                "parse_error": None,
-            }
+            tools._run_runtime_json_command = lambda kind, **_: (
+                calls.append(kind)
+                or {
+                    "ok": True,
+                    "command": kind,
+                    "result": {"update_available": True, "decision": "target_ref_changed"},
+                    "process": {"ok": True},
+                    "parse_error": None,
+                }
+            )
 
             payload = json.loads(tools.plugin_update({"action": "status"}))
         finally:
@@ -505,13 +528,16 @@ class HermesAdapterTests(unittest.TestCase):
         original_run = tools._run_runtime_json_command
         calls: list[str] = []
         try:
-            tools._run_runtime_json_command = lambda kind, **_: calls.append(kind) or {
-                "ok": True,
-                "command": kind,
-                "result": {},
-                "process": {"ok": True},
-                "parse_error": None,
-            }
+            tools._run_runtime_json_command = lambda kind, **_: (
+                calls.append(kind)
+                or {
+                    "ok": True,
+                    "command": kind,
+                    "result": {},
+                    "process": {"ok": True},
+                    "parse_error": None,
+                }
+            )
 
             payload = json.loads(tools.plugin_update({"action": "update"}))
         finally:
@@ -525,13 +551,16 @@ class HermesAdapterTests(unittest.TestCase):
         original_run = tools._run_runtime_json_command
         calls: list[str] = []
         try:
-            tools._run_runtime_json_command = lambda kind, **_: calls.append(kind) or {
-                "ok": True,
-                "command": kind,
-                "result": {"kind": kind, "healthy": True},
-                "process": {"ok": True},
-                "parse_error": None,
-            }
+            tools._run_runtime_json_command = lambda kind, **_: (
+                calls.append(kind)
+                or {
+                    "ok": True,
+                    "command": kind,
+                    "result": {"kind": kind, "healthy": True},
+                    "process": {"ok": True},
+                    "parse_error": None,
+                }
+            )
 
             payload = json.loads(
                 tools.plugin_update(
@@ -681,8 +710,8 @@ class HermesAdapterTests(unittest.TestCase):
         try:
             secret_handoff.build_platform_client = lambda: (fake_client, "local_dev")
             secret_handoff._generate_key_pair = lambda: ("PRIVATE", "PUBLIC")
-            secret_handoff._start_worker_process = lambda handoff, private_key_pem: worker_calls.append(
-                {"handoff": handoff, "private_key_pem": private_key_pem}
+            secret_handoff._start_worker_process = lambda handoff, private_key_pem: (
+                worker_calls.append({"handoff": handoff, "private_key_pem": private_key_pem})
             )
 
             reply = tools.private_secret_handoff(
@@ -806,8 +835,8 @@ class HermesAdapterTests(unittest.TestCase):
         try:
             secret_handoff.build_platform_client = lambda: (fake_client, "local_dev")
             secret_handoff._generate_key_pair = lambda: ("PRIVATE", "PUBLIC")
-            secret_handoff._start_worker_process = lambda handoff, private_key_pem: worker_calls.append(
-                {"handoff": handoff, "private_key_pem": private_key_pem}
+            secret_handoff._start_worker_process = lambda handoff, private_key_pem: (
+                worker_calls.append({"handoff": handoff, "private_key_pem": private_key_pem})
             )
 
             reply = tools.private_secret_handoff(
@@ -902,15 +931,13 @@ class HermesAdapterTests(unittest.TestCase):
         original_notice = secret_handoff._send_secret_available_notice
         try:
             secret_handoff._decrypt_ciphertext = lambda *_: "super-secret-value"
-            secret_handoff._set_hermes_secret = lambda name, value: events.append(
-                ("set", name)
+            secret_handoff._set_hermes_secret = lambda name, value: events.append(("set", name))
+            secret_handoff._register_terminal_env_secret = lambda name: (
+                events.append(("register", name)) or {"ok": True}
             )
-            secret_handoff._register_terminal_env_secret = lambda name: events.append(
-                ("register", name)
-            ) or {"ok": True}
-            secret_handoff._send_secret_available_notice = lambda name: events.append(
-                ("notice", name)
-            ) or {"sent": True, "ok": True}
+            secret_handoff._send_secret_available_notice = lambda name: (
+                events.append(("notice", name)) or {"sent": True, "ok": True}
+            )
 
             secret_handoff._install_submitted_secret(
                 client=fake_client,
@@ -999,9 +1026,7 @@ class HermesAdapterTests(unittest.TestCase):
 
         def fake_run(args, **kwargs):
             subprocess_calls.append([str(part) for part in args])
-            return subprocess.CompletedProcess(
-                args=args, returncode=0, stdout="{}", stderr=""
-            )
+            return subprocess.CompletedProcess(args=args, returncode=0, stdout="{}", stderr="")
 
         original_decrypt = secret_handoff._decrypt_ciphertext
         original_set = secret_handoff._set_hermes_secret
@@ -1013,9 +1038,7 @@ class HermesAdapterTests(unittest.TestCase):
             secret_handoff._set_hermes_secret = lambda name, value: None
             secret_handoff._send_secret_notice = lambda text: {"sent": True, "ok": True}
             secret_handoff.subprocess.run = fake_run
-            secret_handoff.subprocess.Popen = (
-                lambda *args, **kwargs: popen_calls.append(args)
-            )
+            secret_handoff.subprocess.Popen = lambda *args, **kwargs: popen_calls.append(args)
 
             secret_handoff._install_submitted_secret(
                 client=fake_client,
@@ -1158,11 +1181,9 @@ class HermesAdapterTests(unittest.TestCase):
             secret_handoff.shutil.which = lambda name: (
                 "/usr/bin/hermes" if name == "hermes" else None
             )
-            secret_handoff._run = lambda args, **kwargs: calls.append(
-                {"args": args, **kwargs}
-            )
-            secret_handoff._reload_hermes_env_current_process = (
-                lambda *_: (_ for _ in ()).throw(RuntimeError("reload failed"))
+            secret_handoff._run = lambda args, **kwargs: calls.append({"args": args, **kwargs})
+            secret_handoff._reload_hermes_env_current_process = lambda *_: (_ for _ in ()).throw(
+                RuntimeError("reload failed")
             )
 
             secret_handoff._set_hermes_secret("EXA_API_KEY", "super-secret-value")
@@ -1226,9 +1247,9 @@ class HermesAdapterTests(unittest.TestCase):
 
         try:
             tools._telegram_credentials = lambda: ("token", "chat")
-            tools._telegram_send_message = lambda **kwargs: sent_messages.append(
-                kwargs["text"]
-            ) or {"ok": True}
+            tools._telegram_send_message = lambda **kwargs: (
+                sent_messages.append(kwargs["text"]) or {"ok": True}
+            )
 
             result = secret_handoff._send_secret_available_notice("EXA_API_KEY")
         finally:
@@ -1299,9 +1320,7 @@ class HermesAdapterTests(unittest.TestCase):
                 fake_client,
                 "local_dev",
             )
-            secret_handoff_worker._install_submitted_secret = lambda **_: (
-                _ for _ in ()
-            ).throw(
+            secret_handoff_worker._install_submitted_secret = lambda **_: (_ for _ in ()).throw(
                 secret_handoff.SecretHandoffError(
                     "worker echoed super-secret-value",
                     public_message="Hermes could not save this secret.",
@@ -1503,12 +1522,41 @@ path.chmod(0o600)
                 os.environ["STRIPE_SECRET_KEY"] = original_secret
 
     def test_tell_joke_ignores_hermes_runtime_metadata(self) -> None:
-        payload = json.loads(
-            tools.tell_joke({"topic": "Hermes"}, task_id="task_123")
-        )
+        payload = json.loads(tools.tell_joke({"topic": "Hermes"}, task_id="task_123"))
 
         self.assertEqual(payload["schema"], "tinyhat_tell_joke_v1")
         self.assertIn("Hermes", payload["joke"])
+
+
+class PlatformClientTests(unittest.TestCase):
+    def test_http_error_preserves_structured_policy_details(self) -> None:
+        response = {
+            "detail": {
+                "error": "google_workspace_scope_review_required",
+                "manifest_version": "1.0.0",
+                "blocked_scopes": ["https://www.googleapis.com/auth/tasks"],
+            }
+        }
+        http_error = error.HTTPError(
+            url="https://api.example.test/path",
+            code=403,
+            msg="Forbidden",
+            hdrs=None,
+            fp=io.BytesIO(json.dumps(response).encode("utf-8")),
+        )
+        client = platform.PlatformClient(
+            base_url="https://api.example.test",
+            token="local-token",
+        )
+
+        with (
+            mock.patch.object(platform.request, "urlopen", side_effect=http_error),
+            self.assertRaises(platform.PlatformError) as raised,
+        ):
+            client.post_json("/path", {"value": 1})
+
+        self.assertEqual(raised.exception.status_code, 403)
+        self.assertEqual(raised.exception.response, response)
 
 
 if __name__ == "__main__":
