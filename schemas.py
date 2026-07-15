@@ -195,7 +195,13 @@ TINYHAT_GOOGLE_WORKSPACE_APP_SCHEMA = {
             "items": {"type": "string", "minLength": 1, "maxLength": 4096},
             "description": (
                 "Opaque gws arguments supplied by Hermes's native Google Workspace "
-                "skill. Do not include the gws executable, auth/setup/login/export/mcp "
+                "skill. Use a dotted method only after schema, for example "
+                "['schema', 'gmail.users.messages.list']; for an API call split the "
+                "method into argv items, for example ['gmail', 'users', 'messages', "
+                "'list', '--params', '{...}']. Put path/query JSON in --params and "
+                "request-body JSON in --json. Never put a dotted method in argv[0] or "
+                "use wrapper shorthand such as 'gmail search'. Do not include the gws "
+                "executable, auth/setup/login/export/mcp "
                 "commands, unaudited/local/synthetic API roots, unsafe file-I/O flags, "
                 "or unbounded pagination such as --page-all."
             ),

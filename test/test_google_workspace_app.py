@@ -125,6 +125,11 @@ class GoogleWorkspaceAppTests(unittest.TestCase):
             {"argv", "effect", "confirmed", "confirmation_id", "account_id"},
         )
         self.assertEqual(schema["properties"]["argv"]["maxItems"], 64)
+        argv_description = schema["properties"]["argv"]["description"]
+        self.assertIn("dotted method only after schema", argv_description)
+        self.assertIn("split the method into argv items", argv_description)
+        self.assertIn("path/query JSON in --params", argv_description)
+        self.assertIn("request-body JSON in --json", argv_description)
 
     def test_rejects_malformed_or_unbounded_argv_before_credentials(self) -> None:
         invalid_values = (
@@ -166,6 +171,9 @@ class GoogleWorkspaceAppTests(unittest.TestCase):
             ["version"],
             ["workflow", "daily-brief"],
             ["wf", "daily-brief"],
+            ["gmail.users.messages.list", "--params", '{"userId":"me"}'],
+            ["calendar.events.list", "--params", '{"calendarId":"primary"}'],
+            ["drive.files.list", "--params", '{"pageSize":1}'],
             ["future-service", "resource", "list", "--params", "{}"],
             ["drive", "files", "list", "--page-all"],
             ["drive", "files", "list", "--page-all=true"],
@@ -199,6 +207,44 @@ class GoogleWorkspaceAppTests(unittest.TestCase):
             google_workspace_app._normalize_argv(["gmail", "+send", "--draft"]),
             ["gmail", "+send", "--draft"],
         )
+        gmail_list_argv = [
+            "gmail",
+            "users",
+            "messages",
+            "list",
+            "--params",
+            '{"userId":"me","maxResults":1}',
+        ]
+        self.assertEqual(
+            google_workspace_app._normalize_argv(gmail_list_argv),
+            gmail_list_argv,
+        )
+        self.assertFalse(google_workspace_app._argv_requires_write_effect(gmail_list_argv))
+
+        label_create_argv = [
+            "gmail",
+            "users",
+            "labels",
+            "create",
+            "--params",
+            '{"userId":"me"}',
+            "--json",
+            '{"name":"Example"}',
+        ]
+        self.assertEqual(
+            google_workspace_app._normalize_argv(label_create_argv),
+            label_create_argv,
+        )
+        self.assertTrue(google_workspace_app._argv_requires_write_effect(label_create_argv))
+
+        skill_text = (REPO_ROOT / "skills" / "tinyhat-google-workspace" / "SKILL.md").read_text(
+            encoding="utf-8"
+        )
+        self.assertIn("Never put a dotted method identifier in `argv[0]`", skill_text)
+        self.assertIn("path and query fields in the JSON", skill_text)
+        self.assertIn("API request body in the JSON", skill_text)
+        self.assertIn('["calendar", "events", "list", "--params", ...]', skill_text)
+        self.assertIn('["drive", "files", "create", "--json", ...]', skill_text)
 
     def test_pinned_gws_root_command_audit_fails_closed_on_version_drift(
         self,

@@ -384,7 +384,10 @@ def _normalize_argv(value: Any) -> list[str]:  # noqa: PLR0912
         raise GoogleWorkspaceAppError(
             "blocked_command",
             "Only pin-audited gws schema and Google API namespaces are allowed. "
-            "Use Tinyhat Google connection instead of local auth or setup commands.",
+            "For an API operation, split the Discovery method into argv items such "
+            "as ['gmail', 'users', 'messages', 'list']; a dotted method identifier "
+            "is valid only after the schema command. Use Tinyhat Google connection "
+            "instead of local auth or setup commands.",
         )
     if len(normalized) > 1 and normalized[1].startswith("+"):
         helper = (root_command, normalized[1].lower())

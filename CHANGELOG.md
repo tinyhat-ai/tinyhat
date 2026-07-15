@@ -13,7 +13,10 @@ All notable changes to the Tinyhat plugin are documented here.
   unimplemented, and legacy-only scopes still return `review_required` before
   OAuth, and operation-level write confirmation remains unchanged. Merge this
   plugin without moving channels, deploy the matching platform pin first, then
-  promote `channels/lts` and `channels/latest`.
+  promote `channels/lts` and `channels/latest`. Teach agents the pinned raw
+  `gws` command shape explicitly: dotted method identifiers are for schema
+  lookup only, API execution uses split service/resource/method argv, and
+  request bodies use `--json` rather than `--params`.
 - Bump the Hermes plugin package to `0.21.6`; make a bare Google connection
   identity-only; define five reviewed, composable Workspace access presets in a
   packaged public scope manifest; limit Custom access to manifest-listed
