@@ -19,9 +19,10 @@ user for a Google Cloud project, OAuth client, secret, or SSH access. A bare
 connection requests identity only. Five composable presets cover common
 read-only Workspace access, mail writing, inbox management, Calendar event
 management, and limited file collaboration. Custom requests can select only
-scopes listed in the packaged public manifest and reviewed for the active OAuth
-client. Google shows the exact request and the user decides whether to grant it
-or ask for narrower access. It
+implemented scopes that the packaged public manifest marks requestable for the
+active OAuth client. A separate manifest state records whether Google
+verification is pending or complete. Google shows the exact request and the
+user decides whether to grant it or ask for narrower access. It
 teaches the agent the Tinyhat-managed OpenAI Codex / ChatGPT subscription
 auth flow that is installed on each Hermes Computer.
 
@@ -62,7 +63,7 @@ attested Computer identity. That identity lets the platform know which
 Computer, agent, user, and account are involved.
 
 This plugin does not mint identity. The Tinyhat platform owns one central Google
-Web OAuth client and callback, validates the exact manifest-approved capability
+Web OAuth client and callback, validates the exact manifest-requestable capability
 request, exchanges the one-time code, and encrypts
 the resulting credential envelope to the
 Computer's one-time RSA public key. The plugin stores credentials only after the
@@ -132,7 +133,7 @@ The Computer creates a fresh RSA keypair and asks the
 platform for identity only: `openid`, `email`, and `profile`. Workspace data
 access is explicit and comes from the versioned
 `google_workspace_scope_manifest.json` contract (schema
-`tinyhat_google_workspace_scope_manifest_v1`, manifest version `1.0.0`). It
+`tinyhat_google_workspace_scope_manifest_v1`, manifest version `1.0.1`). It
 defines these composable presets:
 
 | Preset | Id | Exact data scope |
@@ -152,11 +153,14 @@ inputs for older callers and saved grants, not the path for new requests.
 
 Every manifest scope records a stable id, canonical URL, Google classification,
 enabled API, implemented features and operations, data read or written,
-narrower alternatives, user copy, demo steps, and per-client request and
-verification states. Unknown scopes, or known scopes not reviewed for the
-active OAuth client, return a structured `review_required` result before OAuth
-state is created, a worker starts, or a Google button is sent. This lets Tinyhat
-document a future capability without making it requestable in production.
+narrower alternatives, user copy, demo steps, and separate per-client request
+and verification states. The nine implemented Gmail, Calendar, and Drive
+scopes remain requestable while Google verification is
+`preparing_submission`; Google may show its own unverified-app warning before
+the user decides. Unknown, unimplemented, or legacy-only scopes return a
+structured `review_required` result before OAuth state is created, a worker
+starts, or a Google button is sent. This lets Tinyhat document a future
+capability without making it requestable in production.
 Historical saved grants and blocked requests can also use the manifest's
 separate `compatibility_scope_disclosures` risk labels. These disclosure-only
 records define no capability or operation and can never make a scope
@@ -333,7 +337,7 @@ For development or manual testing, use `channels/latest` or an exact tag:
 
 ```bash
 TINYHAT_PLUGIN_REF=channels/latest
-TINYHAT_PLUGIN_REF=v0.21.6
+TINYHAT_PLUGIN_REF=v0.21.7
 ```
 
 ## Channels
@@ -342,12 +346,12 @@ TINYHAT_PLUGIN_REF=v0.21.6
 | --- | --- |
 | `channels/lts` | Conservative default for managed Computers. |
 | `channels/latest` | Newest promoted final version, used when we want faster adoption. |
-| exact tag, for example `v0.21.6` | Immutable version for tests, rollbacks, and audits. |
+| exact tag, for example `v0.21.7` | Immutable version for tests, rollbacks, and audits. |
 
-For v0.21.6, merge and tag the public plugin without advancing either channel.
-Deploy the platform enforcement that validates the same manifest contract,
-then promote `channels/latest` and `channels/lts`. This order prevents an older
-platform from accepting a request the plugin now describes as reviewed.
+For v0.21.7, merge and tag the public plugin without advancing either channel.
+Deploy the platform that validates the same manifest contract, then promote
+`channels/latest` and `channels/lts`. This order prevents old Computers or an
+older platform from applying the superseded pending-review denial.
 
 ## Local Checks
 

@@ -41,8 +41,9 @@ description: Tell a short Tinyhat wiring-test joke when the user asks for proof 
   specific skill loads, use a short `pre_llm_call` context hook and keep
   the longer playbook in a skill.
 - For Google access, add or revise the public scope manifest first. Skill copy
-  may explain manifest presets and scopes, but it must not make an unknown or
-  unreviewed scope sound immediately requestable.
+  may explain manifest presets and scopes, but it must not make an unknown,
+  unimplemented, or legacy-only scope sound requestable. Keep requestability
+  separate from pending or completed Google verification.
 - For capability-discovery skills, include concrete trigger examples in
   the frontmatter description. Example: `tinyhat-codex-auth` names
   "connect you to my ChatGPT account", "use my Codex subscription", and
@@ -126,9 +127,12 @@ and read state, but not immediate permanent deletion. Workspace Reader's
 shares with the app, not other Drive files.
 
 Custom `scopes` must be exact manifest-listed canonical values with a short
-precise `reason`; they may compose with presets. Unknown or unreviewed scopes
-return `review_required` before Google, so a skill must explain the result and
-must not retry with broader access. Historical `profile` values are
+precise `reason`; they may compose with presets. Unknown, unimplemented, or
+legacy-only scopes return `review_required` before Google, so a skill must
+explain the result and must not retry with broader access. Pending Google
+verification remains truthful manifest metadata but does not block an
+implemented request; Google may show its own warning. Historical `profile`
+values are
 compatibility inputs only and cannot be combined with `presets` or `scopes`.
 Do not duplicate scope membership in a new skill: read it from the packaged
 manifest and loader. Preserve its normalization rules, including

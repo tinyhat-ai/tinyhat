@@ -1,6 +1,6 @@
 {
   "schema": "tinyhat.framework-adapter.v1",
-  "version": "0.21.6",
+  "version": "0.21.7",
   "framework": {
     "name": "hermes",
     "minimum": "0.0.0"
@@ -44,7 +44,7 @@
       "qualified_name": "tinyhat:tinyhat-google-workspace",
       "aliases": ["tinyhat-google-workspace"],
       "path": "skills/tinyhat-google-workspace/SKILL.md",
-      "purpose": "Connects Google identity, composes reviewed access presets, or starts an account-targeted local disconnect ceremony."
+      "purpose": "Connects Google identity, composes implemented access presets, or starts an account-targeted local disconnect ceremony."
     },
     {
       "name": "tinyhat-google-workspace-app-manager",

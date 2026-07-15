@@ -770,7 +770,7 @@ def blocked_scope_details(
                     display_name=scope_url,
                     request_state=unknown_request_state,
                     verification_state=unknown_verification_state,
-                    reason="This canonical Google scope is not listed in the reviewed manifest.",
+                    reason="This canonical Google scope is not listed in the public manifest.",
                 )
             )
             continue
@@ -869,7 +869,7 @@ def resolve_scope_request(  # noqa: PLR0912
 def approved_scope_urls(
     client_policy_id: str = DEFAULT_CLIENT_POLICY_ID,
 ) -> tuple[str, ...]:
-    """Return every manifest-listed scope approved for the selected client."""
+    """Return every manifest-listed scope requestable for the selected client."""
 
     if client_policy_id not in CLIENT_POLICIES_BY_ID:
         raise ValueError(f"Unknown Google OAuth client policy: {client_policy_id}")

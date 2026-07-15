@@ -9,7 +9,7 @@ The current capability list is intentionally small.
 | `tinyhat_tell_joke` | Available now | Proves Hermes loaded the Tinyhat plugin and can call a plugin tool. |
 | `tinyhat_skill_catalog` | Available now | Lists Tinyhat plugin skills with `tinyhat:<skill>` qualified names and unqualified aliases. |
 | `tinyhat_private_secret_handoff` | Available now | Lets a user enter a secret in a Telegram Mini App while Tinyhat stores only short-lived ciphertext. |
-| `tinyhat_google_workspace` | Available now | Connects Google identity, composes reviewed access presets and approved Custom scopes, blocks unreviewed requests before OAuth, and starts an account-targeted local disconnect ceremony. |
+| `tinyhat_google_workspace` | Available now | Connects Google identity, composes implemented access presets and requestable Custom scopes, lets Google handle its pending-verification warning, blocks unimplemented requests before OAuth, and starts an account-targeted local disconnect ceremony. |
 | `tinyhat_google_workspace_app` | Available now | Lends one selected account's assignment-verified Google access to one bounded `gws` invocation. |
 | `tinyhat_google_workspace_app_manager` | Available now | After approval, installs or removes the pinned integrity-verified `gws` app; Hermes supplies the operation skill. |
 | `tinyhat-codex-auth` skill | Available now | Teaches the agent to start and inspect the Tinyhat-installed OpenAI Codex / ChatGPT subscription auth flow. |
@@ -41,7 +41,7 @@ credentials, Tinyhat, Codex auth, usage limits, plugin updates, skill
 lookup, QA reports, or on the first turn of a session. The context tells
 the agent to prefer Tinyhat private secret entry for credentials,
 Tinyhat's installed Codex commands for OpenAI Codex auth, identity-only bare
-Google connect, reviewed Google access presets, the plugin catalog for missing
+Google connect, implemented Google access presets, the plugin catalog for missing
 skill lookup, and runtime channel commands for stale installed plugins. The longer playbook lives in
 `skills/tinyhat-platform/SKILL.md`.
 
@@ -62,7 +62,7 @@ The Computer creates a fresh RSA keypair for every attempt. The packaged
 `google_workspace_scope_manifest.json` and its dependency-free loader are the
 public source of truth for scopes, presets, normalization, user copy, and the
 request state of each OAuth client. The contract uses schema
-`tinyhat_google_workspace_scope_manifest_v1` and manifest version `1.0.0`.
+`tinyhat_google_workspace_scope_manifest_v1` and manifest version `1.0.1`.
 Five composable presets cover common jobs:
 
 | Preset | Id | Exact scopes and capability |
@@ -81,9 +81,11 @@ scopes. The loader deterministically removes redundant narrower permissions:
 `gmail.compose` supersedes `gmail.send`; and `calendar.events` supersedes
 `calendar.events.readonly`.
 
-An unknown scope, or a known scope not reviewed for the active OAuth client,
-returns structured `review_required` before the plugin creates OAuth state,
-starts a worker, or sends a Google button. The result identifies the blocked
+An unknown, unimplemented, or legacy-only scope returns structured
+`review_required` before the plugin creates OAuth state, starts a worker, or
+sends a Google button. Implemented scopes remain requestable while their
+separate Google verification state is `preparing_submission`; Google can show
+the provider warning before the user decides. The result identifies a blocked
 scope and safe next step without exposing private OAuth configuration.
 Historical `profile` values remain compatibility inputs so old callers and
 saved grants reconstruct safely; new requests use `presets` and `scopes`.
@@ -97,7 +99,7 @@ validated against that contract instead of treating prose as another authority.
 The manifest's separate `compatibility_scope_disclosures` collection contains
 only risk labels for scopes that can appear in historical saved grants or
 blocked requests. Those records have no capabilities or operations and cannot
-be selected by a preset or approved as Custom access. Package validation scans
+be selected by a preset or made requestable as Custom access. Package validation scans
 literal and statically constructed scope URLs in production Python and requires
 each one to be either an implemented manifest scope or one of these explicit
 disclosure-only records. Natural-language prose is not treated as mechanically
@@ -127,7 +129,7 @@ agent uses it to select an account without seeing credentials. When more than
 one account exists, operations and mutations require the intended `account_id`
 instead of silently choosing one.
 
-Permission changes accept a composable `presets` array and optional approved
+Permission changes accept a composable `presets` array and optional requestable
 Custom `scopes` plus `reason`. The legacy `profile` field is accepted only for
 compatibility and cannot be combined with either new field. `connect` with an
 explicit `account_id` unions that account's current and requested scopes;

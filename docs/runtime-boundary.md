@@ -26,8 +26,8 @@ belongs in this repo. If it is "keep the Computer alive and trusted", it
 belongs in the runtime.
 
 Google identity connection is a concrete example: the plugin supplies the
-agent tool, one-time Computer key, a packaged public scope manifest, reviewed
-presets, approved Custom-scope handling, detached poll/decrypt worker, owner-only
+agent tool, one-time Computer key, a packaged public scope manifest, implemented
+presets, requestable Custom-scope handling, detached poll/decrypt worker, owner-only
 multi-account credential registry, account selection, and user-facing skill.
 The platform owns stable connection ids, the central Web OAuth client, callback,
 code exchange, identity and exact-grant validation, and short-lived encrypted
@@ -48,20 +48,22 @@ The plugin normalizes redundant scopes and sends exact manifest metadata for
 platform validation. The plugin's preliminary client-policy selection defaults
 to `tinyhat-development` intentionally: the Computer cannot know which central
 OAuth client the attested platform will select, and a production default would
-reject reviewed development requests before the platform could decide. This
+reject valid development requests before the platform could decide. This
 fallback does not authorize OAuth. The platform preflight is authoritative for
 the exact final scopes and stamps the actual manifest and client policy before
 the plugin may create local state, a worker, an authorization URL, or a Google
 button. A missing preflight endpoint or malformed review rejection therefore
 stops with a non-transient platform-not-ready result instead of inviting a retry.
-Unknown scopes, or scopes not reviewed for the active OAuth client, produce
-`review_required` before OAuth state, a detached worker, or a Google button
-exists. Historical profiles remain readable compatibility inputs. Separate
+Unknown, unimplemented, or legacy-only scopes produce `review_required` before
+OAuth state, a detached worker, or a Google button exists. Implemented scopes
+remain requestable while Google verification is pending; that verification
+state stays visible in the manifest and Google may show its provider warning.
+Historical profiles remain readable compatibility inputs. Separate
 compatibility scope disclosures only label risks in historical grants or blocked
-requests; they cannot become presets, approved Custom scopes, or implemented
+requests; they cannot become presets, requestable Custom scopes, or implemented
 capabilities. `connect` with one account id unions current and requested access;
 `set_permissions` replaces one selected account's local credential with the
-exact presets and approved Custom set, plus identity. A narrower replacement
+exact presets and requestable Custom set, plus identity. A narrower replacement
 stops the Computer from using removed scopes, but is not Google provider-side
 granular revocation and does not erase consent history. Google consent is the
 permission decision, so there is no separate plugin elevation ceremony.

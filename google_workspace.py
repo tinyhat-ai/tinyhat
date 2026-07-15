@@ -124,7 +124,7 @@ GOOGLE_GMAIL_SEND_CALENDAR_WRITE_CAPABILITY_BUNDLE = "google_workspace_gmail_sen
 GOOGLE_IDENTITY_SCOPES = tuple(IDENTITY_SCOPE_URLS)
 GOOGLE_REQUESTED_SERVICES = ("identity", "gmail", "calendar", "drive")
 # The plugin cannot know which central OAuth client the attested platform will
-# select, so this local fallback intentionally permits manifest-reviewed
+# select, so this local fallback intentionally permits manifest-requestable
 # development requests to reach preflight. It never authorizes OAuth: platform
 # preflight is authoritative and stamps the actual client policy before any
 # local state, worker, authorization URL, or Google button can be created.
@@ -307,7 +307,7 @@ class GoogleWorkspacePlatformNotReady(GoogleWorkspaceError):
 
 @dataclass(frozen=True)
 class GoogleWorkspaceProfile:
-    """One normalized reviewed or caller-selected OAuth capability request."""
+    """One normalized requestable or caller-selected OAuth capability request."""
 
     name: str
     capability_bundle: str
@@ -543,7 +543,7 @@ def google_workspace(  # noqa: PLR0911, PLR0912
         )
 
     # Connect and permission changes perform this recovery only after the
-    # platform has approved their exact final scope set. That ordering keeps a
+    # platform has accepted their exact final scope set. That ordering keeps a
     # review-required response completely side-effect free. Other actions keep
     # the normal opportunistic recovery behavior.
     if action not in {"connect", "set_permissions"}:
@@ -1083,9 +1083,9 @@ def _scope_review_required_payload(
         "blocked_scopes": blocked,
         "message": (
             "Tinyhat did not start Google authorization because this exact access "
-            "is not approved for the selected OAuth client. Choose a narrower "
-            "reviewed preset or manifest-listed scope, or complete the product and "
-            "Google review before trying again."
+            "is not available for a new connection. Choose an implemented preset "
+            "or manifest-listed scope that Tinyhat currently supports. Pending "
+            "Google verification alone does not block implemented access."
         ),
     }
 
@@ -1186,7 +1186,7 @@ def _profile_with_authoritative_policy(
     manifest_version: str,
     client_policy_id: str,
 ) -> GoogleWorkspaceProfile:
-    """Attach the platform's reviewed policy stamp without changing access."""
+    """Attach the platform's authoritative policy stamp without changing access."""
     return GoogleWorkspaceProfile(
         name=profile.name,
         capability_bundle=profile.capability_bundle,
