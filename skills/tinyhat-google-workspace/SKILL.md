@@ -57,13 +57,14 @@ before it prepares consent:
 - `gmail.compose` supersedes `gmail.send`.
 - `calendar.events` supersedes `calendar.events.readonly`.
 
-The public manifest is the source of truth for which scopes are known and which
-OAuth clients may request them. If a scope is unknown or is not reviewed for
-the current client, the tool returns a structured `review_required` result
-before creating OAuth state, starting a worker, or sending a Google button.
-Explain that result and do not retry with a broader permission. A
-manifest-listed scope can therefore be
-documented before it is available for a production connection.
+The public manifest is the source of truth for which scopes are implemented and
+which OAuth clients may request them. Its request state is separate from its
+Google verification state. An implemented scope may start authorization while
+verification is `preparing_submission`; Google may show an unverified-app
+warning and the user decides whether to continue. Unknown, unimplemented, or
+legacy-only scopes return a structured `review_required` result before creating
+OAuth state, starting a worker, or sending a Google button. Explain that result
+and do not retry with a broader permission.
 
 The historical `profile` field and its values remain compatibility inputs for
 older callers and saved grants. Do not choose a legacy profile for a new

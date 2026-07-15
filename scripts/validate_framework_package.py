@@ -346,8 +346,9 @@ def validate_google_scope_manifest(root: Path) -> None:  # noqa: PLR0912, PLR091
     )
     production_allowed_verification_states = production_client.get("allowed_verification_states")
     require(
-        production_allowed_verification_states == ["not_required", "verified"],
-        "production Google requests must require a completed verification state",
+        production_allowed_verification_states
+        == ["not_required", "preparing_submission", "verified"],
+        "production Google requests must distinguish pending from completed verification",
     )
 
     scopes = index_objects_by_id(manifest.get("scopes"), label="scopes")
@@ -504,6 +505,27 @@ def validate_google_scope_manifest(root: Path) -> None:  # noqa: PLR0912, PLR091
         tasks["client_states"]["tinyhat-production"]["request_state"] == "review_required",
         "Google Tasks must remain blocked before production OAuth",
     )
+    phase_one_scope_ids = {
+        "gmail.readonly",
+        "gmail.send",
+        "gmail.compose",
+        "gmail.labels",
+        "gmail.modify",
+        "calendar.events.readonly",
+        "calendar.events",
+        "drive.file",
+        "drive.readonly",
+    }
+    for scope_id in phase_one_scope_ids:
+        state = scopes[scope_id]["client_states"]["tinyhat-production"]
+        require(
+            state
+            == {
+                "request_state": "approved",
+                "verification_state": "preparing_submission",
+            },
+            f"implemented production scope {scope_id} must remain requestable while review is pending",
+        )
 
     legacy_bundles = index_objects_by_id(manifest.get("legacy_bundles"), label="legacy_bundles")
     require(

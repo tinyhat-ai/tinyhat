@@ -16,7 +16,7 @@ Use this as the default routing map:
 | Add or save an API key, token, password, webhook secret, or credential | Call `tinyhat_private_secret_handoff` once. |
 | Say "Connect Google", add a personal/work Google account, or sign in with Google | Load `tinyhat:tinyhat-google-workspace` and call `tinyhat_google_workspace` with `{"action": "connect"}`. This adds an account; it does not replace another account. The tool sends the native Telegram button itself. |
 | Use Gmail, Calendar, Drive, or another granted Google Workspace service | Load `tinyhat:tinyhat-google-workspace`, get safe status, and select the intended `account_id`. Use Hermes's built-in `google-workspace` skill for operation guidance and run the operation through `tinyhat_google_workspace_app`. |
-| Change a Google account's permissions, including making it read-only or adding another Workspace service | Select its `account_id`, then call `tinyhat_google_workspace` with `action=set_permissions` and the smallest reviewed `presets` combination, optionally extended by exact manifest-listed `scopes` plus a short `reason`. Google consent is the permission decision. |
+| Change a Google account's permissions, including making it read-only or adding another Workspace service | Select its `account_id`, then call `tinyhat_google_workspace` with `action=set_permissions` and the smallest implemented `presets` combination, optionally extended by exact manifest-listed `scopes` plus a short `reason`. Google consent is the permission decision. |
 | Revoke or disconnect one Google account from this Computer | Select its `account_id`, then call `tinyhat_google_workspace` with `action=disconnect`. The tool sends the native Telegram button and owns final confirmation; do not pass `confirmed`, expose a URL, or send a duplicate reply. |
 | Ask which Tinyhat plugin is running | Call `tinyhat_plugin_version`. |
 | Check this Computer's Tinyhat platform state, assignment, or installed packages | Call `tinyhat_get_platform_status`. |
@@ -65,7 +65,7 @@ Do not print, paste, repeat, or ask for a plain authorization link. If button
 delivery fails, report the safe failure and let the user retry.
 
 Bare connect requests identity only: `openid`, `email`, and `profile`. Add
-Workspace access only when the user's task needs it. Use the five reviewed
+Workspace access only when the user's task needs it. Use the five implemented
 presets through the composable `presets` array:
 
 - Workspace Reader (`workspace_reader`): read Gmail messages, threads, and settings,
@@ -85,10 +85,11 @@ Tinyhat normalizes redundant supersets: `gmail.modify` replaces Gmail read, comp
 label-only scopes; `gmail.compose` replaces `gmail.send`; and `calendar.events`
 replaces `calendar.events.readonly`.
 
-Unknown scopes, or scopes not reviewed for the active OAuth client, return a
-structured `review_required` result before Tinyhat creates OAuth state, starts
-a worker, or sends a Google button. Explain the result and do not retry with
-broader access.
+Unknown, unimplemented, or legacy-only scopes return a structured
+`review_required` result before Tinyhat creates OAuth state, starts a worker,
+or sends a Google button. Implemented scopes can proceed while Google
+verification is pending; Google may show its own warning and the user decides.
+Explain a blocked result and do not retry with broader access.
 Historical `profile` values remain compatibility inputs only. `profile` is
 mutually exclusive with `presets` and `scopes`.
 

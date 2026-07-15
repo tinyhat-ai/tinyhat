@@ -1,6 +1,6 @@
 {
   "schema": "tinyhat_google_workspace_scope_manifest_v1",
-  "manifest_version": "1.0.0",
+  "manifest_version": "1.0.1",
   "identity_capability_bundle": "google_workspace_identity_v1",
   "identity_scope_ids": [
     "openid",
@@ -11,7 +11,7 @@
     "canonical_url_prefix": "https://www.googleapis.com/auth/",
     "unknown_scope_request_state": "review_required",
     "unknown_scope_verification_state": "not_listed",
-    "user_copy": "Tinyhat can describe any canonical Google OAuth scope, but only manifest-listed scopes approved for the selected OAuth client can start authorization."
+    "user_copy": "Tinyhat can describe any canonical Google OAuth scope, but only manifest-listed scopes marked requestable for the selected OAuth client can start authorization."
   },
   "compatibility_scope_disclosures": [
     {
@@ -92,15 +92,15 @@
       "environment": "development",
       "allowed_request_states": ["approved"],
       "allowed_verification_states": ["not_required", "test_users_only"],
-      "user_copy": "Development requests are limited to reviewed scopes and configured test users."
+      "user_copy": "Development requests are limited to implemented scopes and configured test users."
     },
     {
       "id": "tinyhat-production",
       "display_name": "Tinyhat production OAuth client",
       "environment": "production",
       "allowed_request_states": ["approved"],
-      "allowed_verification_states": ["not_required", "verified"],
-      "user_copy": "Production requests are limited to scopes reviewed for this OAuth client."
+      "allowed_verification_states": ["not_required", "preparing_submission", "verified"],
+      "user_copy": "Production may request implemented scopes while Google verification is pending; Google can show an unverified-app warning before the user decides."
     }
   ],
   "scopes": [
@@ -205,7 +205,7 @@
       "supersedes": [],
       "client_states": {
         "tinyhat-development": {"request_state": "approved", "verification_state": "test_users_only"},
-        "tinyhat-production": {"request_state": "review_required", "verification_state": "preparing_submission"}
+        "tinyhat-production": {"request_state": "approved", "verification_state": "preparing_submission"}
       }
     },
     {
@@ -231,7 +231,7 @@
       "supersedes": [],
       "client_states": {
         "tinyhat-development": {"request_state": "approved", "verification_state": "test_users_only"},
-        "tinyhat-production": {"request_state": "review_required", "verification_state": "preparing_submission"}
+        "tinyhat-production": {"request_state": "approved", "verification_state": "preparing_submission"}
       }
     },
     {
@@ -257,7 +257,7 @@
       "supersedes": ["gmail.send"],
       "client_states": {
         "tinyhat-development": {"request_state": "approved", "verification_state": "test_users_only"},
-        "tinyhat-production": {"request_state": "review_required", "verification_state": "preparing_submission"}
+        "tinyhat-production": {"request_state": "approved", "verification_state": "preparing_submission"}
       }
     },
     {
@@ -283,7 +283,7 @@
       "supersedes": [],
       "client_states": {
         "tinyhat-development": {"request_state": "approved", "verification_state": "test_users_only"},
-        "tinyhat-production": {"request_state": "review_required", "verification_state": "preparing_submission"}
+        "tinyhat-production": {"request_state": "approved", "verification_state": "preparing_submission"}
       }
     },
     {
@@ -309,7 +309,7 @@
       "supersedes": ["gmail.readonly", "gmail.compose", "gmail.send", "gmail.labels"],
       "client_states": {
         "tinyhat-development": {"request_state": "approved", "verification_state": "test_users_only"},
-        "tinyhat-production": {"request_state": "review_required", "verification_state": "preparing_submission"}
+        "tinyhat-production": {"request_state": "approved", "verification_state": "preparing_submission"}
       }
     },
     {
@@ -335,7 +335,7 @@
       "supersedes": [],
       "client_states": {
         "tinyhat-development": {"request_state": "approved", "verification_state": "test_users_only"},
-        "tinyhat-production": {"request_state": "review_required", "verification_state": "preparing_submission"}
+        "tinyhat-production": {"request_state": "approved", "verification_state": "preparing_submission"}
       }
     },
     {
@@ -361,7 +361,7 @@
       "supersedes": ["calendar.events.readonly"],
       "client_states": {
         "tinyhat-development": {"request_state": "approved", "verification_state": "test_users_only"},
-        "tinyhat-production": {"request_state": "review_required", "verification_state": "preparing_submission"}
+        "tinyhat-production": {"request_state": "approved", "verification_state": "preparing_submission"}
       }
     },
     {
@@ -387,7 +387,7 @@
       "supersedes": [],
       "client_states": {
         "tinyhat-development": {"request_state": "approved", "verification_state": "test_users_only"},
-        "tinyhat-production": {"request_state": "review_required", "verification_state": "preparing_submission"}
+        "tinyhat-production": {"request_state": "approved", "verification_state": "preparing_submission"}
       }
     },
     {
@@ -413,7 +413,7 @@
       "supersedes": [],
       "client_states": {
         "tinyhat-development": {"request_state": "approved", "verification_state": "test_users_only"},
-        "tinyhat-production": {"request_state": "review_required", "verification_state": "preparing_submission"}
+        "tinyhat-production": {"request_state": "approved", "verification_state": "preparing_submission"}
       }
     },
     {
@@ -432,8 +432,8 @@
       "data_read": ["Task lists and tasks"],
       "data_written": ["Task lists and tasks"],
       "narrower_alternatives": [],
-      "why_narrower_insufficient": "No narrower reviewed Tasks scope implements task-list management, and the feature itself is not yet implemented.",
-      "user_copy": "Google Tasks access is known but is not yet approved for Tinyhat connections.",
+      "why_narrower_insufficient": "No narrower Tasks scope implements task-list management, and the feature itself is not yet implemented.",
+      "user_copy": "Google Tasks access is known but is not yet implemented or requestable through Tinyhat.",
       "demo_steps": ["Request this scope and confirm Tinyhat returns review_required before creating OAuth state or an authorization button."],
       "verification_status": "review_required",
       "supersedes": [],

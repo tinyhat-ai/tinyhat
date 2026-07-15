@@ -71,9 +71,10 @@ TINYHAT_GOOGLE_WORKSPACE_SCHEMA = {
     "description": (
         "Connect, inspect, change permissions for, or disconnect Google Workspace "
         "accounts on this Tinyhat Computer. A bare connect requests identity only. "
-        "Workspace data access must be selected explicitly with one or more reviewed "
-        "presets or an exact custom subset of the public scope manifest. Requests that "
-        "are valid but not approved for the production OAuth client stop before an "
+        "Workspace data access must be selected explicitly with one or more implemented "
+        "presets or an exact custom subset of the public scope manifest. Pending Google "
+        "verification may produce a provider warning but does not block an implemented "
+        "scope. Unknown, unimplemented, and legacy-only requests stop before an "
         "authorization URL or worker is created and return review_required. Legacy "
         "named profiles remain available for compatibility. The user provides no "
         "Google Cloud project or OAuth secret."
@@ -127,7 +128,7 @@ TINYHAT_GOOGLE_WORKSPACE_SCHEMA = {
                 ],
             },
             "description": (
-                "One or more composable reviewed presets: Workspace Reader reads "
+                "One or more composable implemented presets: Workspace Reader reads "
                 "Gmail messages, threads, and settings, Calendar events, and Drive; "
                 "Mail Writer prepares and sends "
                 "mail; Inbox Manager reads and manages Gmail messages, drafts, and "
@@ -146,8 +147,9 @@ TINYHAT_GOOGLE_WORKSPACE_SCHEMA = {
                 "Exact custom Google OAuth scopes requested with action=connect or "
                 "action=set_permissions. Tinyhat adds openid, email, and profile, "
                 "normalizes superseded scopes, and allows only scopes declared in the "
-                "versioned public manifest. Approved subsets and unions may launch; a "
-                "declared but unreviewed scope returns review_required before OAuth. "
+                "versioned public manifest. Requestable subsets and unions may launch "
+                "even while Google verification is pending; an unimplemented scope "
+                "returns review_required before OAuth. "
                 "Requires reason; it may extend presets but cannot be combined with "
                 "the deprecated profile input."
             ),

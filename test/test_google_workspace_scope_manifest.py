@@ -54,7 +54,7 @@ class GoogleWorkspaceScopeManifestTests(unittest.TestCase):
 
     def test_manifest_is_strictly_loaded_and_recursively_immutable(self) -> None:
         self.assertEqual(manifest.MANIFEST["schema"], manifest.MANIFEST_SCHEMA)
-        self.assertEqual(manifest.MANIFEST["manifest_version"], "1.0.0")
+        self.assertEqual(manifest.MANIFEST["manifest_version"], "1.0.1")
         self.assertEqual(manifest.IDENTITY_BUNDLE_ID, "google_workspace_identity_v1")
         self.assertIsInstance(manifest.MANIFEST, MappingProxyType)
         self.assertIsInstance(manifest.MANIFEST["scopes"], tuple)
@@ -248,7 +248,7 @@ class GoogleWorkspaceScopeManifestTests(unittest.TestCase):
             )
             self.assertEqual(
                 scope["client_states"]["tinyhat-production"]["request_state"],
-                "review_required",
+                "approved",
             )
         self.assertEqual(
             manifest.SCOPES_BY_ID["tasks"]["client_states"]["tinyhat-production"]["request_state"],
@@ -404,15 +404,17 @@ class GoogleWorkspaceScopeManifestTests(unittest.TestCase):
         self.assertFalse(resolved.read_only)
         self.assertTrue(resolved.approved)
 
-    def test_production_blocks_workspace_scopes_until_client_verification(self) -> None:
+    def test_production_allows_implemented_scopes_while_verification_is_pending(
+        self,
+    ) -> None:
         resolved = manifest.resolve_scope_request(preset_ids=("workspace_reader",))
-        self.assertFalse(resolved.approved)
+        self.assertTrue(resolved.approved)
         self.assertTrue(resolved.read_only)
-        self.assertEqual(len(resolved.blocked), 3)
-        self.assertTrue(all(item.request_state == "review_required" for item in resolved.blocked))
-        self.assertTrue(
-            all(item.verification_state == "preparing_submission" for item in resolved.blocked)
-        )
+        self.assertEqual(resolved.blocked, ())
+        for scope_id in ("gmail.readonly", "calendar.events.readonly", "drive.readonly"):
+            state = manifest.SCOPES_BY_ID[scope_id]["client_states"]["tinyhat-production"]
+            self.assertEqual(state["request_state"], "approved")
+            self.assertEqual(state["verification_state"], "preparing_submission")
 
     def test_manifest_listed_tasks_is_explainable_but_blocked(self) -> None:
         scope_url = "https://www.googleapis.com/auth/tasks"
@@ -480,14 +482,18 @@ class GoogleWorkspaceScopeManifestTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "why_narrower_insufficient"):
             self.load_changed(raw)
 
-    def test_strict_loader_rejects_contradictory_production_approval(self) -> None:
+    def test_strict_loader_rejects_approval_with_disallowed_verification_state(
+        self,
+    ) -> None:
         raw = self.raw_manifest()
         gmail_readonly = next(
             scope
             for scope in raw["scopes"]  # type: ignore[union-attr]
             if scope["id"] == "gmail.readonly"
         )
-        gmail_readonly["client_states"]["tinyhat-production"]["request_state"] = "approved"
+        gmail_readonly["client_states"]["tinyhat-production"]["verification_state"] = (
+            "not_submitted"
+        )
         with self.assertRaisesRegex(ValueError, "approved request"):
             self.load_changed(raw)
 

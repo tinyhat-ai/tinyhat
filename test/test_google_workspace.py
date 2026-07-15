@@ -598,32 +598,101 @@ class GoogleWorkspaceTests(unittest.TestCase):
         self.assertNotIn("https://www.googleapis.com/auth/gmail.modify", labels_only.scopes)
         self.assertEqual(labels_only.blocked_scopes, ())
 
-    def test_production_workspace_request_stops_before_lifecycle_side_effects(self) -> None:
+    def test_production_workspace_write_request_reaches_google_while_review_pending(
+        self,
+    ) -> None:
+        requested_scopes = [
+            *IDENTITY_SCOPES,
+            "https://www.googleapis.com/auth/gmail.modify",
+            "https://www.googleapis.com/auth/calendar.events",
+            "https://www.googleapis.com/auth/drive.file",
+        ]
+        requested_services = ["identity", "gmail", "calendar", "drive"]
+
+        class Client:
+            def __init__(self) -> None:
+                self.base_url = PLATFORM_BASE_URL
+                self.posts: list[tuple[str, dict[str, object]]] = []
+
+            def post_json(
+                self,
+                path: str,
+                payload: dict[str, object],
+            ) -> dict[str, object]:
+                self.posts.append((path, payload))
+                if path.endswith("/preflight"):
+                    return {
+                        "capability_bundle": CUSTOM_BUNDLE,
+                        "services": requested_services,
+                        "scopes": requested_scopes,
+                        "scope_manifest_version": "1.0.1",
+                        "client_policy_id": "tinyhat-production",
+                    }
+                return start_response(
+                    bundle=CUSTOM_BUNDLE,
+                    scopes=requested_scopes,
+                    services=requested_services,
+                    authorization_url=prepare_authorization_url(),
+                )
+
+        client = Client()
         with (
+            tempfile.TemporaryDirectory() as tmp,
+            self._patched_state(Path(tmp)),
             mock.patch.dict(
                 os.environ,
                 {"TINYHAT_GOOGLE_WORKSPACE_CLIENT_POLICY_ID": "tinyhat-production"},
             ),
-            mock.patch.object(workspace, "build_platform_client") as build_client,
+            mock.patch.object(
+                workspace,
+                "_preflight_connection_request",
+                REAL_PREFLIGHT_CONNECTION_REQUEST,
+            ),
+            mock.patch.object(
+                workspace,
+                "build_platform_client",
+                return_value=(client, "local_dev"),
+            ),
+            mock.patch.object(
+                workspace,
+                "_generate_key_pair",
+                return_value=("one-time-private-key", "one-time-public-key"),
+            ),
             mock.patch.object(workspace, "_start_worker_process") as start_worker,
-            mock.patch.object(workspace, "_send_google_connect_button") as send_button,
+            mock.patch.object(
+                workspace,
+                "_send_google_connect_button",
+                return_value={"sent": True, "ok": True},
+            ) as send_button,
         ):
             result = json.loads(
-                tools.google_workspace({"action": "connect", "presets": ["workspace_reader"]})
+                tools.google_workspace(
+                    {
+                        "action": "connect",
+                        "presets": [
+                            "inbox_manager",
+                            "calendar_coordinator",
+                            "file_collaborator",
+                        ],
+                    }
+                )
             )
 
-        self.assertEqual(result["status"], "review_required")
-        self.assertFalse(result["button_sent"])
-        self.assertEqual(len(result["blocked_scopes"]), 3)
-        self.assertTrue(
-            all(
-                item["verification_state"] == "preparing_submission"
-                for item in result["blocked_scopes"]
-            )
+        self.assertEqual(result["status"], "waiting_for_user")
+        self.assertTrue(result["button_sent"])
+        self.assertEqual(result["manifest_version"], "1.0.1")
+        self.assertEqual(result["client_policy_id"], "tinyhat-production")
+        self.assertEqual(
+            [path for path, _payload in client.posts],
+            [
+                "/hapi/v1/computers/local-dev/google-workspace-oauth/v1/preflight",
+                "/hapi/v1/computers/local-dev/google-workspace-oauth/v1",
+            ],
         )
-        build_client.assert_not_called()
-        start_worker.assert_not_called()
-        send_button.assert_not_called()
+        self.assertEqual(client.posts[0][1]["requested_scopes"], requested_scopes)
+        self.assertEqual(client.posts[1][1]["requested_scopes"], requested_scopes)
+        start_worker.assert_called_once()
+        send_button.assert_called_once()
 
     def test_tasks_and_unknown_scopes_stop_before_lifecycle_side_effects(self) -> None:
         cases = (
@@ -1280,7 +1349,7 @@ class GoogleWorkspaceTests(unittest.TestCase):
                     reason="Request an unrecognized Google scope",
                 )
 
-    def test_unreviewed_high_risk_scopes_return_truthful_blocked_details(self) -> None:
+    def test_disclosure_only_high_risk_scopes_return_truthful_blocked_details(self) -> None:
         scopes = (
             "https://www.googleapis.com/auth/drive",
             "https://www.googleapis.com/auth/admin.directory.user",
