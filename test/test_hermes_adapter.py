@@ -35,6 +35,7 @@ else:
 
 from tinyhat import context as tinyhat_context  # noqa: E402
 from tinyhat import (  # noqa: E402
+    credentials,
     platform,
     schemas,
     secret_handoff,
@@ -74,6 +75,7 @@ class HermesAdapterTests(unittest.TestCase):
         self.assertIn("tinyhat_tell_joke", ctx.tools)
         self.assertIn("tinyhat_skill_catalog", ctx.tools)
         self.assertIn("tinyhat_private_secret_handoff", ctx.tools)
+        self.assertIn("tinyhat_credentials", ctx.tools)
         self.assertIn("tinyhat_codex_auth", ctx.tools)
         self.assertIn("tinyhat_plugin_update", ctx.tools)
         self.assertIn("tinyhat-plugin-version", ctx.commands)
@@ -84,6 +86,7 @@ class HermesAdapterTests(unittest.TestCase):
         self.assertIn("tinyhat-tell-joke", ctx.skills)
         self.assertIn("tinyhat-skill-catalog", ctx.skills)
         self.assertIn("tinyhat-private-secret", ctx.skills)
+        self.assertIn("tinyhat-credentials", ctx.skills)
         self.assertIn("tinyhat-codex-auth", ctx.skills)
         self.assertIn("tinyhat-plugin-update", ctx.skills)
         self.assertIn("tinyhat-platform", ctx.skills)
@@ -91,6 +94,7 @@ class HermesAdapterTests(unittest.TestCase):
         self.assertTrue(ctx.skills["tinyhat-tell-joke"].is_file())
         self.assertTrue(ctx.skills["tinyhat-skill-catalog"].is_file())
         self.assertTrue(ctx.skills["tinyhat-private-secret"].is_file())
+        self.assertTrue(ctx.skills["tinyhat-credentials"].is_file())
         self.assertTrue(ctx.skills["tinyhat-codex-auth"].is_file())
         self.assertTrue(ctx.skills["tinyhat-plugin-update"].is_file())
         self.assertTrue(ctx.skills["tinyhat-platform"].is_file())
@@ -140,6 +144,14 @@ class HermesAdapterTests(unittest.TestCase):
         self.assertNotIn("env_var", secret_schema["properties"])
         self.assertNotIn("key_name", secret_schema["properties"])
 
+        credentials_schema = schemas.TINYHAT_CREDENTIALS_SCHEMA
+        self.assertEqual(credentials_schema["required"], ["action"])
+        self.assertFalse(credentials_schema["additionalProperties"])
+        self.assertEqual(
+            credentials_schema["properties"]["action"]["enum"],
+            ["list", "remove"],
+        )
+
         update_schema = schemas.TINYHAT_PLUGIN_UPDATE_SCHEMA
         self.assertEqual(update_schema["required"], ["action"])
         self.assertFalse(update_schema["additionalProperties"])
@@ -152,7 +164,7 @@ class HermesAdapterTests(unittest.TestCase):
 
         self.assertEqual(payload["schema"], "tinyhat_plugin_version_v1")
         self.assertEqual(payload["name"], "tinyhat")
-        self.assertEqual(payload["version"], "0.21.7")
+        self.assertEqual(payload["version"], "0.21.8")
 
     def test_platform_status_uses_attested_computer_endpoint(self) -> None:
         original_build = tools.build_platform_client
@@ -201,7 +213,7 @@ class HermesAdapterTests(unittest.TestCase):
 
         self.assertEqual(payload["schema"], "tinyhat_skill_catalog_v1")
         self.assertEqual(payload["plugin"]["name"], "tinyhat")
-        self.assertEqual(payload["plugin"]["version"], "0.21.7")
+        self.assertEqual(payload["plugin"]["version"], "0.21.8")
         by_name = {skill["name"]: skill for skill in payload["skills"]}
         self.assertEqual(
             by_name["tinyhat-codex-auth"]["qualified_name"],
@@ -217,6 +229,177 @@ class HermesAdapterTests(unittest.TestCase):
         self.assertIn("Hermes supplies the native operation skill", manager_purpose)
         self.assertNotIn("operation skills", manager_purpose)
         self.assertIn("qualified names", payload["lookup_rule"])
+
+    def test_credentials_list_returns_only_safe_metadata(self) -> None:
+        paths: list[str] = []
+
+        class FakePlatformClient:
+            def get_json(self, path: str) -> dict[str, object]:
+                paths.append(path)
+                return {
+                    "schema": "tinyhat_private_credentials_v1",
+                    "credentials": [
+                        {
+                            "handoff_id": "sh_exa",
+                            "name": "EXA_API_KEY",
+                            "description": "Search API credential",
+                            "value_available": False,
+                        }
+                    ],
+                    "value_note": "Values live only on the Computer.",
+                }
+
+        with mock.patch.object(
+            credentials,
+            "build_platform_client",
+            return_value=(FakePlatformClient(), "local_dev"),
+        ):
+            payload = json.loads(credentials.credentials({"action": "list", "query": "search API"}))
+
+        self.assertEqual(
+            paths,
+            ["/hapi/v1/computers/local-dev/private-credentials/v1?q=search+API"],
+        )
+        self.assertEqual(payload["credentials"][0]["name"], "EXA_API_KEY")
+        self.assertIs(payload["credentials"][0]["value_available"], False)
+        self.assertNotIn("value", payload["credentials"][0])
+
+    def test_credentials_remove_sends_one_generation_bound_request(self) -> None:
+        posts: list[tuple[str, dict[str, object]]] = []
+
+        class FakePlatformClient:
+            def post_json(self, path: str, payload: dict[str, object]) -> dict[str, object]:
+                posts.append((path, payload))
+                return {
+                    "schema": "tinyhat_private_credential_removal_v1",
+                    "handoff_id": "sh_exa",
+                    "credential_name": "EXA_API_KEY",
+                    "status": "offered",
+                }
+
+        with mock.patch.object(
+            credentials,
+            "build_platform_client",
+            return_value=(FakePlatformClient(), "local_dev"),
+        ):
+            payload = json.loads(
+                credentials.credentials({"action": "remove", "handoff_id": "sh_exa"})
+            )
+
+        self.assertEqual(
+            posts,
+            [
+                (
+                    "/hapi/v1/computers/local-dev/private-credentials/v1/sh_exa/removal-requests",
+                    {},
+                )
+            ],
+        )
+        self.assertEqual(payload["status"], "offered")
+        self.assertIs(payload["chat_response_required"], False)
+
+    def test_credentials_remove_resolves_one_case_insensitive_exact_name(self) -> None:
+        gets: list[str] = []
+        posts: list[tuple[str, dict[str, object]]] = []
+
+        class FakePlatformClient:
+            def get_json(self, path: str) -> dict[str, object]:
+                gets.append(path)
+                return {
+                    "credentials": [
+                        {"handoff_id": "sh_partial", "name": "EXA_API_KEY_BACKUP"},
+                        {"handoff_id": "sh_exact", "name": "exa_api_key"},
+                    ]
+                }
+
+            def post_json(self, path: str, payload: dict[str, object]) -> dict[str, object]:
+                posts.append((path, payload))
+                return {"status": "offered"}
+
+        client = FakePlatformClient()
+        with mock.patch.object(
+            credentials,
+            "build_platform_client",
+            return_value=(client, "local_dev"),
+        ):
+            payload = json.loads(
+                credentials.credentials({"action": "remove", "name": "exa_api_key"})
+            )
+
+        self.assertEqual(
+            gets,
+            ["/hapi/v1/computers/local-dev/private-credentials/v1?q=EXA_API_KEY"],
+        )
+        self.assertEqual(
+            posts,
+            [
+                (
+                    "/hapi/v1/computers/local-dev/private-credentials/v1/sh_exact/removal-requests",
+                    {},
+                )
+            ],
+        )
+        self.assertEqual(payload["status"], "offered")
+
+    def test_credentials_remove_name_fallback_requires_one_exact_current_match(self) -> None:
+        cases = {
+            "partial matches only": {
+                "name": "EXA",
+                "credentials": [
+                    {"handoff_id": "sh_primary", "name": "EXA_API_KEY"},
+                    {"handoff_id": "sh_backup", "name": "EXA_BACKUP_KEY"},
+                ],
+            },
+            "duplicate exact matches": {
+                "name": "EXA_API_KEY",
+                "credentials": [
+                    {"handoff_id": "sh_first", "name": "EXA_API_KEY"},
+                    {"handoff_id": "sh_second", "name": "exa_api_key"},
+                ],
+            },
+            "exact match without selector": {
+                "name": "EXA_API_KEY",
+                "credentials": [{"handoff_id": "", "name": "EXA_API_KEY"}],
+            },
+        }
+
+        for label, case in cases.items():
+            with self.subTest(label=label):
+                posts: list[tuple[str, dict[str, object]]] = []
+
+                class FakePlatformClient:
+                    def get_json(self, path: str) -> dict[str, object]:
+                        return {"credentials": case["credentials"]}
+
+                    def post_json(
+                        self, path: str, payload: dict[str, object]
+                    ) -> dict[str, object]:
+                        posts.append((path, payload))
+                        return {"status": "offered"}
+
+                with mock.patch.object(
+                    credentials,
+                    "build_platform_client",
+                    return_value=(FakePlatformClient(), "local_dev"),
+                ):
+                    payload = json.loads(
+                        credentials.credentials(
+                            {"action": "remove", "name": case["name"]}
+                        )
+                    )
+
+                self.assertEqual(posts, [])
+                self.assertEqual(payload["status"], "selection_required")
+                self.assertEqual(payload["error"], "credential_not_unique")
+                self.assertEqual(payload["credentials"], case["credentials"])
+
+    def test_credentials_remove_without_selector_never_calls_platform(self) -> None:
+        with mock.patch.object(credentials, "build_platform_client") as build_client:
+            payload = json.loads(credentials.credentials({"action": "remove"}))
+
+        build_client.assert_not_called()
+        self.assertEqual(payload["status"], "selection_required")
+        self.assertEqual(payload["error"], "missing_selector")
 
     def test_context_hook_injects_for_secret_requests(self) -> None:
         ctx = FakeHermesContext()

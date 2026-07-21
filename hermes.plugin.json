@@ -1,6 +1,6 @@
 {
   "schema": "tinyhat.framework-adapter.v1",
-  "version": "0.21.7",
+  "version": "0.21.8",
   "framework": {
     "name": "hermes",
     "minimum": "0.0.0"
@@ -38,6 +38,13 @@
       "aliases": ["tinyhat-private-secret"],
       "path": "skills/tinyhat-private-secret/SKILL.md",
       "purpose": "Starts a private browser-encrypted secret handoff to the assigned Computer."
+    },
+    {
+      "name": "tinyhat-credentials",
+      "qualified_name": "tinyhat:tinyhat-credentials",
+      "aliases": ["tinyhat-credentials"],
+      "path": "skills/tinyhat-credentials/SKILL.md",
+      "purpose": "Lists value-blind credential metadata and starts confirmed Computer-side removal."
     },
     {
       "name": "tinyhat-google-workspace",
@@ -100,6 +107,11 @@
       "name": "tinyhat_private_secret_handoff",
       "handler": "tools.private_secret_handoff",
       "skill": "tinyhat-private-secret"
+    },
+    {
+      "name": "tinyhat_credentials",
+      "handler": "tools.credentials",
+      "skill": "tinyhat-credentials"
     },
     {
       "name": "tinyhat_google_workspace",

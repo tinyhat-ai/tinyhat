@@ -34,7 +34,8 @@ auth flow that is installed on each Hermes Computer.
 | `__init__.py` | Hermes registration entrypoint. |
 | `hermes.plugin.json` | Tinyhat metadata for the Hermes adapter, skill, command, and release channels. |
 | `context.py` | Small Hermes `pre_llm_call` context hook for Tinyhat-sensitive turns. |
-| `tools.py` / `schemas.py` | Tinyhat tools: plugin version, safe platform status, joke proof, skill catalog, private secret handoff, Google identity connection, Codex auth setup/status helpers, and plugin update helper. |
+| `tools.py` / `schemas.py` | Tinyhat tools: plugin version, safe platform status, joke proof, skill catalog, private secret handoff and removal, Google identity connection, Codex auth setup/status helpers, and plugin update helper. |
+| `credentials.py` | Value-blind credential name/description discovery and platform-owned, expiring Telegram removal confirmation. |
 | `google_workspace.py` / `google_workspace_worker.py` | Platform-authored Google OAuth handoff, multi-account local custody, manifest-governed access selection, assignment-safe status, and targeted disconnect. |
 | `google_workspace_scope_manifest.json` / `google_workspace_scope_manifest.py` | Versioned public Google scope contract and dependency-free loader. |
 | `google_workspace_app.py` | Account-selected credential bridge to the manifest-verified, root-owned managed `gws` app. |
@@ -43,6 +44,7 @@ auth flow that is installed on each Hermes Computer.
 | `skills/tinyhat-plugin-version/SKILL.md` | Live plugin version proof. |
 | `skills/tinyhat-skill-catalog/SKILL.md` | Skill discovery guidance for plugin-qualified Tinyhat skill names. |
 | `skills/tinyhat-private-secret/SKILL.md` | Browser-encrypted secret handoff guidance. |
+| `skills/tinyhat-credentials/SKILL.md` | Value-blind credential discovery and confirmed Computer-side removal guidance. |
 | `skills/tinyhat-google-workspace/SKILL.md` | Existing-account Google identity connection guidance. |
 | `skills/tinyhat-google-workspace-app-manager/SKILL.md` | Approval-gated managed `gws` installation guidance. |
 | `skills/tinyhat-codex-auth/SKILL.md` | OpenAI Codex / ChatGPT subscription auth guidance. |
@@ -126,6 +128,14 @@ when available) as defense in depth. The runtime reloads Hermes env files
 during gateway startup and records Tinyhat-managed terminal aliases for
 the saved names, so exec/shell subprocesses can use the secret without
 Tinyhat storing or returning the value.
+
+`tinyhat-credentials` lists only the safe names, descriptions, and saved
+timestamps of credentials currently installed through the private-secret
+handoff. Removal sends an expiring two-stage Telegram confirmation. After the
+user confirms, the platform queues a generation-bound runtime command; Hermes
+deletes the env entry, terminal alias, and loaded process value locally. The
+platform hard-deletes the value-less credential metadata only after that local
+proof, and the user may then add the same name again.
 
 `tinyhat-google-workspace` connects this Computer to existing Google accounts.
 Each connect without `account_id` adds an account while preserving the others.
