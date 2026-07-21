@@ -298,6 +298,109 @@ class HermesAdapterTests(unittest.TestCase):
         self.assertEqual(payload["status"], "offered")
         self.assertIs(payload["chat_response_required"], False)
 
+    def test_credentials_remove_resolves_one_case_insensitive_exact_name(self) -> None:
+        gets: list[str] = []
+        posts: list[tuple[str, dict[str, object]]] = []
+
+        class FakePlatformClient:
+            def get_json(self, path: str) -> dict[str, object]:
+                gets.append(path)
+                return {
+                    "credentials": [
+                        {"handoff_id": "sh_partial", "name": "EXA_API_KEY_BACKUP"},
+                        {"handoff_id": "sh_exact", "name": "exa_api_key"},
+                    ]
+                }
+
+            def post_json(self, path: str, payload: dict[str, object]) -> dict[str, object]:
+                posts.append((path, payload))
+                return {"status": "offered"}
+
+        client = FakePlatformClient()
+        with mock.patch.object(
+            credentials,
+            "build_platform_client",
+            return_value=(client, "local_dev"),
+        ):
+            payload = json.loads(
+                credentials.credentials({"action": "remove", "name": "exa_api_key"})
+            )
+
+        self.assertEqual(
+            gets,
+            ["/hapi/v1/computers/local-dev/private-credentials/v1?q=EXA_API_KEY"],
+        )
+        self.assertEqual(
+            posts,
+            [
+                (
+                    "/hapi/v1/computers/local-dev/private-credentials/v1/sh_exact/removal-requests",
+                    {},
+                )
+            ],
+        )
+        self.assertEqual(payload["status"], "offered")
+
+    def test_credentials_remove_name_fallback_requires_one_exact_current_match(self) -> None:
+        cases = {
+            "partial matches only": {
+                "name": "EXA",
+                "credentials": [
+                    {"handoff_id": "sh_primary", "name": "EXA_API_KEY"},
+                    {"handoff_id": "sh_backup", "name": "EXA_BACKUP_KEY"},
+                ],
+            },
+            "duplicate exact matches": {
+                "name": "EXA_API_KEY",
+                "credentials": [
+                    {"handoff_id": "sh_first", "name": "EXA_API_KEY"},
+                    {"handoff_id": "sh_second", "name": "exa_api_key"},
+                ],
+            },
+            "exact match without selector": {
+                "name": "EXA_API_KEY",
+                "credentials": [{"handoff_id": "", "name": "EXA_API_KEY"}],
+            },
+        }
+
+        for label, case in cases.items():
+            with self.subTest(label=label):
+                posts: list[tuple[str, dict[str, object]]] = []
+
+                class FakePlatformClient:
+                    def get_json(self, path: str) -> dict[str, object]:
+                        return {"credentials": case["credentials"]}
+
+                    def post_json(
+                        self, path: str, payload: dict[str, object]
+                    ) -> dict[str, object]:
+                        posts.append((path, payload))
+                        return {"status": "offered"}
+
+                with mock.patch.object(
+                    credentials,
+                    "build_platform_client",
+                    return_value=(FakePlatformClient(), "local_dev"),
+                ):
+                    payload = json.loads(
+                        credentials.credentials(
+                            {"action": "remove", "name": case["name"]}
+                        )
+                    )
+
+                self.assertEqual(posts, [])
+                self.assertEqual(payload["status"], "selection_required")
+                self.assertEqual(payload["error"], "credential_not_unique")
+                self.assertEqual(payload["credentials"], case["credentials"])
+
+    def test_credentials_remove_without_selector_never_calls_platform(self) -> None:
+        with mock.patch.object(credentials, "build_platform_client") as build_client:
+            payload = json.loads(credentials.credentials({"action": "remove"}))
+
+        build_client.assert_not_called()
+        self.assertEqual(payload["status"], "selection_required")
+        self.assertEqual(payload["error"], "missing_selector")
+
     def test_context_hook_injects_for_secret_requests(self) -> None:
         ctx = FakeHermesContext()
         tinyhat.register(ctx)
