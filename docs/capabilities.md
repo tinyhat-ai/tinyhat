@@ -34,6 +34,13 @@ After save, the worker reports the install to the platform with
 one-shot gateway restart and sends the final ready-or-failed confirmation
 after that restart settles. The worker never restarts the gateway itself.
 
+To find or remove one of these new value-blind credentials, load
+`tinyhat:tinyhat-credentials` and call `tinyhat_credentials`. Search returns
+only safe name and description metadata. Removal is bound to the exact handoff
+generation and requires the platform's expiring Telegram confirmation before
+Hermes deletes the credential locally. The platform never receives a value and
+deletes its metadata only after the Computer proves the local name is absent.
+
 ## Tinyhat Platform Context
 
 The plugin injects a short context note when the user asks about secrets,

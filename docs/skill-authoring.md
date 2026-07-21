@@ -109,6 +109,14 @@ to retry with names like `tinyhat:tinyhat-codex-auth`.
 It should be triggered before generic `.env` advice whenever a user asks
 to add or save an API key, token, password, or credential.
 
+`tinyhat-credentials` is the value-blind discovery and removal path for those
+new secure credentials. It lists names, descriptions, and opaque handoff ids,
+never values. For agent-requested removal it calls `tinyhat_credentials` once
+with the selected handoff id; the platform owns an expiring two-stage Telegram
+confirmation, then Hermes removes the local env entry and terminal alias. Do
+not ask for text confirmation or send a duplicate reply. After Computer proof,
+Tinyhat deletes the metadata row so the same env name can be added again.
+
 `tinyhat-google-workspace` is the default way to connect existing Google
 accounts. Calling connect without `account_id` adds an account. Status exposes
 safe metadata and the stable opaque `account_id` used to select an account;

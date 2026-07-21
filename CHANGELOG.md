@@ -6,6 +6,11 @@ All notable changes to the Tinyhat plugin are documented here.
 
 ### Changed
 
+- Bump the Hermes plugin package to `0.21.8`; add `tinyhat_credentials` and
+  `tinyhat:tinyhat-credentials` for value-blind name/description discovery and
+  expiring two-stage Telegram removal. Confirmed deletion is executed by the
+  assigned Computer, never by the platform, and the same name can be added
+  again after local deletion succeeds.
 - Bump the Hermes plugin package to `0.21.7` and separate Tinyhat requestability
   from Google verification state. All nine implemented Gmail, Calendar, and
   Drive scopes can reach Google while verification is `preparing_submission`;

@@ -46,6 +46,14 @@ When the user says something like "add my Exa API key":
 Load `tinyhat:tinyhat-private-secret` when you need the full naming and
 failure-handling rules.
 
+When the user wants to list, find, remove, replace, or update a saved secure
+credential, load `tinyhat:tinyhat-credentials` and use `tinyhat_credentials`.
+Lists contain names and descriptions only. For removal, select one opaque
+`handoff_id` and call the tool once; Tinyhat sends the expiring two-stage
+Telegram confirmation and Hermes performs local deletion. Do not ask for a
+text confirmation or send a duplicate reply. Once deletion succeeds, add the
+same name again with `tinyhat_private_secret_handoff` to replace its value.
+
 ## Google Workspace
 
 When the user says "Connect Google", asks to add a personal or work account, or

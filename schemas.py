@@ -66,6 +66,46 @@ TINYHAT_PRIVATE_SECRET_HANDOFF_SCHEMA = {
     "additionalProperties": False,
 }
 
+TINYHAT_CREDENTIALS_SCHEMA = {
+    "type": "object",
+    "description": (
+        "Lists value-blind credential metadata on this Computer or sends an "
+        "expiring Telegram confirmation that triggers Computer-side deletion. "
+        "This tool never returns credential values."
+    ),
+    "properties": {
+        "action": {
+            "type": "string",
+            "enum": ["list", "remove"],
+            "description": (
+                "Use list to retrieve names/descriptions and related matches. Use "
+                "remove only after selecting the intended credential; the platform "
+                "sends the final Telegram confirmation."
+            ),
+        },
+        "query": {
+            "type": "string",
+            "maxLength": 200,
+            "description": "Optional case-insensitive name or description search for list.",
+        },
+        "handoff_id": {
+            "type": "string",
+            "maxLength": 64,
+            "description": "Preferred opaque selector returned by action=list.",
+        },
+        "name": {
+            "type": "string",
+            "maxLength": 127,
+            "description": (
+                "Exact env-style name fallback for remove when handoff_id is not "
+                "available. Ambiguous or missing matches return related credentials."
+            ),
+        },
+    },
+    "required": ["action"],
+    "additionalProperties": False,
+}
+
 TINYHAT_GOOGLE_WORKSPACE_SCHEMA = {
     "type": "object",
     "description": (
