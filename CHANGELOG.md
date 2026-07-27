@@ -20,11 +20,12 @@ All notable changes to the Tinyhat plugin are documented here.
   check `tinyhat_codex_auth` `action=status` before claiming a subscription
   is not connected, never state a remaining credit balance they cannot see,
   and answer how-is-this-paid-for / is-this-free / credits-ran-out questions
-  from the model. Funding routing is bounded: end-anchored funding-question
-  patterns, a funding word bound to the agent/service outside a command
-  frame, or the standalone word billing — generic developer wording
-  ("balance this binary tree", "check the balance factor", "look for free
-  variables") does not inject.
+  from the model. Funding routing is bounded: command frames are suppressed
+  before any funding matching, then end-anchored funding-question
+  patterns, a funding word bound to the agent/service, or the standalone
+  word billing can route — generic developer wording ("balance this
+  binary tree", "check the balance factor", "look for free variables")
+  does not inject.
 - Bump the Hermes plugin package to `0.21.9`; add the `tinyhat:tinyhat-privacy`
   skill and widen the `pre_llm_call` context so agents answer privacy and
   data-access questions from the platform's real trust model instead of

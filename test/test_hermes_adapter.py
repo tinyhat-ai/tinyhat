@@ -646,6 +646,9 @@ class HermesAdapterTests(unittest.TestCase):
             "What does it cost to sort this list?",
             "Check the balance factor in this AVL tree",
             "Look for free variables in this closure",
+            "Check my balance factor in this AVL tree",
+            "Look for free to use in the README",
+            "Show who pays for each invoice in this CSV",
         )
         for user_message in examples:
             with self.subTest(user_message=user_message):

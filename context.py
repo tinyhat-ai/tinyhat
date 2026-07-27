@@ -465,17 +465,17 @@ _ZERO_WIDTH_MARKS = ("\u200c", "\u200d", "\u200e", "\u200f")
 
 
 def _matches_funding_intent(normalized: str) -> bool:
-    """Bounded funding routing: anchored question patterns, or a funding
-    word bound to the agent/service outside a command frame, or the lone
-    standalone word billing."""
+    """Bounded funding routing: command frames are suppressed first, then
+    anchored question patterns, a funding word bound to the agent/service,
+    or the lone standalone word billing."""
+    if _is_command_frame(normalized):
+        return False
     for pattern in _FUNDING_QUESTION_PATTERNS:
         if pattern.search(normalized):
             return True
     tokens = set(re.findall(r"\w+", normalized))
     if any(term in tokens for term in _FUNDING_STANDALONE_TERMS):
         return True
-    if _is_command_frame(normalized):
-        return False
     return any(term in tokens for term in _FUNDING_WORD_TERMS) and any(
         term in tokens for term in _FUNDING_SERVICE_ANCHORS
     )

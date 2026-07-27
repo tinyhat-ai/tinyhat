@@ -361,12 +361,12 @@ include a short connect-your-subscription line, recorded with a durable
 marker so a later `/new` or `/reset` session does not re-arm it.
 Tool-owned native first replies (the Codex auth prerequisite photo, a
 Connect Google button) or an explicit connect request satisfy the
-reminder on their own. Funding questions route through bounded matching
-(end-anchored funding-question patterns, a funding word bound to the
-agent or service outside a command frame, or the standalone word
-billing), so generic developer wording such as "check the balance
-factor", "look for free variables", or "please free this buffer" does
-not inject.
+reminder on their own. Funding questions route through bounded matching:
+command frames are suppressed before any funding matching, then
+end-anchored funding-question patterns, a funding word bound to the
+agent or service, or the standalone word billing can route — so
+generic developer wording such as "check the balance factor", "look
+for free variables", or "please free this buffer" does not inject.
 
 ## Installing
 
