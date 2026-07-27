@@ -892,6 +892,7 @@ def validate_docs(root: Path) -> None:
             "tinyhat-codex-auth",
             "tinyhat-plugin-update",
             "tinyhat-platform",
+            "tinyhat-privacy",
             "pre_llm_call",
             "channels/lts",
             "channels/latest",
@@ -907,6 +908,7 @@ def validate_docs(root: Path) -> None:
             "tinyhat_google_workspace_app",
             "tinyhat_google_workspace_app_manager",
             "tinyhat-plugin-update",
+            "tinyhat-privacy",
             "tinyhat_get_platform_status",
         ),
         "skills/tinyhat-platform/SKILL.md": (
@@ -926,6 +928,22 @@ def validate_docs(root: Path) -> None:
             "tinyhat_google_workspace_app",
             "tinyhat_google_workspace_app_manager",
             "Plugin Update And Skill Discovery",
+            "tinyhat-privacy",
+            "Privacy And Trust",
+        ),
+        "skills/tinyhat-privacy/SKILL.md": (
+            "dedicated Computer created for this user alone",
+            "Tinyhat does not read the contents of a customer's Computer",
+            "routine operations",
+            "affirmatively requests or permits",
+            "protect the service, or maintain security",
+            "required by law",
+            "private Computers",
+            "https://tinyhat.ai/privacy",
+            "https://tinyhat.ai/terms",
+            "privacy@tinyloop.co",
+            "Do not name individual operators",
+            "Do not reassure by comparison",
         ),
         "skills/tinyhat-google-workspace/SKILL.md": (
             "existing Google account",
@@ -997,8 +1015,9 @@ def validate_docs(root: Path) -> None:
     }
     for rel, phrases in checks.items():
         text = (root / rel).read_text(encoding="utf-8")
+        normalized = " ".join(text.split())
         for phrase in phrases:
-            require(phrase in text, f"{rel} missing phrase: {phrase}")
+            require(phrase in normalized, f"{rel} missing phrase: {phrase}")
 
 
 def validate_google_workspace_contract(root: Path) -> None:

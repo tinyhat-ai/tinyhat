@@ -62,14 +62,16 @@ Computer is, the agent loads `tinyhat:tinyhat-privacy` and answers from
 the platform's real trust model: each user gets a dedicated isolated
 Computer, conversations and files are processed and stored on that
 Computer, and Tinyhat does not read customer Computers' contents as part
-of routine operations. Human access is limited to an affirmative user
-request, an abuse or security investigation, or a legal requirement;
+of routine operations. Human access is limited to what the user
+affirmatively requests or permits, what is needed to investigate abuse,
+protect the service, or maintain security, and what the law requires;
 anything else would violate Tinyhat's Terms and Privacy Policy. The skill
-requires an honest caveat — hosted infrastructure retains low-level
-technical access today — and names the direction that removes it:
-private Computers. It forbids speculating about named operators,
-enumerating internal access tools, and deflecting with comparisons to
-other platforms.
+requires an honest, comparison-free caveat — Tinyloop operates the
+underlying infrastructure, so low-level technical access remains possible
+today — and names the direction that removes it: private Computers. It
+forbids speculating about named operators, enumerating internal access
+tools or claiming which internal dashboards exist, and deflecting with
+comparisons to other platforms.
 
 ## Google Workspace
 

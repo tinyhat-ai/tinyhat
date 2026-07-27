@@ -20,7 +20,7 @@ TINYHAT_CONTEXT = """Tinyhat context: this Hermes agent runs on a Tinyhat-manage
 - If skill_view or skills_list omits Tinyhat plugin skills, call tinyhat_skill_catalog and retry with qualified names such as tinyhat:tinyhat-codex-auth.
 - If this Computer reports update_available=true or target_ref_changed for the Tinyhat plugin, load tinyhat:tinyhat-plugin-update and use tinyhat_plugin_update with action=status before applying updates. Only call action=update after the user/operator asks to update, and use restart_gateway=true when the live Telegram gateway should reload the new plugin commands.
 - For Tinyhat QA or Slack-style bug reports that mention words like restart, reload, update, or gateway, do not use terminal/curl just to post the text. Use a native Slack/reporting tool if available, or return the report in chat.
-- For privacy, security, or data-access questions — who can read the user's messages or files, whether Tinyhat staff or operators see logs or conversations, whether chats are monitored — load tinyhat:tinyhat-privacy and answer from it, in the user's language. Core facts: this agent runs on a dedicated Computer created for this user alone; conversations and files are processed and stored on this Computer; Tinyhat does not read customer Computers' conversations, files, or logs as part of routine operations, and outside an affirmative user request, an abuse or security investigation, or a legal requirement, such access would violate Tinyhat's own Terms and Privacy Policy (https://tinyhat.ai/privacy and https://tinyhat.ai/terms). Stay honest that, like any hosted service, the infrastructure operator retains low-level technical access today — that is why the policy is binding and why Tinyhat is building private Computers designed to remove even that technical possibility. Never speculate about named operators and never enumerate internal tools or access paths.
+- For privacy, security, or data-access questions — who can read the user's messages or files, whether Tinyhat staff or operators see logs or conversations, whether chats are monitored or stored — load tinyhat:tinyhat-privacy and answer from it, in the user's language. Core facts: this agent runs on a dedicated Computer created for this user alone; conversations and files are processed and stored on this Computer; Tinyhat does not read customer Computers' conversations, files, or logs as part of routine operations, and human access is limited to what the user affirmatively requests or permits, what is needed to investigate abuse, protect the service, or maintain security, and what the law requires — anything else would violate Tinyhat's own Terms and Privacy Policy (https://tinyhat.ai/privacy and https://tinyhat.ai/terms). Stay honest that Tinyloop operates the underlying infrastructure, so low-level technical access remains possible today — that is why the policy is binding and why Tinyhat is building private Computers designed to remove even that technical possibility. Never speculate about named operators, never enumerate internal tools or access paths, never claim which internal dashboards or tools do or do not exist, and never reassure by comparing Tinyhat to other platforms or hosting providers.
 - Load tinyhat:tinyhat-platform, tinyhat:tinyhat-privacy, tinyhat:tinyhat-private-secret, tinyhat:tinyhat-credentials, tinyhat:tinyhat-google-workspace, tinyhat:tinyhat-codex-auth, tinyhat:tinyhat-plugin-update, tinyhat:tinyhat-skill-catalog, or tinyhat:tinyhat-plugin-version when you need the longer Tinyhat playbook."""
 
 _CONTEXT_PHRASES = (
@@ -83,6 +83,7 @@ _CONTEXT_PHRASES = (
     "data protection",
     "who can see",
     "who can read",
+    "who can access",
     "who has access",
     "access my",
     "access to my",
@@ -90,9 +91,10 @@ _CONTEXT_PHRASES = (
     "terms of service",
     "chat history",
     "conversation history",
+    "support staff",
     "spy on",
     "حریم خصوصی",
-    "پیام‌های من",
+    "پیامهای من",
     "پیام های من",
     "لاگ",
     "دسترسی",
@@ -133,26 +135,67 @@ _CONTEXT_TERMS = (
     "tinyhat",
     "update",
     "privacy",
-    "private",
-    "log",
     "logs",
     "gdpr",
     "surveillance",
-    "monitoring",
     "monitored",
     "spying",
-    "admin",
-    "admins",
     "operator",
     "operators",
-    "isolation",
-    "isolated",
-    "security",
-    "confidential",
-    "encrypted",
-    "encryption",
-    "trust",
 )
+
+# Privacy/data-access questions inject the trust context only when a
+# conversation-data subject and an access/visibility word appear together,
+# so generic developer words ("private repo", "log the response",
+# "security headers") do not inject on their own.
+_PRIVACY_SUBJECT_TERMS = (
+    "message",
+    "messages",
+    "chat",
+    "chats",
+    "conversation",
+    "conversations",
+    "data",
+    "logs",
+    "files",
+    "history",
+    "computer",
+)
+
+_PRIVACY_ACCESS_TERMS = (
+    "read",
+    "reads",
+    "see",
+    "sees",
+    "view",
+    "views",
+    "access",
+    "accessed",
+    "accesses",
+    "monitor",
+    "monitors",
+    "monitored",
+    "record",
+    "records",
+    "recorded",
+    "store",
+    "stored",
+    "stores",
+    "keep",
+    "keeps",
+    "kept",
+    "watch",
+    "watched",
+    "who",
+    "private",
+    "privacy",
+)
+
+# Persian text arrives with interchangeable Arabic/Persian letters and
+# zero-width joiners; canonicalize before phrase matching so spelling
+# variants of the same question still match.
+_PERSIAN_CHAR_MAP = str.maketrans({"ي": "ی", "ك": "ک"})
+_ZERO_WIDTH_MARKS = ("\u200c", "\u200d", "\u200e", "\u200f")
 
 
 def should_inject_tinyhat_context(user_message: str, *, is_first_turn: bool = False) -> bool:
@@ -160,11 +203,18 @@ def should_inject_tinyhat_context(user_message: str, *, is_first_turn: bool = Fa
     if is_first_turn:
         return True
     normalized = " ".join((user_message or "").lower().split())
+    normalized = normalized.translate(_PERSIAN_CHAR_MAP)
+    for mark in _ZERO_WIDTH_MARKS:
+        normalized = normalized.replace(mark, "")
     normalized_for_terms = re.sub(r"[_-]+", " ", normalized)
     if any(phrase in normalized or phrase in normalized_for_terms for phrase in _CONTEXT_PHRASES):
         return True
     terms = set(re.findall(r"[a-z0-9]+", normalized_for_terms))
-    return any(term in terms for term in _CONTEXT_TERMS)
+    if any(term in terms for term in _CONTEXT_TERMS):
+        return True
+    has_privacy_subject = any(term in terms for term in _PRIVACY_SUBJECT_TERMS)
+    has_privacy_access = any(term in terms for term in _PRIVACY_ACCESS_TERMS)
+    return has_privacy_subject and has_privacy_access
 
 
 def inject_tinyhat_context(  # noqa: PLR0913

@@ -335,14 +335,15 @@ conversations, or how isolated their Computer is, the agent answers from
 the platform's real model instead of guessing: each user gets a dedicated
 isolated Computer, conversations and files are processed and stored on
 that Computer, and Tinyhat does not read customer Computers' contents as
-part of routine operations. Human access is limited to an affirmative
-user request, an abuse or security investigation, or a legal requirement
-— anything else would violate Tinyhat's own Terms and Privacy Policy
+part of routine operations. Human access is limited to what the user
+affirmatively requests or permits, what is needed to investigate abuse,
+protect the service, or maintain security, and what the law requires —
+anything else would violate Tinyhat's own Terms and Privacy Policy
 (https://tinyhat.ai/privacy and https://tinyhat.ai/terms). The skill also
-keeps the answer honest: hosted infrastructure retains low-level
-technical access today, which is why the policy is binding and why
-Tinyhat is building private Computers designed to remove even that
-technical possibility.
+keeps the answer honest without comparisons: Tinyloop operates the
+underlying infrastructure, so low-level technical access remains possible
+today, which is why the policy is binding and why Tinyhat is building
+private Computers designed to remove even that technical possibility.
 
 ## Installing
 

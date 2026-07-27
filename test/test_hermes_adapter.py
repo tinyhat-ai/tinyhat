@@ -499,7 +499,11 @@ class HermesAdapterTests(unittest.TestCase):
             "Do you keep logs of this conversation anywhere?",
             "Is this chat monitored by tinyhat staff?",
             "How is my data protected here?",
+            "Where is this conversation stored?",
+            "Can support staff view this chat?",
             "آیا ادمین‌ها به پیام‌های من دسترسی دارن؟",
+            "آیا ادمین ها به پیامهای من دسترسی دارن؟",
+            "آيا كسی به پیامهای من دسترسی داره؟",
             "حریم خصوصی من اینجا چطور حفظ میشه؟",
         )
         for user_message in examples:
@@ -513,12 +517,57 @@ class HermesAdapterTests(unittest.TestCase):
                 self.assertIn("tinyhat:tinyhat-privacy", injected["context"])
                 self.assertIn("dedicated Computer", injected["context"])
                 self.assertIn("routine operations", injected["context"])
+                self.assertIn("affirmatively requests or permits", injected["context"])
                 self.assertIn("https://tinyhat.ai/privacy", injected["context"])
                 self.assertIn("private Computers", injected["context"])
 
+    def test_context_hook_skips_generic_developer_terms(self) -> None:
+        examples = (
+            "Make this GitHub repository private",
+            "Please log the HTTP response",
+            "Review the security headers",
+            "I trust this certificate",
+        )
+        for user_message in examples:
+            with self.subTest(user_message=user_message):
+                self.assertIsNone(
+                    tinyhat_context.inject_tinyhat_context(
+                        user_message=user_message,
+                        is_first_turn=False,
+                    )
+                )
+
+    def test_privacy_access_wording_is_policy_exact_everywhere(self) -> None:
+        fragments = (
+            "affirmatively requests or permits",
+            "protect the service, or maintain security",
+        )
+        files = (
+            REPO_ROOT / "skills" / "tinyhat-privacy" / "SKILL.md",
+            REPO_ROOT / "skills" / "tinyhat-platform" / "SKILL.md",
+            REPO_ROOT / "README.md",
+            REPO_ROOT / "docs" / "capabilities.md",
+        )
+        for path in files:
+            text = " ".join(path.read_text(encoding="utf-8").split())
+            for fragment in fragments:
+                with self.subTest(path=path.name, fragment=fragment):
+                    self.assertIn(fragment, text)
+        for fragment in fragments:
+            with self.subTest(path="context.py", fragment=fragment):
+                self.assertIn(fragment, tinyhat_context.TINYHAT_CONTEXT)
+        skill_text = (REPO_ROOT / "skills" / "tinyhat-privacy" / "SKILL.md").read_text(
+            encoding="utf-8"
+        )
+        facts_and_example = skill_text.split("## Do Not")[0].lower()
+        for banned in ("like any hosted service", "like every hosted service"):
+            with self.subTest(banned=banned):
+                self.assertNotIn(banned, facts_and_example)
+                self.assertNotIn(banned, tinyhat_context.TINYHAT_CONTEXT.lower())
+
     def test_privacy_skill_states_the_trust_model(self) -> None:
         skill_md = REPO_ROOT / "skills" / "tinyhat-privacy" / "SKILL.md"
-        text = skill_md.read_text(encoding="utf-8")
+        text = " ".join(skill_md.read_text(encoding="utf-8").split())
 
         self.assertIn("dedicated Computer created for this user alone", text)
         self.assertIn(
@@ -526,6 +575,9 @@ class HermesAdapterTests(unittest.TestCase):
             text,
         )
         self.assertIn("routine operations", text)
+        self.assertIn("affirmatively requests or permits", text)
+        self.assertIn("protect the service, or maintain security", text)
+        self.assertIn("required by law", text)
         self.assertIn(
             "violate Tinyhat's own Terms of Service and Privacy Policy",
             text,

@@ -22,17 +22,17 @@ Answer from the facts below. Answer in the user's language.
   conversations, files, or logs — as part of routine operations.** Running
   the platform does not involve humans looking inside customer Computers.
 - Human access to a customer's Computer or its data is limited to three
-  cases: the user affirmatively asks for it (for example support or
-  debugging help they request), investigating abuse or protecting the
-  service, or a legal requirement. Outside those cases, operator access
-  would violate Tinyhat's own Terms of Service and Privacy Policy.
+  cases: actions the user affirmatively requests or permits (for example
+  support they ask for), what is needed to investigate abuse, protect the
+  service, or maintain security, and what is required by law. Anything
+  else would violate Tinyhat's own Terms of Service and Privacy Policy.
 - Connected Google user data carries stricter Limited Use commitments:
   humans do not read Google user data except with the user's affirmative
   permission for support or security, to investigate abuse, or when
   required by law.
-- Be honest about today's technical reality: like every hosted service,
-  the party operating the infrastructure retains low-level technical
-  ability to access the machines it hosts. What protects users today is
+- Be honest about today's technical reality: Tinyloop operates the
+  underlying infrastructure, so low-level technical access to a hosted
+  Computer remains possible today. What protects users today is
   dedicated-Computer isolation, access controls, and the binding policy
   commitments above — not a claim that access is impossible.
 - Tinyhat is building **private Computers**: a next step designed so the
@@ -56,11 +56,12 @@ Example shape for "Can Tinyhat staff read this conversation?":
 > Your agent runs on a Computer created only for you, and this
 > conversation is processed and stored on that Computer. Tinyhat does not
 > read customer Computers — conversations, files, or logs — as part of
-> running the service. Human access happens only if you ask for it, if
-> abuse or security has to be investigated, or if the law requires it;
-> anything else would violate Tinyhat's own Terms and Privacy Policy. To
-> be fully transparent: as with any hosted service, the operator of the
-> infrastructure technically could access a hosted machine — that is
+> running the service. Human access is limited to what you affirmatively
+> request or permit, what is needed to investigate abuse, protect the
+> service, or maintain security, and what the law requires; anything else
+> would violate Tinyhat's own Terms of Service and Privacy Policy. To be
+> fully transparent: Tinyloop operates the infrastructure this Computer
+> runs on, so low-level technical access remains possible today — that is
 > exactly why the policy is binding, and why Tinyhat is building private
 > Computers that remove even that technical possibility. The full policy
 > is at https://tinyhat.ai/privacy and https://tinyhat.ai/terms.
@@ -70,9 +71,11 @@ Example shape for "Can Tinyhat staff read this conversation?":
 - Do not name individual operators or speculate about what specific
   people can or might do.
 - Do not enumerate internal tools, commands, databases, or access paths
-  as capabilities "operators could use".
+  as capabilities "operators could use", and do not make claims about
+  which internal dashboards or tools do or do not exist.
 - Do not reassure by comparison, such as "admins of other platforms can
-  read your data too".
+  read your data too" or "this is like any hosted service". State
+  Tinyhat's own facts instead.
 - Do not claim access is technically impossible today, and do not promise
   a delivery date for private Computers.
 - Do not invent policy. If a question goes beyond the published Privacy
