@@ -313,6 +313,7 @@ _PRIVACY_IMPERATIVE_MARKERS_FA = (
     "کنم",
     "کنیم",
     "بخون",
+    "بخوان",
     "ببین",
 )
 
@@ -333,19 +334,42 @@ def _matches_privacy_phrase(normalized: str) -> bool:
     return False
 
 
+# A message that opens with a bare or please-prefixed access verb and
+# carries no question mark is a work request ("Please read my messages"),
+# as is a modal request aimed at the agent ("can you read this file").
+_ENGLISH_COMMAND_FRAME = re.compile(
+    r"^(please\s+)?"
+    r"(read|look|view|see|inspect|check|store|save|watch|open|keep|tail|show|list|access)"
+    r"(?!\w)"
+)
+_ENGLISH_MODAL_REQUEST = re.compile(r"(?<!\w)(can|could|would|will) you(?!\w)")
+
+
+def _is_command_frame(normalized: str) -> bool:
+    has_question_mark = "?" in normalized or "؟" in normalized
+    if not has_question_mark and _ENGLISH_COMMAND_FRAME.search(normalized):
+        return True
+    if not has_question_mark and any(
+        token in set(re.findall(r"\w+", normalized))
+        for token in _PRIVACY_IMPERATIVE_MARKERS_FA
+    ):
+        return True
+    return bool(_ENGLISH_MODAL_REQUEST.search(normalized))
+
+
 def _matches_privacy_intent(normalized: str) -> bool:
     """Bounded bilingual privacy routing: exact phrases or subject+access."""
+    # Command frames are work requests, not privacy questions; they are
+    # suppressed before phrase and combination routing alike.
+    if _is_command_frame(normalized):
+        return False
     if _matches_privacy_phrase(normalized):
         return True
     # \w+ keeps letters in both scripts and drops punctuation such as the
     # Arabic question mark, which shares the U+0600 block with letters.
     tokens = set(re.findall(r"\w+", normalized))
-    # "Can/could you read this file" is a task request aimed at the agent,
-    # not a question about who reads the user's data.
-    is_task_request = re.search(r"(?<!\w)(can|could|would|will|please) you(?!\w)", normalized)
     if (
-        not is_task_request
-        and any(term in tokens for term in _PRIVACY_SUBJECT_TERMS)
+        any(term in tokens for term in _PRIVACY_SUBJECT_TERMS)
         and any(term in tokens for term in _PRIVACY_ACCESS_TERMS)
         and any(term in tokens for term in _PRIVACY_SIGNAL_TERMS)
     ):

@@ -549,6 +549,9 @@ class HermesAdapterTests(unittest.TestCase):
             "فایل رو ببین",
             "Can you read this file?",
             "Could you look at my logs?",
+            "پیام من را بخوان",
+            "Please look at my logs",
+            "Please read my messages",
         )
         for user_message in examples:
             with self.subTest(user_message=user_message):
