@@ -1,6 +1,6 @@
 {
   "name": "tinyhat",
-  "version": "0.21.9",
+  "version": "0.21.10",
   "description": "Hermes plugin that teaches agents how to use Tinyhat platform capabilities.",
   "private": true,
   "files": [

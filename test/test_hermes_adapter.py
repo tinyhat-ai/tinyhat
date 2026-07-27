@@ -166,7 +166,7 @@ class HermesAdapterTests(unittest.TestCase):
 
         self.assertEqual(payload["schema"], "tinyhat_plugin_version_v1")
         self.assertEqual(payload["name"], "tinyhat")
-        self.assertEqual(payload["version"], "0.21.9")
+        self.assertEqual(payload["version"], "0.21.10")
 
     def test_platform_status_uses_attested_computer_endpoint(self) -> None:
         original_build = tools.build_platform_client
@@ -215,7 +215,7 @@ class HermesAdapterTests(unittest.TestCase):
 
         self.assertEqual(payload["schema"], "tinyhat_skill_catalog_v1")
         self.assertEqual(payload["plugin"]["name"], "tinyhat")
-        self.assertEqual(payload["plugin"]["version"], "0.21.9")
+        self.assertEqual(payload["plugin"]["version"], "0.21.10")
         by_name = {skill["name"]: skill for skill in payload["skills"]}
         self.assertEqual(
             by_name["tinyhat-codex-auth"]["qualified_name"],
@@ -530,6 +530,54 @@ class HermesAdapterTests(unittest.TestCase):
                 self.assertIn("affirmatively requests or permits", injected["context"])
                 self.assertIn("https://tinyhat.ai/privacy", injected["context"])
                 self.assertIn("private Computers", injected["context"])
+
+    def test_context_hook_injects_for_funding_questions(self) -> None:
+        examples = (
+            "How am I paying for this?",
+            "What happens when my credits run out?",
+            "Is this bot free to use?",
+            "Who is funding this agent?",
+            "What does it cost to keep you running?",
+        )
+        for user_message in examples:
+            with self.subTest(user_message=user_message):
+                injected = tinyhat_context.inject_tinyhat_context(
+                    user_message=user_message,
+                    is_first_turn=False,
+                )
+                self.assertIsNotNone(injected)
+                assert injected is not None
+                self.assertIn("starter credit", injected["context"])
+                self.assertIn("about $10", injected["context"])
+                self.assertIn("/codex_auth", injected["context"])
+                self.assertIn("tinyhat:tinyhat-codex-auth", injected["context"])
+
+    def test_context_states_funding_reminder_rules(self) -> None:
+        self.assertIn("Remind once, not every turn", tinyhat_context.TINYHAT_CONTEXT)
+        self.assertIn(
+            "never block a task on it",
+            tinyhat_context.TINYHAT_CONTEXT,
+        )
+        self.assertIn(
+            "Never state a remaining credit balance",
+            tinyhat_context.TINYHAT_CONTEXT,
+        )
+        self.assertIn(
+            "check tinyhat_codex_auth with action=status",
+            tinyhat_context.TINYHAT_CONTEXT,
+        )
+
+    def test_codex_auth_skill_states_funding_model(self) -> None:
+        skill_md = REPO_ROOT / "skills" / "tinyhat-codex-auth" / "SKILL.md"
+        text = " ".join(skill_md.read_text(encoding="utf-8").split())
+
+        self.assertIn("small starter credit (about $10)", text)
+        self.assertIn("intended ongoing fund", text)
+        self.assertIn("Remind once, early", text)
+        self.assertIn("Never block or delay the user's actual request", text)
+        self.assertIn("Never state a remaining credit balance", text)
+        self.assertIn('{"action": "status"}', text)
+        self.assertIn("/codex_auth", text)
 
     def test_context_hook_skips_generic_developer_terms(self) -> None:
         examples = (

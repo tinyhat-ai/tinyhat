@@ -294,7 +294,14 @@ changing the runtime. The disconnect ceremony also stays inside the existing
 plugin-and-platform boundary; it adds no runtime callback or command.
 
 `tinyhat-codex-auth` teaches the agent how to start and inspect the
-Tinyhat-managed OpenAI Codex / ChatGPT subscription sign-in flow. When
+Tinyhat-managed OpenAI Codex / ChatGPT subscription sign-in flow — and
+the funding model behind it: a new agent starts on Tinyhat's included
+platform credits, a small starter credit (about $10) that exists so the
+agent works immediately, while the intended ongoing fund is the user's
+own ChatGPT / Codex subscription. The skill has the agent remind a new
+user once, early and without nagging, to connect their subscription,
+check `{"action": "status"}` before claiming it is not connected, and
+never state a remaining credit balance it cannot see. When
 the user says "connect you to my ChatGPT account", "use my Codex
 subscription", or "switch from platform credits", the agent calls
 `tinyhat_codex_auth` with `{"action": "prerequisite"}`. The helper sends

@@ -6,6 +6,18 @@ All notable changes to the Tinyhat plugin are documented here.
 
 ### Changed
 
+- Bump the Hermes plugin package to `0.21.10`; teach agents the funding model
+  and the one-time onboarding reminder. A new agent starts on Tinyhat's
+  included platform credits — a small starter credit (about $10) so it works
+  immediately — and the intended ongoing fund is the user's own ChatGPT /
+  Codex subscription connected through `/codex_auth`. The injected context and
+  `tinyhat:tinyhat-codex-auth` now have the agent remind a new user once,
+  early and without nagging, to connect their subscription; check
+  `tinyhat_codex_auth` `action=status` before claiming it is not connected;
+  never state a remaining credit balance it cannot see; and answer
+  how-is-this-paid-for / is-this-free / credits-ran-out questions from the
+  model. Context injection also triggers on billing, payment, cost, price,
+  balance, fund, and free wording.
 - Bump the Hermes plugin package to `0.21.9`; add the `tinyhat:tinyhat-privacy`
   skill and widen the `pre_llm_call` context so agents answer privacy and
   data-access questions from the platform's real trust model instead of

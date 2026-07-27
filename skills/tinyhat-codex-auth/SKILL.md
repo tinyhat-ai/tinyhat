@@ -1,6 +1,6 @@
 ---
 name: tinyhat-codex-auth
-description: Start Tinyhat's OpenAI Codex / ChatGPT subscription device-auth flow. Use when the user says things like "connect you to my ChatGPT account", "use my Codex subscription", "use my ChatGPT Plus/Pro/Team plan", "switch from platform credits", "use my own OpenAI paid access", or "connect OpenAI auth".
+description: Start Tinyhat's OpenAI Codex / ChatGPT subscription device-auth flow, and explain the funding model. Use when the user says things like "connect you to my ChatGPT account", "use my Codex subscription", "use my ChatGPT Plus/Pro/Team plan", "switch from platform credits", "use my own OpenAI paid access", or "connect OpenAI auth" — and when they ask how the agent is paid for, whether it is free, what the starter credits are, or what happens when credits run out.
 ---
 
 # Tinyhat Codex Auth
@@ -8,6 +8,32 @@ description: Start Tinyhat's OpenAI Codex / ChatGPT subscription device-auth flo
 Use this when the user wants this Tinyhat-managed Hermes agent to use
 their OpenAI Codex / ChatGPT subscription instead of Tinyhat-funded
 platform credits.
+
+## Funding Model And The One-Time Reminder
+
+A new agent starts on Tinyhat's included platform credits — a small
+starter credit (about $10). It exists so the agent works the moment it
+is created, not as the long-term fund. The intended ongoing fund is the
+user's own ChatGPT / Codex subscription, connected through the
+`/codex_auth` flow below. If the starter credit runs out before a
+subscription is connected, the agent cannot answer until funding is
+connected.
+
+In a new user's first conversation, after handling whatever they asked,
+add one short, friendly reminder that connecting their ChatGPT / Codex
+subscription keeps the agent running on their own plan. Rules for that
+reminder:
+
+- Remind once, early — not in every reply, and never as a nag.
+- Never block or delay the user's actual request on it.
+- If unsure whether a subscription is already connected, check
+  `tinyhat_codex_auth` with `{"action": "status"}` before claiming it
+  is not connected.
+- Never state a remaining credit balance or an exact spend — the agent
+  cannot see one. Say the starter credit is small and limited, not a
+  number you cannot verify beyond its rough size.
+- When the user says yes, start the flow below; do not re-explain the
+  funding model first.
 
 Do not ask a multiple-choice clarification for common wording like
 "connect my ChatGPT account" or "use my Codex subscription". Treat that

@@ -12,7 +12,7 @@ The current capability list is intentionally small.
 | `tinyhat_google_workspace` | Available now | Connects Google identity, composes implemented access presets and requestable Custom scopes, lets Google handle its pending-verification warning, blocks unimplemented requests before OAuth, and starts an account-targeted local disconnect ceremony. |
 | `tinyhat_google_workspace_app` | Available now | Lends one selected account's assignment-verified Google access to one bounded `gws` invocation. |
 | `tinyhat_google_workspace_app_manager` | Available now | After approval, installs or removes the pinned integrity-verified `gws` app; Hermes supplies the operation skill. |
-| `tinyhat-codex-auth` skill | Available now | Teaches the agent to start and inspect the Tinyhat-installed OpenAI Codex / ChatGPT subscription auth flow. |
+| `tinyhat-codex-auth` skill | Available now | Teaches the agent the starter-credit funding model, the one-time connect-your-subscription reminder, and how to start and inspect the Tinyhat-installed OpenAI Codex / ChatGPT subscription auth flow. |
 | `tinyhat_plugin_update` | Available now | Checks and applies the configured plugin channel through installed runtime commands. |
 | `tinyhat-privacy` skill | Available now | Teaches the agent Tinyhat's privacy and trust model: dedicated isolated Computers, no routine platform reading of Computer contents, policy-bound human access, and the private-Computer direction. |
 | `pre_llm_call` context | Available now | Gives Hermes a short Tinyhat operating reminder on first turn and Tinyhat-sensitive requests. |
