@@ -501,10 +501,14 @@ class HermesAdapterTests(unittest.TestCase):
             "How is my data protected here?",
             "Where is this conversation stored?",
             "Can support staff view this chat?",
+            "Is anyone reading this conversation?",
+            "Are you recording our chat?",
+            "Can employees inspect my files?",
             "آیا ادمین‌ها به پیام‌های من دسترسی دارن؟",
             "آیا ادمین ها به پیامهای من دسترسی دارن؟",
             "آيا كسی به پیامهای من دسترسی داره؟",
             "حریم خصوصی من اینجا چطور حفظ میشه؟",
+            "کسی مکالمه‌های منو می‌خونه؟",
         )
         for user_message in examples:
             with self.subTest(user_message=user_message):
@@ -527,6 +531,10 @@ class HermesAdapterTests(unittest.TestCase):
             "Please log the HTTP response",
             "Review the security headers",
             "I trust this certificate",
+            "Tail the application logs",
+            "Explain operator precedence",
+            "Please migrate my database",
+            "برای سایت یه بلاگ بنویس",
         )
         for user_message in examples:
             with self.subTest(user_message=user_message):
@@ -541,12 +549,14 @@ class HermesAdapterTests(unittest.TestCase):
         fragments = (
             "affirmatively requests or permits",
             "protect the service, or maintain security",
+            "required by law",
         )
         files = (
             REPO_ROOT / "skills" / "tinyhat-privacy" / "SKILL.md",
             REPO_ROOT / "skills" / "tinyhat-platform" / "SKILL.md",
             REPO_ROOT / "README.md",
             REPO_ROOT / "docs" / "capabilities.md",
+            REPO_ROOT / "CHANGELOG.md",
         )
         for path in files:
             text = " ".join(path.read_text(encoding="utf-8").split())

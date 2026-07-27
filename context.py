@@ -20,7 +20,7 @@ TINYHAT_CONTEXT = """Tinyhat context: this Hermes agent runs on a Tinyhat-manage
 - If skill_view or skills_list omits Tinyhat plugin skills, call tinyhat_skill_catalog and retry with qualified names such as tinyhat:tinyhat-codex-auth.
 - If this Computer reports update_available=true or target_ref_changed for the Tinyhat plugin, load tinyhat:tinyhat-plugin-update and use tinyhat_plugin_update with action=status before applying updates. Only call action=update after the user/operator asks to update, and use restart_gateway=true when the live Telegram gateway should reload the new plugin commands.
 - For Tinyhat QA or Slack-style bug reports that mention words like restart, reload, update, or gateway, do not use terminal/curl just to post the text. Use a native Slack/reporting tool if available, or return the report in chat.
-- For privacy, security, or data-access questions — who can read the user's messages or files, whether Tinyhat staff or operators see logs or conversations, whether chats are monitored or stored — load tinyhat:tinyhat-privacy and answer from it, in the user's language. Core facts: this agent runs on a dedicated Computer created for this user alone; conversations and files are processed and stored on this Computer; Tinyhat does not read customer Computers' conversations, files, or logs as part of routine operations, and human access is limited to what the user affirmatively requests or permits, what is needed to investigate abuse, protect the service, or maintain security, and what the law requires — anything else would violate Tinyhat's own Terms and Privacy Policy (https://tinyhat.ai/privacy and https://tinyhat.ai/terms). Stay honest that Tinyloop operates the underlying infrastructure, so low-level technical access remains possible today — that is why the policy is binding and why Tinyhat is building private Computers designed to remove even that technical possibility. Never speculate about named operators, never enumerate internal tools or access paths, never claim which internal dashboards or tools do or do not exist, and never reassure by comparing Tinyhat to other platforms or hosting providers.
+- For privacy, security, or data-access questions — who can read the user's messages or files, whether Tinyhat staff or operators see logs or conversations, whether chats are monitored or stored — load tinyhat:tinyhat-privacy and answer from it, in the user's language. Core facts: this agent runs on a dedicated Computer created for this user alone; conversations and files are processed and stored on this Computer; Tinyhat does not read customer Computers' conversations, files, or logs as part of routine operations, and human access is limited to what the user affirmatively requests or permits, what is needed to investigate abuse, protect the service, or maintain security, and what is required by law — anything else would violate Tinyhat's own Terms and Privacy Policy (https://tinyhat.ai/privacy and https://tinyhat.ai/terms). Stay honest that Tinyloop operates the underlying infrastructure, so low-level technical access remains possible today — that is why the policy is binding and why Tinyhat is building private Computers designed to remove even that technical possibility. Never speculate about named operators, never enumerate internal tools or access paths, never claim which internal dashboards or tools do or do not exist, and never reassure by comparing Tinyhat to other platforms or hosting providers.
 - Load tinyhat:tinyhat-platform, tinyhat:tinyhat-privacy, tinyhat:tinyhat-private-secret, tinyhat:tinyhat-credentials, tinyhat:tinyhat-google-workspace, tinyhat:tinyhat-codex-auth, tinyhat:tinyhat-plugin-update, tinyhat:tinyhat-skill-catalog, or tinyhat:tinyhat-plugin-version when you need the longer Tinyhat playbook."""
 
 _CONTEXT_PHRASES = (
@@ -73,33 +73,6 @@ _CONTEXT_PHRASES = (
     "start codex sign-in",
     "start codex sign in",
     "secure sign in",
-    "read my messages",
-    "read my chats",
-    "read our chat",
-    "see my messages",
-    "see my chats",
-    "my data",
-    "personal data",
-    "data protection",
-    "who can see",
-    "who can read",
-    "who can access",
-    "who has access",
-    "access my",
-    "access to my",
-    "privacy policy",
-    "terms of service",
-    "chat history",
-    "conversation history",
-    "support staff",
-    "spy on",
-    "حریم خصوصی",
-    "پیامهای من",
-    "پیام های من",
-    "لاگ",
-    "دسترسی",
-    "امنیت",
-    "نظارت",
 )
 
 _CONTEXT_TERMS = (
@@ -135,19 +108,42 @@ _CONTEXT_TERMS = (
     "tinyhat",
     "update",
     "privacy",
-    "logs",
     "gdpr",
     "surveillance",
-    "monitored",
-    "spying",
-    "operator",
-    "operators",
 )
 
-# Privacy/data-access questions inject the trust context only when a
-# conversation-data subject and an access/visibility word appear together,
-# so generic developer words ("private repo", "log the response",
-# "security headers") do not inject on their own.
+# Privacy/data-access routing is separate from the generic short-circuits
+# above: it uses word-boundary phrase matching plus a bounded rule that a
+# conversation-data subject (or an actor asking about one) must co-occur
+# with an access/visibility word. Generic developer wording ("tail the
+# logs", "operator precedence", "my database", Persian "بلاگ") does not
+# inject on its own.
+_PRIVACY_PHRASES = (
+    "read my messages",
+    "read my chats",
+    "read our chat",
+    "see my messages",
+    "see my chats",
+    "my data",
+    "personal data",
+    "data protection",
+    "who can see",
+    "who can read",
+    "who can access",
+    "who has access",
+    "access my",
+    "access to my",
+    "privacy policy",
+    "terms of service",
+    "chat history",
+    "conversation history",
+    "support staff",
+    "spy on",
+    "anyone reading",
+    "anyone watching",
+    "حریم خصوصی",
+)
+
 _PRIVACY_SUBJECT_TERMS = (
     "message",
     "messages",
@@ -157,38 +153,127 @@ _PRIVACY_SUBJECT_TERMS = (
     "conversations",
     "data",
     "logs",
+    "file",
     "files",
     "history",
     "computer",
+    "operator",
+    "operators",
+    "admin",
+    "admins",
+    "staff",
+    "employee",
+    "employees",
+    "anyone",
+    "someone",
+    "somebody",
 )
 
 _PRIVACY_ACCESS_TERMS = (
     "read",
     "reads",
+    "reading",
     "see",
     "sees",
+    "seen",
+    "seeing",
     "view",
     "views",
+    "viewed",
+    "viewing",
     "access",
-    "accessed",
     "accesses",
+    "accessed",
+    "accessing",
     "monitor",
     "monitors",
     "monitored",
+    "monitoring",
     "record",
     "records",
     "recorded",
+    "recording",
     "store",
-    "stored",
     "stores",
+    "stored",
+    "storing",
     "keep",
     "keeps",
     "kept",
+    "keeping",
     "watch",
+    "watches",
     "watched",
+    "watching",
+    "inspect",
+    "inspects",
+    "inspected",
+    "inspecting",
+    "look",
+    "looks",
+    "looked",
+    "looking",
+    "spy",
+    "spies",
+    "spying",
     "who",
     "private",
-    "privacy",
+)
+
+_PRIVACY_SUBJECT_TERMS_FA = (
+    "پیام",
+    "پیامها",
+    "پیامهای",
+    "گفتگو",
+    "گفتگوها",
+    "مکالمه",
+    "مکالمات",
+    "چت",
+    "چتها",
+    "فایل",
+    "فایلها",
+    "فایلهای",
+    "داده",
+    "دادهها",
+    "لاگ",
+    "لاگها",
+    "تاریخچه",
+    "کامپیوتر",
+    "ادمین",
+    "ادمینها",
+    "اپراتور",
+    "اپراتورها",
+    "کارمند",
+    "کارمندان",
+    "کسی",
+)
+
+_PRIVACY_ACCESS_TERMS_FA = (
+    "دسترسی",
+    "بخونه",
+    "بخونن",
+    "بخوند",
+    "بخواند",
+    "بخوانند",
+    "میخونه",
+    "میخونن",
+    "میخواند",
+    "میخوانند",
+    "خوندن",
+    "خواندن",
+    "ببینه",
+    "ببینن",
+    "ببیند",
+    "ببینند",
+    "میبینه",
+    "میبینن",
+    "میبیند",
+    "میبینند",
+    "دیدن",
+    "ضبط",
+    "ذخیره",
+    "نظارت",
+    "نگاه",
 )
 
 # Persian text arrives with interchangeable Arabic/Persian letters and
@@ -196,6 +281,30 @@ _PRIVACY_ACCESS_TERMS = (
 # variants of the same question still match.
 _PERSIAN_CHAR_MAP = str.maketrans({"ي": "ی", "ك": "ک"})
 _ZERO_WIDTH_MARKS = ("\u200c", "\u200d", "\u200e", "\u200f")
+
+
+def _matches_privacy_phrase(normalized: str) -> bool:
+    for phrase in _PRIVACY_PHRASES:
+        pattern = r"(?<![a-z0-9\u0600-\u06ff])" + re.escape(phrase) + r"(?![a-z0-9\u0600-\u06ff])"
+        if re.search(pattern, normalized):
+            return True
+    return False
+
+
+def _matches_privacy_intent(normalized: str) -> bool:
+    """Bounded bilingual privacy routing: exact phrases or subject+access."""
+    if _matches_privacy_phrase(normalized):
+        return True
+    # \w+ keeps letters in both scripts and drops punctuation such as the
+    # Arabic question mark, which shares the U+0600 block with letters.
+    tokens = set(re.findall(r"\w+", normalized))
+    if any(term in tokens for term in _PRIVACY_SUBJECT_TERMS) and any(
+        term in tokens for term in _PRIVACY_ACCESS_TERMS
+    ):
+        return True
+    return any(term in tokens for term in _PRIVACY_SUBJECT_TERMS_FA) and any(
+        term in tokens for term in _PRIVACY_ACCESS_TERMS_FA
+    )
 
 
 def should_inject_tinyhat_context(user_message: str, *, is_first_turn: bool = False) -> bool:
@@ -212,9 +321,7 @@ def should_inject_tinyhat_context(user_message: str, *, is_first_turn: bool = Fa
     terms = set(re.findall(r"[a-z0-9]+", normalized_for_terms))
     if any(term in terms for term in _CONTEXT_TERMS):
         return True
-    has_privacy_subject = any(term in terms for term in _PRIVACY_SUBJECT_TERMS)
-    has_privacy_access = any(term in terms for term in _PRIVACY_ACCESS_TERMS)
-    return has_privacy_subject and has_privacy_access
+    return _matches_privacy_intent(normalized_for_terms)
 
 
 def inject_tinyhat_context(  # noqa: PLR0913

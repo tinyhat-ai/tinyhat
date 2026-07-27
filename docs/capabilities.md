@@ -64,7 +64,7 @@ Computer, conversations and files are processed and stored on that
 Computer, and Tinyhat does not read customer Computers' contents as part
 of routine operations. Human access is limited to what the user
 affirmatively requests or permits, what is needed to investigate abuse,
-protect the service, or maintain security, and what the law requires;
+protect the service, or maintain security, and what is required by law;
 anything else would violate Tinyhat's Terms and Privacy Policy. The skill
 requires an honest, comparison-free caveat — Tinyloop operates the
 underlying infrastructure, so low-level technical access remains possible

@@ -65,8 +65,7 @@ dedicated Computer created for this user alone, conversations and files are
 processed and stored on it, and Tinyhat does not read customer Computers'
 contents as part of routine operations — human access is limited to what
 the user affirmatively requests or permits, what is needed to investigate
-abuse, protect the service, or maintain security, and what the law
-requires; anything else would violate Tinyhat's own Terms and Privacy
+abuse, protect the service, or maintain security, and what is required by law; anything else would violate Tinyhat's own Terms and Privacy
 Policy (https://tinyhat.ai/privacy and https://tinyhat.ai/terms). Never
 speculate about named operators, never enumerate internal access tools,
 and never reassure by comparison with other platforms.

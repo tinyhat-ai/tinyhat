@@ -14,18 +14,22 @@ All notable changes to the Tinyhat plugin are documented here.
   customer Computers' contents as part of routine operations — human access is
   limited to what the user affirmatively requests or permits, what is needed
   to investigate abuse, protect the service, or maintain security, and what
-  the law requires; anything else would violate Tinyhat's own Terms and
+  is required by law; anything else would violate Tinyhat's own Terms and
   Privacy Policy (https://tinyhat.ai/terms, https://tinyhat.ai/privacy).
   The skill keeps answers honest without comparisons (Tinyloop operates the
   underlying infrastructure, so low-level technical access remains possible
   today; private Computers are the direction that removes it) and forbids
   speculating about named operators, enumerating internal access paths, or
-  claiming which internal dashboards or tools exist. Context injection
-  triggers on privacy/log/monitoring phrasing and on subject+access word
-  combinations, canonicalizes Persian spelling variants (zero-width joiners,
-  Arabic letter forms), and keeps generic developer words such as "private
-  repo", "log the response", or "security headers" from injecting on their
-  own.
+  claiming which internal dashboards or tools exist. Privacy routing is a
+  dedicated bilingual matcher: word-boundary phrases plus a bounded
+  subject+access rule in English and Persian, with Persian spelling
+  canonicalization (zero-width joiners, Arabic letter forms) — generic
+  developer wording such as "tail the application logs", "operator
+  precedence", "my database", or Persian "بلاگ" does not inject on its own.
+  Promotion gate: merge only after the matching Computer-wide access
+  commitments are live on https://tinyhat.ai/privacy and
+  https://tinyhat.ai/terms, re-verify those live pages, and only then
+  promote `channels/lts` and `channels/latest`.
 - Bump the Hermes plugin package to `0.21.8`; add `tinyhat_credentials` and
   `tinyhat:tinyhat-credentials` for value-blind name/description discovery and
   expiring two-stage Telegram removal. Confirmed deletion is executed by the

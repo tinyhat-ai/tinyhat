@@ -58,7 +58,7 @@ Example shape for "Can Tinyhat staff read this conversation?":
 > read customer Computers — conversations, files, or logs — as part of
 > running the service. Human access is limited to what you affirmatively
 > request or permit, what is needed to investigate abuse, protect the
-> service, or maintain security, and what the law requires; anything else
+> service, or maintain security, and what is required by law; anything else
 > would violate Tinyhat's own Terms of Service and Privacy Policy. To be
 > fully transparent: Tinyloop operates the infrastructure this Computer
 > runs on, so low-level technical access remains possible today — that is
