@@ -271,7 +271,9 @@ _PRIVACY_SUBJECT_STEMS_FA = (
 _PRIVACY_ACCESS_STEMS_FA = (
     "دسترسی",
     "میخون",
+    "میخوان",
     "بخون",
+    "بخوان",
     "خوند",
     "خواند",
     "میبین",
@@ -283,8 +285,25 @@ _PRIVACY_ACCESS_STEMS_FA = (
     "نگاه",
 )
 
+# A Persian privacy question carries a question mark or an explicit
+# asker/owner word; task requests directed at the agent do not.
+_PRIVACY_SIGNAL_TERMS_FA = (
+    "آیا",
+    "کسی",
+    "کی",
+    "شما",
+    "تو",
+    "چرا",
+    "چه",
+    "من",
+    "منو",
+    "ما",
+)
+
 # Imperative "do" markers turn a data+verb sentence into a work request
 # ("فایل رو ذخیره کن"), not a privacy question.
+# Bare imperative verb tokens are direct commands ("فایل رو بخون"), not
+# questions; suffixed conjugations of the same stems still count as access.
 _PRIVACY_IMPERATIVE_MARKERS_FA = (
     "کن",
     "کنید",
@@ -293,6 +312,8 @@ _PRIVACY_IMPERATIVE_MARKERS_FA = (
     "بکنید",
     "کنم",
     "کنیم",
+    "بخون",
+    "ببین",
 )
 
 # Persian text arrives with interchangeable Arabic/Persian letters and
@@ -319,13 +340,22 @@ def _matches_privacy_intent(normalized: str) -> bool:
     # \w+ keeps letters in both scripts and drops punctuation such as the
     # Arabic question mark, which shares the U+0600 block with letters.
     tokens = set(re.findall(r"\w+", normalized))
+    # "Can/could you read this file" is a task request aimed at the agent,
+    # not a question about who reads the user's data.
+    is_task_request = re.search(r"(?<!\w)(can|could|would|will|please) you(?!\w)", normalized)
     if (
-        any(term in tokens for term in _PRIVACY_SUBJECT_TERMS)
+        not is_task_request
+        and any(term in tokens for term in _PRIVACY_SUBJECT_TERMS)
         and any(term in tokens for term in _PRIVACY_ACCESS_TERMS)
         and any(term in tokens for term in _PRIVACY_SIGNAL_TERMS)
     ):
         return True
     if any(token in tokens for token in _PRIVACY_IMPERATIVE_MARKERS_FA):
+        return False
+    has_fa_signal = "؟" in normalized or any(
+        term in tokens for term in _PRIVACY_SIGNAL_TERMS_FA
+    )
+    if not has_fa_signal:
         return False
     has_fa_subject = any(
         token.startswith(stem) for token in tokens for stem in _PRIVACY_SUBJECT_STEMS_FA
