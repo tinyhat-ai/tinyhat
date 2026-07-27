@@ -38,8 +38,9 @@ receives Slack message content.
 | `__init__.py` | Hermes registration entrypoint. |
 | `hermes.plugin.json` | Tinyhat metadata for the Hermes adapter, skill, command, and release channels. |
 | `context.py` | Small Hermes `pre_llm_call` context hook for Tinyhat-sensitive turns. |
-| `tools.py` / `schemas.py` | Tinyhat tools: plugin version, safe platform status, joke proof, skill catalog, private secret handoff, Slack connection, Google identity connection, Codex auth setup/status helpers, and plugin update helper. |
+| `tools.py` / `schemas.py` | Tinyhat tools: plugin version, safe platform status, joke proof, skill catalog, private secret handoff and removal, Slack connection, Google identity connection, Codex auth setup/status helpers, and plugin update helper. |
 | `slack_connection.py` | Hermes manifest generation plus Computer-local Slack token validation and installation. |
+| `credentials.py` | Value-blind credential name/description discovery and platform-owned, expiring Telegram removal confirmation. |
 | `google_workspace.py` / `google_workspace_worker.py` | Platform-authored Google OAuth handoff, multi-account local custody, manifest-governed access selection, assignment-safe status, and targeted disconnect. |
 | `google_workspace_scope_manifest.json` / `google_workspace_scope_manifest.py` | Versioned public Google scope contract and dependency-free loader. |
 | `google_workspace_app.py` | Account-selected credential bridge to the manifest-verified, root-owned managed `gws` app. |
@@ -49,6 +50,7 @@ receives Slack message content.
 | `skills/tinyhat-skill-catalog/SKILL.md` | Skill discovery guidance for plugin-qualified Tinyhat skill names. |
 | `skills/tinyhat-private-secret/SKILL.md` | Browser-encrypted secret handoff guidance. |
 | `skills/tinyhat-slack/SKILL.md` | Hermes-native Slack Agent-view and Socket Mode onboarding. |
+| `skills/tinyhat-credentials/SKILL.md` | Value-blind credential discovery and confirmed Computer-side removal guidance. |
 | `skills/tinyhat-google-workspace/SKILL.md` | Existing-account Google identity connection guidance. |
 | `skills/tinyhat-google-workspace-app-manager/SKILL.md` | Approval-gated managed `gws` installation guidance. |
 | `skills/tinyhat-codex-auth/SKILL.md` | OpenAI Codex / ChatGPT subscription auth guidance. |
@@ -141,6 +143,14 @@ Socket Mode token, and allowed Slack member IDs. The Computer validates those
 values against Slack, saves them through Hermes' supported configuration
 interface, and reports only the app and workspace identifiers needed by the
 Connections page. Hermes owns the WebSocket and every Slack message.
+
+`tinyhat-credentials` lists only the safe names, descriptions, and saved
+timestamps of credentials currently installed through the private-secret
+handoff. Removal sends an expiring two-stage Telegram confirmation. After the
+user confirms, the platform queues a generation-bound runtime command; Hermes
+deletes the env entry, terminal alias, and loaded process value locally. The
+platform hard-deletes the value-less credential metadata only after that local
+proof, and the user may then add the same name again.
 
 `tinyhat-google-workspace` connects this Computer to existing Google accounts.
 Each connect without `account_id` adds an account while preserving the others.
@@ -352,7 +362,7 @@ For development or manual testing, use `channels/latest` or an exact tag:
 
 ```bash
 TINYHAT_PLUGIN_REF=channels/latest
-TINYHAT_PLUGIN_REF=v0.21.8
+TINYHAT_PLUGIN_REF=v0.21.9
 ```
 
 ## Channels
@@ -361,9 +371,9 @@ TINYHAT_PLUGIN_REF=v0.21.8
 | --- | --- |
 | `channels/lts` | Conservative default for managed Computers. |
 | `channels/latest` | Newest promoted final version, used when we want faster adoption. |
-| exact tag, for example `v0.21.8` | Immutable version for tests, rollbacks, and audits. |
+| exact tag, for example `v0.21.9` | Immutable version for tests, rollbacks, and audits. |
 
-For v0.21.8, merge and tag the public plugin without advancing either channel.
+For v0.21.9, merge and tag the public plugin without advancing either channel.
 Deploy the platform that validates the same manifest contract, then promote
 `channels/latest` and `channels/lts`. This order prevents old Computers or an
 older platform from applying the superseded pending-review denial.

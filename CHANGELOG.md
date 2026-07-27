@@ -6,12 +6,17 @@ All notable changes to the Tinyhat plugin are documented here.
 
 ### Changed
 
-- Bump the Hermes plugin package to `0.21.8` and add `tinyhat_slack_connect`.
+- Bump the Hermes plugin package to `0.21.9` and add `tinyhat_slack_connect`.
   The tool generates Hermes' current Slack Agent-view manifest, sends the
   create-from-manifest guide in Telegram, accepts the bot token, Socket Mode
   app token, and allowed member IDs as one browser-encrypted bundle, validates
   and saves them on the Computer, and leaves all Slack message handling to
   Hermes over Socket Mode.
+- Bump the Hermes plugin package to `0.21.8`; add `tinyhat_credentials` and
+  `tinyhat:tinyhat-credentials` for value-blind name/description discovery and
+  expiring two-stage Telegram removal. Confirmed deletion is executed by the
+  assigned Computer, never by the platform, and the same name can be added
+  again after local deletion succeeds.
 - Bump the Hermes plugin package to `0.21.7` and separate Tinyhat requestability
   from Google verification state. All nine implemented Gmail, Calendar, and
   Drive scopes can reach Google while verification is `preparing_submission`;

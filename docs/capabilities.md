@@ -45,6 +45,13 @@ directly with Slack, saves them through Hermes, and reports only safe app and
 workspace metadata. Hermes then connects through Socket Mode; Tinyhat has no
 public Slack ingress and never receives Slack messages.
 
+To find or remove one of these new value-blind credentials, load
+`tinyhat:tinyhat-credentials` and call `tinyhat_credentials`. Search returns
+only safe name and description metadata. Removal is bound to the exact handoff
+generation and requires the platform's expiring Telegram confirmation before
+Hermes deletes the credential locally. The platform never receives a value and
+deletes its metadata only after the Computer proves the local name is absent.
+
 ## Tinyhat Platform Context
 
 The plugin injects a short context note when the user asks about secrets,

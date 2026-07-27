@@ -9,6 +9,7 @@ from pathlib import Path
 from typing import Any
 from urllib import error, parse, request
 
+from .credentials import credentials as handle_credentials
 from .google_workspace import google_workspace as handle_google_workspace
 from .google_workspace_app import google_workspace_app as handle_google_workspace_app
 from .google_workspace_app_manager import (
@@ -162,6 +163,11 @@ def slack_connect(args: dict[str, Any] | None = None, **kwargs: Any) -> str:
     """Start the Hermes-owned Slack connection onboarding."""
 
     return start_slack_connection(args, **kwargs)
+
+
+def credentials(args: dict[str, Any] | None = None, **kwargs: Any) -> str:
+    """List or start confirmed deletion of value-blind Computer credentials."""
+    return handle_credentials(args, **kwargs)
 
 
 def google_workspace(args: dict[str, Any] | None = None, **kwargs: Any) -> str:
