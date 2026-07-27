@@ -6,7 +6,7 @@ All notable changes to the Tinyhat plugin are documented here.
 
 ### Changed
 
-- Bump the Hermes plugin package to `0.21.9`; add the `tinyhat:tinyhat-privacy`
+- Bump the Hermes plugin package to `0.21.11`; add the `tinyhat:tinyhat-privacy`
   skill and widen the `pre_llm_call` context so agents answer privacy and
   data-access questions from the platform's real trust model instead of
   guessing: each user gets a dedicated isolated Computer, conversations and

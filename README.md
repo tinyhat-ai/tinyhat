@@ -389,7 +389,7 @@ For development or manual testing, use `channels/latest` or an exact tag:
 
 ```bash
 TINYHAT_PLUGIN_REF=channels/latest
-TINYHAT_PLUGIN_REF=v0.21.9
+TINYHAT_PLUGIN_REF=vX.Y.Z
 ```
 
 ## Channels
@@ -398,12 +398,12 @@ TINYHAT_PLUGIN_REF=v0.21.9
 | --- | --- |
 | `channels/lts` | Conservative default for managed Computers. |
 | `channels/latest` | Newest promoted final version, used when we want faster adoption. |
-| exact tag, for example `v0.21.9` | Immutable version for tests, rollbacks, and audits. |
+| exact tag, for example `vX.Y.Z` | Immutable version for tests, rollbacks, and audits. |
 
-For v0.21.9, merge and tag the public plugin without advancing either channel.
-Deploy the platform that validates the same manifest contract, then promote
-`channels/latest` and `channels/lts`. This order prevents old Computers or an
-older platform from applying the superseded pending-review denial.
+For v0.21.11, deploy the platform that validates the same Slack and privacy
+contracts before promoting `channels/latest` and `channels/lts`. This order
+keeps older Computers and platform versions from applying incompatible
+connection or trust-model behavior.
 
 ## Local Checks
 
