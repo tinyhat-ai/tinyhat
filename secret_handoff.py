@@ -20,6 +20,7 @@ from .tool_errors import tool_error_json
 
 KEY_ALGORITHM = "RSA-OAEP-256"
 DEFAULT_EXPIRES_IN_SECONDS = 300
+MAX_EXPIRES_IN_SECONDS = 30 * 60
 SECRET_NAME_RE = re.compile(r"^[A-Z_][A-Z0-9_]{0,126}$")
 STATE_DIR = Path.home() / ".tinyhat" / "private-secret-handoffs"
 WORKER_SYSTEMD_ENV_KEYS = (
@@ -152,6 +153,7 @@ def _start_worker_process(handoff: dict[str, Any], private_key_pem: str) -> None
     handoff_id = str(handoff.get("handoff_id") or "").strip()
     if not handoff_id:
         raise SecretHandoffError("Platform did not return a handoff id.")
+    expires_in_seconds = _worker_expires_in_seconds(handoff)
     key_path = _write_private_key_file(handoff_id, private_key_pem)
     package_dir = Path(__file__).resolve().parent
     env = os.environ.copy()
@@ -165,6 +167,7 @@ def _start_worker_process(handoff: dict[str, Any], private_key_pem: str) -> None
             key_path=key_path,
             package_dir=package_dir,
             env=env,
+            expires_in_seconds=expires_in_seconds,
         ):
             return
         _start_worker_with_popen(
@@ -172,6 +175,7 @@ def _start_worker_process(handoff: dict[str, Any], private_key_pem: str) -> None
             key_path=key_path,
             package_dir=package_dir,
             env=env,
+            expires_in_seconds=expires_in_seconds,
         )
     except Exception as exc:
         try:
@@ -184,12 +188,24 @@ def _start_worker_process(handoff: dict[str, Any], private_key_pem: str) -> None
         ) from exc
 
 
+def _worker_expires_in_seconds(handoff: dict[str, Any]) -> int:
+    raw_value = handoff.get("entry_window_seconds")
+    if raw_value is None:
+        raw_value = handoff.get("expires_in_seconds")
+    try:
+        value = int(raw_value)
+    except (TypeError, ValueError):
+        value = DEFAULT_EXPIRES_IN_SECONDS
+    return min(max(1, value), MAX_EXPIRES_IN_SECONDS)
+
+
 def _start_worker_with_systemd(
     *,
     handoff_id: str,
     key_path: Path,
     package_dir: Path,
     env: dict[str, str],
+    expires_in_seconds: int,
 ) -> bool:
     systemd_run = shutil.which("systemd-run")
     if not systemd_run:
@@ -213,6 +229,8 @@ def _start_worker_with_systemd(
             handoff_id,
             "--key-path",
             str(key_path),
+            "--expires-in-seconds",
+            str(expires_in_seconds),
         ]
     )
     try:
@@ -248,6 +266,7 @@ def _start_worker_with_popen(
     key_path: Path,
     package_dir: Path,
     env: dict[str, str],
+    expires_in_seconds: int,
 ) -> None:
     # Fallback when systemd-run is unavailable or fails. The worker never
     # stops or starts the gateway, so escaping the gateway control group via
@@ -260,6 +279,8 @@ def _start_worker_with_popen(
             handoff_id,
             "--key-path",
             str(key_path),
+            "--expires-in-seconds",
+            str(expires_in_seconds),
         ],
         cwd=str(package_dir.parent),
         env=env,

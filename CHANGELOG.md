@@ -38,6 +38,8 @@ All notable changes to the Tinyhat plugin are documented here.
   leaves all Slack message handling to Hermes over Socket Mode. Direct env
   writes resolve and verify Hermes' real Python runtime from its launcher or
   project venv instead of accepting an unrelated system Python executable.
+  Detached handoff workers now also honor the platform's entry window, so the
+  Slack worker remains available for the advertised 30-minute setup period.
 - Bump the Hermes plugin package to `0.21.8`; add `tinyhat_credentials` and
   `tinyhat:tinyhat-credentials` for value-blind name/description discovery and
   expiring two-stage Telegram removal. Confirmed deletion is executed by the

@@ -1776,6 +1776,7 @@ class HermesAdapterTests(unittest.TestCase):
                     key_path=key_path,
                     package_dir=package_dir,
                     env=env,
+                    expires_in_seconds=30 * 60,
                 )
             finally:
                 secret_handoff.shutil.which = original_which
@@ -1789,8 +1790,8 @@ class HermesAdapterTests(unittest.TestCase):
         self.assertIn("--setenv=TINYHAT_HERMES_HOME=/home/tinyhat/.hermes", args)
         self.assertIn("--setenv=TINYHAT_PLATFORM_URL=http://localhost:8000", args)
         self.assertIn("--setenv=TINYHAT_LOCAL_DEV_TOKEN=dev-token", args)
-        self.assertEqual(args[-4], "--handoff-id")
-        self.assertEqual(args[-3], "sh_test")
+        self.assertIn("--expires-in-seconds", args)
+        self.assertIn(str(30 * 60), args)
 
     def test_private_secret_worker_systemd_failure_falls_back_to_popen(self) -> None:
         original_which = secret_handoff.shutil.which
@@ -1825,7 +1826,10 @@ class HermesAdapterTests(unittest.TestCase):
                 stderr = io.StringIO()
                 with contextlib.redirect_stderr(stderr):
                     secret_handoff._start_worker_process(
-                        {"handoff_id": "sh_test"},
+                        {
+                            "handoff_id": "sh_test",
+                            "entry_window_seconds": 30 * 60,
+                        },
                         "PRIVATE",
                     )
             finally:
@@ -1841,8 +1845,37 @@ class HermesAdapterTests(unittest.TestCase):
         self.assertTrue(str(worker_args[1]).endswith("secret_handoff_worker.py"))
         self.assertIn("--handoff-id", worker_args)
         self.assertIn("sh_test", worker_args)
+        self.assertIn("--expires-in-seconds", worker_args)
+        self.assertIn(str(30 * 60), worker_args)
         self.assertIn("falling back to a detached process", stderr.getvalue())
         self.assertIn("Failed to start transient service unit", stderr.getvalue())
+
+    def test_private_secret_worker_uses_platform_entry_window(self) -> None:
+        with (
+            tempfile.TemporaryDirectory() as tmp,
+            mock.patch.object(
+                secret_handoff,
+                "STATE_DIR",
+                Path(tmp) / "handoffs",
+            ),
+            mock.patch.object(
+                secret_handoff,
+                "_start_worker_with_systemd",
+                return_value=True,
+            ) as start_worker,
+        ):
+            secret_handoff._start_worker_process(
+                {
+                    "handoff_id": "sh_slack",
+                    "entry_window_seconds": 30 * 60,
+                },
+                "PRIVATE",
+            )
+
+        self.assertEqual(
+            start_worker.call_args.kwargs["expires_in_seconds"],
+            30 * 60,
+        )
 
     def test_private_secret_save_ignores_worker_reload_failure(self) -> None:
         original_which = secret_handoff.shutil.which
