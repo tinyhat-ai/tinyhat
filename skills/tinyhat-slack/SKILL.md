@@ -23,6 +23,12 @@ files, and Socket Mode remain owned by Hermes.
 The Mini App encrypts all values for this Computer. Tinyhat carries only
 ciphertext and safe connection metadata. Hermes validates and saves the values
 locally, then owns the Slack Socket Mode connection and all Slack functionality.
+After submission, Hermes immediately acknowledges receipt in Telegram. It then
+reports either the validation stage that failed or confirms that it sent the
+first owner-DM message in Slack. The connection is not marked ready until that
+Slack message succeeds. Tinyhat receives only the value-blind stage, stable
+error code, field-presence booleans, allowed-member count, and validated
+app/workspace labels; it never receives tokens or member IDs.
 
 Call the tool once with no arguments. Do not ask for token values in chat, do
 not substitute the generic private-secret flow, and do not send an extra reply

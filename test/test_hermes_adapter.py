@@ -174,7 +174,7 @@ class HermesAdapterTests(unittest.TestCase):
 
         self.assertEqual(payload["schema"], "tinyhat_plugin_version_v1")
         self.assertEqual(payload["name"], "tinyhat")
-        self.assertEqual(payload["version"], "0.21.11")
+        self.assertEqual(payload["version"], "0.21.12")
 
     def test_platform_status_uses_attested_computer_endpoint(self) -> None:
         original_build = tools.build_platform_client
@@ -187,7 +187,7 @@ class HermesAdapterTests(unittest.TestCase):
                     "computer_id": 5359,
                     "state": "active",
                     "assigned": True,
-                    "package_inventory": {"plugin": {"version": "0.21.11"}},
+                    "package_inventory": {"plugin": {"version": "0.21.12"}},
                 }
 
         try:
@@ -200,7 +200,7 @@ class HermesAdapterTests(unittest.TestCase):
         self.assertEqual(payload["computer_id"], 5359)
         self.assertEqual(payload["state"], "active")
         self.assertTrue(payload["assigned"])
-        self.assertEqual(payload["package_inventory"]["plugin"]["version"], "0.21.11")
+        self.assertEqual(payload["package_inventory"]["plugin"]["version"], "0.21.12")
 
     def test_platform_status_returns_structured_platform_error(self) -> None:
         original_build = tools.build_platform_client
@@ -223,7 +223,7 @@ class HermesAdapterTests(unittest.TestCase):
 
         self.assertEqual(payload["schema"], "tinyhat_skill_catalog_v1")
         self.assertEqual(payload["plugin"]["name"], "tinyhat")
-        self.assertEqual(payload["plugin"]["version"], "0.21.11")
+        self.assertEqual(payload["plugin"]["version"], "0.21.12")
         by_name = {skill["name"]: skill for skill in payload["skills"]}
         self.assertEqual(
             by_name["tinyhat-codex-auth"]["qualified_name"],
@@ -1058,6 +1058,8 @@ class HermesAdapterTests(unittest.TestCase):
         )
         saved: list[tuple[str, str]] = []
         claims: list[dict] = []
+        slack_calls: list[tuple[str, dict]] = []
+        notices: list[str] = []
         metadata = {
             "provider": "slack",
             "app_id": "A012ABCDEF",
@@ -1087,7 +1089,18 @@ class HermesAdapterTests(unittest.TestCase):
                 "_set_hermes_secret",
                 side_effect=lambda name, value: saved.append((name, value)),
             ),
-            mock.patch.object(slack_connection, "_send_secret_notice"),
+            mock.patch.object(
+                slack_connection,
+                "_slack_api_call",
+                side_effect=lambda method, **kwargs: (
+                    slack_calls.append((method, kwargs)) or {"ok": True}
+                ),
+            ),
+            mock.patch.object(
+                slack_connection,
+                "_send_secret_notice",
+                side_effect=lambda text: notices.append(text),
+            ),
             mock.patch.object(
                 slack_connection,
                 "_claim_handoff",
@@ -1119,10 +1132,99 @@ class HermesAdapterTests(unittest.TestCase):
                 ("SLACK_HOME_CHANNEL_NAME", "Owner DM"),
             ],
         )
-        self.assertEqual(claims[0]["connection_metadata"], metadata)
+        self.assertEqual(
+            claims[0]["connection_metadata"],
+            {**metadata, "connection_status": "connected"},
+        )
         self.assertEqual(
             claims[0]["outcome"],
             secret_handoff.HANDOFF_OUTCOME_RESTART_PENDING,
+        )
+        self.assertEqual(
+            slack_calls,
+            [
+                (
+                    "chat.postMessage",
+                    {
+                        "token": bot_token,
+                        "params": {
+                            "channel": "D012ABCDEF",
+                            "text": slack_connection.SLACK_WELCOME_MESSAGE,
+                        },
+                        "stage": "greeting",
+                    },
+                )
+            ],
+        )
+        self.assertIn("details were received", notices[0])
+        self.assertIn("welcome message was sent", notices[1])
+
+    def test_slack_failure_reports_stage_to_telegram_and_platform(self) -> None:
+        plaintext = json.dumps(
+            {
+                "schema": "tinyhat_slack_connection_bundle_v1",
+                "bot_token": "xoxb-placeholder",
+                "app_token": "xapp-placeholder",
+                "allowed_users": "U012ABCDEF",
+            }
+        )
+        claims: list[dict] = []
+        notices: list[str] = []
+        failure = slack_connection.SlackConnectionError(
+            "Slack rejected users.info: user_not_found.",
+            stage="member_lookup",
+            code="user_not_found",
+            public_message=(
+                "Slack could not find an allowed member ID. Copy it from the "
+                "member profile and retry."
+            ),
+        )
+        with (
+            mock.patch.object(
+                slack_connection,
+                "_decrypt_ciphertext",
+                return_value=plaintext,
+            ),
+            mock.patch.object(
+                slack_connection,
+                "_validate_slack_credentials",
+                side_effect=failure,
+            ),
+            mock.patch.object(
+                slack_connection,
+                "_send_secret_notice",
+                side_effect=lambda text: notices.append(text),
+            ),
+            mock.patch.object(
+                slack_connection,
+                "_claim_handoff",
+                side_effect=lambda *args, **kwargs: claims.append(kwargs),
+            ),
+            mock.patch.object(
+                slack_connection,
+                "_set_hermes_secret",
+                side_effect=AssertionError("must not save failed details"),
+            ),
+        ):
+            slack_connection.install_submitted_slack_connection(
+                client=object(),
+                platform_auth="local_dev",
+                handoff_id="sh_slack",
+                private_key_pem="PRIVATE",
+                state={"ciphertext_payload": {"algorithm": "RSA-OAEP-256"}},
+            )
+
+        self.assertIn("details were received", notices[0])
+        self.assertIn("allowed-member validation", notices[1])
+        self.assertEqual(claims[0]["installed"], False)
+        self.assertEqual(
+            claims[0]["connection_metadata"],
+            {
+                "provider": "slack",
+                "connection_status": "failed",
+                "failure_stage": "member_lookup",
+                "failure_code": "user_not_found",
+            },
         )
 
     def test_slack_bundle_parser_rejects_schema_and_token_prefixes(self) -> None:
@@ -1201,6 +1303,7 @@ class HermesAdapterTests(unittest.TestCase):
                     {
                         "token": "xoxb-placeholder",
                         "params": {"users": "U012ABCDEF"},
+                        "stage": "owner_dm",
                     },
                 )
             ],

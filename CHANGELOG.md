@@ -6,7 +6,11 @@ All notable changes to the Tinyhat plugin are documented here.
 
 ### Changed
 
-- Bump the Hermes plugin package to `0.21.11`; add the `tinyhat:tinyhat-privacy`
+- Bump the Hermes plugin package to `0.21.12`; acknowledge encrypted Slack
+  detail receipt immediately in Telegram, report value-blind validation stages
+  and stable error codes to the platform, and require a successful owner-DM
+  welcome message before the connection is marked ready.
+- Add the `tinyhat:tinyhat-privacy`
   skill and widen the `pre_llm_call` context so agents answer privacy and
   data-access questions from the platform's real trust model instead of
   guessing: each user gets a dedicated isolated Computer, conversations and
