@@ -1,6 +1,6 @@
 ---
 name: tinyhat-platform
-description: Explain how this Hermes agent should use Tinyhat platform capabilities. Use for Tinyhat-managed Computer status, state, assignment, configuration revisions, installed packages, secrets, API keys, credentials, Codex auth, ChatGPT subscription auth, usage limits, settings, or questions about where the agent is running.
+description: Explain how this Hermes agent should use Tinyhat platform capabilities. Use for Tinyhat-managed Computer status, state, assignment, configuration revisions, installed packages, secrets, API keys, credentials, Slack, Codex auth, ChatGPT subscription auth, usage limits, settings, or questions about where the agent is running.
 ---
 
 # Tinyhat Platform
@@ -14,6 +14,7 @@ Use this as the default routing map:
 | User intent | Default Tinyhat route |
 | --- | --- |
 | Add or save an API key, token, password, webhook secret, or credential | Call `tinyhat_private_secret_handoff` once. |
+| Connect this agent to Slack | Load `tinyhat:tinyhat-slack` and call `tinyhat_slack_connect` once. The tool sends the Hermes Agent-view manifest, create-app guide, and encrypted token form. Do not send a duplicate reply. |
 | Say "Connect Google", add a personal/work Google account, or sign in with Google | Load `tinyhat:tinyhat-google-workspace` and call `tinyhat_google_workspace` with `{"action": "connect"}`. This adds an account; it does not replace another account. The tool sends the native Telegram button itself. |
 | Use Gmail, Calendar, Drive, or another granted Google Workspace service | Load `tinyhat:tinyhat-google-workspace`, get safe status, and select the intended `account_id`. Use Hermes's built-in `google-workspace` skill for operation guidance and run the operation through `tinyhat_google_workspace_app`. |
 | Change a Google account's permissions, including making it read-only or adding another Workspace service | Select its `account_id`, then call `tinyhat_google_workspace` with `action=set_permissions` and the smallest implemented `presets` combination, optionally extended by exact manifest-listed `scopes` plus a short `reason`. Google consent is the permission decision. |
@@ -45,6 +46,14 @@ When the user says something like "add my Exa API key":
 
 Load `tinyhat:tinyhat-private-secret` when you need the full naming and
 failure-handling rules.
+
+## Slack
+
+For "connect to Slack", use `tinyhat_slack_connect`, not three generic secret
+handoffs. The tool generates the manifest through Hermes, sends the Slack
+create-from-manifest guide, and accepts both tokens plus allowed member IDs in
+one browser-encrypted bundle. Hermes owns Socket Mode and Slack messages.
+Tinyhat receives only ciphertext and safe app/workspace metadata.
 
 ## Google Workspace
 

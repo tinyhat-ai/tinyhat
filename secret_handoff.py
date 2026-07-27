@@ -324,6 +324,17 @@ def _install_submitted_secret(
     private_key_pem: str,
     state: dict[str, Any],
 ) -> None:
+    if state.get("handoff_kind") == "slack_connection":
+        from .slack_connection import install_submitted_slack_connection
+
+        install_submitted_slack_connection(
+            client=client,
+            platform_auth=platform_auth,
+            handoff_id=handoff_id,
+            private_key_pem=private_key_pem,
+            state=state,
+        )
+        return
     ciphertext_payload = state.get("ciphertext_payload")
     if not isinstance(ciphertext_payload, dict):
         raise SecretHandoffError("Platform did not return ciphertext.")
@@ -358,12 +369,15 @@ def _claim_handoff(
     message: str | None = None,
     gateway_ready: bool | None = None,
     outcome: str | None = None,
+    connection_metadata: dict[str, Any] | None = None,
 ) -> None:
     payload: dict[str, Any] = {"installed": installed, "message": message}
     if gateway_ready is not None:
         payload["gateway_ready"] = gateway_ready
     if outcome:
         payload["outcome"] = outcome
+    if connection_metadata is not None:
+        payload["connection_metadata"] = connection_metadata
     path = computer_api_path(
         platform_auth,
         f"private-secret-handoffs/v1/{handoff_id}/claim",
@@ -372,6 +386,8 @@ def _claim_handoff(
         client.post_json(path, payload)
         return
     except Exception:
+        if connection_metadata is not None:
+            raise
         if gateway_ready is None and not outcome:
             raise
 

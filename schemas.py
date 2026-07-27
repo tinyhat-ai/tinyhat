@@ -66,6 +66,18 @@ TINYHAT_PRIVATE_SECRET_HANDOFF_SCHEMA = {
     "additionalProperties": False,
 }
 
+TINYHAT_SLACK_CONNECT_SCHEMA = {
+    "type": "object",
+    "properties": {},
+    "required": [],
+    "additionalProperties": False,
+    "description": (
+        "Start Tinyhat's Hermes-native Slack setup. Sends the current Hermes "
+        "Agent-view manifest, Slack app creation guide, and browser-encrypted "
+        "credential bundle to Telegram."
+    ),
+}
+
 TINYHAT_GOOGLE_WORKSPACE_SCHEMA = {
     "type": "object",
     "description": (

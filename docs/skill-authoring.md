@@ -109,6 +109,12 @@ to retry with names like `tinyhat:tinyhat-codex-auth`.
 It should be triggered before generic `.env` advice whenever a user asks
 to add or save an API key, token, password, or credential.
 
+`tinyhat-slack` is the dedicated way to connect the current Hermes agent to
+Slack. It must call `tinyhat_slack_connect` once and let the tool own the
+Telegram response. Do not split the two tokens into generic secret handoffs,
+ask for token values in chat, enable open workspace access, or add a parallel
+Slack adapter. Hermes supplies the manifest and owns Socket Mode.
+
 `tinyhat-google-workspace` is the default way to connect existing Google
 accounts. Calling connect without `account_id` adds an account. Status exposes
 safe metadata and the stable opaque `account_id` used to select an account;

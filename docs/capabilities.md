@@ -9,6 +9,7 @@ The current capability list is intentionally small.
 | `tinyhat_tell_joke` | Available now | Proves Hermes loaded the Tinyhat plugin and can call a plugin tool. |
 | `tinyhat_skill_catalog` | Available now | Lists Tinyhat plugin skills with `tinyhat:<skill>` qualified names and unqualified aliases. |
 | `tinyhat_private_secret_handoff` | Available now | Lets a user enter a secret in a Telegram Mini App while Tinyhat stores only short-lived ciphertext. |
+| `tinyhat_slack_connect` | Available now | Sends Hermes' current Agent-view manifest and transfers the Slack bot token, Socket Mode app token, and allowed member IDs as one browser-encrypted Computer-local bundle. |
 | `tinyhat_google_workspace` | Available now | Connects Google identity, composes implemented access presets and requestable Custom scopes, lets Google handle its pending-verification warning, blocks unimplemented requests before OAuth, and starts an account-targeted local disconnect ceremony. |
 | `tinyhat_google_workspace_app` | Available now | Lends one selected account's assignment-verified Google access to one bounded `gws` invocation. |
 | `tinyhat_google_workspace_app_manager` | Available now | After approval, installs or removes the pinned integrity-verified `gws` app; Hermes supplies the operation skill. |
@@ -34,13 +35,24 @@ After save, the worker reports the install to the platform with
 one-shot gateway restart and sends the final ready-or-failed confirmation
 after that restart settles. The worker never restarts the gateway itself.
 
+## Slack
+
+The agent calls `tinyhat_slack_connect` once. The tool sends the current
+Hermes-generated Agent-view manifest, a highlighted Slack app-creation guide,
+and a secure Mini App button. The browser encrypts the two Slack tokens and the
+allowed member IDs together for the Computer. The Computer validates them
+directly with Slack, saves them through Hermes, and reports only safe app and
+workspace metadata. Hermes then connects through Socket Mode; Tinyhat has no
+public Slack ingress and never receives Slack messages.
+
 ## Tinyhat Platform Context
 
 The plugin injects a short context note when the user asks about secrets,
 credentials, Tinyhat, Codex auth, usage limits, plugin updates, skill
 lookup, QA reports, or on the first turn of a session. The context tells
 the agent to prefer Tinyhat private secret entry for credentials,
-Tinyhat's installed Codex commands for OpenAI Codex auth, identity-only bare
+Tinyhat's installed Codex commands for OpenAI Codex auth, the Hermes-owned
+Slack connection flow, identity-only bare
 Google connect, implemented Google access presets, the plugin catalog for missing
 skill lookup, and runtime channel commands for stale installed plugins. The longer playbook lives in
 `skills/tinyhat-platform/SKILL.md`.

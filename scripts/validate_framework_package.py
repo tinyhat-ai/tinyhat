@@ -19,6 +19,7 @@ REQUIRED_TOOLS = [
     "tinyhat_tell_joke",
     "tinyhat_skill_catalog",
     "tinyhat_private_secret_handoff",
+    "tinyhat_slack_connect",
     "tinyhat_google_workspace",
     "tinyhat_google_workspace_app",
     "tinyhat_google_workspace_app_manager",
@@ -35,6 +36,7 @@ REQUIRED_SKILLS = [
     "tinyhat-tell-joke",
     "tinyhat-skill-catalog",
     "tinyhat-private-secret",
+    "tinyhat-slack",
     "tinyhat-google-workspace",
     "tinyhat-google-workspace-app-manager",
     "tinyhat-codex-auth",
@@ -784,6 +786,7 @@ def validate_hermes_adapter(root: Path) -> None:
         "tinyhat-tell-joke": "skills/tinyhat-tell-joke/SKILL.md",
         "tinyhat-skill-catalog": "skills/tinyhat-skill-catalog/SKILL.md",
         "tinyhat-private-secret": "skills/tinyhat-private-secret/SKILL.md",
+        "tinyhat-slack": "skills/tinyhat-slack/SKILL.md",
         "tinyhat-google-workspace": "skills/tinyhat-google-workspace/SKILL.md",
         "tinyhat-google-workspace-app-manager": (
             "skills/tinyhat-google-workspace-app-manager/SKILL.md"
@@ -880,6 +883,7 @@ def validate_docs(root: Path) -> None:
             "tinyhat-plugin-version",
             "tinyhat-skill-catalog",
             "tinyhat-private-secret",
+            "tinyhat-slack",
             "tinyhat-google-workspace",
             "tinyhat_google_workspace_app",
             "tinyhat_google_workspace_app_manager",
@@ -897,6 +901,8 @@ def validate_docs(root: Path) -> None:
             "Tinyhat Platform Context",
             "tinyhat-codex-auth",
             "tinyhat-skill-catalog",
+            "tinyhat-slack",
+            "tinyhat_slack_connect",
             "tinyhat_google_workspace_app",
             "tinyhat_google_workspace_app_manager",
             "tinyhat-plugin-update",
@@ -905,6 +911,7 @@ def validate_docs(root: Path) -> None:
         "skills/tinyhat-platform/SKILL.md": (
             "tinyhat_get_platform_status",
             "tinyhat_skill_catalog",
+            "tinyhat_slack_connect",
             "tinyhat_plugin_update",
             "tinyhat_google_workspace_app",
             "tinyhat_google_workspace_app_manager",
@@ -914,6 +921,7 @@ def validate_docs(root: Path) -> None:
         "docs/capabilities.md": (
             "tinyhat_get_platform_status",
             "tinyhat_skill_catalog",
+            "tinyhat_slack_connect",
             "tinyhat_plugin_update",
             "tinyhat_google_workspace",
             "tinyhat_google_workspace_app",

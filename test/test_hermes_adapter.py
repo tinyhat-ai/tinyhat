@@ -39,6 +39,7 @@ from tinyhat import (  # noqa: E402
     schemas,
     secret_handoff,
     secret_handoff_worker,
+    slack_connection,
     tools,
 )
 
@@ -74,6 +75,7 @@ class HermesAdapterTests(unittest.TestCase):
         self.assertIn("tinyhat_tell_joke", ctx.tools)
         self.assertIn("tinyhat_skill_catalog", ctx.tools)
         self.assertIn("tinyhat_private_secret_handoff", ctx.tools)
+        self.assertIn("tinyhat_slack_connect", ctx.tools)
         self.assertIn("tinyhat_codex_auth", ctx.tools)
         self.assertIn("tinyhat_plugin_update", ctx.tools)
         self.assertIn("tinyhat-plugin-version", ctx.commands)
@@ -84,6 +86,7 @@ class HermesAdapterTests(unittest.TestCase):
         self.assertIn("tinyhat-tell-joke", ctx.skills)
         self.assertIn("tinyhat-skill-catalog", ctx.skills)
         self.assertIn("tinyhat-private-secret", ctx.skills)
+        self.assertIn("tinyhat-slack", ctx.skills)
         self.assertIn("tinyhat-codex-auth", ctx.skills)
         self.assertIn("tinyhat-plugin-update", ctx.skills)
         self.assertIn("tinyhat-platform", ctx.skills)
@@ -91,6 +94,7 @@ class HermesAdapterTests(unittest.TestCase):
         self.assertTrue(ctx.skills["tinyhat-tell-joke"].is_file())
         self.assertTrue(ctx.skills["tinyhat-skill-catalog"].is_file())
         self.assertTrue(ctx.skills["tinyhat-private-secret"].is_file())
+        self.assertTrue(ctx.skills["tinyhat-slack"].is_file())
         self.assertTrue(ctx.skills["tinyhat-codex-auth"].is_file())
         self.assertTrue(ctx.skills["tinyhat-plugin-update"].is_file())
         self.assertTrue(ctx.skills["tinyhat-platform"].is_file())
@@ -139,6 +143,10 @@ class HermesAdapterTests(unittest.TestCase):
         self.assertNotIn("secret_name", secret_schema["properties"])
         self.assertNotIn("env_var", secret_schema["properties"])
         self.assertNotIn("key_name", secret_schema["properties"])
+        slack_schema = schemas.TINYHAT_SLACK_CONNECT_SCHEMA
+        self.assertEqual(slack_schema["properties"], {})
+        self.assertEqual(slack_schema["required"], [])
+        self.assertFalse(slack_schema["additionalProperties"])
 
         update_schema = schemas.TINYHAT_PLUGIN_UPDATE_SCHEMA
         self.assertEqual(update_schema["required"], ["action"])
@@ -152,7 +160,7 @@ class HermesAdapterTests(unittest.TestCase):
 
         self.assertEqual(payload["schema"], "tinyhat_plugin_version_v1")
         self.assertEqual(payload["name"], "tinyhat")
-        self.assertEqual(payload["version"], "0.21.7")
+        self.assertEqual(payload["version"], "0.21.8")
 
     def test_platform_status_uses_attested_computer_endpoint(self) -> None:
         original_build = tools.build_platform_client
@@ -165,7 +173,7 @@ class HermesAdapterTests(unittest.TestCase):
                     "computer_id": 5359,
                     "state": "active",
                     "assigned": True,
-                    "package_inventory": {"plugin": {"version": "0.21.7"}},
+                    "package_inventory": {"plugin": {"version": "0.21.8"}},
                 }
 
         try:
@@ -178,7 +186,7 @@ class HermesAdapterTests(unittest.TestCase):
         self.assertEqual(payload["computer_id"], 5359)
         self.assertEqual(payload["state"], "active")
         self.assertTrue(payload["assigned"])
-        self.assertEqual(payload["package_inventory"]["plugin"]["version"], "0.21.7")
+        self.assertEqual(payload["package_inventory"]["plugin"]["version"], "0.21.8")
 
     def test_platform_status_returns_structured_platform_error(self) -> None:
         original_build = tools.build_platform_client
@@ -201,7 +209,7 @@ class HermesAdapterTests(unittest.TestCase):
 
         self.assertEqual(payload["schema"], "tinyhat_skill_catalog_v1")
         self.assertEqual(payload["plugin"]["name"], "tinyhat")
-        self.assertEqual(payload["plugin"]["version"], "0.21.7")
+        self.assertEqual(payload["plugin"]["version"], "0.21.8")
         by_name = {skill["name"]: skill for skill in payload["skills"]}
         self.assertEqual(
             by_name["tinyhat-codex-auth"]["qualified_name"],
@@ -230,6 +238,7 @@ class HermesAdapterTests(unittest.TestCase):
         self.assertIsNotNone(injected)
         assert injected is not None
         self.assertIn("tinyhat_private_secret_handoff", injected["context"])
+        self.assertIn("tinyhat_slack_connect", injected["context"])
         self.assertIn("Do not ask the user to paste secrets", injected["context"])
         self.assertIn("/codex_auth", injected["context"])
         self.assertIn("tinyhat:tinyhat-codex-auth", injected["context"])
@@ -663,6 +672,125 @@ class HermesAdapterTests(unittest.TestCase):
 
         self.assertEqual(payload["schema"], "tinyhat_tell_joke_v1")
         self.assertIn("Hermes", payload["joke"])
+
+    def test_slack_connect_sends_hermes_agent_manifest_and_starts_worker(self) -> None:
+        class FakeClient:
+            def __init__(self) -> None:
+                self.path = ""
+                self.payload: dict = {}
+
+            def post_json(self, path: str, payload: dict) -> dict:
+                self.path = path
+                self.payload = payload
+                return {
+                    "handoff_id": "sh_slack",
+                    "status": "pending",
+                    "secret_name": "SLACK_CONNECTION",
+                    "handoff_kind": "slack_connection",
+                }
+
+        fake_client = FakeClient()
+        manifest = {
+            "features": {"agent_view": {"agent_description": "Hermes"}},
+            "settings": {"socket_mode_enabled": True},
+        }
+        worker_calls: list[tuple[dict, str]] = []
+        with (
+            mock.patch.object(
+                slack_connection,
+                "_generate_hermes_slack_manifest",
+                return_value=manifest,
+            ),
+            mock.patch.object(
+                slack_connection,
+                "_generate_key_pair",
+                return_value=("PRIVATE", "PUBLIC"),
+            ),
+            mock.patch.object(
+                slack_connection,
+                "build_platform_client",
+                return_value=(fake_client, "local_dev"),
+            ),
+            mock.patch.object(
+                slack_connection,
+                "_start_worker_process",
+                side_effect=lambda handoff, key: worker_calls.append((handoff, key)),
+            ),
+        ):
+            reply = tools.slack_connect({})
+
+        self.assertEqual(
+            fake_client.path,
+            "/hapi/v1/computers/local-dev/private-secret-handoffs/v1",
+        )
+        self.assertEqual(fake_client.payload["handoff_kind"], "slack_connection")
+        self.assertEqual(fake_client.payload["expires_in_seconds"], 30 * 60)
+        self.assertIs(fake_client.payload["slack_manifest"], manifest)
+        self.assertEqual(worker_calls[0][1], "PRIVATE")
+        self.assertIn("Hermes Agent-view manifest", reply)
+        self.assertIn("never sees the tokens or Slack messages", reply)
+
+    def test_slack_bundle_installs_three_values_and_claims_safe_metadata(self) -> None:
+        bot_token = "xoxb-" + "placeholder"
+        app_token = "xapp-" + "placeholder"
+        plaintext = json.dumps(
+            {
+                "schema": "tinyhat_slack_connection_bundle_v1",
+                "bot_token": bot_token,
+                "app_token": app_token,
+                "allowed_users": "U012ABCDEF",
+            }
+        )
+        saved: list[tuple[str, str]] = []
+        claims: list[dict] = []
+        metadata = {
+            "provider": "slack",
+            "app_id": "A012ABCDEF",
+            "app_name": "Forecast Agent",
+            "workspace_id": "T012ABCDEF",
+            "workspace_name": "Tinyloop",
+            "allowed_user_count": 1,
+        }
+        with (
+            mock.patch.object(
+                slack_connection,
+                "_decrypt_ciphertext",
+                return_value=plaintext,
+            ),
+            mock.patch.object(
+                slack_connection,
+                "_validate_slack_credentials",
+                return_value=metadata,
+            ),
+            mock.patch.object(
+                slack_connection,
+                "_set_hermes_secret",
+                side_effect=lambda name, value: saved.append((name, value)),
+            ),
+            mock.patch.object(slack_connection, "_send_secret_notice"),
+            mock.patch.object(
+                slack_connection,
+                "_claim_handoff",
+                side_effect=lambda *args, **kwargs: claims.append(kwargs),
+            ),
+        ):
+            slack_connection.install_submitted_slack_connection(
+                client=object(),
+                platform_auth="local_dev",
+                handoff_id="sh_slack",
+                private_key_pem="PRIVATE",
+                state={"ciphertext_payload": {"algorithm": "RSA-OAEP-256"}},
+            )
+
+        self.assertEqual(
+            [name for name, _ in saved],
+            ["SLACK_BOT_TOKEN", "SLACK_APP_TOKEN", "SLACK_ALLOWED_USERS"],
+        )
+        self.assertEqual(claims[0]["connection_metadata"], metadata)
+        self.assertEqual(
+            claims[0]["outcome"],
+            secret_handoff.HANDOFF_OUTCOME_RESTART_PENDING,
+        )
 
     def test_private_secret_handoff_missing_params_error_is_actionable(self) -> None:
         payload = json.loads(tools.private_secret_handoff({}))
