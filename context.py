@@ -56,24 +56,20 @@ def _funding_reminder_marker_path() -> Path:
     return _hermes_home() / "tinyhat-funding-reminder-shown"
 
 
-def _funding_reminder_due() -> bool:
+def _claim_funding_reminder() -> bool:
+    """Atomically claim the once-per-Computer reminder; fail closed.
+
+    The exclusive create is the claim: the directive is issued only when
+    this call creates the marker. A pre-existing marker, a missing or
+    unwritable Hermes home, and a lost concurrent race all return False,
+    so a persistence problem can never re-issue the "mandatory" line.
+    """
     try:
-        return not _funding_reminder_marker_path().exists()
+        with open(_funding_reminder_marker_path(), "x", encoding="utf-8") as fh:
+            fh.write("shown\n")
+        return True
     except OSError:
         return False
-
-
-def _record_funding_reminder_instructed() -> None:
-    # Best-effort durable marker; written when the directive is issued (the
-    # hook cannot observe whether the model actually said the line). The
-    # parent directory must already exist — on a Tinyhat Computer it always
-    # does; a machine without a Hermes home is not re-instructed.
-    try:
-        path = _funding_reminder_marker_path()
-        if path.parent.is_dir():
-            path.write_text("shown\n", encoding="utf-8")
-    except OSError:
-        pass
 
 
 _CONTEXT_PHRASES = (
@@ -174,55 +170,48 @@ _FUNDING_PHRASES = (
     "paying for you",
     "pay for this",
     "pay for you",
+    "how do i pay",
+    "who pays for",
+    "who is paying for",
+    "payment method",
+    "payment methods",
     "how much do you cost",
-    "is this free",
+    "how much does it cost",
+    "what does it cost",
+    "does it cost",
+    "you cost",
+    "what is the price",
+    "price of this service",
+    "my balance",
+    "the balance?",
+    "check the balance",
+    "remaining balance",
+    "how does billing",
+    "my billing",
+    "billing work",
+    "is this free?",
+    "free to use",
+    "for free",
     "run out of credits",
     "credits run out",
     "credit runs out",
-    "who pays",
-    "who is paying",
+    "out of credits",
     "starter credit",
     "platform credits",
+    "who is funding",
+    "funding this",
+    "funded by",
 )
 
-_FUNDING_TERMS = (
+# Standalone funding words precise enough to route alone; everything else
+# must appear inside one of the bounded phrases above, so developer
+# wording that merely contains a funding word ("can you free this
+# buffer", "balance this binary tree") does not inject.
+_FUNDING_STANDALONE_TERMS = (
     "billing",
-    "payment",
-    "payments",
-    "balance",
-    "pay",
-    "pays",
-    "paying",
-    "paid",
-    "cost",
-    "costs",
-    "price",
-    "pricing",
-    "fund",
-    "funding",
-    "funded",
-    "free",
-    "money",
-    "charge",
-    "charged",
-    "charges",
 )
 
-_FUNDING_ANCHOR_TERMS = (
-    "you",
-    "your",
-    "agent",
-    "bot",
-    "assistant",
-    "tinyhat",
-    "credits",
-    "credit",
-    "subscription",
-    "chatgpt",
-    "codex",
-    "service",
-    "running",
-)
+
 
 # Privacy/data-access routing is separate from the generic short-circuits
 # above. It matches word-boundary phrases in either script, or a bounded
@@ -437,15 +426,13 @@ _ZERO_WIDTH_MARKS = ("\u200c", "\u200d", "\u200e", "\u200f")
 
 
 def _matches_funding_intent(normalized: str) -> bool:
-    """Bounded funding routing: exact phrases or funding word + anchor."""
+    """Bounded funding routing: exact phrases or a precise standalone word."""
     for phrase in _FUNDING_PHRASES:
         pattern = r"(?<!\w)" + re.escape(phrase) + r"(?!\w)"
         if re.search(pattern, normalized):
             return True
     tokens = set(re.findall(r"\w+", normalized))
-    return any(term in tokens for term in _FUNDING_TERMS) and any(
-        term in tokens for term in _FUNDING_ANCHOR_TERMS
-    )
+    return any(term in tokens for term in _FUNDING_STANDALONE_TERMS)
 
 
 def _matches_privacy_phrase(normalized: str) -> bool:
@@ -557,7 +544,6 @@ def inject_tinyhat_context(  # noqa: PLR0913
         assignment_cleanup = "unavailable"
     _ = assignment_cleanup
     context = TINYHAT_CONTEXT
-    if is_first_turn and _funding_reminder_due():
+    if is_first_turn and _claim_funding_reminder():
         context = context + "\n" + FUNDING_REMINDER_DIRECTIVE
-        _record_funding_reminder_instructed()
     return {"context": context}

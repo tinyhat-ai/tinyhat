@@ -553,6 +553,11 @@ class HermesAdapterTests(unittest.TestCase):
             "Is this bot free to use?",
             "Who is funding this agent?",
             "What does it cost to keep you running?",
+            "What is my balance?",
+            "How does billing work?",
+            "What is the price?",
+            "What payment methods do you accept?",
+            "How much does it cost?",
         )
         for user_message in examples:
             with self.subTest(user_message=user_message):
@@ -626,6 +631,12 @@ class HermesAdapterTests(unittest.TestCase):
             "Balance this binary tree",
             "Change the price field",
             "Fund the test fixture",
+            "Can you free this buffer?",
+            "Could you balance this binary tree?",
+            "Estimate the cost of running this query",
+            "Who pays attention to this warning?",
+            "Is this free variable captured?",
+            "The balance factor of this AVL tree is wrong",
         )
         for user_message in examples:
             with self.subTest(user_message=user_message):
@@ -650,6 +661,26 @@ class HermesAdapterTests(unittest.TestCase):
         self.assertIn("Never state a remaining credit balance", text)
         self.assertIn('{"action": "status"}', text)
         self.assertIn("/codex_auth", text)
+
+    def test_funding_reminder_claim_fails_closed_without_hermes_home(self) -> None:
+        os.environ["TINYHAT_HERMES_HOME"] = str(
+            Path(self._hermes_home.name) / "does-not-exist"
+        )
+        for attempt in range(2):
+            with self.subTest(attempt=attempt):
+                injected = tinyhat_context.inject_tinyhat_context(
+                    user_message="hello",
+                    is_first_turn=True,
+                )
+                assert injected is not None
+                self.assertNotIn(
+                    tinyhat_context.FUNDING_REMINDER_DIRECTIVE,
+                    injected["context"],
+                )
+
+    def test_funding_reminder_claim_is_exclusive(self) -> None:
+        self.assertTrue(tinyhat_context._claim_funding_reminder())
+        self.assertFalse(tinyhat_context._claim_funding_reminder())
 
     def test_context_hook_skips_generic_developer_terms(self) -> None:
         examples = (
