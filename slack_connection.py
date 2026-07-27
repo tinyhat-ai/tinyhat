@@ -27,6 +27,7 @@ SLACK_CONNECTION_EXPIRES_IN_SECONDS = 30 * 60
 MAX_ALLOWED_USERS = 100
 SLACK_ID_RE = re.compile(r"^[A-Z][A-Z0-9]{8,}$")
 SLACK_API_BASE_URL = "https://slack.com/api"
+SLACK_HOME_CHANNEL_NAME = "Owner DM"
 
 
 def start_slack_connection(args: dict[str, Any] | None = None, **_: Any) -> str:
@@ -132,10 +133,13 @@ def install_submitted_slack_connection(
         plaintext = ""
 
     metadata = _validate_slack_credentials(bundle)
+    home_channel = _open_slack_home_channel(bundle)
     for name, value in (
         ("SLACK_BOT_TOKEN", bundle["bot_token"]),
         ("SLACK_APP_TOKEN", bundle["app_token"]),
         ("SLACK_ALLOWED_USERS", bundle["allowed_users"]),
+        ("SLACK_HOME_CHANNEL", home_channel),
+        ("SLACK_HOME_CHANNEL_NAME", SLACK_HOME_CHANNEL_NAME),
     ):
         _set_hermes_secret(name, value)
     bundle.clear()
@@ -196,6 +200,32 @@ def _normalize_allowed_users(value: Any) -> str:
             public_message=("Enter the Slack member ID from Profile → More → Copy member ID."),
         )
     return ",".join(dict.fromkeys(users))
+
+
+def _open_slack_home_channel(bundle: dict[str, str]) -> str:
+    """Open the first allowed member's DM and use it as Hermes' home channel."""
+
+    owner_user_id = bundle["allowed_users"].split(",", 1)[0]
+    result = _slack_api_call(
+        "conversations.open",
+        token=bundle["bot_token"],
+        params={"users": owner_user_id},
+    )
+    channel = result.get("channel")
+    channel_id = (
+        str(channel.get("id") or "").strip().upper()
+        if isinstance(channel, dict)
+        else ""
+    )
+    if not channel_id.startswith("D") or not SLACK_ID_RE.fullmatch(channel_id):
+        raise SecretHandoffError(
+            "Slack did not return the owner's direct-message channel.",
+            public_message=(
+                "Slack accepted the tokens but could not open the owner's "
+                "direct message."
+            ),
+        )
+    return channel_id
 
 
 def _validate_slack_credentials(bundle: dict[str, str]) -> dict[str, Any]:

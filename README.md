@@ -146,6 +146,10 @@ Socket Mode token, and allowed Slack member IDs. The Computer validates those
 values against Slack, saves them through Hermes' supported configuration
 interface, and reports only the app and workspace identifiers needed by the
 Connections page. Hermes owns the WebSocket and every Slack message.
+The Computer opens a direct message with the first allowed member and saves
+that private chat locally as Hermes' Slack home channel, so cron results and
+cross-platform messages have a safe default without workspace-global slash
+commands.
 Before the JSON is sent, the plugin removes Hermes' slash-command definitions
 and the `commands` OAuth scope so multiple per-agent apps can coexist in the
 same workspace without command-name conflicts.

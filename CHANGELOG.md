@@ -40,6 +40,8 @@ All notable changes to the Tinyhat plugin are documented here.
   project venv instead of accepting an unrelated system Python executable.
   Detached handoff workers now also honor the platform's entry window, so the
   Slack worker remains available for the advertised 30-minute setup period.
+  The Computer now opens the first allowed member's DM and saves it locally as
+  Hermes' Slack home channel, avoiding an unusable slash-command prompt.
 - Bump the Hermes plugin package to `0.21.8`; add `tinyhat_credentials` and
   `tinyhat:tinyhat-credentials` for value-blind name/description discovery and
   expiring two-stage Telegram removal. Confirmed deletion is executed by the

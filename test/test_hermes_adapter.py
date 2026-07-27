@@ -1045,7 +1045,7 @@ class HermesAdapterTests(unittest.TestCase):
         self.assertIn("Hermes Agent-view manifest", reply)
         self.assertIn("never sees the tokens or Slack messages", reply)
 
-    def test_slack_bundle_installs_three_values_and_claims_safe_metadata(self) -> None:
+    def test_slack_bundle_installs_connection_and_private_home_channel(self) -> None:
         bot_token = "xoxb-" + "placeholder"
         app_token = "xapp-" + "placeholder"
         plaintext = json.dumps(
@@ -1079,6 +1079,11 @@ class HermesAdapterTests(unittest.TestCase):
             ),
             mock.patch.object(
                 slack_connection,
+                "_open_slack_home_channel",
+                return_value="D012ABCDEF",
+            ),
+            mock.patch.object(
+                slack_connection,
                 "_set_hermes_secret",
                 side_effect=lambda name, value: saved.append((name, value)),
             ),
@@ -1099,7 +1104,20 @@ class HermesAdapterTests(unittest.TestCase):
 
         self.assertEqual(
             [name for name, _ in saved],
-            ["SLACK_BOT_TOKEN", "SLACK_APP_TOKEN", "SLACK_ALLOWED_USERS"],
+            [
+                "SLACK_BOT_TOKEN",
+                "SLACK_APP_TOKEN",
+                "SLACK_ALLOWED_USERS",
+                "SLACK_HOME_CHANNEL",
+                "SLACK_HOME_CHANNEL_NAME",
+            ],
+        )
+        self.assertEqual(
+            saved[-2:],
+            [
+                ("SLACK_HOME_CHANNEL", "D012ABCDEF"),
+                ("SLACK_HOME_CHANNEL_NAME", "Owner DM"),
+            ],
         )
         self.assertEqual(claims[0]["connection_metadata"], metadata)
         self.assertEqual(
@@ -1154,6 +1172,58 @@ class HermesAdapterTests(unittest.TestCase):
                 "member IDs",
             ):
                 slack_connection._normalize_allowed_users(value)
+
+    def test_slack_home_channel_uses_first_allowed_member_dm(self) -> None:
+        calls: list[tuple[str, dict[str, object]]] = []
+
+        def fake_slack_call(method: str, **kwargs):
+            calls.append((method, kwargs))
+            return {"channel": {"id": "d012abcdef"}}
+
+        with mock.patch.object(
+            slack_connection,
+            "_slack_api_call",
+            side_effect=fake_slack_call,
+        ):
+            channel_id = slack_connection._open_slack_home_channel(
+                {
+                    "bot_token": "xoxb-placeholder",
+                    "allowed_users": "U012ABCDEF,U999ABCDEF",
+                }
+            )
+
+        self.assertEqual(channel_id, "D012ABCDEF")
+        self.assertEqual(
+            calls,
+            [
+                (
+                    "conversations.open",
+                    {
+                        "token": "xoxb-placeholder",
+                        "params": {"users": "U012ABCDEF"},
+                    },
+                )
+            ],
+        )
+
+    def test_slack_home_channel_rejects_missing_dm_id(self) -> None:
+        with (
+            mock.patch.object(
+                slack_connection,
+                "_slack_api_call",
+                return_value={"channel": {}},
+            ),
+            self.assertRaisesRegex(
+                secret_handoff.SecretHandoffError,
+                "direct-message channel",
+            ),
+        ):
+            slack_connection._open_slack_home_channel(
+                {
+                    "bot_token": "xoxb-placeholder",
+                    "allowed_users": "U012ABCDEF",
+                }
+            )
 
     def test_slack_validation_uses_bot_then_profile_app_id_fallbacks(self) -> None:
         bundle = {
