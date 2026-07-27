@@ -677,12 +677,15 @@ def _save_hermes_env_value(hermes: str, secret_name: str, value: str) -> None:
 
 
 def _hermes_python_executable(hermes: str) -> str | None:
-    for candidate in _hermes_script_candidates(Path(hermes)):
-        for name in ("python", "python3"):
-            python = candidate.parent / name
-            if python.exists():
-                return str(python)
-        shebang = _read_first_line(candidate)
+    scripts = _hermes_script_candidates(Path(hermes))
+    candidates: list[Path] = []
+
+    for script in scripts:
+        candidates.extend(_hermes_wrapper_python_candidates(script))
+    candidates.extend(_hermes_project_python_candidates())
+
+    for script in scripts:
+        shebang = _read_first_line(script)
         if not shebang.startswith("#!"):
             continue
         try:
@@ -692,13 +695,104 @@ def _hermes_python_executable(hermes: str) -> str | None:
         if not parts:
             continue
         executable = Path(parts[0])
-        if executable.name.startswith("python") and executable.exists():
-            return str(executable)
-        if executable.name == "env" and len(parts) > 1 and parts[1].startswith("python"):
+        if executable.name.startswith("python"):
+            candidates.append(executable)
+        elif executable.name == "env" and len(parts) > 1 and parts[1].startswith("python"):
             python = shutil.which(parts[1])
             if python:
-                return python
+                candidates.append(Path(python))
+
+    for script in scripts:
+        for name in ("python", "python3"):
+            candidates.append(script.parent / name)
+
+    seen: set[str] = set()
+    for python in candidates:
+        expanded = python.expanduser()
+        key = str(expanded)
+        if key in seen:
+            continue
+        seen.add(key)
+        if expanded.exists() and _python_can_import_hermes_cli(expanded):
+            return key
     return None
+
+
+def _hermes_wrapper_python_candidates(hermes: Path) -> list[Path]:
+    try:
+        text = hermes.read_text(encoding="utf-8", errors="ignore")[:8192]
+    except OSError:
+        return []
+
+    candidates: list[Path] = []
+    for raw_line in text.splitlines():
+        line = raw_line.strip()
+        if not line or line.startswith("#"):
+            continue
+        try:
+            parts = shlex.split(line, comments=True)
+        except ValueError:
+            continue
+        while parts and parts[0] in {"command", "exec"}:
+            parts.pop(0)
+        if parts and Path(parts[0]).name == "env":
+            parts.pop(0)
+            while parts and "=" in parts[0] and not parts[0].startswith(("/", "~")):
+                parts.pop(0)
+        if not parts:
+            continue
+        raw_executable = os.path.expandvars(parts[0])
+        executable = Path(raw_executable).expanduser()
+        if not executable.name.startswith("python"):
+            continue
+        if not executable.is_absolute():
+            resolved = shutil.which(raw_executable)
+            if not resolved:
+                continue
+            executable = Path(resolved)
+        if executable not in candidates:
+            candidates.append(executable)
+    return candidates
+
+
+def _hermes_project_python_candidates() -> list[Path]:
+    roots: list[Path] = []
+    explicit = (os.getenv("HERMES_PROJECT_DIR") or "").strip()
+    if explicit:
+        roots.append(Path(explicit).expanduser())
+    roots.extend(
+        [
+            Path("/usr/local/lib/hermes-agent"),
+            Path.home() / ".hermes" / "hermes-agent",
+        ]
+    )
+
+    candidates: list[Path] = []
+    for root in roots:
+        for relative in (
+            Path("venv/bin/python"),
+            Path(".venv/bin/python"),
+            Path("venv/Scripts/python.exe"),
+            Path(".venv/Scripts/python.exe"),
+        ):
+            python = root / relative
+            if python not in candidates:
+                candidates.append(python)
+    return candidates
+
+
+def _python_can_import_hermes_cli(python: Path) -> bool:
+    try:
+        completed = subprocess.run(
+            [str(python), "-c", "import hermes_cli.config"],
+            capture_output=True,
+            text=True,
+            timeout=10,
+            check=False,
+        )
+    except (OSError, subprocess.TimeoutExpired):
+        return False
+    return completed.returncode == 0
 
 
 def _hermes_script_candidates(hermes: Path) -> list[Path]:

@@ -35,7 +35,9 @@ All notable changes to the Tinyhat plugin are documented here.
   exact `commands` bot scope, sends the create-from-manifest guide in Telegram,
   accepts the bot token, Socket Mode app token, and allowed member IDs as one
   browser-encrypted bundle, validates and saves them on the Computer, and
-  leaves all Slack message handling to Hermes over Socket Mode.
+  leaves all Slack message handling to Hermes over Socket Mode. Direct env
+  writes resolve and verify Hermes' real Python runtime from its launcher or
+  project venv instead of accepting an unrelated system Python executable.
 - Bump the Hermes plugin package to `0.21.8`; add `tinyhat_credentials` and
   `tinyhat:tinyhat-credentials` for value-blind name/description discovery and
   expiring two-stage Telegram removal. Confirmed deletion is executed by the

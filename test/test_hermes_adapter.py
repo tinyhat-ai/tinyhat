@@ -1868,6 +1868,93 @@ class HermesAdapterTests(unittest.TestCase):
         self.assertEqual(calls[0]["args"][:3], ["/usr/bin/hermes", "config", "set"])
         self.assertEqual(calls[0]["redactions"], ("super-secret-value",))
 
+    def test_hermes_python_executable_prefers_production_wrapper_venv(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            bin_dir = root / "usr" / "local" / "bin"
+            project_dir = root / "usr" / "local" / "lib" / "hermes-agent"
+            wrapper = bin_dir / "hermes"
+            runtime_python = project_dir / "venv" / "bin" / "python"
+            unrelated_python = bin_dir / "python3"
+            runtime_python.parent.mkdir(parents=True)
+            bin_dir.mkdir(parents=True)
+            runtime_python.touch()
+            unrelated_python.touch()
+            wrapper.write_text(
+                "#!/bin/sh\n"
+                f'exec "{runtime_python}" -m hermes_cli.main "$@"\n',
+                encoding="utf-8",
+            )
+
+            with mock.patch.object(
+                secret_handoff,
+                "_python_can_import_hermes_cli",
+                return_value=True,
+            ) as probe:
+                resolved = secret_handoff._hermes_python_executable(str(wrapper))
+
+        self.assertEqual(resolved, str(runtime_python))
+        probe.assert_called_once_with(runtime_python)
+
+    def test_hermes_python_executable_uses_explicit_project_venv(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            wrapper = root / "bin" / "hermes"
+            project_dir = root / "hermes-agent"
+            runtime_python = project_dir / "venv" / "bin" / "python"
+            wrapper.parent.mkdir(parents=True)
+            runtime_python.parent.mkdir(parents=True)
+            wrapper.write_text("#!/bin/sh\nexit 0\n", encoding="utf-8")
+            runtime_python.touch()
+
+            with (
+                mock.patch.dict(
+                    os.environ,
+                    {"HERMES_PROJECT_DIR": str(project_dir)},
+                ),
+                mock.patch.object(
+                    secret_handoff,
+                    "_python_can_import_hermes_cli",
+                    return_value=True,
+                ) as probe,
+            ):
+                resolved = secret_handoff._hermes_python_executable(str(wrapper))
+
+        self.assertEqual(resolved, str(runtime_python))
+        probe.assert_called_once_with(runtime_python)
+
+    def test_save_hermes_env_value_uses_runtime_python_and_stdin(self) -> None:
+        calls: list[dict[str, object]] = []
+        runtime_python = "/opt/hermes-agent/venv/bin/python"
+        allowed_users = "U0123456789"
+
+        with (
+            mock.patch.object(
+                secret_handoff,
+                "_hermes_python_executable",
+                return_value=runtime_python,
+            ),
+            mock.patch.object(
+                secret_handoff,
+                "_run",
+                side_effect=lambda args, **kwargs: calls.append(
+                    {"args": args, **kwargs}
+                ),
+            ),
+        ):
+            secret_handoff._save_hermes_env_value(
+                "/usr/local/bin/hermes",
+                "SLACK_ALLOWED_USERS",
+                allowed_users,
+            )
+
+        self.assertEqual(calls[0]["args"][0], runtime_python)
+        self.assertEqual(calls[0]["args"][1], "-c")
+        self.assertEqual(calls[0]["args"][-1], "SLACK_ALLOWED_USERS")
+        self.assertEqual(calls[0]["input_text"], allowed_users)
+        self.assertEqual(calls[0]["redactions"], (allowed_users,))
+        self.assertNotIn(allowed_users, calls[0]["args"])
+
     def test_register_terminal_env_secret_calls_runtime_module(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             runtime_prefix = Path(tmp) / "runtime"
