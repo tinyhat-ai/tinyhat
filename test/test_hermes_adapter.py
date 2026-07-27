@@ -975,6 +975,196 @@ class HermesAdapterTests(unittest.TestCase):
             secret_handoff.HANDOFF_OUTCOME_RESTART_PENDING,
         )
 
+    def test_slack_bundle_parser_rejects_schema_and_token_prefixes(self) -> None:
+        cases = (
+            (
+                {"schema": "wrong", "bot_token": "xoxb-ok", "app_token": "xapp-ok"},
+                "schema",
+            ),
+            (
+                {
+                    "schema": "tinyhat_slack_connection_bundle_v1",
+                    "bot_token": "xoxp-wrong",
+                    "app_token": "xapp-ok",
+                    "allowed_users": "U012ABCDEF",
+                },
+                "bot token",
+            ),
+            (
+                {
+                    "schema": "tinyhat_slack_connection_bundle_v1",
+                    "bot_token": "xoxb-ok",
+                    "app_token": "xoxb-wrong",
+                    "allowed_users": "U012ABCDEF",
+                },
+                "app token",
+            ),
+        )
+        for payload, message in cases:
+            with self.subTest(message=message), self.assertRaisesRegex(
+                secret_handoff.SecretHandoffError,
+                message,
+            ):
+                slack_connection._parse_connection_bundle(json.dumps(payload))
+
+    def test_slack_allowed_users_are_normalized_deduplicated_and_bounded(self) -> None:
+        self.assertEqual(
+            slack_connection._normalize_allowed_users(" u012abcdef, U012ABCDEF, w012abcdef "),
+            "U012ABCDEF,W012ABCDEF",
+        )
+        for value in (
+            "",
+            "not-a-member-id",
+            ",".join(f"U{i:09d}" for i in range(101)),
+        ):
+            with self.subTest(value=value[:40]), self.assertRaisesRegex(
+                secret_handoff.SecretHandoffError,
+                "member IDs",
+            ):
+                slack_connection._normalize_allowed_users(value)
+
+    def test_slack_validation_uses_bot_then_profile_app_id_fallbacks(self) -> None:
+        bundle = {
+            "bot_token": "xoxb-placeholder",
+            "app_token": "xapp-placeholder",
+            "allowed_users": "U012ABCDEF",
+        }
+
+        def bot_fallback(method: str, **kwargs):
+            if method == "auth.test":
+                return {
+                    "team_id": "T012ABCDEF",
+                    "team": "Tinyloop",
+                    "bot_id": "B012ABCDEF",
+                }
+            if method == "bots.info":
+                return {
+                    "bot": {
+                        "app_id": "A012ABCDEF",
+                        "name": "The Forecaster",
+                    }
+                }
+            return {"ok": True}
+
+        with mock.patch.object(
+            slack_connection,
+            "_slack_api_call",
+            side_effect=bot_fallback,
+        ):
+            metadata = slack_connection._validate_slack_credentials(bundle)
+        self.assertEqual(metadata["app_id"], "A012ABCDEF")
+        self.assertEqual(metadata["app_name"], "The Forecaster")
+
+        def profile_fallback(method: str, **kwargs):
+            if method == "auth.test":
+                return {
+                    "team_id": "T012ABCDEF",
+                    "team": "Tinyloop",
+                    "user_id": "U999ABCDEF",
+                }
+            if method == "users.info" and kwargs.get("params", {}).get("user") == "U999ABCDEF":
+                return {"user": {"profile": {"api_app_id": "A999ABCDEF"}}}
+            return {"ok": True}
+
+        with mock.patch.object(
+            slack_connection,
+            "_slack_api_call",
+            side_effect=profile_fallback,
+        ):
+            metadata = slack_connection._validate_slack_credentials(bundle)
+        self.assertEqual(metadata["app_id"], "A999ABCDEF")
+
+    def test_slack_api_call_maps_transport_and_slack_errors(self) -> None:
+        with (
+            mock.patch.object(
+                slack_connection.request,
+                "urlopen",
+                side_effect=error.URLError("offline"),
+            ),
+            self.assertRaisesRegex(
+                secret_handoff.SecretHandoffError,
+                "validation failed",
+            ),
+        ):
+            slack_connection._slack_api_call(
+                "auth.test",
+                token="xoxb-placeholder",
+            )
+
+        response = mock.MagicMock()
+        response.__enter__.return_value.read.return_value = json.dumps(
+            {"ok": False, "error": "invalid_auth"}
+        ).encode()
+        with (
+            mock.patch.object(
+                slack_connection.request,
+                "urlopen",
+                return_value=response,
+            ),
+            self.assertRaisesRegex(
+                secret_handoff.SecretHandoffError,
+                "invalid_auth",
+            ),
+        ):
+            slack_connection._slack_api_call(
+                "auth.test",
+                token="xoxb-placeholder",
+            )
+
+    def test_slack_manifest_error_keeps_redaction_safe_stderr_tail(self) -> None:
+        completed = subprocess.CompletedProcess(
+            args=["hermes"],
+            returncode=2,
+            stdout="",
+            stderr="manifest flag is unavailable",
+        )
+        with (
+            mock.patch.object(slack_connection.shutil, "which", return_value="/bin/hermes"),
+            mock.patch.object(slack_connection.subprocess, "run", return_value=completed),
+            self.assertRaisesRegex(
+                secret_handoff.SecretHandoffError,
+                "manifest flag is unavailable",
+            ),
+        ):
+            slack_connection._generate_hermes_slack_manifest()
+
+    def test_generic_secret_flow_refuses_reserved_slack_connection_values(self) -> None:
+        for name in secret_handoff.RESERVED_SLACK_CONNECTION_NAMES:
+            with self.subTest(name=name):
+                payload = json.loads(
+                    secret_handoff.start_private_secret_handoff(
+                        {
+                            "name": name,
+                            "description": "Slack connection value.",
+                        }
+                    )
+                )
+                self.assertEqual(payload["error"], "slack_connection_required")
+                self.assertIn("tinyhat_slack_connect", payload["message"])
+
+    def test_generic_installer_refuses_slack_bundle_name_under_version_skew(self) -> None:
+        with (
+            mock.patch.object(
+                secret_handoff,
+                "_decrypt_ciphertext",
+                side_effect=AssertionError("must reject before decrypting"),
+            ),
+            self.assertRaisesRegex(
+                secret_handoff.SecretHandoffError,
+                "Reserved Slack connection",
+            ),
+        ):
+            secret_handoff._install_submitted_secret(
+                client=object(),
+                platform_auth="local_dev",
+                handoff_id="sh_slack",
+                private_key_pem="PRIVATE",
+                state={
+                    "secret_name": "SLACK_CONNECTION",
+                    "ciphertext_payload": {"algorithm": "RSA-OAEP-256"},
+                },
+            )
+
     def test_private_secret_handoff_missing_params_error_is_actionable(self) -> None:
         payload = json.loads(tools.private_secret_handoff({}))
 

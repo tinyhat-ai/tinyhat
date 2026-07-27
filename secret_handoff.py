@@ -49,6 +49,14 @@ GENERIC_SECRET_NAMES = {
     "CREDENTIAL",
     "WEBHOOK_SECRET",
 }
+RESERVED_SLACK_CONNECTION_NAMES = frozenset(
+    {
+        "SLACK_CONNECTION",
+        "SLACK_BOT_TOKEN",
+        "SLACK_APP_TOKEN",
+        "SLACK_ALLOWED_USERS",
+    }
+)
 SECRET_NAME_HINTS: tuple[tuple[tuple[str, ...], str], ...] = (
     (("exa", "exa.ai"), "EXA_API_KEY"),
     (("openrouter", "open router"), "OPENROUTER_API_KEY"),
@@ -107,6 +115,16 @@ def start_private_secret_handoff(
         )
 
     secret_name = _resolve_secret_name(raw_secret_name, description)
+    if secret_name in RESERVED_SLACK_CONNECTION_NAMES:
+        return tool_error_json(
+            tool="tinyhat_private_secret_handoff",
+            error_name="slack_connection_required",
+            message=(
+                "Slack connection values are managed as one Hermes Socket Mode "
+                "bundle. Load tinyhat:tinyhat-slack and call "
+                "tinyhat_slack_connect once."
+            ),
+        )
     expires_in_seconds = DEFAULT_EXPIRES_IN_SECONDS
 
     private_key_pem, public_key_pem = _generate_key_pair()
@@ -339,6 +357,14 @@ def _install_submitted_secret(
     if not isinstance(ciphertext_payload, dict):
         raise SecretHandoffError("Platform did not return ciphertext.")
     secret_name = _normalize_secret_name(str(state.get("secret_name") or ""))
+    if secret_name in RESERVED_SLACK_CONNECTION_NAMES:
+        raise SecretHandoffError(
+            "Reserved Slack connection value reached the generic secret installer.",
+            public_message=(
+                "Use the Connect Slack flow so Hermes can validate and save "
+                "the complete Socket Mode connection."
+            ),
+        )
     plaintext = _decrypt_ciphertext(private_key_pem, ciphertext_payload)
     try:
         _set_hermes_secret(secret_name, plaintext)

@@ -45,7 +45,14 @@ directly with Slack, saves them through Hermes, and reports only safe app and
 workspace metadata. Hermes then connects through Socket Mode; Tinyhat has no
 public Slack ingress and never receives Slack messages.
 
-To find or remove one of these new value-blind credentials, load
+Slack is a bundled provider connection. Its metadata row and the names
+`SLACK_CONNECTION`, `SLACK_BOT_TOKEN`, `SLACK_APP_TOKEN`, and
+`SLACK_ALLOWED_USERS` are excluded from generic secret entry/removal. A managed
+Slack disconnect ceremony is not part of this release; the agent must not use
+`tinyhat_credentials` or claim that removing one env value disconnected the
+app.
+
+To find or remove a generic value-blind credential, load
 `tinyhat:tinyhat-credentials` and call `tinyhat_credentials`. Search returns
 only safe name and description metadata. Removal is bound to the exact handoff
 generation and requires the platform's expiring Telegram confirmation before

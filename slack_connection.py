@@ -77,8 +77,10 @@ def _generate_hermes_slack_manifest() -> dict[str, Any]:
             public_message="I could not generate the Hermes Slack manifest.",
         ) from exc
     if completed.returncode != 0:
+        stderr_tail = (completed.stderr or completed.stdout or "").strip()[-500:]
+        detail = f": {stderr_tail}" if stderr_tail else ""
         raise SecretHandoffError(
-            "Hermes Slack manifest command returned an error.",
+            f"Hermes Slack manifest command returned an error{detail}",
             public_message="I could not generate the Hermes Slack manifest.",
         )
     try:

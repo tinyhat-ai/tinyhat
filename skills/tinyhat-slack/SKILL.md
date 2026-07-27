@@ -21,3 +21,10 @@ locally, then owns the Slack Socket Mode connection and all Slack functionality.
 Call the tool once with no arguments. Do not ask for token values in chat, do
 not substitute the generic private-secret flow, and do not send an extra reply
 after the tool returns.
+
+Slack is a bundled provider connection, not a generic removable credential.
+`tinyhat_credentials` must not be used for `SLACK_CONNECTION`,
+`SLACK_BOT_TOKEN`, `SLACK_APP_TOKEN`, or `SLACK_ALLOWED_USERS`. Until Tinyhat
+ships a connection-specific disconnect ceremony, tell a user asking to
+disconnect Slack that the managed disconnect flow is not available yet; never
+claim that removing one env value disconnected the app.
