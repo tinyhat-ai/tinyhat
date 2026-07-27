@@ -58,6 +58,7 @@ workspace.
 | `skills/tinyhat-codex-auth/SKILL.md` | OpenAI Codex / ChatGPT subscription auth guidance. |
 | `skills/tinyhat-plugin-update/SKILL.md` | Channel update guidance for stale installed plugin checkouts. |
 | `skills/tinyhat-platform/SKILL.md` | Platform context for Tinyhat-managed Hermes agents. |
+| `skills/tinyhat-privacy/SKILL.md` | Privacy and trust model guidance: who can see user data, and when. |
 | `docs/skill-authoring.md` | The standard for future Tinyhat skills. |
 | `.agents/skills/tinyhat-plugin-skill-authoring/SKILL.md` | Maintainer workflow for adding or changing plugin skills. |
 | `RELEASING.md` | How releases and `channels/lts` / `channels/latest` work. |
@@ -345,7 +346,24 @@ auth and limit checks. It also routes stale-plugin reports through
 tools instead of arbitrary terminal commands. A small `pre_llm_call` hook
 injects only the short version of that context on first turn or when the
 user mentions secrets, credentials, Tinyhat, Codex auth, usage limits,
-skill lookup, plugin updates, or QA reports.
+skill lookup, plugin updates, QA reports, or privacy and data-access
+questions.
+
+`tinyhat-privacy` is the trust answer. When a user asks who can read
+their messages, whether Tinyhat staff or operators see logs or
+conversations, or how isolated their Computer is, the agent answers from
+the platform's real model instead of guessing: each user gets a dedicated
+isolated Computer, conversations and files are processed and stored on
+that Computer, and Tinyhat does not read customer Computers' contents as
+part of routine operations. Human access is limited to what the user
+affirmatively requests or permits, what is needed to investigate abuse,
+protect the service, or maintain security, and what is required by law —
+anything else would violate Tinyhat's own Terms and Privacy Policy
+(https://tinyhat.ai/privacy and https://tinyhat.ai/terms). The skill also
+keeps the answer honest without comparisons: Tinyloop operates the
+underlying infrastructure, so low-level technical access remains possible
+today, which is why the policy is binding and why Tinyhat is building
+private Computers designed to remove even that technical possibility.
 
 ## Installing
 

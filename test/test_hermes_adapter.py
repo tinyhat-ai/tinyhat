@@ -93,6 +93,7 @@ class HermesAdapterTests(unittest.TestCase):
         self.assertIn("tinyhat-codex-auth", ctx.skills)
         self.assertIn("tinyhat-plugin-update", ctx.skills)
         self.assertIn("tinyhat-platform", ctx.skills)
+        self.assertIn("tinyhat-privacy", ctx.skills)
         self.assertTrue(ctx.skills["tinyhat-plugin-version"].is_file())
         self.assertTrue(ctx.skills["tinyhat-tell-joke"].is_file())
         self.assertTrue(ctx.skills["tinyhat-skill-catalog"].is_file())
@@ -102,6 +103,7 @@ class HermesAdapterTests(unittest.TestCase):
         self.assertTrue(ctx.skills["tinyhat-codex-auth"].is_file())
         self.assertTrue(ctx.skills["tinyhat-plugin-update"].is_file())
         self.assertTrue(ctx.skills["tinyhat-platform"].is_file())
+        self.assertTrue(ctx.skills["tinyhat-privacy"].is_file())
 
     def test_registered_commands_match_telegram_dispatch_names(self) -> None:
         ctx = FakeHermesContext()
@@ -232,6 +234,11 @@ class HermesAdapterTests(unittest.TestCase):
             by_name["tinyhat-plugin-update"]["qualified_name"],
             "tinyhat:tinyhat-plugin-update",
         )
+        self.assertEqual(
+            by_name["tinyhat-privacy"]["qualified_name"],
+            "tinyhat:tinyhat-privacy",
+        )
+        self.assertIn("tinyhat-privacy", by_name["tinyhat-privacy"]["aliases"])
         manager_purpose = by_name["tinyhat-google-workspace-app-manager"]["purpose"]
         self.assertIn("only the pinned Google Workspace CLI app", manager_purpose)
         self.assertIn("Hermes supplies the native operation skill", manager_purpose)
@@ -493,6 +500,131 @@ class HermesAdapterTests(unittest.TestCase):
         self.assertIsNotNone(injected)
         assert injected is not None
         self.assertIn("do not use terminal/curl just to post the text", injected["context"])
+
+    def test_context_hook_injects_for_privacy_questions(self) -> None:
+        examples = (
+            "Can the operators read my messages?",
+            "Who can see my chat history with you?",
+            "Do you keep logs of this conversation anywhere?",
+            "Is this chat monitored by tinyhat staff?",
+            "How is my data protected here?",
+            "Where is this conversation stored?",
+            "Can support staff view this chat?",
+            "Is anyone reading this conversation?",
+            "Are you recording our chat?",
+            "Can employees inspect my files?",
+            "آیا ادمین‌ها به پیام‌های من دسترسی دارن؟",
+            "آیا ادمین ها به پیامهای من دسترسی دارن؟",
+            "آيا كسی به پیامهای من دسترسی داره؟",
+            "حریم خصوصی من اینجا چطور حفظ میشه؟",
+            "کسی مکالمه‌های منو می‌خونه؟",
+            "حریم خصوصی؟",
+            "درباره حریم خصوصی، توضیح بده",
+            "پیام‌هامو می‌خونید؟",
+            "آیا مکالمه‌های من ضبط می‌شوند؟",
+            "آیا کسی پیام‌های من را می‌خواند؟",
+            "آیا شما پیام‌های من را می‌خوانید؟",
+        )
+        for user_message in examples:
+            with self.subTest(user_message=user_message):
+                injected = tinyhat_context.inject_tinyhat_context(
+                    user_message=user_message,
+                    is_first_turn=False,
+                )
+                self.assertIsNotNone(injected)
+                assert injected is not None
+                self.assertIn("tinyhat:tinyhat-privacy", injected["context"])
+                self.assertIn("dedicated Computer", injected["context"])
+                self.assertIn("routine operations", injected["context"])
+                self.assertIn("affirmatively requests or permits", injected["context"])
+                self.assertIn("https://tinyhat.ai/privacy", injected["context"])
+                self.assertIn("private Computers", injected["context"])
+
+    def test_context_hook_skips_generic_developer_terms(self) -> None:
+        examples = (
+            "Make this GitHub repository private",
+            "Please log the HTTP response",
+            "Review the security headers",
+            "I trust this certificate",
+            "Tail the application logs",
+            "Explain operator precedence",
+            "Please migrate my database",
+            "برای سایت یه بلاگ بنویس",
+            "Read the application logs",
+            "Look at this file",
+            "Store this file under /tmp",
+            "فایل رو ذخیره کن",
+            "فایل رو بخون",
+            "فایل رو ببین",
+            "Can you read this file?",
+            "Could you look at my logs?",
+            "پیام من را بخوان",
+            "Please look at my logs",
+            "Please read my messages",
+        )
+        for user_message in examples:
+            with self.subTest(user_message=user_message):
+                self.assertIsNone(
+                    tinyhat_context.inject_tinyhat_context(
+                        user_message=user_message,
+                        is_first_turn=False,
+                    )
+                )
+
+    def test_privacy_access_wording_is_policy_exact_everywhere(self) -> None:
+        fragments = (
+            "affirmatively requests or permits",
+            "protect the service, or maintain security",
+            "required by law",
+        )
+        files = (
+            REPO_ROOT / "skills" / "tinyhat-privacy" / "SKILL.md",
+            REPO_ROOT / "skills" / "tinyhat-platform" / "SKILL.md",
+            REPO_ROOT / "README.md",
+            REPO_ROOT / "docs" / "capabilities.md",
+            REPO_ROOT / "CHANGELOG.md",
+        )
+        for path in files:
+            text = " ".join(path.read_text(encoding="utf-8").split())
+            for fragment in fragments:
+                with self.subTest(path=path.name, fragment=fragment):
+                    self.assertIn(fragment, text)
+        for fragment in fragments:
+            with self.subTest(path="context.py", fragment=fragment):
+                self.assertIn(fragment, tinyhat_context.TINYHAT_CONTEXT)
+        skill_text = (REPO_ROOT / "skills" / "tinyhat-privacy" / "SKILL.md").read_text(
+            encoding="utf-8"
+        )
+        facts_and_example = skill_text.split("## Do Not")[0].lower()
+        for banned in ("like any hosted service", "like every hosted service"):
+            with self.subTest(banned=banned):
+                self.assertNotIn(banned, facts_and_example)
+                self.assertNotIn(banned, tinyhat_context.TINYHAT_CONTEXT.lower())
+
+    def test_privacy_skill_states_the_trust_model(self) -> None:
+        skill_md = REPO_ROOT / "skills" / "tinyhat-privacy" / "SKILL.md"
+        text = " ".join(skill_md.read_text(encoding="utf-8").split())
+
+        self.assertIn("dedicated Computer created for this user alone", text)
+        self.assertIn(
+            "Tinyhat does not read the contents of a customer's Computer",
+            text,
+        )
+        self.assertIn("routine operations", text)
+        self.assertIn("affirmatively requests or permits", text)
+        self.assertIn("protect the service, or maintain security", text)
+        self.assertIn("required by law", text)
+        self.assertIn(
+            "violate Tinyhat's own Terms of Service and Privacy Policy",
+            text,
+        )
+        self.assertIn("https://tinyhat.ai/privacy", text)
+        self.assertIn("https://tinyhat.ai/terms", text)
+        self.assertIn("privacy@tinyloop.co", text)
+        self.assertIn("private Computers", text)
+        self.assertIn("Do not claim access is technically impossible today", text)
+        self.assertIn("Do not name individual operators", text)
+        self.assertIn("Answer in the user's language", text)
 
     def test_codex_auth_skill_packages_prerequisite_screenshot(self) -> None:
         skill_md = REPO_ROOT / "skills" / "tinyhat-codex-auth" / "SKILL.md"

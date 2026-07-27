@@ -15,6 +15,7 @@ The current capability list is intentionally small.
 | `tinyhat_google_workspace_app_manager` | Available now | After approval, installs or removes the pinned integrity-verified `gws` app; Hermes supplies the operation skill. |
 | `tinyhat-codex-auth` skill | Available now | Teaches the agent to start and inspect the Tinyhat-installed OpenAI Codex / ChatGPT subscription auth flow. |
 | `tinyhat_plugin_update` | Available now | Checks and applies the configured plugin channel through installed runtime commands. |
+| `tinyhat-privacy` skill | Available now | Teaches the agent Tinyhat's privacy and trust model: dedicated isolated Computers, no routine platform reading of Computer contents, policy-bound human access, and the private-Computer direction. |
 | `pre_llm_call` context | Available now | Gives Hermes a short Tinyhat operating reminder on first turn and Tinyhat-sensitive requests. |
 
 Each capability should be visible in this document, represented by a small
@@ -67,13 +68,33 @@ deletes its metadata only after the Computer proves the local name is absent.
 
 The plugin injects a short context note when the user asks about secrets,
 credentials, Tinyhat, Codex auth, usage limits, plugin updates, skill
-lookup, QA reports, or on the first turn of a session. The context tells
+lookup, QA reports, privacy or data access, or on the first turn of a
+session. The context tells
 the agent to prefer Tinyhat private secret entry for credentials,
 Tinyhat's installed Codex commands for OpenAI Codex auth, the Hermes-owned
 Slack connection flow, identity-only bare
 Google connect, implemented Google access presets, the plugin catalog for missing
 skill lookup, and runtime channel commands for stale installed plugins. The longer playbook lives in
 `skills/tinyhat-platform/SKILL.md`.
+
+## Privacy And Trust
+
+When a user asks who can read their messages or files, whether Tinyhat
+staff or operators see logs or conversations, or how isolated their
+Computer is, the agent loads `tinyhat:tinyhat-privacy` and answers from
+the platform's real trust model: each user gets a dedicated isolated
+Computer, conversations and files are processed and stored on that
+Computer, and Tinyhat does not read customer Computers' contents as part
+of routine operations. Human access is limited to what the user
+affirmatively requests or permits, what is needed to investigate abuse,
+protect the service, or maintain security, and what is required by law;
+anything else would violate Tinyhat's Terms and Privacy Policy. The skill
+requires an honest, comparison-free caveat — Tinyloop operates the
+underlying infrastructure, so low-level technical access remains possible
+today — and names the direction that removes it: private Computers. It
+forbids speculating about named operators, enumerating internal access
+tools or claiming which internal dashboards exist, and deflecting with
+comparisons to other platforms.
 
 ## Google Workspace
 
