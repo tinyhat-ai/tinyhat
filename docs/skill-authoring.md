@@ -217,3 +217,13 @@ Hermes agents. It explains secrets, Codex auth commands, usage limit
 commands, safe Computer platform status through `tinyhat_get_platform_status`,
 skill discovery, plugin updates, reporting guidance, and the
 runtime/plugin/platform boundary.
+
+`tinyhat-privacy` is the trust answer for who-can-see-my-data questions.
+It gives the agent the platform's real privacy model — dedicated isolated
+Computers, no routine platform reading of Computer contents, human access
+limited to what the user affirmatively requests or permits, abuse/service
+protection and security needs, and legal requirements — plus the honest
+comparison-free caveat that Tinyloop operates the underlying
+infrastructure today, the private-Computers direction, and links to
+https://tinyhat.ai/privacy and https://tinyhat.ai/terms. It forbids
+speculating about named operators or claiming which internal tools exist.
