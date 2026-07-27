@@ -553,6 +553,14 @@ class HermesAdapterTests(unittest.TestCase):
                 self.assertIn("tinyhat:tinyhat-codex-auth", injected["context"])
 
     def test_context_states_funding_reminder_rules(self) -> None:
+        self.assertIn(
+            "first substantive reply must also include one short funding line",
+            tinyhat_context.TINYHAT_CONTEXT,
+        )
+        self.assertIn(
+            "connect your ChatGPT/Codex subscription with /codex_auth",
+            tinyhat_context.TINYHAT_CONTEXT,
+        )
         self.assertIn("Remind once, not every turn", tinyhat_context.TINYHAT_CONTEXT)
         self.assertIn(
             "never block a task on it",
@@ -573,6 +581,7 @@ class HermesAdapterTests(unittest.TestCase):
 
         self.assertIn("small starter credit (about $10)", text)
         self.assertIn("intended ongoing fund", text)
+        self.assertIn("first substantive reply must include", text)
         self.assertIn("Remind once, early", text)
         self.assertIn("Never block or delay the user's actual request", text)
         self.assertIn("Never state a remaining credit balance", text)
