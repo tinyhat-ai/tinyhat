@@ -48,8 +48,9 @@ The plugin injects a short context note when the user asks about secrets,
 credentials, Tinyhat, Codex auth, usage limits, plugin updates, skill
 lookup, QA reports, privacy or data access, funding (how the agent is
 paid for, what it costs, credits running out — command frames are
-suppressed first, then end-anchored question patterns,
-agent/service-bound funding words, or the standalone word billing),
+suppressed first, then end-anchored question forms and bounded funding
+phrases, agent/service-bound funding words, or the standalone word
+billing),
 or on the first turn of a
 session. On a Computer's very first conversation the context also
 appends a one-time funding-reminder directive, tracked by a durable

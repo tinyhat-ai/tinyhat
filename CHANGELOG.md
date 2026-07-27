@@ -21,9 +21,9 @@ All notable changes to the Tinyhat plugin are documented here.
   is not connected, never state a remaining credit balance they cannot see,
   and answer how-is-this-paid-for / is-this-free / credits-ran-out questions
   from the model. Funding routing is bounded: command frames are suppressed
-  before any funding matching, then end-anchored funding-question
-  patterns, a funding word bound to the agent/service, or the standalone
-  word billing can route — generic developer wording ("balance this
+  before any funding matching, then end-anchored question forms and
+  bounded funding phrases, a funding word bound to the agent/service, or
+  the standalone word billing can route — generic developer wording ("balance this
   binary tree", "check the balance factor", "look for free variables")
   does not inject.
 - Bump the Hermes plugin package to `0.21.9`; add the `tinyhat:tinyhat-privacy`

@@ -161,13 +161,14 @@ _CONTEXT_TERMS = (
     "surveillance",
 )
 
-# Funding routing binds funding wording to the funding question itself:
-# an end-anchored question pattern about this thing's cost/funding, a
-# funding word anchored to the agent/service (outside a command frame),
-# or the lone precise standalone word "billing". Fixed substrings alone
-# leak ("what does it cost to sort this list", "check the balance
-# factor", "look for free variables"), so the patterns are anchored and
-# the token rule requires a service anchor.
+# Funding routing binds funding wording to the funding question itself.
+# Command frames are suppressed first; then an end-anchored question
+# form or a bounded funding phrase, a funding word bound to the
+# agent/service, or the lone precise standalone word "billing" can
+# route. Question forms that can take a non-service object ("what does
+# it cost to sort this list", "how do i pay attention") are end-anchored;
+# self-contained funding phrases ("my balance", "funded by") use word
+# boundaries only.
 _FUNDING_QUESTION_PATTERNS = tuple(
     re.compile(pattern)
     for pattern in (
@@ -466,8 +467,9 @@ _ZERO_WIDTH_MARKS = ("\u200c", "\u200d", "\u200e", "\u200f")
 
 def _matches_funding_intent(normalized: str) -> bool:
     """Bounded funding routing: command frames are suppressed first, then
-    anchored question patterns, a funding word bound to the agent/service,
-    or the lone standalone word billing."""
+    end-anchored question forms and bounded funding phrases, a funding
+    word bound to the agent/service, or the lone standalone word
+    billing."""
     if _is_command_frame(normalized):
         return False
     for pattern in _FUNDING_QUESTION_PATTERNS:
