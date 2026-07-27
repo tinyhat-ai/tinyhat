@@ -42,6 +42,7 @@ REQUIRED_SKILLS = [
     "tinyhat-codex-auth",
     "tinyhat-plugin-update",
     "tinyhat-platform",
+    "tinyhat-privacy",
 ]
 FORBIDDEN_PATHS = (
     "openclaw.plugin.json",
@@ -794,6 +795,7 @@ def validate_hermes_adapter(root: Path) -> None:
         "tinyhat-codex-auth": "skills/tinyhat-codex-auth/SKILL.md",
         "tinyhat-plugin-update": "skills/tinyhat-plugin-update/SKILL.md",
         "tinyhat-platform": "skills/tinyhat-platform/SKILL.md",
+        "tinyhat-privacy": "skills/tinyhat-privacy/SKILL.md",
     }
     for skill in skills:
         require(isinstance(skill, dict), "skill declaration must be an object")

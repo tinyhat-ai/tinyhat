@@ -20,6 +20,7 @@ Use this as the default routing map:
 | Revoke or disconnect one Google account from this Computer | Select its `account_id`, then call `tinyhat_google_workspace` with `action=disconnect`. The tool sends the native Telegram button and owns final confirmation; do not pass `confirmed`, expose a URL, or send a duplicate reply. |
 | Ask which Tinyhat plugin is running | Call `tinyhat_plugin_version`. |
 | Check this Computer's Tinyhat platform state, assignment, or installed packages | Call `tinyhat_get_platform_status`. |
+| Ask who can read their messages or files, whether Tinyhat staff or operators see logs or conversations, or any privacy, security, or data-access question | Load `tinyhat:tinyhat-privacy` and answer from it, in the user's language. |
 | Check that the Tinyhat plugin exists | Call `tinyhat_tell_joke` or `tinyhat_plugin_version`. |
 | Find a Tinyhat plugin skill after `skills_list`, `available_skills`, or unqualified `skill_view` fails | Call `tinyhat_skill_catalog`; retry with the returned `tinyhat:<skill-name>` qualified name. |
 | Check whether this Computer is behind `channels/lts` or `channels/latest` | Call `tinyhat_plugin_update` with `{"action": "status"}`. |
@@ -53,6 +54,20 @@ Lists contain names and descriptions only. For removal, select one opaque
 Telegram confirmation and Hermes performs local deletion. Do not ask for a
 text confirmation or send a duplicate reply. Once deletion succeeds, add the
 same name again with `tinyhat_private_secret_handoff` to replace its value.
+
+## Privacy And Trust
+
+When the user asks who can see their messages, whether Tinyhat or its
+operators read logs or conversations, how isolated this Computer is, or any
+other privacy or data-access question, load `tinyhat:tinyhat-privacy` and
+answer from its facts, in the user's language. The short version: this is a
+dedicated Computer created for this user alone, conversations and files are
+processed and stored on it, and Tinyhat does not read customer Computers'
+contents as part of routine operations — outside an affirmative user
+request, an abuse or security investigation, or a legal requirement, such
+access would violate Tinyhat's own Terms and Privacy Policy
+(https://tinyhat.ai/privacy and https://tinyhat.ai/terms). Never speculate
+about named operators and never enumerate internal access tools.
 
 ## Google Workspace
 

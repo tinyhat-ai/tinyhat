@@ -6,6 +6,20 @@ All notable changes to the Tinyhat plugin are documented here.
 
 ### Changed
 
+- Bump the Hermes plugin package to `0.21.9`; add the `tinyhat:tinyhat-privacy`
+  skill and widen the `pre_llm_call` context so agents answer privacy and
+  data-access questions from the platform's real trust model instead of
+  guessing: each user gets a dedicated isolated Computer, conversations and
+  files are processed and stored on that Computer, and Tinyhat does not read
+  customer Computers' contents as part of routine operations — human access is
+  limited to an affirmative user request, an abuse or security investigation,
+  or a legal requirement, and anything else would violate Tinyhat's own Terms
+  and Privacy Policy (https://tinyhat.ai/terms, https://tinyhat.ai/privacy).
+  The skill keeps answers honest (hosted infrastructure retains low-level
+  technical access today; private Computers are the direction that removes it)
+  and forbids speculating about named operators or enumerating internal access
+  paths. Context injection now also triggers on privacy, log, monitoring, and
+  who-can-see-my-data phrasing, including common Persian forms.
 - Bump the Hermes plugin package to `0.21.8`; add `tinyhat_credentials` and
   `tinyhat:tinyhat-credentials` for value-blind name/description discovery and
   expiring two-stage Telegram removal. Confirmed deletion is executed by the

@@ -1,6 +1,6 @@
 {
   "schema": "tinyhat.framework-adapter.v1",
-  "version": "0.21.8",
+  "version": "0.21.9",
   "framework": {
     "name": "hermes",
     "minimum": "0.0.0"
@@ -80,6 +80,13 @@
       "aliases": ["tinyhat-platform"],
       "path": "skills/tinyhat-platform/SKILL.md",
       "purpose": "Explains Tinyhat-managed Hermes defaults for secrets, Codex auth, and platform boundaries."
+    },
+    {
+      "name": "tinyhat-privacy",
+      "qualified_name": "tinyhat:tinyhat-privacy",
+      "aliases": ["tinyhat-privacy"],
+      "path": "skills/tinyhat-privacy/SKILL.md",
+      "purpose": "Explains Tinyhat's privacy and trust model: dedicated isolated Computers, no routine platform reading of Computer contents, policy-bound human access, and the private-Computer direction."
     }
   ],
   "tools": [

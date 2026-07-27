@@ -20,7 +20,8 @@ TINYHAT_CONTEXT = """Tinyhat context: this Hermes agent runs on a Tinyhat-manage
 - If skill_view or skills_list omits Tinyhat plugin skills, call tinyhat_skill_catalog and retry with qualified names such as tinyhat:tinyhat-codex-auth.
 - If this Computer reports update_available=true or target_ref_changed for the Tinyhat plugin, load tinyhat:tinyhat-plugin-update and use tinyhat_plugin_update with action=status before applying updates. Only call action=update after the user/operator asks to update, and use restart_gateway=true when the live Telegram gateway should reload the new plugin commands.
 - For Tinyhat QA or Slack-style bug reports that mention words like restart, reload, update, or gateway, do not use terminal/curl just to post the text. Use a native Slack/reporting tool if available, or return the report in chat.
-- Load tinyhat:tinyhat-platform, tinyhat:tinyhat-private-secret, tinyhat:tinyhat-credentials, tinyhat:tinyhat-google-workspace, tinyhat:tinyhat-codex-auth, tinyhat:tinyhat-plugin-update, tinyhat:tinyhat-skill-catalog, or tinyhat:tinyhat-plugin-version when you need the longer Tinyhat playbook."""
+- For privacy, security, or data-access questions — who can read the user's messages or files, whether Tinyhat staff or operators see logs or conversations, whether chats are monitored — load tinyhat:tinyhat-privacy and answer from it, in the user's language. Core facts: this agent runs on a dedicated Computer created for this user alone; conversations and files are processed and stored on this Computer; Tinyhat does not read customer Computers' conversations, files, or logs as part of routine operations, and outside an affirmative user request, an abuse or security investigation, or a legal requirement, such access would violate Tinyhat's own Terms and Privacy Policy (https://tinyhat.ai/privacy and https://tinyhat.ai/terms). Stay honest that, like any hosted service, the infrastructure operator retains low-level technical access today — that is why the policy is binding and why Tinyhat is building private Computers designed to remove even that technical possibility. Never speculate about named operators and never enumerate internal tools or access paths.
+- Load tinyhat:tinyhat-platform, tinyhat:tinyhat-privacy, tinyhat:tinyhat-private-secret, tinyhat:tinyhat-credentials, tinyhat:tinyhat-google-workspace, tinyhat:tinyhat-codex-auth, tinyhat:tinyhat-plugin-update, tinyhat:tinyhat-skill-catalog, or tinyhat:tinyhat-plugin-version when you need the longer Tinyhat playbook."""
 
 _CONTEXT_PHRASES = (
     "api key",
@@ -72,6 +73,31 @@ _CONTEXT_PHRASES = (
     "start codex sign-in",
     "start codex sign in",
     "secure sign in",
+    "read my messages",
+    "read my chats",
+    "read our chat",
+    "see my messages",
+    "see my chats",
+    "my data",
+    "personal data",
+    "data protection",
+    "who can see",
+    "who can read",
+    "who has access",
+    "access my",
+    "access to my",
+    "privacy policy",
+    "terms of service",
+    "chat history",
+    "conversation history",
+    "spy on",
+    "حریم خصوصی",
+    "پیام‌های من",
+    "پیام های من",
+    "لاگ",
+    "دسترسی",
+    "امنیت",
+    "نظارت",
 )
 
 _CONTEXT_TERMS = (
@@ -106,6 +132,26 @@ _CONTEXT_TERMS = (
     "gateway",
     "tinyhat",
     "update",
+    "privacy",
+    "private",
+    "log",
+    "logs",
+    "gdpr",
+    "surveillance",
+    "monitoring",
+    "monitored",
+    "spying",
+    "admin",
+    "admins",
+    "operator",
+    "operators",
+    "isolation",
+    "isolated",
+    "security",
+    "confidential",
+    "encrypted",
+    "encryption",
+    "trust",
 )
 
 
