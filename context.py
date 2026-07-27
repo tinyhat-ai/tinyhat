@@ -113,11 +113,13 @@ _CONTEXT_TERMS = (
 )
 
 # Privacy/data-access routing is separate from the generic short-circuits
-# above: it uses word-boundary phrase matching plus a bounded rule that a
-# conversation-data subject (or an actor asking about one) must co-occur
-# with an access/visibility word. Generic developer wording ("tail the
-# logs", "operator precedence", "my database", Persian "بلاگ") does not
-# inject on its own.
+# above. It matches word-boundary phrases in either script, or a bounded
+# combination: a conversation-data subject plus an access word, plus (in
+# English) an interrogative/actor/possessive signal so imperative file or
+# log operations ("read the application logs") stay out, and (in Persian)
+# no imperative marker so commands ("فایل رو ذخیره کن") stay out. Persian
+# uses stem prefixes because possessive/plural/verb suffixes attach to the
+# word after zero-width joiners are stripped.
 _PRIVACY_PHRASES = (
     "read my messages",
     "read my chats",
@@ -157,16 +159,6 @@ _PRIVACY_SUBJECT_TERMS = (
     "files",
     "history",
     "computer",
-    "operator",
-    "operators",
-    "admin",
-    "admins",
-    "staff",
-    "employee",
-    "employees",
-    "anyone",
-    "someone",
-    "somebody",
 )
 
 _PRIVACY_ACCESS_TERMS = (
@@ -216,64 +208,91 @@ _PRIVACY_ACCESS_TERMS = (
     "spy",
     "spies",
     "spying",
-    "who",
     "private",
 )
 
-_PRIVACY_SUBJECT_TERMS_FA = (
-    "پیام",
-    "پیامها",
-    "پیامهای",
-    "گفتگو",
-    "گفتگوها",
-    "مکالمه",
-    "مکالمات",
-    "چت",
-    "چتها",
-    "فایل",
-    "فایلها",
-    "فایلهای",
-    "داده",
-    "دادهها",
-    "لاگ",
-    "لاگها",
-    "تاریخچه",
-    "کامپیوتر",
-    "ادمین",
-    "ادمینها",
-    "اپراتور",
-    "اپراتورها",
-    "کارمند",
-    "کارمندان",
-    "کسی",
+# A privacy question names or implies someone doing the accessing; a bare
+# imperative operation does not.
+_PRIVACY_SIGNAL_TERMS = (
+    "who",
+    "whom",
+    "where",
+    "when",
+    "why",
+    "how",
+    "is",
+    "are",
+    "was",
+    "were",
+    "do",
+    "does",
+    "did",
+    "can",
+    "could",
+    "will",
+    "would",
+    "should",
+    "anyone",
+    "someone",
+    "somebody",
+    "everyone",
+    "you",
+    "your",
+    "my",
+    "mine",
+    "our",
+    "ours",
+    "staff",
+    "operator",
+    "operators",
+    "admin",
+    "admins",
+    "employee",
+    "employees",
+    "tinyhat",
+    "tinyloop",
 )
 
-_PRIVACY_ACCESS_TERMS_FA = (
+# Persian stems are matched as token prefixes: suffixed possessives,
+# plurals, and verb conjugations (for example پیامهامو or میخونید after
+# zero-width-joiner stripping) still resolve to their stem.
+_PRIVACY_SUBJECT_STEMS_FA = (
+    "پیام",
+    "گفتگو",
+    "مکالم",
+    "چت",
+    "فایل",
+    "داده",
+    "لاگ",
+    "تاریخچ",
+    "کامپیوتر",
+)
+
+_PRIVACY_ACCESS_STEMS_FA = (
     "دسترسی",
-    "بخونه",
-    "بخونن",
-    "بخوند",
-    "بخواند",
-    "بخوانند",
-    "میخونه",
-    "میخونن",
-    "میخواند",
-    "میخوانند",
-    "خوندن",
-    "خواندن",
-    "ببینه",
-    "ببینن",
-    "ببیند",
-    "ببینند",
-    "میبینه",
-    "میبینن",
-    "میبیند",
-    "میبینند",
-    "دیدن",
+    "میخون",
+    "بخون",
+    "خوند",
+    "خواند",
+    "میبین",
+    "ببین",
+    "دید",
     "ضبط",
     "ذخیره",
     "نظارت",
     "نگاه",
+)
+
+# Imperative "do" markers turn a data+verb sentence into a work request
+# ("فایل رو ذخیره کن"), not a privacy question.
+_PRIVACY_IMPERATIVE_MARKERS_FA = (
+    "کن",
+    "کنید",
+    "کنین",
+    "بکن",
+    "بکنید",
+    "کنم",
+    "کنیم",
 )
 
 # Persian text arrives with interchangeable Arabic/Persian letters and
@@ -285,7 +304,9 @@ _ZERO_WIDTH_MARKS = ("\u200c", "\u200d", "\u200e", "\u200f")
 
 def _matches_privacy_phrase(normalized: str) -> bool:
     for phrase in _PRIVACY_PHRASES:
-        pattern = r"(?<![a-z0-9\u0600-\u06ff])" + re.escape(phrase) + r"(?![a-z0-9\u0600-\u06ff])"
+        # \w-based boundaries treat Arabic punctuation (؟ ،) as boundaries
+        # while still refusing matches inside longer words such as بلاگ.
+        pattern = r"(?<!\w)" + re.escape(phrase) + r"(?!\w)"
         if re.search(pattern, normalized):
             return True
     return False
@@ -298,13 +319,21 @@ def _matches_privacy_intent(normalized: str) -> bool:
     # \w+ keeps letters in both scripts and drops punctuation such as the
     # Arabic question mark, which shares the U+0600 block with letters.
     tokens = set(re.findall(r"\w+", normalized))
-    if any(term in tokens for term in _PRIVACY_SUBJECT_TERMS) and any(
-        term in tokens for term in _PRIVACY_ACCESS_TERMS
+    if (
+        any(term in tokens for term in _PRIVACY_SUBJECT_TERMS)
+        and any(term in tokens for term in _PRIVACY_ACCESS_TERMS)
+        and any(term in tokens for term in _PRIVACY_SIGNAL_TERMS)
     ):
         return True
-    return any(term in tokens for term in _PRIVACY_SUBJECT_TERMS_FA) and any(
-        term in tokens for term in _PRIVACY_ACCESS_TERMS_FA
+    if any(token in tokens for token in _PRIVACY_IMPERATIVE_MARKERS_FA):
+        return False
+    has_fa_subject = any(
+        token.startswith(stem) for token in tokens for stem in _PRIVACY_SUBJECT_STEMS_FA
     )
+    has_fa_access = any(
+        token.startswith(stem) for token in tokens for stem in _PRIVACY_ACCESS_STEMS_FA
+    )
+    return has_fa_subject and has_fa_access
 
 
 def should_inject_tinyhat_context(user_message: str, *, is_first_turn: bool = False) -> bool:

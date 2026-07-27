@@ -509,6 +509,10 @@ class HermesAdapterTests(unittest.TestCase):
             "آيا كسی به پیامهای من دسترسی داره؟",
             "حریم خصوصی من اینجا چطور حفظ میشه؟",
             "کسی مکالمه‌های منو می‌خونه؟",
+            "حریم خصوصی؟",
+            "درباره حریم خصوصی، توضیح بده",
+            "پیام‌هامو می‌خونید؟",
+            "آیا مکالمه‌های من ضبط می‌شوند؟",
         )
         for user_message in examples:
             with self.subTest(user_message=user_message):
@@ -535,6 +539,10 @@ class HermesAdapterTests(unittest.TestCase):
             "Explain operator precedence",
             "Please migrate my database",
             "برای سایت یه بلاگ بنویس",
+            "Read the application logs",
+            "Look at this file",
+            "Store this file under /tmp",
+            "فایل رو ذخیره کن",
         )
         for user_message in examples:
             with self.subTest(user_message=user_message):
