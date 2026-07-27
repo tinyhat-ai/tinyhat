@@ -558,6 +558,11 @@ class HermesAdapterTests(unittest.TestCase):
             "What is the price?",
             "What payment methods do you accept?",
             "How much does it cost?",
+            "How much does this cost?",
+            "Is it free?",
+            "How is this funded?",
+            "What are my payment options?",
+            "How much credit is left?",
         )
         for user_message in examples:
             with self.subTest(user_message=user_message):
@@ -637,6 +642,10 @@ class HermesAdapterTests(unittest.TestCase):
             "Who pays attention to this warning?",
             "Is this free variable captured?",
             "The balance factor of this AVL tree is wrong",
+            "How do I pay attention to failing tests?",
+            "What does it cost to sort this list?",
+            "Check the balance factor in this AVL tree",
+            "Look for free variables in this closure",
         )
         for user_message in examples:
             with self.subTest(user_message=user_message):

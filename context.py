@@ -161,57 +161,96 @@ _CONTEXT_TERMS = (
     "surveillance",
 )
 
-# Funding questions inject only when a funding word is anchored to the
-# agent/service ("what does it cost to keep you running"), or an exact
-# funding phrase appears — generic developer wording ("balance this
-# binary tree", "please free this buffer") does not inject.
-_FUNDING_PHRASES = (
-    "paying for this",
-    "paying for you",
-    "pay for this",
-    "pay for you",
-    "how do i pay",
-    "who pays for",
-    "who is paying for",
-    "payment method",
-    "payment methods",
-    "how much do you cost",
-    "how much does it cost",
-    "what does it cost",
-    "does it cost",
-    "you cost",
-    "what is the price",
-    "price of this service",
-    "my balance",
-    "the balance?",
-    "check the balance",
-    "remaining balance",
-    "how does billing",
-    "my billing",
-    "billing work",
-    "is this free?",
-    "free to use",
-    "for free",
-    "run out of credits",
-    "credits run out",
-    "credit runs out",
-    "out of credits",
-    "starter credit",
-    "platform credits",
-    "who is funding",
-    "funding this",
-    "funded by",
+# Funding routing binds funding wording to the funding question itself:
+# an end-anchored question pattern about this thing's cost/funding, a
+# funding word anchored to the agent/service (outside a command frame),
+# or the lone precise standalone word "billing". Fixed substrings alone
+# leak ("what does it cost to sort this list", "check the balance
+# factor", "look for free variables"), so the patterns are anchored and
+# the token rule requires a service anchor.
+_FUNDING_QUESTION_PATTERNS = tuple(
+    re.compile(pattern)
+    for pattern in (
+        r"(?:how much|what) (?:does|do|will|would) (?:it|this|you) cost\s*\??$",
+        r"how much (?:is|are) (?:it|this)\s*\??$",
+        r"what(?:'s| is) the price\s*\??$",
+        r"is (?:it|this) free\s*\??$",
+        r"how is (?:it|this) funded\s*\??$",
+        r"how do i pay(?: for (?:it|this|you))?\s*\??$",
+        r"(?<!\w)payment (?:option|options|method|methods|plan|plans)(?!\w)",
+        r"(?<!\w)how (?:much|many) credits?(?!\w)",
+        r"(?<!\w)credits? (?:is|are) left(?!\w)",
+        r"(?<!\w)remaining (?:credit|credits|balance)(?!\w)",
+        r"check (?:my|the) balance\s*\??$",
+        r"(?<!\w)my balance(?!\w)",
+        r"(?<!\w)my billing(?!\w)",
+        r"(?<!\w)how does billing(?!\w)",
+        r"(?<!\w)who pays for(?!\w)",
+        r"(?<!\w)who is paying for(?!\w)",
+        r"(?<!\w)paying for (?:this|you)(?!\w)",
+        r"(?<!\w)pay for (?:this|you)(?!\w)",
+        r"(?<!\w)how much do you cost(?!\w)",
+        r"(?<!\w)you cost(?!\w)",
+        r"(?<!\w)free to use(?!\w)",
+        r"(?<!\w)(?:run out of|out of) credits(?!\w)",
+        r"(?<!\w)credits? runs? out(?!\w)",
+        r"(?<!\w)starter credit(?!\w)",
+        r"(?<!\w)platform credits(?!\w)",
+        r"(?<!\w)who is funding(?!\w)",
+        r"(?<!\w)funded by(?!\w)",
+    )
 )
 
-# Standalone funding words precise enough to route alone; everything else
-# must appear inside one of the bounded phrases above, so developer
-# wording that merely contains a funding word ("can you free this
-# buffer", "balance this binary tree") does not inject.
+_FUNDING_WORD_TERMS = (
+    "pay",
+    "pays",
+    "paying",
+    "paid",
+    "payment",
+    "payments",
+    "cost",
+    "costs",
+    "costing",
+    "price",
+    "pricing",
+    "priced",
+    "bill",
+    "billed",
+    "billing",
+    "balance",
+    "credit",
+    "credits",
+    "fund",
+    "funded",
+    "funding",
+    "free",
+    "charge",
+    "charges",
+    "charged",
+    "money",
+)
+
+_FUNDING_SERVICE_ANCHORS = (
+    "you",
+    "your",
+    "yourself",
+    "agent",
+    "bot",
+    "assistant",
+    "tinyhat",
+    "service",
+    "subscription",
+    "chatgpt",
+    "codex",
+    "plan",
+    "credits",
+    "credit",
+    "starter",
+)
+
 _FUNDING_STANDALONE_TERMS = (
     "billing",
 )
-
-
 
 # Privacy/data-access routing is separate from the generic short-circuits
 # above. It matches word-boundary phrases in either script, or a bounded
@@ -426,13 +465,20 @@ _ZERO_WIDTH_MARKS = ("\u200c", "\u200d", "\u200e", "\u200f")
 
 
 def _matches_funding_intent(normalized: str) -> bool:
-    """Bounded funding routing: exact phrases or a precise standalone word."""
-    for phrase in _FUNDING_PHRASES:
-        pattern = r"(?<!\w)" + re.escape(phrase) + r"(?!\w)"
-        if re.search(pattern, normalized):
+    """Bounded funding routing: anchored question patterns, or a funding
+    word bound to the agent/service outside a command frame, or the lone
+    standalone word billing."""
+    for pattern in _FUNDING_QUESTION_PATTERNS:
+        if pattern.search(normalized):
             return True
     tokens = set(re.findall(r"\w+", normalized))
-    return any(term in tokens for term in _FUNDING_STANDALONE_TERMS)
+    if any(term in tokens for term in _FUNDING_STANDALONE_TERMS):
+        return True
+    if _is_command_frame(normalized):
+        return False
+    return any(term in tokens for term in _FUNDING_WORD_TERMS) and any(
+        term in tokens for term in _FUNDING_SERVICE_ANCHORS
+    )
 
 
 def _matches_privacy_phrase(normalized: str) -> bool:

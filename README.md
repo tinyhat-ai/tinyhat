@@ -335,8 +335,8 @@ auth and limit checks. It also routes stale-plugin reports through
 tools instead of arbitrary terminal commands. A small `pre_llm_call` hook
 injects only the short version of that context on first turn or when the
 user mentions secrets, credentials, Tinyhat, Codex auth, usage limits,
-skill lookup, plugin updates, QA reports, or privacy and data-access
-questions.
+skill lookup, plugin updates, QA reports, privacy and data-access
+questions, or funding questions.
 
 `tinyhat-privacy` is the trust answer. When a user asks who can read
 their messages, whether Tinyhat staff or operators see logs or
@@ -362,9 +362,11 @@ marker so a later `/new` or `/reset` session does not re-arm it.
 Tool-owned native first replies (the Codex auth prerequisite photo, a
 Connect Google button) or an explicit connect request satisfy the
 reminder on their own. Funding questions route through bounded matching
-(exact phrases, or a funding word anchored to the agent/service), so
-generic developer wording such as "balance this binary tree" or "please
-free this buffer" does not inject.
+(end-anchored funding-question patterns, a funding word bound to the
+agent or service outside a command frame, or the standalone word
+billing), so generic developer wording such as "check the balance
+factor", "look for free variables", or "please free this buffer" does
+not inject.
 
 ## Installing
 

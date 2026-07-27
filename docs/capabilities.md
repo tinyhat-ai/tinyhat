@@ -47,8 +47,9 @@ deletes its metadata only after the Computer proves the local name is absent.
 The plugin injects a short context note when the user asks about secrets,
 credentials, Tinyhat, Codex auth, usage limits, plugin updates, skill
 lookup, QA reports, privacy or data access, funding (how the agent is
-paid for, what it costs, credits running out — bounded to
-agent/service-anchored wording), or on the first turn of a
+paid for, what it costs, credits running out — end-anchored question
+patterns or agent/service-bound funding words outside command frames),
+or on the first turn of a
 session. On a Computer's very first conversation the context also
 appends a one-time funding-reminder directive, tracked by a durable
 marker so later /new sessions do not re-arm it; tool-owned native first
