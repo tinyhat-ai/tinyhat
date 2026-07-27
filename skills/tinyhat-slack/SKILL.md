@@ -14,6 +14,12 @@ The tool sends the user:
 - one secure Mini App form for the bot token, Socket Mode app token, and
   allowed Slack member IDs.
 
+Before sending the manifest, Tinyhat removes Hermes slash-command definitions
+and the `commands` OAuth scope. Slash-command names are workspace-global, so
+per-agent commands would collide when a workspace connects more than one
+Hermes agent. Agent messages, direct messages, mentions, invited channels,
+files, and Socket Mode remain owned by Hermes.
+
 The Mini App encrypts all values for this Computer. Tinyhat carries only
 ciphertext and safe connection metadata. Hermes validates and saves the values
 locally, then owns the Slack Socket Mode connection and all Slack functionality.

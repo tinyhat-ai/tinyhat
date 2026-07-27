@@ -92,7 +92,26 @@ def _generate_hermes_slack_manifest() -> dict[str, Any]:
         ) from exc
     if not isinstance(manifest, dict):
         raise SecretHandoffError("Hermes Slack manifest output was not an object.")
+    _remove_slack_commands(manifest)
     return manifest
+
+
+def _remove_slack_commands(manifest: dict[str, Any]) -> None:
+    """Remove workspace-global slash commands from the per-agent Slack app."""
+
+    features = manifest.get("features")
+    if isinstance(features, dict):
+        features.pop("slash_commands", None)
+
+    oauth_config = manifest.get("oauth_config")
+    if not isinstance(oauth_config, dict):
+        return
+    scopes = oauth_config.get("scopes")
+    if not isinstance(scopes, dict):
+        return
+    bot_scopes = scopes.get("bot")
+    if isinstance(bot_scopes, list):
+        scopes["bot"] = [scope for scope in bot_scopes if scope != "commands"]
 
 
 def install_submitted_slack_connection(

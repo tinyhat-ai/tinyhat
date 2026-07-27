@@ -1128,6 +1128,46 @@ class HermesAdapterTests(unittest.TestCase):
         ):
             slack_connection._generate_hermes_slack_manifest()
 
+    def test_slack_manifest_removes_workspace_global_slash_commands(self) -> None:
+        completed = subprocess.CompletedProcess(
+            args=["hermes"],
+            returncode=0,
+            stdout=json.dumps(
+                {
+                    "features": {
+                        "agent_view": {"agent_description": "Hermes"},
+                        "slash_commands": [
+                            {"command": "/hermes"},
+                            {"command": "/model"},
+                        ],
+                    },
+                    "oauth_config": {
+                        "scopes": {
+                            "bot": [
+                                "assistant:write",
+                                "chat:write",
+                                "commands",
+                                "users:read",
+                            ]
+                        }
+                    },
+                    "settings": {"socket_mode_enabled": True},
+                }
+            ),
+            stderr="",
+        )
+        with (
+            mock.patch.object(slack_connection.shutil, "which", return_value="/bin/hermes"),
+            mock.patch.object(slack_connection.subprocess, "run", return_value=completed),
+        ):
+            manifest = slack_connection._generate_hermes_slack_manifest()
+
+        self.assertNotIn("slash_commands", manifest["features"])
+        self.assertEqual(
+            manifest["oauth_config"]["scopes"]["bot"],
+            ["assistant:write", "chat:write", "users:read"],
+        )
+
     def test_generic_secret_flow_refuses_reserved_slack_connection_values(self) -> None:
         for name in secret_handoff.RESERVED_SLACK_CONNECTION_NAMES:
             with self.subTest(name=name):

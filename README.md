@@ -28,7 +28,9 @@ auth flow that is installed on each Hermes Computer.
 It also connects that same Hermes agent to Slack with Hermes' current
 Agent-view manifest and Socket Mode adapter. Slack tokens are entered together
 in the encrypted Mini App and decrypted only on the Computer; Tinyhat never
-receives Slack message content.
+receives Slack message content. Tinyhat removes slash commands from each
+per-agent manifest so command names cannot collide across apps in one
+workspace.
 
 ## What This Plugin Does
 
@@ -143,6 +145,9 @@ Socket Mode token, and allowed Slack member IDs. The Computer validates those
 values against Slack, saves them through Hermes' supported configuration
 interface, and reports only the app and workspace identifiers needed by the
 Connections page. Hermes owns the WebSocket and every Slack message.
+Before the JSON is sent, the plugin removes Hermes' slash-command definitions
+and the `commands` OAuth scope so multiple per-agent apps can coexist in the
+same workspace without command-name conflicts.
 
 `tinyhat-credentials` lists only the safe names, descriptions, and saved
 timestamps of credentials currently installed through the private-secret

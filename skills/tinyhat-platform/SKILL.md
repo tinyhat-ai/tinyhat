@@ -55,6 +55,9 @@ handoffs. The tool generates the manifest through Hermes, sends the Slack
 create-from-manifest guide, and accepts both tokens plus allowed member IDs in
 one browser-encrypted bundle. Hermes owns Socket Mode and Slack messages.
 Tinyhat receives only ciphertext and safe app/workspace metadata.
+Tinyhat removes Hermes slash commands and the `commands` OAuth scope before
+sending the manifest so multiple per-agent Slack apps cannot compete for the
+same workspace-global command names.
 
 Slack connection values are reserved from the generic secret and credential
 removal flows. Until a bundled disconnect ceremony is implemented, never route

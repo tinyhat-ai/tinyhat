@@ -114,6 +114,9 @@ Slack. It must call `tinyhat_slack_connect` once and let the tool own the
 Telegram response. Do not split the two tokens into generic secret handoffs,
 ask for token values in chat, enable open workspace access, or add a parallel
 Slack adapter. Hermes supplies the manifest and owns Socket Mode.
+Tinyhat removes slash-command definitions and the `commands` OAuth scope from
+that manifest because Slack command names are workspace-global and per-agent
+apps must not collide.
 
 `tinyhat-credentials` is the value-blind discovery and removal path for those
 new secure credentials. It lists names, descriptions, and opaque handoff ids,
