@@ -109,6 +109,15 @@ to retry with names like `tinyhat:tinyhat-codex-auth`.
 It should be triggered before generic `.env` advice whenever a user asks
 to add or save an API key, token, password, or credential.
 
+`tinyhat-slack` is the dedicated way to connect the current Hermes agent to
+Slack. It must call `tinyhat_slack_connect` once and let the tool own the
+Telegram response. Do not split the two tokens into generic secret handoffs,
+ask for token values in chat, enable open workspace access, or add a parallel
+Slack adapter. Hermes supplies the manifest and owns Socket Mode.
+Tinyhat removes slash-command definitions and the `commands` OAuth scope from
+that manifest because Slack command names are workspace-global and per-agent
+apps must not collide.
+
 `tinyhat-credentials` is the value-blind discovery and removal path for those
 new secure credentials. It lists names, descriptions, and opaque handoff ids,
 never values. For agent-requested removal it calls `tinyhat_credentials` once

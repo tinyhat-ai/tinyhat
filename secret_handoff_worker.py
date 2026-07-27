@@ -39,11 +39,16 @@ from .secret_handoff import (
 )
 
 
-def run_worker(*, handoff_id: str, key_path: Path) -> None:
+def run_worker(
+    *,
+    handoff_id: str,
+    key_path: Path,
+    expires_in_seconds: int = DEFAULT_EXPIRES_IN_SECONDS,
+) -> None:
     client, platform_auth = build_platform_client()
     try:
         private_key_pem = key_path.read_text(encoding="utf-8")
-        deadline = time.time() + DEFAULT_EXPIRES_IN_SECONDS
+        deadline = time.time() + max(1, int(expires_in_seconds))
         while time.time() < deadline:
             state = client.get_json(
                 computer_api_path(
@@ -108,12 +113,21 @@ def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--handoff-id", required=True)
     parser.add_argument("--key-path", required=True)
+    parser.add_argument(
+        "--expires-in-seconds",
+        type=int,
+        default=DEFAULT_EXPIRES_IN_SECONDS,
+    )
     return parser.parse_args()
 
 
 def main() -> int:
     args = parse_args()
-    run_worker(handoff_id=args.handoff_id, key_path=Path(args.key_path))
+    run_worker(
+        handoff_id=args.handoff_id,
+        key_path=Path(args.key_path),
+        expires_in_seconds=args.expires_in_seconds,
+    )
     return 0
 
 
