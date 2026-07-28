@@ -42,9 +42,12 @@ The agent calls `tinyhat_slack_connect` once. The tool sends the current
 Hermes-generated Agent-view manifest, a highlighted Slack app-creation guide,
 and a secure Mini App button. The browser encrypts the two Slack tokens and the
 allowed member IDs together for the Computer. The Computer validates them
-directly with Slack, saves them through Hermes, and reports only safe app and
-workspace metadata. Hermes then connects through Socket Mode; Tinyhat has no
-public Slack ingress and never receives Slack messages.
+directly with Slack, acknowledges receipt in Telegram, saves them through
+Hermes, and sends an owner-DM greeting before reporting success. Failed
+attempts report a value-blind validation stage and stable error code; both
+failures and validated app/workspace metadata appear on the Connections page.
+Hermes then connects through Socket Mode; Tinyhat has no public Slack ingress
+and never receives Slack messages.
 The Computer opens the first allowed member's direct message and saves its
 channel ID locally as Hermes' Slack home channel. That gives cron results and
 cross-platform deliveries a private default without exposing the channel ID
