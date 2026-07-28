@@ -49,6 +49,8 @@ def run_worker(
     try:
         private_key_pem = key_path.read_text(encoding="utf-8")
         deadline = time.time() + max(1, int(expires_in_seconds))
+        last_status = ""
+        last_handoff_kind = ""
         while time.time() < deadline:
             state = client.get_json(
                 computer_api_path(
@@ -60,19 +62,26 @@ def run_worker(
             if parsed_deadline is not None:
                 deadline = parsed_deadline
             status = str(state.get("status") or "").strip()
+            last_status = status
+            last_handoff_kind = str(state.get("handoff_kind") or "").strip()
             if status == "submitted":
-                _install_submitted_secret(
+                installed = _install_submitted_secret(
                     client=client,
                     platform_auth=platform_auth,
                     handoff_id=handoff_id,
                     private_key_pem=private_key_pem,
                     state=state,
                 )
+                if installed:
+                    return
+            if status in {"claimed", "expired"}:
                 return
-            if status in {"claimed", "expired", "failed"}:
+            if status == "failed" and state.get("handoff_kind") != "slack_connection":
                 return
             poll_after = max(1.0, float(state.get("poll_after_ms") or 2000) / 1000)
             time.sleep(poll_after)
+        if last_status == "failed" and last_handoff_kind == "slack_connection":
+            return
         _claim_handoff(
             client,
             platform_auth,

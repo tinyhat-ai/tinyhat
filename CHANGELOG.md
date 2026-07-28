@@ -6,6 +6,10 @@ All notable changes to the Tinyhat plugin are documented here.
 
 ### Changed
 
+- Bump the Hermes plugin package to `0.21.13`; stop blocking setup on the
+  optional Slack `users.info` display-name lookup, keep the Computer-local
+  private key worker alive after a failed Slack validation, and accept an
+  owner-edited retry through the same expiring encrypted handoff.
 - Bump the Hermes plugin package to `0.21.12`; acknowledge encrypted Slack
   detail receipt immediately in Telegram, report value-blind validation stages
   and stable error codes to the platform, and require a successful owner-DM
