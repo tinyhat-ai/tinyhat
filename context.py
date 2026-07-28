@@ -87,6 +87,17 @@ _PRIVACY_BULLET_MARKER = "- For privacy, security, or data-access questions"
 _FUNDING_BULLET_MARKER = "- Funding model:"
 
 
+# Routing signals whose owning bullet does not contain the signal text
+# literally. Protection derives from the routing decision, so each such
+# alias names the bullet it routes to.
+_ROUTE_SIGNAL_BULLET_HINTS = {
+    "qa report": "- For Tinyhat QA or Slack-style bug reports",
+    "bug report": "- For Tinyhat QA or Slack-style bug reports",
+    "slack report": "- For Tinyhat QA or Slack-style bug reports",
+    "plugin update": "- If this Computer reports update_available",
+}
+
+
 def _route_signals(user_message: str) -> tuple[set[str], set[str]]:
     """The routing-table phrases and terms this message actually matches.
 
@@ -94,9 +105,17 @@ def _route_signals(user_message: str) -> tuple[set[str], set[str]]:
     the context (``_CONTEXT_PHRASES`` / ``_CONTEXT_TERMS``), not from a
     narrower parallel predicate — otherwise a first-turn request routed
     by a generic phrase or term can lose the very bullet it asked for.
+    Phrases are checked against both the raw and the separator-split
+    forms, exactly as ``should_inject_tinyhat_context`` checks them, so
+    underscore phrases such as ``skills_list`` count here too.
     """
-    normalized = _normalize_message(user_message)
-    phrases = {phrase for phrase in _CONTEXT_PHRASES if phrase in normalized}
+    raw = _normalize_message_raw(user_message)
+    normalized = re.sub(r"[_-]+", " ", raw)
+    phrases = {
+        phrase
+        for phrase in _CONTEXT_PHRASES
+        if phrase in raw or phrase in normalized
+    }
     tokens = set(re.findall(r"[a-z0-9]+", normalized))
     terms = {term for term in _CONTEXT_TERMS if term in tokens}
     return phrases, terms
@@ -111,6 +130,10 @@ def _bullet_matches_request(
 ) -> bool:
     if any(marker in bullet for marker in intent_markers):
         return True
+    for phrase in phrases:
+        hint = _ROUTE_SIGNAL_BULLET_HINTS.get(phrase)
+        if hint is not None and hint in bullet:
+            return True
     lowered = bullet.lower()
     if any(phrase in lowered for phrase in phrases):
         return True
@@ -123,11 +146,20 @@ def _compose_onboarding_context(context: str, user_message: str) -> str:
     if len(composed) <= _HOOK_SPILL_SAFE_CHARS:
         return composed
     budget = _HOOK_SPILL_SAFE_CHARS - len(FUNDING_REMINDER_DIRECTIVE) - 1
+    if budget <= 0:
+        # Fail closed on a directive at or above the cap: the cap is the
+        # harder invariant, so ship a truncated directive alone rather
+        # than ever exceeding it.
+        return FUNDING_REMINDER_DIRECTIVE[:_HOOK_SPILL_SAFE_CHARS]
 
     starts = [m.start() for m in re.finditer(r"\n- ", context)]
     if not starts:
         return FUNDING_REMINDER_DIRECTIVE + "\n" + context[:budget]
     heading = context[: starts[0]]
+    if len(heading) > budget:
+        # A heading alone that exceeds the retained-context budget is
+        # hard-capped: no bullet could fit after it anyway.
+        return FUNDING_REMINDER_DIRECTIVE + "\n" + heading[:budget]
     bounds = starts + [len(context)]
     bullets = [context[bounds[i] : bounds[i + 1]] for i in range(len(starts))]
 
@@ -139,18 +171,27 @@ def _compose_onboarding_context(context: str, user_message: str) -> str:
     if _matches_funding_intent(normalized):
         intent_markers.append(_FUNDING_BULLET_MARKER)
 
-    # Two passes, both in source order and both capped: request-matched
-    # bullets reserve budget first (over-subscription degrades in order
-    # instead of all-or-nothing), then remaining bullets fill the rest.
-    # The cap is the harder invariant — nothing here can exceed it.
+    # Three passes, each in source order and capped: explicit intent
+    # bullets reserve budget first (a privacy question must keep the
+    # trust-model bullet even when generic terms like "tinyhat" also
+    # match many earlier bullets), then route-signal-matched bullets,
+    # then everything else fills the rest. Over-subscription degrades in
+    # order instead of all-or-nothing, and nothing can exceed the cap.
     used = len(heading)
     kept: set[int] = set()
     for i, bullet in enumerate(bullets):
+        if any(marker in bullet for marker in intent_markers):
+            if used + len(bullet) <= budget:
+                kept.add(i)
+                used += len(bullet)
+    for i, bullet in enumerate(bullets):
+        if i in kept:
+            continue
         if _bullet_matches_request(
             bullet,
             phrases=phrases,
             terms=terms,
-            intent_markers=tuple(intent_markers),
+            intent_markers=(),
         ) and used + len(bullet) <= budget:
             kept.add(i)
             used += len(bullet)
@@ -314,6 +355,8 @@ _FUNDING_QUESTION_PATTERNS = tuple(
         r"(?<!\w)paying for (?:this|you)(?!\w)",
         r"(?<!\w)pay for (?:this|you)(?!\w)",
         r"(?<!\w)how much do you cost(?!\w)",
+        r"what (?:it|this|you) costs?\s*\??$",
+        r"how much (?:you|it|this) costs?\s*\??$",
         r"(?<!\w)you cost(?!\w)",
         r"(?<!\w)free to use(?!\w)",
         r"(?<!\w)(?:run out of|out of) credits(?!\w)",
@@ -356,8 +399,6 @@ _FUNDING_WORD_TERMS = (
 
 _FUNDING_SERVICE_ANCHORS = (
     "you",
-    "your",
-    "yourself",
     "agent",
     "bot",
     "assistant",
@@ -370,6 +411,13 @@ _FUNDING_SERVICE_ANCHORS = (
     "credits",
     "credit",
     "starter",
+)
+
+# Possessive funding anchor: "your" counts only immediately before a
+# funding word, never as a generic possessive in a developer imperative.
+_FUNDING_POSSESSIVE_ANCHOR = re.compile(
+    r"(?<!\w)your (?:price|pricing|prices|cost|costs|rate|rates|fee|fees|"
+    r"plan|plans|subscription|credit|credits|balance|billing|charges?)(?!\w)"
 )
 
 _FUNDING_STANDALONE_TERMS = (
@@ -589,21 +637,33 @@ _ZERO_WIDTH_MARKS = ("\u200c", "\u200d", "\u200e", "\u200f")
 
 
 def _matches_funding_intent(normalized: str) -> bool:
-    """Bounded funding routing: command frames are suppressed first, then
-    end-anchored question forms and bounded funding phrases, a funding
-    word bound to the agent/service, or the lone standalone word
-    billing."""
-    if _is_command_frame(normalized):
+    """Bounded funding routing. Imperative work requests ("check my
+    balance factor in this AVL tree") suppress everything. A modal
+    wrapper ("can/could you ...") suppresses only the loose word+anchor
+    route: a polite modal around a precise funding question — "could you
+    explain how much you cost?" — is still a funding question, while
+    "can you free this buffer?" matches no question form and stays a
+    command. Then bounded funding phrases, a funding word bound to the
+    agent/service, or the lone standalone word billing."""
+    if _is_imperative_frame(normalized):
         return False
     for pattern in _FUNDING_QUESTION_PATTERNS:
         if pattern.search(normalized):
             return True
+    if _ENGLISH_MODAL_REQUEST.search(normalized):
+        return False
     tokens = set(re.findall(r"\w+", normalized))
     if any(term in tokens for term in _FUNDING_STANDALONE_TERMS):
         return True
-    return any(term in tokens for term in _FUNDING_WORD_TERMS) and any(
-        term in tokens for term in _FUNDING_SERVICE_ANCHORS
-    )
+    if not any(term in tokens for term in _FUNDING_WORD_TERMS):
+        return False
+    if any(term in tokens for term in _FUNDING_SERVICE_ANCHORS):
+        return True
+    # Possessive anchor only as "your <funding word>" ("your price",
+    # "your credits") — a bare "your" would make developer imperatives
+    # like "balance your binary tree" or "price your API response"
+    # read as funding requests.
+    return bool(_FUNDING_POSSESSIVE_ANCHOR.search(normalized))
 
 
 def _matches_privacy_phrase(normalized: str) -> bool:
@@ -627,14 +687,21 @@ _ENGLISH_COMMAND_FRAME = re.compile(
 _ENGLISH_MODAL_REQUEST = re.compile(r"(?<!\w)(can|could|would|will) you(?!\w)")
 
 
-def _is_command_frame(normalized: str) -> bool:
+def _is_imperative_frame(normalized: str) -> bool:
+    """Non-question work request: bare/please-prefixed verb, FA marker."""
     has_question_mark = "?" in normalized or "؟" in normalized
-    if not has_question_mark and _ENGLISH_COMMAND_FRAME.search(normalized):
+    if has_question_mark:
+        return False
+    if _ENGLISH_COMMAND_FRAME.search(normalized):
         return True
-    if not has_question_mark and any(
+    return any(
         token in set(re.findall(r"\w+", normalized))
         for token in _PRIVACY_IMPERATIVE_MARKERS_FA
-    ):
+    )
+
+
+def _is_command_frame(normalized: str) -> bool:
+    if _is_imperative_frame(normalized):
         return True
     return bool(_ENGLISH_MODAL_REQUEST.search(normalized))
 
@@ -672,13 +739,18 @@ def _matches_privacy_intent(normalized: str) -> bool:
     return has_fa_subject and has_fa_access
 
 
-def _normalize_message(user_message: str) -> str:
-    """Canonical matcher input: lowercased, Persian-normalized, term-split."""
+def _normalize_message_raw(user_message: str) -> str:
+    """Lowercased, Persian-normalized form with separators intact."""
     normalized = " ".join((user_message or "").lower().split())
     normalized = normalized.translate(_PERSIAN_CHAR_MAP)
     for mark in _ZERO_WIDTH_MARKS:
         normalized = normalized.replace(mark, "")
-    return re.sub(r"[_-]+", " ", normalized)
+    return normalized
+
+
+def _normalize_message(user_message: str) -> str:
+    """Canonical matcher input: lowercased, Persian-normalized, term-split."""
+    return re.sub(r"[_-]+", " ", _normalize_message_raw(user_message))
 
 
 def should_inject_tinyhat_context(user_message: str, *, is_first_turn: bool = False) -> bool:

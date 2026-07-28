@@ -81,6 +81,12 @@ class HermesAdapterTests(unittest.TestCase):
             os.environ["TINYHAT_HERMES_HOME"] = self._original_hermes_home
         self._hermes_home.cleanup()
 
+    def _reset_funding_marker(self) -> None:
+        """Re-arm the once-per-Computer marker inside one test method."""
+        marker = Path(self._hermes_home.name) / "tinyhat-funding-reminder-shown"
+        if marker.exists():
+            marker.unlink()
+
     def test_register_exposes_proof_tool_command_and_skill(self) -> None:
         ctx = FakeHermesContext()
 
@@ -572,6 +578,8 @@ class HermesAdapterTests(unittest.TestCase):
             "How is this funded?",
             "What are my payment options?",
             "How much credit is left?",
+            "Can you tell me what this costs?",
+            "Could you explain how much you cost?",
         )
         for user_message in examples:
             with self.subTest(user_message=user_message):
@@ -709,6 +717,7 @@ class HermesAdapterTests(unittest.TestCase):
         )
         self.assertIn(tinyhat_context._PRIVACY_BULLET_MARKER, asking)
         self.assertLessEqual(len(asking), tinyhat_context._HOOK_SPILL_SAFE_CHARS)
+        self.assertLess(len(asking), 10_000)
 
     def test_onboarding_turn_preserves_privacy_context_for_privacy_question(
         self,
@@ -745,14 +754,69 @@ class HermesAdapterTests(unittest.TestCase):
     def test_onboarding_turn_preserves_qa_report_guard(self) -> None:
         # An existing routed contract must not regress on the one turn
         # that carries the funding note: the QA/reporting guard bullet
-        # survives its own first-turn request.
+        # survives its own first-turn request — including alias phrases
+        # ("qa report", "bug report") whose text does not appear in the
+        # bullet literally.
+        for user_message in (
+            "Post this Slack report about a gateway restart bug",
+            "Please post this QA report about a restart bug",
+            "Please post this QA report about a reload bug",
+        ):
+            with self.subTest(user_message=user_message):
+                first = tinyhat_context.inject_tinyhat_context(
+                    user_message=user_message,
+                    is_first_turn=True,
+                )
+                assert first is not None
+                self.assertLess(len(first["context"]), 10_000)
+                self.assertIn("do not use terminal/curl", first["context"])
+                self._reset_funding_marker()
+
+    def test_onboarding_turn_prioritizes_intent_bullet_over_terms(self) -> None:
+        # "tinyhat" is a generic routing term matching many early
+        # bullets; the explicit privacy intent must still reserve the
+        # trust-model bullet first.
         first = tinyhat_context.inject_tinyhat_context(
-            user_message="Post this Slack report about a gateway restart bug",
+            user_message="Is this chat monitored by tinyhat staff?",
             is_first_turn=True,
         )
         assert first is not None
         self.assertLess(len(first["context"]), 10_000)
-        self.assertIn("do not use terminal/curl", first["context"])
+        self.assertIn("tinyhat:tinyhat-privacy", first["context"])
+        self.assertIn("routine operations", first["context"])
+        self.assertIn("https://tinyhat.ai/privacy", first["context"])
+
+    def test_onboarding_turn_preserves_underscore_phrase_guards(self) -> None:
+        # Raw-form phrases ("skills_list") must count as route signals
+        # exactly as the router counts them.
+        first = tinyhat_context.inject_tinyhat_context(
+            user_message="skills_list does not show the privacy skill",
+            is_first_turn=True,
+        )
+        assert first is not None
+        self.assertLess(len(first["context"]), 10_000)
+        self.assertIn("tinyhat_skill_catalog", first["context"])
+        self.assertIn("tinyhat:tinyhat-privacy", first["context"])
+
+    def test_compose_onboarding_context_degenerate_inputs_stay_capped(
+        self,
+    ) -> None:
+        with mock.patch.object(
+            tinyhat_context, "FUNDING_REMINDER_DIRECTIVE", "X" * 12_000
+        ):
+            capped = tinyhat_context._compose_onboarding_context(
+                "Tinyhat context: heading.\n- a bullet.", "hi"
+            )
+            self.assertLessEqual(
+                len(capped), tinyhat_context._HOOK_SPILL_SAFE_CHARS
+            )
+        heading_only = tinyhat_context._compose_onboarding_context(
+            "H" * 12_000, "hi"
+        )
+        self.assertLessEqual(
+            len(heading_only), tinyhat_context._HOOK_SPILL_SAFE_CHARS
+        )
+        self.assertLess(len(heading_only), 10_000)
 
     def test_onboarding_turn_preserves_funding_context_for_funding_question(
         self,
@@ -802,6 +866,9 @@ class HermesAdapterTests(unittest.TestCase):
     def test_context_hook_skips_generic_funding_terms(self) -> None:
         examples = (
             "Please free this buffer",
+            "Balance your binary tree",
+            "Price your API response",
+            "Fund your test fixture",
             "Estimate the cost of this query",
             "Balance this binary tree",
             "Change the price field",
