@@ -6,6 +6,9 @@ All notable changes to the Tinyhat plugin are documented here.
 
 ### Changed
 
+- Bump the Hermes plugin package to `0.21.16`; preserve the Slack app ID
+  embedded in the submitted app-level token so permission failures can link
+  directly to the correct app even when Slack omits `app_id` from `auth.test`.
 - Bump the Hermes plugin package to `0.21.15`; failed Slack setup notices now
   link directly to the validated Slack app settings page and concisely guide
   the owner to reinstall the app before retrying. Generated manifests now

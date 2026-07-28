@@ -195,7 +195,7 @@ class HermesAdapterTests(unittest.TestCase):
 
         self.assertEqual(payload["schema"], "tinyhat_plugin_version_v1")
         self.assertEqual(payload["name"], "tinyhat")
-        self.assertEqual(payload["version"], "0.21.15")
+        self.assertEqual(payload["version"], "0.21.16")
 
     def test_platform_status_uses_attested_computer_endpoint(self) -> None:
         original_build = tools.build_platform_client
@@ -208,7 +208,7 @@ class HermesAdapterTests(unittest.TestCase):
                     "computer_id": 5359,
                     "state": "active",
                     "assigned": True,
-                    "package_inventory": {"plugin": {"version": "0.21.15"}},
+                    "package_inventory": {"plugin": {"version": "0.21.16"}},
                 }
 
         try:
@@ -221,7 +221,7 @@ class HermesAdapterTests(unittest.TestCase):
         self.assertEqual(payload["computer_id"], 5359)
         self.assertEqual(payload["state"], "active")
         self.assertTrue(payload["assigned"])
-        self.assertEqual(payload["package_inventory"]["plugin"]["version"], "0.21.15")
+        self.assertEqual(payload["package_inventory"]["plugin"]["version"], "0.21.16")
 
     def test_platform_status_returns_structured_platform_error(self) -> None:
         original_build = tools.build_platform_client
@@ -244,7 +244,7 @@ class HermesAdapterTests(unittest.TestCase):
 
         self.assertEqual(payload["schema"], "tinyhat_skill_catalog_v1")
         self.assertEqual(payload["plugin"]["name"], "tinyhat")
-        self.assertEqual(payload["plugin"]["version"], "0.21.15")
+        self.assertEqual(payload["plugin"]["version"], "0.21.16")
         by_name = {skill["name"]: skill for skill in payload["skills"]}
         self.assertEqual(
             by_name["tinyhat-codex-auth"]["qualified_name"],
@@ -1703,6 +1703,66 @@ class HermesAdapterTests(unittest.TestCase):
             },
         )
 
+    def test_slack_scope_failure_preserves_app_id_from_app_token(self) -> None:
+        plaintext = json.dumps(
+            {
+                "schema": "tinyhat_slack_connection_bundle_v1",
+                "bot_token": "xoxb-placeholder",
+                "app_token": "xapp-1-A012ABCDEF-secret",
+                "allowed_users": "U012ABCDEF",
+            }
+        )
+        claims: list[dict] = []
+        notices: list[str] = []
+        failure = slack_connection.SlackConnectionError(
+            "Slack rejected apps.connections.open: missing_scope.",
+            stage="socket_mode",
+            code="missing_scope",
+            public_message=(
+                "Slack needs updated permissions. Reinstall the app, then retry."
+            ),
+        )
+        with (
+            mock.patch.object(
+                slack_connection,
+                "_decrypt_ciphertext",
+                return_value=plaintext,
+            ),
+            mock.patch.object(
+                slack_connection,
+                "_validate_slack_credentials",
+                side_effect=failure,
+            ),
+            mock.patch.object(
+                slack_connection,
+                "_send_secret_notice",
+                side_effect=lambda text: notices.append(text),
+            ),
+            mock.patch.object(
+                slack_connection,
+                "_claim_handoff",
+                side_effect=lambda *args, **kwargs: claims.append(kwargs),
+            ),
+        ):
+            installed = slack_connection.install_submitted_slack_connection(
+                client=object(),
+                platform_auth="local_dev",
+                handoff_id="sh_slack",
+                private_key_pem="PRIVATE",
+                state={"ciphertext_payload": {"algorithm": "RSA-OAEP-256"}},
+            )
+
+        self.assertFalse(installed)
+        self.assertEqual(
+            claims[0]["connection_metadata"]["app_id"],
+            "A012ABCDEF",
+        )
+        self.assertIn(
+            "https://api.slack.com/apps/A012ABCDEF",
+            notices[-1],
+        )
+        self.assertNotIn("xapp-1-A012ABCDEF-secret", notices[-1])
+
     def test_slack_greeting_failure_is_not_reported_as_connected(self) -> None:
         plaintext = json.dumps(
             {
@@ -2092,6 +2152,56 @@ class HermesAdapterTests(unittest.TestCase):
             calls,
             ["auth.test", "apps.connections.open", "bots.info"],
         )
+
+    def test_slack_validation_uses_app_id_embedded_in_app_token(self) -> None:
+        bundle = {
+            "bot_token": "xoxb-placeholder",
+            "app_token": "xapp-1-A012ABCDEF-secret",
+            "allowed_users": "U012ABCDEF",
+        }
+        calls: list[str] = []
+
+        def fake_slack_call(method: str, **kwargs):
+            del kwargs
+            calls.append(method)
+            if method == "auth.test":
+                return {
+                    "team_id": "T012ABCDEF",
+                    "team": "Tinyloop",
+                    "user": "The Forecaster",
+                    "bot_id": "B012ABCDEF",
+                }
+            return {"ok": True}
+
+        with mock.patch.object(
+            slack_connection,
+            "_slack_api_call",
+            side_effect=fake_slack_call,
+        ):
+            metadata = slack_connection._validate_slack_credentials(bundle)
+
+        self.assertEqual(metadata["app_id"], "A012ABCDEF")
+        self.assertEqual(calls, ["auth.test", "apps.connections.open"])
+
+    def test_slack_app_token_app_id_parser_rejects_unrecognized_shapes(
+        self,
+    ) -> None:
+        self.assertEqual(
+            slack_connection._app_id_from_app_token(
+                "xapp-1-a012abcdef-secret"
+            ),
+            "A012ABCDEF",
+        )
+        for value in (
+            "xapp-placeholder",
+            "xapp-1-T012ABCDEF-secret",
+            "xoxb-1-A012ABCDEF-secret",
+            "",
+        ):
+            with self.subTest(value=value):
+                self.assertIsNone(
+                    slack_connection._app_id_from_app_token(value)
+                )
 
     def test_slack_api_call_maps_transport_and_slack_errors(self) -> None:
         with (
