@@ -6,6 +6,28 @@ All notable changes to the Tinyhat plugin are documented here.
 
 ### Changed
 
+- Bump the Hermes plugin package to `0.21.13`; teach agents the funding model
+  and the one-time onboarding reminder (relands the `0.21.10` funding
+  work that missed the release channels). A new agent
+  starts on Tinyhat's included platform credits — a small starter credit
+  (about $10) so it works immediately — and the intended ongoing fund is the
+  user's own ChatGPT / Codex subscription connected through `/codex_auth`.
+  On a Computer's very first conversation the injected context appends a
+  one-time directive requiring the first substantive reply to carry a
+  short connect-your-subscription line, recorded with a durable
+  per-Computer marker so a later
+  `/new` or `/reset` session does not re-arm it; tool-owned native first
+  replies (the Codex auth prerequisite photo, a Connect Google button) or an
+  explicit connect request satisfy the reminder on their own. Agents check
+  `tinyhat_codex_auth` `action=status` before claiming a subscription is not
+  connected, never state a remaining credit balance they cannot see, and
+  answer how-is-this-paid-for / is-this-free / credits-ran-out questions
+  from the model. Funding routing is bounded: command frames are suppressed
+  before any funding matching, then end-anchored question forms and
+  bounded funding phrases, a funding word bound to the agent/service, or
+  the standalone word billing can route — generic developer wording ("balance this
+  binary tree", "check the balance factor", "look for free variables")
+  does not inject.
 - Bump the Hermes plugin package to `0.21.12`; acknowledge encrypted Slack
   detail receipt immediately in Telegram, report value-blind validation stages
   and stable error codes to the platform, and require a successful owner-DM

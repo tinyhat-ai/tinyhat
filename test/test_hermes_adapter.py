@@ -66,6 +66,21 @@ class FakeHermesContext:
 
 
 class HermesAdapterTests(unittest.TestCase):
+    def setUp(self) -> None:
+        # Isolate the durable funding-reminder marker from the real Hermes
+        # home so tests never write outside their sandbox and each test
+        # starts un-reminded.
+        self._hermes_home = tempfile.TemporaryDirectory(prefix="tinyhat-hermes-home-")
+        self._original_hermes_home = os.environ.get("TINYHAT_HERMES_HOME")
+        os.environ["TINYHAT_HERMES_HOME"] = self._hermes_home.name
+
+    def tearDown(self) -> None:
+        if self._original_hermes_home is None:
+            os.environ.pop("TINYHAT_HERMES_HOME", None)
+        else:
+            os.environ["TINYHAT_HERMES_HOME"] = self._original_hermes_home
+        self._hermes_home.cleanup()
+
     def test_register_exposes_proof_tool_command_and_skill(self) -> None:
         ctx = FakeHermesContext()
 
@@ -174,7 +189,7 @@ class HermesAdapterTests(unittest.TestCase):
 
         self.assertEqual(payload["schema"], "tinyhat_plugin_version_v1")
         self.assertEqual(payload["name"], "tinyhat")
-        self.assertEqual(payload["version"], "0.21.12")
+        self.assertEqual(payload["version"], "0.21.13")
 
     def test_platform_status_uses_attested_computer_endpoint(self) -> None:
         original_build = tools.build_platform_client
@@ -223,7 +238,7 @@ class HermesAdapterTests(unittest.TestCase):
 
         self.assertEqual(payload["schema"], "tinyhat_skill_catalog_v1")
         self.assertEqual(payload["plugin"]["name"], "tinyhat")
-        self.assertEqual(payload["plugin"]["version"], "0.21.12")
+        self.assertEqual(payload["plugin"]["version"], "0.21.13")
         by_name = {skill["name"]: skill for skill in payload["skills"]}
         self.assertEqual(
             by_name["tinyhat-codex-auth"]["qualified_name"],
@@ -539,6 +554,154 @@ class HermesAdapterTests(unittest.TestCase):
                 self.assertIn("affirmatively requests or permits", injected["context"])
                 self.assertIn("https://tinyhat.ai/privacy", injected["context"])
                 self.assertIn("private Computers", injected["context"])
+
+    def test_context_hook_injects_for_funding_questions(self) -> None:
+        examples = (
+            "How am I paying for this?",
+            "What happens when my credits run out?",
+            "Is this bot free to use?",
+            "Who is funding this agent?",
+            "What does it cost to keep you running?",
+            "What is my balance?",
+            "How does billing work?",
+            "What is the price?",
+            "What payment methods do you accept?",
+            "How much does it cost?",
+            "How much does this cost?",
+            "Is it free?",
+            "How is this funded?",
+            "What are my payment options?",
+            "How much credit is left?",
+        )
+        for user_message in examples:
+            with self.subTest(user_message=user_message):
+                injected = tinyhat_context.inject_tinyhat_context(
+                    user_message=user_message,
+                    is_first_turn=False,
+                )
+                self.assertIsNotNone(injected)
+                assert injected is not None
+                self.assertIn("starter credit", injected["context"])
+                self.assertIn("about $10", injected["context"])
+                self.assertIn("/codex_auth", injected["context"])
+                self.assertIn("tinyhat:tinyhat-codex-auth", injected["context"])
+
+    def test_context_states_funding_reminder_rules(self) -> None:
+        directive = tinyhat_context.FUNDING_REMINDER_DIRECTIVE
+        self.assertIn(
+            "first substantive reply must also include one short funding line",
+            directive,
+        )
+        self.assertIn(
+            "connect your ChatGPT/Codex subscription with /codex_auth",
+            directive,
+        )
+        self.assertIn("tool-owned native response", directive)
+        self.assertIn("Never repeat this reminder", directive)
+        self.assertIn("never block the user's actual request", directive)
+        self.assertIn(
+            "Never state a remaining credit balance",
+            tinyhat_context.TINYHAT_CONTEXT,
+        )
+        self.assertIn(
+            "check tinyhat_codex_auth with action=status",
+            tinyhat_context.TINYHAT_CONTEXT,
+        )
+
+    def test_funding_reminder_directive_is_once_per_computer(self) -> None:
+        first = tinyhat_context.inject_tinyhat_context(
+            user_message="hello",
+            is_first_turn=True,
+        )
+        assert first is not None
+        self.assertIn(tinyhat_context.FUNDING_REMINDER_DIRECTIVE, first["context"])
+        marker = Path(self._hermes_home.name) / "tinyhat-funding-reminder-shown"
+        self.assertTrue(marker.is_file())
+
+        reset_session = tinyhat_context.inject_tinyhat_context(
+            user_message="hello again after /new",
+            is_first_turn=True,
+        )
+        assert reset_session is not None
+        self.assertNotIn(
+            tinyhat_context.FUNDING_REMINDER_DIRECTIVE,
+            reset_session["context"],
+        )
+
+        later_turn = tinyhat_context.inject_tinyhat_context(
+            user_message="tinyhat status",
+            is_first_turn=False,
+        )
+        assert later_turn is not None
+        self.assertNotIn(
+            tinyhat_context.FUNDING_REMINDER_DIRECTIVE,
+            later_turn["context"],
+        )
+
+    def test_context_hook_skips_generic_funding_terms(self) -> None:
+        examples = (
+            "Please free this buffer",
+            "Estimate the cost of this query",
+            "Balance this binary tree",
+            "Change the price field",
+            "Fund the test fixture",
+            "Can you free this buffer?",
+            "Could you balance this binary tree?",
+            "Estimate the cost of running this query",
+            "Who pays attention to this warning?",
+            "Is this free variable captured?",
+            "The balance factor of this AVL tree is wrong",
+            "How do I pay attention to failing tests?",
+            "What does it cost to sort this list?",
+            "Check the balance factor in this AVL tree",
+            "Look for free variables in this closure",
+            "Check my balance factor in this AVL tree",
+            "Look for free to use in the README",
+            "Show who pays for each invoice in this CSV",
+        )
+        for user_message in examples:
+            with self.subTest(user_message=user_message):
+                self.assertIsNone(
+                    tinyhat_context.inject_tinyhat_context(
+                        user_message=user_message,
+                        is_first_turn=False,
+                    )
+                )
+
+    def test_codex_auth_skill_states_funding_model(self) -> None:
+        skill_md = REPO_ROOT / "skills" / "tinyhat-codex-auth" / "SKILL.md"
+        text = " ".join(skill_md.read_text(encoding="utf-8").split())
+
+        self.assertIn("small starter credit (about $10)", text)
+        self.assertIn("intended ongoing fund", text)
+        self.assertIn("first substantive reply must include", text)
+        self.assertIn("Remind once, early", text)
+        self.assertIn("durable per-Computer marker", text)
+        self.assertIn("tool-owned native response", text)
+        self.assertIn("Never block or delay the user's actual request", text)
+        self.assertIn("Never state a remaining credit balance", text)
+        self.assertIn('{"action": "status"}', text)
+        self.assertIn("/codex_auth", text)
+
+    def test_funding_reminder_claim_fails_closed_without_hermes_home(self) -> None:
+        os.environ["TINYHAT_HERMES_HOME"] = str(
+            Path(self._hermes_home.name) / "does-not-exist"
+        )
+        for attempt in range(2):
+            with self.subTest(attempt=attempt):
+                injected = tinyhat_context.inject_tinyhat_context(
+                    user_message="hello",
+                    is_first_turn=True,
+                )
+                assert injected is not None
+                self.assertNotIn(
+                    tinyhat_context.FUNDING_REMINDER_DIRECTIVE,
+                    injected["context"],
+                )
+
+    def test_funding_reminder_claim_is_exclusive(self) -> None:
+        self.assertTrue(tinyhat_context._claim_funding_reminder())
+        self.assertFalse(tinyhat_context._claim_funding_reminder())
 
     def test_context_hook_skips_generic_developer_terms(self) -> None:
         examples = (

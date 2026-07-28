@@ -2,7 +2,9 @@
 
 from __future__ import annotations
 
+import os
 import re
+from pathlib import Path
 from typing import Any
 
 from .google_workspace import remove_credentials_if_assignment_changed_for_context
@@ -19,11 +21,58 @@ TINYHAT_CONTEXT = """Tinyhat context: this Hermes agent runs on a Tinyhat-manage
 - To disconnect or revoke one Google account, select its account_id and call tinyhat_google_workspace once with action=disconnect; never pass confirmed=true. The tool owns the two-stage Telegram ceremony and sends exactly one Revoke this Computer's access button; its first tap shows final Confirm revoke and Cancel buttons. Do not ask for text confirmation, expose a URL, or send a duplicate reply. Confirm deletes only that account's local credential and marks its safe connection metadata disconnected. It does not revoke Google's provider grant or affect another account or Computer.
 - When the user asks to connect ChatGPT, OpenAI, Codex, ChatGPT Plus/Pro/Team, a paid ChatGPT account, their Codex subscription, or to stop using Tinyhat/platform credits, load tinyhat:tinyhat-codex-auth and call tinyhat_codex_auth once with action=prerequisite. That sends the ChatGPT Settings > Security screenshot and /codex_auth instruction on its own line. Do not send an extra text reply after that tool call. Do not ask a multiple-choice clarification unless they explicitly ask for ChatGPT history/data or an OpenAI API key.
 - For OpenAI Codex auth status, recent auth output, or usage limits, prefer tinyhat_codex_auth with action=status, action=log, or action=limits. The auth flow sends the Telegram button and copyable device code after the ChatGPT Security setting is confirmed; do not ask for auth.json, refresh tokens, passwords, or raw OAuth tokens.
+- Funding model: a new agent starts on Tinyhat's included platform credits — a small starter credit (about $10) so the agent works immediately — and the intended ongoing fund is the user's own ChatGPT/Codex subscription connected through /codex_auth. If unsure whether a subscription is already connected, check tinyhat_codex_auth with action=status before claiming it is not. Never state a remaining credit balance — the agent cannot see one. If the starter credit runs out before a subscription is connected, the agent cannot answer until funding is connected. For questions like how the agent is paid for, whether it is free, or what happens when credits run out, answer from this model and load tinyhat:tinyhat-codex-auth for the connect flow.
 - If skill_view or skills_list omits Tinyhat plugin skills, call tinyhat_skill_catalog and retry with qualified names such as tinyhat:tinyhat-codex-auth.
 - If this Computer reports update_available=true or target_ref_changed for the Tinyhat plugin, load tinyhat:tinyhat-plugin-update and use tinyhat_plugin_update with action=status before applying updates. Only call action=update after the user/operator asks to update, and use restart_gateway=true when the live Telegram gateway should reload the new plugin commands.
 - For Tinyhat QA or Slack-style bug reports that mention words like restart, reload, update, or gateway, do not use terminal/curl just to post the text. Use a native Slack/reporting tool if available, or return the report in chat.
 - For privacy, security, or data-access questions — who can read the user's messages or files, whether Tinyhat staff or operators see logs or conversations, whether chats are monitored or stored — load tinyhat:tinyhat-privacy and answer from it, in the user's language. Core facts: this agent runs on a dedicated Computer created for this user alone; conversations and files are processed and stored on this Computer; Tinyhat does not read customer Computers' conversations, files, or logs as part of routine operations, and human access is limited to what the user affirmatively requests or permits, what is needed to investigate abuse, protect the service, or maintain security, and what is required by law — anything else would violate Tinyhat's own Terms and Privacy Policy (https://tinyhat.ai/privacy and https://tinyhat.ai/terms). Stay honest that Tinyloop operates the underlying infrastructure, so low-level technical access remains possible today — that is why the policy is binding and why Tinyhat is building private Computers designed to remove even that technical possibility. Never speculate about named operators, never enumerate internal tools or access paths, never claim which internal dashboards or tools do or do not exist, and never reassure by comparing Tinyhat to other platforms or hosting providers.
 - Load tinyhat:tinyhat-platform, tinyhat:tinyhat-privacy, tinyhat:tinyhat-private-secret, tinyhat:tinyhat-credentials, tinyhat:tinyhat-slack, tinyhat:tinyhat-google-workspace, tinyhat:tinyhat-codex-auth, tinyhat:tinyhat-plugin-update, tinyhat:tinyhat-skill-catalog, or tinyhat:tinyhat-plugin-version when you need the longer Tinyhat playbook."""
+
+# Appended to the injected context at most once per Computer (durable
+# marker below): the first-conversation funding reminder. It is issued on
+# the first turn of the first session only, so /new or /reset later does
+# not re-arm a "mandatory" line for a user who already saw it.
+FUNDING_REMINDER_DIRECTIVE = (
+    "- This is this user's first conversation on this Computer: your first "
+    "substantive reply must also include one short funding line, alongside "
+    'any introduction or profile offer — for example: "Heads up: I\'m '
+    "running on a small included starter credit right now — when you're "
+    "ready, connect your ChatGPT/Codex subscription with /codex_auth so I "
+    'keep running on your own plan." Precedence: if your first reply is a '
+    "tool-owned native response (for example the Codex auth prerequisite "
+    "photo or a Connect Google button), or the user is already asking to "
+    "connect their subscription, that flow satisfies the reminder — do not "
+    "add a separate text reply for it. Never repeat this reminder in later "
+    "replies and never block the user's actual request on it."
+)
+
+
+def _hermes_home() -> Path:
+    override = os.environ.get("TINYHAT_HERMES_HOME")
+    if override:
+        return Path(override)
+    return Path.home() / ".hermes"
+
+
+def _funding_reminder_marker_path() -> Path:
+    return _hermes_home() / "tinyhat-funding-reminder-shown"
+
+
+def _claim_funding_reminder() -> bool:
+    """Atomically claim the once-per-Computer reminder; fail closed.
+
+    The exclusive create is the claim: the directive is issued only when
+    this call creates the marker. A pre-existing marker, a missing or
+    unwritable Hermes home, and a lost concurrent race all return False,
+    so a persistence problem can never re-issue the "mandatory" line.
+    """
+    try:
+        with open(_funding_reminder_marker_path(), "x", encoding="utf-8") as fh:
+            fh.write("shown\n")
+        return True
+    except OSError:
+        return False
+
 
 _CONTEXT_PHRASES = (
     "api key",
@@ -116,6 +165,98 @@ _CONTEXT_TERMS = (
     "privacy",
     "gdpr",
     "surveillance",
+)
+
+# Funding routing binds funding wording to the funding question itself.
+# Command frames are suppressed first; then an end-anchored question
+# form or a bounded funding phrase, a funding word bound to the
+# agent/service, or the lone precise standalone word "billing" can
+# route. Question forms that can take a non-service object ("what does
+# it cost to sort this list", "how do i pay attention") are end-anchored;
+# self-contained funding phrases ("my balance", "funded by") use word
+# boundaries only.
+_FUNDING_QUESTION_PATTERNS = tuple(
+    re.compile(pattern)
+    for pattern in (
+        r"(?:how much|what) (?:does|do|will|would) (?:it|this|you) cost\s*\??$",
+        r"how much (?:is|are) (?:it|this)\s*\??$",
+        r"what(?:'s| is) the price\s*\??$",
+        r"is (?:it|this) free\s*\??$",
+        r"how is (?:it|this) funded\s*\??$",
+        r"how do i pay(?: for (?:it|this|you))?\s*\??$",
+        r"(?<!\w)payment (?:option|options|method|methods|plan|plans)(?!\w)",
+        r"(?<!\w)how (?:much|many) credits?(?!\w)",
+        r"(?<!\w)credits? (?:is|are) left(?!\w)",
+        r"(?<!\w)remaining (?:credit|credits|balance)(?!\w)",
+        r"check (?:my|the) balance\s*\??$",
+        r"(?<!\w)my balance(?!\w)",
+        r"(?<!\w)my billing(?!\w)",
+        r"(?<!\w)how does billing(?!\w)",
+        r"(?<!\w)who pays for(?!\w)",
+        r"(?<!\w)who is paying for(?!\w)",
+        r"(?<!\w)paying for (?:this|you)(?!\w)",
+        r"(?<!\w)pay for (?:this|you)(?!\w)",
+        r"(?<!\w)how much do you cost(?!\w)",
+        r"(?<!\w)you cost(?!\w)",
+        r"(?<!\w)free to use(?!\w)",
+        r"(?<!\w)(?:run out of|out of) credits(?!\w)",
+        r"(?<!\w)credits? runs? out(?!\w)",
+        r"(?<!\w)starter credit(?!\w)",
+        r"(?<!\w)platform credits(?!\w)",
+        r"(?<!\w)who is funding(?!\w)",
+        r"(?<!\w)funded by(?!\w)",
+    )
+)
+
+_FUNDING_WORD_TERMS = (
+    "pay",
+    "pays",
+    "paying",
+    "paid",
+    "payment",
+    "payments",
+    "cost",
+    "costs",
+    "costing",
+    "price",
+    "pricing",
+    "priced",
+    "bill",
+    "billed",
+    "billing",
+    "balance",
+    "credit",
+    "credits",
+    "fund",
+    "funded",
+    "funding",
+    "free",
+    "charge",
+    "charges",
+    "charged",
+    "money",
+)
+
+_FUNDING_SERVICE_ANCHORS = (
+    "you",
+    "your",
+    "yourself",
+    "agent",
+    "bot",
+    "assistant",
+    "tinyhat",
+    "service",
+    "subscription",
+    "chatgpt",
+    "codex",
+    "plan",
+    "credits",
+    "credit",
+    "starter",
+)
+
+_FUNDING_STANDALONE_TERMS = (
+    "billing",
 )
 
 # Privacy/data-access routing is separate from the generic short-circuits
@@ -330,6 +471,24 @@ _PERSIAN_CHAR_MAP = str.maketrans({"ي": "ی", "ك": "ک"})
 _ZERO_WIDTH_MARKS = ("\u200c", "\u200d", "\u200e", "\u200f")
 
 
+def _matches_funding_intent(normalized: str) -> bool:
+    """Bounded funding routing: command frames are suppressed first, then
+    end-anchored question forms and bounded funding phrases, a funding
+    word bound to the agent/service, or the lone standalone word
+    billing."""
+    if _is_command_frame(normalized):
+        return False
+    for pattern in _FUNDING_QUESTION_PATTERNS:
+        if pattern.search(normalized):
+            return True
+    tokens = set(re.findall(r"\w+", normalized))
+    if any(term in tokens for term in _FUNDING_STANDALONE_TERMS):
+        return True
+    return any(term in tokens for term in _FUNDING_WORD_TERMS) and any(
+        term in tokens for term in _FUNDING_SERVICE_ANCHORS
+    )
+
+
 def _matches_privacy_phrase(normalized: str) -> bool:
     for phrase in _PRIVACY_PHRASES:
         # \w-based boundaries treat Arabic punctuation (؟ ،) as boundaries
@@ -410,6 +569,8 @@ def should_inject_tinyhat_context(user_message: str, *, is_first_turn: bool = Fa
     terms = set(re.findall(r"[a-z0-9]+", normalized_for_terms))
     if any(term in terms for term in _CONTEXT_TERMS):
         return True
+    if _matches_funding_intent(normalized_for_terms):
+        return True
     return _matches_privacy_intent(normalized_for_terms)
 
 
@@ -436,4 +597,7 @@ def inject_tinyhat_context(  # noqa: PLR0913
     except Exception:
         assignment_cleanup = "unavailable"
     _ = assignment_cleanup
-    return {"context": TINYHAT_CONTEXT}
+    context = TINYHAT_CONTEXT
+    if is_first_turn and _claim_funding_reminder():
+        context = context + "\n" + FUNDING_REMINDER_DIRECTIVE
+    return {"context": context}
