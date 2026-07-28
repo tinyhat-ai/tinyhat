@@ -174,7 +174,7 @@ class HermesAdapterTests(unittest.TestCase):
 
         self.assertEqual(payload["schema"], "tinyhat_plugin_version_v1")
         self.assertEqual(payload["name"], "tinyhat")
-        self.assertEqual(payload["version"], "0.21.12")
+        self.assertEqual(payload["version"], "0.21.13")
 
     def test_platform_status_uses_attested_computer_endpoint(self) -> None:
         original_build = tools.build_platform_client
@@ -187,7 +187,7 @@ class HermesAdapterTests(unittest.TestCase):
                     "computer_id": 5359,
                     "state": "active",
                     "assigned": True,
-                    "package_inventory": {"plugin": {"version": "0.21.12"}},
+                    "package_inventory": {"plugin": {"version": "0.21.13"}},
                 }
 
         try:
@@ -200,7 +200,7 @@ class HermesAdapterTests(unittest.TestCase):
         self.assertEqual(payload["computer_id"], 5359)
         self.assertEqual(payload["state"], "active")
         self.assertTrue(payload["assigned"])
-        self.assertEqual(payload["package_inventory"]["plugin"]["version"], "0.21.12")
+        self.assertEqual(payload["package_inventory"]["plugin"]["version"], "0.21.13")
 
     def test_platform_status_returns_structured_platform_error(self) -> None:
         original_build = tools.build_platform_client
@@ -223,7 +223,7 @@ class HermesAdapterTests(unittest.TestCase):
 
         self.assertEqual(payload["schema"], "tinyhat_skill_catalog_v1")
         self.assertEqual(payload["plugin"]["name"], "tinyhat")
-        self.assertEqual(payload["plugin"]["version"], "0.21.12")
+        self.assertEqual(payload["plugin"]["version"], "0.21.13")
         by_name = {skill["name"]: skill for skill in payload["skills"]}
         self.assertEqual(
             by_name["tinyhat-codex-auth"]["qualified_name"],
@@ -1107,7 +1107,7 @@ class HermesAdapterTests(unittest.TestCase):
                 side_effect=lambda *args, **kwargs: claims.append(kwargs),
             ),
         ):
-            slack_connection.install_submitted_slack_connection(
+            installed = slack_connection.install_submitted_slack_connection(
                 client=object(),
                 platform_auth="local_dev",
                 handoff_id="sh_slack",
@@ -1115,6 +1115,7 @@ class HermesAdapterTests(unittest.TestCase):
                 state={"ciphertext_payload": {"algorithm": "RSA-OAEP-256"}},
             )
 
+        self.assertTrue(installed)
         self.assertEqual(
             [name for name, _ in saved],
             [
@@ -1206,7 +1207,7 @@ class HermesAdapterTests(unittest.TestCase):
                 side_effect=AssertionError("must not save failed details"),
             ),
         ):
-            slack_connection.install_submitted_slack_connection(
+            installed = slack_connection.install_submitted_slack_connection(
                 client=object(),
                 platform_auth="local_dev",
                 handoff_id="sh_slack",
@@ -1214,6 +1215,7 @@ class HermesAdapterTests(unittest.TestCase):
                 state={"ciphertext_payload": {"algorithm": "RSA-OAEP-256"}},
             )
 
+        self.assertFalse(installed)
         self.assertIn("details were received", notices[0])
         self.assertIn("allowed-member validation", notices[1])
         self.assertEqual(claims[0]["installed"], False)
@@ -1224,6 +1226,7 @@ class HermesAdapterTests(unittest.TestCase):
                 "connection_status": "failed",
                 "failure_stage": "member_lookup",
                 "failure_code": "user_not_found",
+                "retryable": True,
             },
         )
 
@@ -1251,8 +1254,9 @@ class HermesAdapterTests(unittest.TestCase):
             stage="greeting",
             code="missing_scope",
             public_message=(
-                "The Slack app is missing a required permission. "
-                "Reinstall it and retry."
+                "The submitted bot token cannot perform this Slack step. "
+                "Copy the Bot User OAuth Token from the app you just created, "
+                "then retry."
             ),
         )
         with (
@@ -1288,7 +1292,7 @@ class HermesAdapterTests(unittest.TestCase):
                 side_effect=lambda *args, **kwargs: claims.append(kwargs),
             ),
         ):
-            slack_connection.install_submitted_slack_connection(
+            installed = slack_connection.install_submitted_slack_connection(
                 client=object(),
                 platform_auth="local_dev",
                 handoff_id="sh_slack",
@@ -1296,6 +1300,7 @@ class HermesAdapterTests(unittest.TestCase):
                 state={"ciphertext_payload": {"algorithm": "RSA-OAEP-256"}},
             )
 
+        self.assertFalse(installed)
         self.assertNotIn(True, [claim["installed"] for claim in claims])
         self.assertEqual(claims[0]["installed"], False)
         self.assertEqual(
@@ -1309,6 +1314,7 @@ class HermesAdapterTests(unittest.TestCase):
                 "connection_status": "failed",
                 "failure_stage": "greeting",
                 "failure_code": "missing_scope",
+                "retryable": True,
             },
         )
         self.assertIn("welcome-message delivery", notices[-1])
@@ -1357,7 +1363,7 @@ class HermesAdapterTests(unittest.TestCase):
                 side_effect=fake_claim,
             ),
         ):
-            slack_connection.install_submitted_slack_connection(
+            installed = slack_connection.install_submitted_slack_connection(
                 client=object(),
                 platform_auth="local_dev",
                 handoff_id="sh_slack",
@@ -1365,6 +1371,7 @@ class HermesAdapterTests(unittest.TestCase):
                 state={"ciphertext_payload": {"algorithm": "RSA-OAEP-256"}},
             )
 
+        self.assertFalse(installed)
         self.assertEqual(len(claims), 2)
         self.assertEqual(claims[0]["installed"], False)
         self.assertEqual(
@@ -1483,56 +1490,76 @@ class HermesAdapterTests(unittest.TestCase):
                 }
             )
 
-    def test_slack_validation_uses_bot_then_profile_app_id_fallbacks(self) -> None:
+    def test_slack_validation_uses_auth_metadata_without_user_lookup(self) -> None:
         bundle = {
             "bot_token": "xoxb-placeholder",
             "app_token": "xapp-placeholder",
             "allowed_users": "U012ABCDEF",
         }
+        calls: list[str] = []
 
-        def bot_fallback(method: str, **kwargs):
+        def fake_slack_call(method: str, **kwargs):
+            del kwargs
+            calls.append(method)
             if method == "auth.test":
                 return {
+                    "app_id": "A012ABCDEF",
                     "team_id": "T012ABCDEF",
                     "team": "Tinyloop",
-                    "bot_id": "B012ABCDEF",
-                }
-            if method == "bots.info":
-                return {
-                    "bot": {
-                        "app_id": "A012ABCDEF",
-                        "name": "The Forecaster",
-                    }
+                    "user": "The Forecaster",
                 }
             return {"ok": True}
 
         with mock.patch.object(
             slack_connection,
             "_slack_api_call",
-            side_effect=bot_fallback,
+            side_effect=fake_slack_call,
         ):
             metadata = slack_connection._validate_slack_credentials(bundle)
         self.assertEqual(metadata["app_id"], "A012ABCDEF")
         self.assertEqual(metadata["app_name"], "The Forecaster")
+        self.assertEqual(calls, ["auth.test", "apps.connections.open"])
 
-        def profile_fallback(method: str, **kwargs):
+    def test_slack_validation_does_not_require_optional_app_lookup(self) -> None:
+        bundle = {
+            "bot_token": "xoxb-placeholder",
+            "app_token": "xapp-placeholder",
+            "allowed_users": "U012ABCDEF",
+        }
+        calls: list[str] = []
+
+        def fake_slack_call(method: str, **kwargs):
+            del kwargs
+            calls.append(method)
             if method == "auth.test":
                 return {
                     "team_id": "T012ABCDEF",
                     "team": "Tinyloop",
-                    "user_id": "U999ABCDEF",
+                    "user": "The Forecaster",
+                    "bot_id": "B012ABCDEF",
                 }
-            if method == "users.info" and kwargs.get("params", {}).get("user") == "U999ABCDEF":
-                return {"user": {"profile": {"api_app_id": "A999ABCDEF"}}}
+            if method == "bots.info":
+                raise slack_connection.SlackConnectionError(
+                    "Slack rejected bots.info: missing_scope",
+                    stage="app_identity",
+                    code="missing_scope",
+                    public_message="Optional app lookup was unavailable.",
+                )
             return {"ok": True}
 
         with mock.patch.object(
             slack_connection,
             "_slack_api_call",
-            side_effect=profile_fallback,
+            side_effect=fake_slack_call,
         ):
             metadata = slack_connection._validate_slack_credentials(bundle)
-        self.assertEqual(metadata["app_id"], "A999ABCDEF")
+
+        self.assertNotIn("app_id", metadata)
+        self.assertEqual(metadata["workspace_id"], "T012ABCDEF")
+        self.assertEqual(
+            calls,
+            ["auth.test", "apps.connections.open", "bots.info"],
+        )
 
     def test_slack_api_call_maps_transport_and_slack_errors(self) -> None:
         with (
@@ -2479,6 +2506,68 @@ class HermesAdapterTests(unittest.TestCase):
             "Hermes could not save this secret.",
         )
         self.assertNotIn("super-secret-value", json.dumps(fake_client.claim_payloads))
+
+    def test_slack_worker_keeps_private_key_for_same_handoff_retry(self) -> None:
+        class FakeClient:
+            def __init__(self) -> None:
+                self.states = iter(
+                    [
+                        {
+                            "status": "submitted",
+                            "handoff_kind": "slack_connection",
+                        },
+                        {
+                            "status": "failed",
+                            "handoff_kind": "slack_connection",
+                        },
+                        {
+                            "status": "pending",
+                            "handoff_kind": "slack_connection",
+                        },
+                        {
+                            "status": "submitted",
+                            "handoff_kind": "slack_connection",
+                        },
+                    ]
+                )
+
+            def get_json(self, path: str) -> dict:
+                del path
+                return next(self.states)
+
+        install_results = iter([False, True])
+        install_calls: list[dict] = []
+        with (
+            mock.patch.object(
+                secret_handoff_worker,
+                "build_platform_client",
+                return_value=(FakeClient(), "local_dev"),
+            ),
+            mock.patch.object(
+                secret_handoff_worker,
+                "_install_submitted_secret",
+                side_effect=lambda **kwargs: (
+                    install_calls.append(kwargs) or next(install_results)
+                ),
+            ),
+            mock.patch.object(secret_handoff_worker.time, "sleep"),
+            tempfile.TemporaryDirectory(prefix="tinyhat-worker-retry-") as temp_dir,
+        ):
+            key_path = Path(temp_dir) / "private.pem"
+            key_path.write_text("PRIVATE", encoding="utf-8")
+
+            secret_handoff_worker.run_worker(
+                handoff_id="sh_slack_retry",
+                key_path=key_path,
+            )
+
+            self.assertFalse(key_path.exists())
+
+        self.assertEqual(len(install_calls), 2)
+        self.assertEqual(
+            [call["state"]["status"] for call in install_calls],
+            ["submitted", "submitted"],
+        )
 
     def test_private_secret_save_reloads_current_process_from_hermes_config(self) -> None:
         original_secret = os.environ.get("EXA_API_KEY")

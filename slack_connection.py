@@ -152,7 +152,8 @@ def install_submitted_slack_connection(
     handoff_id: str,
     private_key_pem: str,
     state: dict[str, Any],
-) -> None:
+) -> bool:
+    """Install a submitted bundle, preserving the worker for safe retries."""
     ciphertext_payload = state.get("ciphertext_payload")
     if not isinstance(ciphertext_payload, dict):
         raise SecretHandoffError("Platform did not return Slack ciphertext.")
@@ -216,6 +217,7 @@ def install_submitted_slack_connection(
                 "connection_status": "connected",
             },
         )
+        return True
     except Exception as exc:
         failure = _slack_connection_failure(exc)
         _send_secret_notice(
@@ -227,6 +229,7 @@ def install_submitted_slack_connection(
             "connection_status": "failed",
             "failure_stage": failure.stage,
             "failure_code": failure.code,
+            "retryable": True,
             **{
                 key: metadata[key]
                 for key in (
@@ -257,6 +260,7 @@ def install_submitted_slack_connection(
                 installed=False,
                 message=failure.public_message,
             )
+        return False
     finally:
         bundle.clear()
 
@@ -376,55 +380,45 @@ def _validate_slack_credentials(bundle: dict[str, str]) -> dict[str, Any]:
         token=bundle["app_token"],
         stage="socket_mode",
     )
-    for user_id in bundle["allowed_users"].split(","):
-        _slack_api_call(
-            "users.info",
-            token=bundle["bot_token"],
-            params={"user": user_id},
-            stage="member_lookup",
-        )
 
     app_id = str(auth.get("app_id") or "").strip().upper()
+    app_name = str(
+        auth.get("app_name") or auth.get("user") or "Tinyhat Agent"
+    ).strip()[:80]
     bot_id = str(auth.get("bot_id") or "").strip().upper()
-    app_name = "Tinyhat Agent"
-    if bot_id:
-        bot = _slack_api_call(
-            "bots.info",
-            token=bundle["bot_token"],
-            params={"bot": bot_id},
-            stage="app_identity",
-        ).get("bot")
-        if isinstance(bot, dict):
-            app_id = str(bot.get("app_id") or app_id).strip().upper()
-            app_name = str(bot.get("name") or app_name).strip()[:80]
-    if not SLACK_ID_RE.fullmatch(app_id):
-        user_id = str(auth.get("user_id") or "").strip().upper()
-        if user_id:
-            user = _slack_api_call(
-                "users.info",
+    if not SLACK_ID_RE.fullmatch(app_id) and SLACK_ID_RE.fullmatch(bot_id):
+        try:
+            bot = _slack_api_call(
+                "bots.info",
                 token=bundle["bot_token"],
-                params={"user": user_id},
+                params={"bot": bot_id},
                 stage="app_identity",
-            ).get("user")
-            profile = user.get("profile") if isinstance(user, dict) else None
-            if isinstance(profile, dict):
-                app_id = str(profile.get("api_app_id") or "").strip().upper()
+            ).get("bot")
+        except SlackConnectionError:
+            bot = None
+        if isinstance(bot, dict):
+            app_id = str(bot.get("app_id") or "").strip().upper()
+            app_name = str(bot.get("name") or app_name).strip()[:80]
     workspace_id = str(auth.get("team_id") or "").strip().upper()
-    if not SLACK_ID_RE.fullmatch(app_id) or not SLACK_ID_RE.fullmatch(workspace_id):
+    if not SLACK_ID_RE.fullmatch(workspace_id):
         raise SlackConnectionError(
-            "Slack did not return the app and workspace identifiers.",
+            "Slack did not return the workspace identifier.",
             stage="app_identity",
             code="identity_missing",
-            public_message="Slack accepted the tokens but did not identify the app.",
+            public_message=(
+                "Slack accepted the tokens but did not identify the workspace."
+            ),
         )
-    return {
+    metadata = {
         "provider": "slack",
-        "app_id": app_id,
         "app_name": app_name,
         "workspace_id": workspace_id,
         "workspace_name": str(auth.get("team") or workspace_id).strip()[:100],
         "allowed_user_count": len(bundle["allowed_users"].split(",")),
     }
+    if SLACK_ID_RE.fullmatch(app_id):
+        metadata["app_id"] = app_id
+    return metadata
 
 
 def _slack_api_call(
@@ -478,7 +472,10 @@ def _slack_api_call(
 
 def _slack_failure_message(stage: str, code: str) -> str:
     if code == "missing_scope":
-        return "The Slack app is missing a required permission. Reinstall it and retry."
+        return (
+            "The submitted bot token cannot perform this Slack step. Copy the "
+            "Bot User OAuth Token from the app you just created, then retry."
+        )
     if stage == "bot_auth":
         return "Slack did not accept the bot token. Copy the xoxb token and retry."
     if stage == "socket_mode":
