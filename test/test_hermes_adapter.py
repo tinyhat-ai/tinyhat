@@ -580,6 +580,9 @@ class HermesAdapterTests(unittest.TestCase):
             "How much credit is left?",
             "Can you tell me what this costs?",
             "Could you explain how much you cost?",
+            "What are your prices?",
+            "What are your rates?",
+            "What are your fees?",
         )
         for user_message in examples:
             with self.subTest(user_message=user_message):
@@ -786,6 +789,33 @@ class HermesAdapterTests(unittest.TestCase):
         self.assertIn("routine operations", first["context"])
         self.assertIn("https://tinyhat.ai/privacy", first["context"])
 
+    def test_onboarding_turn_reserves_owner_bullet_over_terms(self) -> None:
+        # The alias-owned bullet must outrank broad literal term matches:
+        # adding the generic "tinyhat" term to a QA-report request must
+        # not crowd out the QA guard bullet the phrase routes to.
+        first = tinyhat_context.inject_tinyhat_context(
+            user_message="Please post this Tinyhat QA report about a reload bug",
+            is_first_turn=True,
+        )
+        assert first is not None
+        self.assertLess(len(first["context"]), 10_000)
+        self.assertIn("do not use terminal/curl", first["context"])
+
+    def test_onboarding_turn_maps_privacy_terms_to_privacy_bullet(self) -> None:
+        # gdpr / surveillance route through the generic term table but
+        # appear nowhere in the privacy bullet text; the term hints must
+        # carry them to it.
+        for user_message in ("GDPR?", "Is this surveillance?"):
+            with self.subTest(user_message=user_message):
+                first = tinyhat_context.inject_tinyhat_context(
+                    user_message=user_message,
+                    is_first_turn=True,
+                )
+                assert first is not None
+                self.assertLess(len(first["context"]), 10_000)
+                self.assertIn("tinyhat:tinyhat-privacy", first["context"])
+                self._reset_funding_marker()
+
     def test_onboarding_turn_preserves_underscore_phrase_guards(self) -> None:
         # Raw-form phrases ("skills_list") must count as route signals
         # exactly as the router counts them.
@@ -817,6 +847,15 @@ class HermesAdapterTests(unittest.TestCase):
             len(heading_only), tinyhat_context._HOOK_SPILL_SAFE_CHARS
         )
         self.assertLess(len(heading_only), 10_000)
+        # The oversized-heading branch with bullets present must also
+        # stay hard-capped (a different code path than no-bullet input).
+        heading_with_bullet = tinyhat_context._compose_onboarding_context(
+            "H" * 12_000 + "\n- tail bullet after a giant heading.", "hi"
+        )
+        self.assertLessEqual(
+            len(heading_with_bullet), tinyhat_context._HOOK_SPILL_SAFE_CHARS
+        )
+        self.assertLess(len(heading_with_bullet), 10_000)
 
     def test_onboarding_turn_preserves_funding_context_for_funding_question(
         self,
@@ -869,6 +908,10 @@ class HermesAdapterTests(unittest.TestCase):
             "Balance your binary tree",
             "Price your API response",
             "Fund your test fixture",
+            "Could you check my balance factor in this AVL tree?",
+            "Can you show who pays for each invoice in this CSV?",
+            "Could you look for free to use in the README?",
+            "Could you list projects funded by NASA?",
             "Estimate the cost of this query",
             "Balance this binary tree",
             "Change the price field",

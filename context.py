@@ -89,12 +89,19 @@ _FUNDING_BULLET_MARKER = "- Funding model:"
 
 # Routing signals whose owning bullet does not contain the signal text
 # literally. Protection derives from the routing decision, so each such
-# alias names the bullet it routes to.
+# alias names the bullet it routes to. Phrase hints and term hints are
+# owner-level signals: their bullets rank with exact phrase matches,
+# ahead of broad literal term matches.
 _ROUTE_SIGNAL_BULLET_HINTS = {
     "qa report": "- For Tinyhat QA or Slack-style bug reports",
     "bug report": "- For Tinyhat QA or Slack-style bug reports",
     "slack report": "- For Tinyhat QA or Slack-style bug reports",
     "plugin update": "- If this Computer reports update_available",
+}
+
+_ROUTE_TERM_BULLET_HINTS = {
+    "gdpr": "- For privacy, security, or data-access questions",
+    "surveillance": "- For privacy, security, or data-access questions",
 }
 
 
@@ -121,23 +128,28 @@ def _route_signals(user_message: str) -> tuple[set[str], set[str]]:
     return phrases, terms
 
 
-def _bullet_matches_request(
-    bullet: str,
-    *,
-    phrases: set[str],
-    terms: set[str],
-    intent_markers: tuple[str, ...],
-) -> bool:
-    if any(marker in bullet for marker in intent_markers):
-        return True
+def _bullet_owns_request(bullet: str, *, phrases: set[str], terms: set[str]) -> bool:
+    """Owner-level match: the bullet the routed signal is about.
+
+    Exact phrase text in the bullet, a phrase-alias hint, or a term hint
+    (``gdpr``/``surveillance`` → the privacy bullet). Owner bullets rank
+    ahead of broad literal term matches so a generic co-occurring term
+    like ``tinyhat`` cannot crowd out the bullet the request is for.
+    """
     for phrase in phrases:
         hint = _ROUTE_SIGNAL_BULLET_HINTS.get(phrase)
         if hint is not None and hint in bullet:
             return True
+    for term in terms:
+        hint = _ROUTE_TERM_BULLET_HINTS.get(term)
+        if hint is not None and hint in bullet:
+            return True
     lowered = bullet.lower()
-    if any(phrase in lowered for phrase in phrases):
-        return True
-    bullet_tokens = set(re.findall(r"[a-z0-9]+", lowered))
+    return any(phrase in lowered for phrase in phrases)
+
+
+def _bullet_matches_terms(bullet: str, *, terms: set[str]) -> bool:
+    bullet_tokens = set(re.findall(r"[a-z0-9]+", bullet.lower()))
     return any(term in bullet_tokens for term in terms)
 
 
@@ -171,36 +183,43 @@ def _compose_onboarding_context(context: str, user_message: str) -> str:
     if _matches_funding_intent(normalized):
         intent_markers.append(_FUNDING_BULLET_MARKER)
 
-    # Three passes, each in source order and capped: explicit intent
+    # Four passes, each in source order and capped: explicit intent
     # bullets reserve budget first (a privacy question must keep the
     # trust-model bullet even when generic terms like "tinyhat" also
-    # match many earlier bullets), then route-signal-matched bullets,
-    # then everything else fills the rest. Over-subscription degrades in
-    # order instead of all-or-nothing, and nothing can exceed the cap.
+    # match many earlier bullets), then owner bullets (the bullet an
+    # exact phrase, alias hint, or term hint routes to), then broad
+    # literal term matches, then everything else fills the rest.
+    # Over-subscription degrades in order instead of all-or-nothing,
+    # and nothing can exceed the cap.
     used = len(heading)
     kept: set[int] = set()
+
+    def _take(i: int) -> None:
+        nonlocal used
+        kept.add(i)
+        used += len(bullets[i])
+
     for i, bullet in enumerate(bullets):
         if any(marker in bullet for marker in intent_markers):
             if used + len(bullet) <= budget:
-                kept.add(i)
-                used += len(bullet)
+                _take(i)
     for i, bullet in enumerate(bullets):
         if i in kept:
             continue
-        if _bullet_matches_request(
-            bullet,
-            phrases=phrases,
-            terms=terms,
-            intent_markers=(),
-        ) and used + len(bullet) <= budget:
-            kept.add(i)
-            used += len(bullet)
+        if _bullet_owns_request(bullet, phrases=phrases, terms=terms):
+            if used + len(bullet) <= budget:
+                _take(i)
+    for i, bullet in enumerate(bullets):
+        if i in kept:
+            continue
+        if _bullet_matches_terms(bullet, terms=terms):
+            if used + len(bullet) <= budget:
+                _take(i)
     for i, bullet in enumerate(bullets):
         if i in kept:
             continue
         if used + len(bullet) <= budget:
-            kept.add(i)
-            used += len(bullet)
+            _take(i)
     trimmed = heading + "".join(bullets[i] for i in range(len(bullets)) if i in kept)
     return FUNDING_REMINDER_DIRECTIVE + "\n" + trimmed
 
@@ -333,7 +352,11 @@ _CONTEXT_TERMS = (
 # it cost to sort this list", "how do i pay attention") are end-anchored;
 # self-contained funding phrases ("my balance", "funded by") use word
 # boundaries only.
-_FUNDING_QUESTION_PATTERNS = tuple(
+# Precise, self-contained funding questions: end-anchored or full
+# question forms. Only these may match before modal-request suppression
+# — a polite wrapper around them ("can you tell me what this costs?")
+# is still a funding question.
+_FUNDING_QUESTION_PATTERNS_PRECISE = tuple(
     re.compile(pattern)
     for pattern in (
         r"(?:how much|what) (?:does|do|will|would) (?:it|this|you) cost\s*\??$",
@@ -342,11 +365,24 @@ _FUNDING_QUESTION_PATTERNS = tuple(
         r"is (?:it|this) free\s*\??$",
         r"how is (?:it|this) funded\s*\??$",
         r"how do i pay(?: for (?:it|this|you))?\s*\??$",
+        r"check (?:my|the) balance\s*\??$",
+        r"(?<!\w)how much do you cost(?!\w)",
+        r"what (?:it|this|you) costs?\s*\??$",
+        r"how much (?:you|it|this) costs?\s*\??$",
+    )
+)
+
+# Broad, mid-string funding fragments. These match only after command
+# frames (imperative or modal) are suppressed, so a modal developer
+# request that merely contains a fragment — "could you check my balance
+# factor in this AVL tree?" — cannot ride them into the context.
+_FUNDING_QUESTION_PATTERNS_BROAD = tuple(
+    re.compile(pattern)
+    for pattern in (
         r"(?<!\w)payment (?:option|options|method|methods|plan|plans)(?!\w)",
         r"(?<!\w)how (?:much|many) credits?(?!\w)",
         r"(?<!\w)credits? (?:is|are) left(?!\w)",
         r"(?<!\w)remaining (?:credit|credits|balance)(?!\w)",
-        r"check (?:my|the) balance\s*\??$",
         r"(?<!\w)my balance(?!\w)",
         r"(?<!\w)my billing(?!\w)",
         r"(?<!\w)how does billing(?!\w)",
@@ -354,9 +390,6 @@ _FUNDING_QUESTION_PATTERNS = tuple(
         r"(?<!\w)who is paying for(?!\w)",
         r"(?<!\w)paying for (?:this|you)(?!\w)",
         r"(?<!\w)pay for (?:this|you)(?!\w)",
-        r"(?<!\w)how much do you cost(?!\w)",
-        r"what (?:it|this|you) costs?\s*\??$",
-        r"how much (?:you|it|this) costs?\s*\??$",
         r"(?<!\w)you cost(?!\w)",
         r"(?<!\w)free to use(?!\w)",
         r"(?<!\w)(?:run out of|out of) credits(?!\w)",
@@ -638,32 +671,36 @@ _ZERO_WIDTH_MARKS = ("\u200c", "\u200d", "\u200e", "\u200f")
 
 def _matches_funding_intent(normalized: str) -> bool:
     """Bounded funding routing. Imperative work requests ("check my
-    balance factor in this AVL tree") suppress everything. A modal
-    wrapper ("can/could you ...") suppresses only the loose word+anchor
-    route: a polite modal around a precise funding question — "could you
-    explain how much you cost?" — is still a funding question, while
-    "can you free this buffer?" matches no question form and stays a
-    command. Then bounded funding phrases, a funding word bound to the
-    agent/service, or the lone standalone word billing."""
+    balance factor in this AVL tree") suppress everything. Precise
+    self-contained question forms match next, so a polite modal wrapper
+    — "could you explain how much you cost?" — is still a funding
+    question. The modal frame then suppresses every looser route: broad
+    mid-string fragments, the standalone word billing, the possessive
+    "your <funding word>" bigram, and a funding word bound to the
+    agent/service."""
     if _is_imperative_frame(normalized):
         return False
-    for pattern in _FUNDING_QUESTION_PATTERNS:
+    for pattern in _FUNDING_QUESTION_PATTERNS_PRECISE:
         if pattern.search(normalized):
             return True
     if _ENGLISH_MODAL_REQUEST.search(normalized):
         return False
+    for pattern in _FUNDING_QUESTION_PATTERNS_BROAD:
+        if pattern.search(normalized):
+            return True
     tokens = set(re.findall(r"\w+", normalized))
     if any(term in tokens for term in _FUNDING_STANDALONE_TERMS):
         return True
+    # The possessive bigram carries its own funding word ("your prices",
+    # "your fees"), including forms absent from the word-term table, so
+    # it is checked before the word-term gate. A bare "your" never
+    # counts — developer imperatives like "balance your binary tree"
+    # must not read as funding requests.
+    if _FUNDING_POSSESSIVE_ANCHOR.search(normalized):
+        return True
     if not any(term in tokens for term in _FUNDING_WORD_TERMS):
         return False
-    if any(term in tokens for term in _FUNDING_SERVICE_ANCHORS):
-        return True
-    # Possessive anchor only as "your <funding word>" ("your price",
-    # "your credits") — a bare "your" would make developer imperatives
-    # like "balance your binary tree" or "price your API response"
-    # read as funding requests.
-    return bool(_FUNDING_POSSESSIVE_ANCHOR.search(normalized))
+    return any(term in tokens for term in _FUNDING_SERVICE_ANCHORS)
 
 
 def _matches_privacy_phrase(normalized: str) -> bool:
