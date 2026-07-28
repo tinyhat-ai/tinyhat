@@ -319,7 +319,7 @@ def _slack_failure_notice(
     if not SLACK_ID_RE.fullmatch(app_id):
         return f"{prefix}{failure.public_message}"
     app_url = f"{SLACK_APP_SETTINGS_BASE_URL}/{app_id}"
-    if failure.stage in {"owner_dm", "greeting"}:
+    if failure.code == "missing_scope":
         return (
             f"{prefix}Open the Slack app, reinstall it in your workspace, "
             f"then retry: {app_url}"

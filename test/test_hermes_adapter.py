@@ -1826,6 +1826,31 @@ class HermesAdapterTests(unittest.TestCase):
             ),
         )
 
+    def test_slack_owner_dm_non_scope_failure_does_not_request_reinstall(
+        self,
+    ) -> None:
+        failure = slack_connection.SlackConnectionError(
+            "Slack rejected conversations.open: user_not_found.",
+            stage="owner_dm",
+            code="user_not_found",
+            public_message="Slack could not open the owner's direct message.",
+        )
+
+        notice = slack_connection._slack_failure_notice(
+            failure,
+            {"app_id": "A012ABCDEF"},
+        )
+
+        self.assertEqual(
+            notice,
+            (
+                "Slack connection failed during owner direct-message setup. "
+                "Slack could not open the owner's direct message. "
+                "Open the Slack app: https://api.slack.com/apps/A012ABCDEF"
+            ),
+        )
+        self.assertNotIn("reinstall", notice)
+
     def test_slack_failure_claim_retries_without_metadata_for_old_platform(
         self,
     ) -> None:
