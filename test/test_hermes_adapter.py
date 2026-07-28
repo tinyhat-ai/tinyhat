@@ -652,7 +652,7 @@ class HermesAdapterTests(unittest.TestCase):
 
     def test_compose_onboarding_context_trims_at_bullet_boundary(self) -> None:
         small = "Tinyhat context: heading.\n- first bullet.\n- second bullet."
-        untouched = tinyhat_context._compose_onboarding_context(small)
+        untouched = tinyhat_context._compose_onboarding_context(small, "hi")
         self.assertEqual(
             untouched,
             tinyhat_context.FUNDING_REMINDER_DIRECTIVE + "\n" + small,
@@ -662,7 +662,7 @@ class HermesAdapterTests(unittest.TestCase):
             f"\n- bullet {i} " + "x" * 400 for i in range(40)
         )
         oversized = "Tinyhat context: heading." + bullets
-        composed = tinyhat_context._compose_onboarding_context(oversized)
+        composed = tinyhat_context._compose_onboarding_context(oversized, "hi")
         self.assertLessEqual(
             len(composed), tinyhat_context._HOOK_SPILL_SAFE_CHARS
         )
@@ -672,11 +672,60 @@ class HermesAdapterTests(unittest.TestCase):
                 + "\nTinyhat context: heading."
             )
         )
-        # The cut lands on a bullet boundary, never mid-bullet: the last
-        # surviving bullet is complete (full 400-character payload).
-        last_bullet = composed.rsplit("\n- ", 1)[-1]
-        self.assertTrue(last_bullet.startswith("bullet"))
-        self.assertTrue(last_bullet.endswith("x" * 400))
+        # Whole bullets only, never a mid-bullet cut: every kept bullet is
+        # complete (full 400-character payload).
+        for kept in composed.split("\n- ")[1:]:
+            self.assertTrue(kept.startswith("bullet"))
+            self.assertTrue(kept.rstrip().endswith("x" * 400))
+
+    def test_compose_onboarding_context_protects_matched_bullets(self) -> None:
+        filler = "".join(f"\n- filler {i} " + "x" * 400 for i in range(40))
+        privacy_bullet = (
+            "\n"
+            + tinyhat_context._PRIVACY_BULLET_MARKER
+            + " trust model facts "
+            + "y" * 400
+        )
+        oversized = "Tinyhat context: heading." + filler + privacy_bullet
+        # A neutral first message drops the tail privacy bullet.
+        neutral = tinyhat_context._compose_onboarding_context(oversized, "hi")
+        self.assertNotIn(tinyhat_context._PRIVACY_BULLET_MARKER, neutral)
+        # A privacy question keeps it despite its tail position.
+        asking = tinyhat_context._compose_onboarding_context(
+            oversized, "Can the operators read my messages?"
+        )
+        self.assertIn(tinyhat_context._PRIVACY_BULLET_MARKER, asking)
+        self.assertLessEqual(len(asking), tinyhat_context._HOOK_SPILL_SAFE_CHARS)
+
+    def test_onboarding_turn_preserves_privacy_context_for_privacy_question(
+        self,
+    ) -> None:
+        first = tinyhat_context.inject_tinyhat_context(
+            user_message="Can the operators read my messages?",
+            is_first_turn=True,
+        )
+        assert first is not None
+        self.assertLessEqual(
+            len(first["context"]), tinyhat_context._HOOK_SPILL_SAFE_CHARS
+        )
+        self.assertTrue(first["context"].startswith("[System note:"))
+        self.assertIn("tinyhat:tinyhat-privacy", first["context"])
+        self.assertIn("https://tinyhat.ai/privacy", first["context"])
+        self.assertIn("routine operations", first["context"])
+
+    def test_onboarding_turn_preserves_funding_context_for_funding_question(
+        self,
+    ) -> None:
+        first = tinyhat_context.inject_tinyhat_context(
+            user_message="How am I paying for you?",
+            is_first_turn=True,
+        )
+        assert first is not None
+        self.assertLessEqual(
+            len(first["context"]), tinyhat_context._HOOK_SPILL_SAFE_CHARS
+        )
+        self.assertIn("- Funding model:", first["context"])
+        self.assertIn("Never state a remaining credit balance", first["context"])
 
     def test_funding_reminder_directive_is_once_per_computer(self) -> None:
         first = tinyhat_context.inject_tinyhat_context(

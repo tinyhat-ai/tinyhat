@@ -389,8 +389,10 @@ step when the reply lists getting-started steps, a standalone step line
 otherwise, never a footnote. The claim is recorded with a durable
 marker so a later `/new` or `/reset` session does not re-arm it. The
 onboarding turn's payload is composed under Hermes's hook-context spill
-cap (directive first, context truncated at a bullet boundary when
-needed) so the note reaches the model inline instead of being spilled
+cap (directive first, whole tail bullets dropped when needed — except
+bullets the first message itself matches, such as the privacy
+trust-model bullet on a first-ever privacy question, which always
+survive) so the note reaches the model inline instead of being spilled
 to a disk preview.
 Tool-owned native first replies (the Codex auth prerequisite photo, a
 Connect Google button) or an explicit connect request satisfy the

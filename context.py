@@ -66,20 +66,67 @@ FUNDING_REMINDER_DIRECTIVE = (
 # under that cap, so appending the onboarding note would push exactly the
 # one turn that carries it over the cliff — the model would never see the
 # directive inline. Compose the onboarding turn under a safe budget: the
-# directive leads, and the context is truncated at a bullet boundary when
-# needed. Later matched turns re-inject the full context unchanged.
+# directive leads, and whole bullets are dropped from the tail when
+# needed — except bullets the user's own first message matches, which
+# must survive (a first-ever privacy question keeps the trust-model
+# bullet). Later matched turns re-inject the full context unchanged.
 _HOOK_SPILL_SAFE_CHARS = 9_500
 
+# Bullet-identifying prefixes protected when the first message matches
+# the corresponding intent. These carry contractual answers (the privacy
+# trust model, the funding model) that must not lose to the trim on the
+# very turn that asks for them.
+_PRIVACY_BULLET_MARKER = "- For privacy, security, or data-access questions"
+_FUNDING_BULLET_MARKER = "- Funding model:"
 
-def _compose_onboarding_context(context: str) -> str:
+
+def _protected_bullet_markers(user_message: str) -> tuple[str, ...]:
+    normalized = _normalize_message(user_message)
+    markers = []
+    if _matches_privacy_intent(normalized):
+        markers.append(_PRIVACY_BULLET_MARKER)
+    if _matches_funding_intent(normalized):
+        markers.append(_FUNDING_BULLET_MARKER)
+    return tuple(markers)
+
+
+def _compose_onboarding_context(context: str, user_message: str) -> str:
     composed = FUNDING_REMINDER_DIRECTIVE + "\n" + context
     if len(composed) <= _HOOK_SPILL_SAFE_CHARS:
         return composed
     budget = _HOOK_SPILL_SAFE_CHARS - len(FUNDING_REMINDER_DIRECTIVE) - 1
-    trimmed = context[:budget]
-    boundary = trimmed.rfind("\n- ")
-    if boundary > 0:
-        trimmed = trimmed[:boundary]
+
+    starts = [m.start() for m in re.finditer(r"\n- ", context)]
+    if not starts:
+        return FUNDING_REMINDER_DIRECTIVE + "\n" + context[:budget]
+    heading = context[: starts[0]]
+    bounds = starts + [len(context)]
+    bullets = [context[bounds[i] : bounds[i + 1]] for i in range(len(starts))]
+
+    markers = _protected_bullet_markers(user_message)
+    protected = {
+        i
+        for i, bullet in enumerate(bullets)
+        if any(marker in bullet for marker in markers)
+    }
+    used = len(heading) + sum(len(bullets[i]) for i in protected)
+    if used > budget:
+        # The cap is the harder invariant: fall back to the plain
+        # bullet-boundary prefix trim rather than ever exceeding it.
+        trimmed = context[:budget]
+        boundary = trimmed.rfind("\n- ")
+        if boundary > 0:
+            trimmed = trimmed[:boundary]
+        return FUNDING_REMINDER_DIRECTIVE + "\n" + trimmed
+
+    kept = set(protected)
+    for i, bullet in enumerate(bullets):
+        if i in kept:
+            continue
+        if used + len(bullet) <= budget:
+            kept.add(i)
+            used += len(bullet)
+    trimmed = heading + "".join(bullets[i] for i in range(len(bullets)) if i in kept)
     return FUNDING_REMINDER_DIRECTIVE + "\n" + trimmed
 
 
@@ -591,6 +638,15 @@ def _matches_privacy_intent(normalized: str) -> bool:
     return has_fa_subject and has_fa_access
 
 
+def _normalize_message(user_message: str) -> str:
+    """Canonical matcher input: lowercased, Persian-normalized, term-split."""
+    normalized = " ".join((user_message or "").lower().split())
+    normalized = normalized.translate(_PERSIAN_CHAR_MAP)
+    for mark in _ZERO_WIDTH_MARKS:
+        normalized = normalized.replace(mark, "")
+    return re.sub(r"[_-]+", " ", normalized)
+
+
 def should_inject_tinyhat_context(user_message: str, *, is_first_turn: bool = False) -> bool:
     """Return whether this turn benefits from Tinyhat operating context."""
     if is_first_turn:
@@ -635,5 +691,5 @@ def inject_tinyhat_context(  # noqa: PLR0913
     _ = assignment_cleanup
     context = TINYHAT_CONTEXT
     if is_first_turn and _claim_funding_reminder():
-        context = _compose_onboarding_context(context)
+        context = _compose_onboarding_context(context, user_message)
     return {"context": context}
