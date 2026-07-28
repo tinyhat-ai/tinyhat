@@ -17,6 +17,7 @@ from .google_workspace_app_manager import (
 )
 from .platform import PlatformError, build_platform_client, computer_api_path
 from .secret_handoff import start_private_secret_handoff
+from .slack_connection import start_slack_connection
 from .tool_errors import tool_error_json
 
 CODEX_AUTH_SCREENSHOT = (
@@ -156,6 +157,12 @@ def tell_joke(args: dict[str, Any] | None = None, **_: Any) -> str:
 def private_secret_handoff(args: dict[str, Any] | None = None, **kwargs: Any) -> str:
     """Start a blind private-secret handoff through the Tinyhat platform."""
     return start_private_secret_handoff(args, **kwargs)
+
+
+def slack_connect(args: dict[str, Any] | None = None, **kwargs: Any) -> str:
+    """Start the Hermes-owned Slack connection onboarding."""
+
+    return start_slack_connection(args, **kwargs)
 
 
 def credentials(args: dict[str, Any] | None = None, **kwargs: Any) -> str:

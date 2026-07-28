@@ -20,6 +20,7 @@ from .tool_errors import tool_error_json
 
 KEY_ALGORITHM = "RSA-OAEP-256"
 DEFAULT_EXPIRES_IN_SECONDS = 300
+MAX_EXPIRES_IN_SECONDS = 30 * 60
 SECRET_NAME_RE = re.compile(r"^[A-Z_][A-Z0-9_]{0,126}$")
 STATE_DIR = Path.home() / ".tinyhat" / "private-secret-handoffs"
 WORKER_SYSTEMD_ENV_KEYS = (
@@ -49,6 +50,14 @@ GENERIC_SECRET_NAMES = {
     "CREDENTIAL",
     "WEBHOOK_SECRET",
 }
+RESERVED_SLACK_CONNECTION_NAMES = frozenset(
+    {
+        "SLACK_CONNECTION",
+        "SLACK_BOT_TOKEN",
+        "SLACK_APP_TOKEN",
+        "SLACK_ALLOWED_USERS",
+    }
+)
 SECRET_NAME_HINTS: tuple[tuple[tuple[str, ...], str], ...] = (
     (("exa", "exa.ai"), "EXA_API_KEY"),
     (("openrouter", "open router"), "OPENROUTER_API_KEY"),
@@ -107,6 +116,16 @@ def start_private_secret_handoff(
         )
 
     secret_name = _resolve_secret_name(raw_secret_name, description)
+    if secret_name in RESERVED_SLACK_CONNECTION_NAMES:
+        return tool_error_json(
+            tool="tinyhat_private_secret_handoff",
+            error_name="slack_connection_required",
+            message=(
+                "Slack connection values are managed as one Hermes Socket Mode "
+                "bundle. Load tinyhat:tinyhat-slack and call "
+                "tinyhat_slack_connect once."
+            ),
+        )
     expires_in_seconds = DEFAULT_EXPIRES_IN_SECONDS
 
     private_key_pem, public_key_pem = _generate_key_pair()
@@ -134,6 +153,7 @@ def _start_worker_process(handoff: dict[str, Any], private_key_pem: str) -> None
     handoff_id = str(handoff.get("handoff_id") or "").strip()
     if not handoff_id:
         raise SecretHandoffError("Platform did not return a handoff id.")
+    expires_in_seconds = _worker_expires_in_seconds(handoff)
     key_path = _write_private_key_file(handoff_id, private_key_pem)
     package_dir = Path(__file__).resolve().parent
     env = os.environ.copy()
@@ -147,6 +167,7 @@ def _start_worker_process(handoff: dict[str, Any], private_key_pem: str) -> None
             key_path=key_path,
             package_dir=package_dir,
             env=env,
+            expires_in_seconds=expires_in_seconds,
         ):
             return
         _start_worker_with_popen(
@@ -154,6 +175,7 @@ def _start_worker_process(handoff: dict[str, Any], private_key_pem: str) -> None
             key_path=key_path,
             package_dir=package_dir,
             env=env,
+            expires_in_seconds=expires_in_seconds,
         )
     except Exception as exc:
         try:
@@ -166,12 +188,24 @@ def _start_worker_process(handoff: dict[str, Any], private_key_pem: str) -> None
         ) from exc
 
 
+def _worker_expires_in_seconds(handoff: dict[str, Any]) -> int:
+    raw_value = handoff.get("entry_window_seconds")
+    if raw_value is None:
+        raw_value = handoff.get("expires_in_seconds")
+    try:
+        value = int(raw_value)
+    except (TypeError, ValueError):
+        value = DEFAULT_EXPIRES_IN_SECONDS
+    return min(max(1, value), MAX_EXPIRES_IN_SECONDS)
+
+
 def _start_worker_with_systemd(
     *,
     handoff_id: str,
     key_path: Path,
     package_dir: Path,
     env: dict[str, str],
+    expires_in_seconds: int,
 ) -> bool:
     systemd_run = shutil.which("systemd-run")
     if not systemd_run:
@@ -195,6 +229,8 @@ def _start_worker_with_systemd(
             handoff_id,
             "--key-path",
             str(key_path),
+            "--expires-in-seconds",
+            str(expires_in_seconds),
         ]
     )
     try:
@@ -230,6 +266,7 @@ def _start_worker_with_popen(
     key_path: Path,
     package_dir: Path,
     env: dict[str, str],
+    expires_in_seconds: int,
 ) -> None:
     # Fallback when systemd-run is unavailable or fails. The worker never
     # stops or starts the gateway, so escaping the gateway control group via
@@ -242,6 +279,8 @@ def _start_worker_with_popen(
             handoff_id,
             "--key-path",
             str(key_path),
+            "--expires-in-seconds",
+            str(expires_in_seconds),
         ],
         cwd=str(package_dir.parent),
         env=env,
@@ -324,10 +363,29 @@ def _install_submitted_secret(
     private_key_pem: str,
     state: dict[str, Any],
 ) -> None:
+    if state.get("handoff_kind") == "slack_connection":
+        from .slack_connection import install_submitted_slack_connection
+
+        install_submitted_slack_connection(
+            client=client,
+            platform_auth=platform_auth,
+            handoff_id=handoff_id,
+            private_key_pem=private_key_pem,
+            state=state,
+        )
+        return
     ciphertext_payload = state.get("ciphertext_payload")
     if not isinstance(ciphertext_payload, dict):
         raise SecretHandoffError("Platform did not return ciphertext.")
     secret_name = _normalize_secret_name(str(state.get("secret_name") or ""))
+    if secret_name in RESERVED_SLACK_CONNECTION_NAMES:
+        raise SecretHandoffError(
+            "Reserved Slack connection value reached the generic secret installer.",
+            public_message=(
+                "Use the Connect Slack flow so Hermes can validate and save "
+                "the complete Socket Mode connection."
+            ),
+        )
     plaintext = _decrypt_ciphertext(private_key_pem, ciphertext_payload)
     try:
         _set_hermes_secret(secret_name, plaintext)
@@ -358,12 +416,15 @@ def _claim_handoff(
     message: str | None = None,
     gateway_ready: bool | None = None,
     outcome: str | None = None,
+    connection_metadata: dict[str, Any] | None = None,
 ) -> None:
     payload: dict[str, Any] = {"installed": installed, "message": message}
     if gateway_ready is not None:
         payload["gateway_ready"] = gateway_ready
     if outcome:
         payload["outcome"] = outcome
+    if connection_metadata is not None:
+        payload["connection_metadata"] = connection_metadata
     path = computer_api_path(
         platform_auth,
         f"private-secret-handoffs/v1/{handoff_id}/claim",
@@ -372,6 +433,8 @@ def _claim_handoff(
         client.post_json(path, payload)
         return
     except Exception:
+        if connection_metadata is not None:
+            raise
         if gateway_ready is None and not outcome:
             raise
 
@@ -635,12 +698,15 @@ def _save_hermes_env_value(hermes: str, secret_name: str, value: str) -> None:
 
 
 def _hermes_python_executable(hermes: str) -> str | None:
-    for candidate in _hermes_script_candidates(Path(hermes)):
-        for name in ("python", "python3"):
-            python = candidate.parent / name
-            if python.exists():
-                return str(python)
-        shebang = _read_first_line(candidate)
+    scripts = _hermes_script_candidates(Path(hermes))
+    candidates: list[Path] = []
+
+    for script in scripts:
+        candidates.extend(_hermes_wrapper_python_candidates(script))
+    candidates.extend(_hermes_project_python_candidates())
+
+    for script in scripts:
+        shebang = _read_first_line(script)
         if not shebang.startswith("#!"):
             continue
         try:
@@ -650,13 +716,104 @@ def _hermes_python_executable(hermes: str) -> str | None:
         if not parts:
             continue
         executable = Path(parts[0])
-        if executable.name.startswith("python") and executable.exists():
-            return str(executable)
-        if executable.name == "env" and len(parts) > 1 and parts[1].startswith("python"):
+        if executable.name.startswith("python"):
+            candidates.append(executable)
+        elif executable.name == "env" and len(parts) > 1 and parts[1].startswith("python"):
             python = shutil.which(parts[1])
             if python:
-                return python
+                candidates.append(Path(python))
+
+    for script in scripts:
+        for name in ("python", "python3"):
+            candidates.append(script.parent / name)
+
+    seen: set[str] = set()
+    for python in candidates:
+        expanded = python.expanduser()
+        key = str(expanded)
+        if key in seen:
+            continue
+        seen.add(key)
+        if expanded.exists() and _python_can_import_hermes_cli(expanded):
+            return key
     return None
+
+
+def _hermes_wrapper_python_candidates(hermes: Path) -> list[Path]:
+    try:
+        text = hermes.read_text(encoding="utf-8", errors="ignore")[:8192]
+    except OSError:
+        return []
+
+    candidates: list[Path] = []
+    for raw_line in text.splitlines():
+        line = raw_line.strip()
+        if not line or line.startswith("#"):
+            continue
+        try:
+            parts = shlex.split(line, comments=True)
+        except ValueError:
+            continue
+        while parts and parts[0] in {"command", "exec"}:
+            parts.pop(0)
+        if parts and Path(parts[0]).name == "env":
+            parts.pop(0)
+            while parts and "=" in parts[0] and not parts[0].startswith(("/", "~")):
+                parts.pop(0)
+        if not parts:
+            continue
+        raw_executable = os.path.expandvars(parts[0])
+        executable = Path(raw_executable).expanduser()
+        if not executable.name.startswith("python"):
+            continue
+        if not executable.is_absolute():
+            resolved = shutil.which(raw_executable)
+            if not resolved:
+                continue
+            executable = Path(resolved)
+        if executable not in candidates:
+            candidates.append(executable)
+    return candidates
+
+
+def _hermes_project_python_candidates() -> list[Path]:
+    roots: list[Path] = []
+    explicit = (os.getenv("HERMES_PROJECT_DIR") or "").strip()
+    if explicit:
+        roots.append(Path(explicit).expanduser())
+    roots.extend(
+        [
+            Path("/usr/local/lib/hermes-agent"),
+            Path.home() / ".hermes" / "hermes-agent",
+        ]
+    )
+
+    candidates: list[Path] = []
+    for root in roots:
+        for relative in (
+            Path("venv/bin/python"),
+            Path(".venv/bin/python"),
+            Path("venv/Scripts/python.exe"),
+            Path(".venv/Scripts/python.exe"),
+        ):
+            python = root / relative
+            if python not in candidates:
+                candidates.append(python)
+    return candidates
+
+
+def _python_can_import_hermes_cli(python: Path) -> bool:
+    try:
+        completed = subprocess.run(
+            [str(python), "-c", "import hermes_cli.config"],
+            capture_output=True,
+            text=True,
+            timeout=10,
+            check=False,
+        )
+    except (OSError, subprocess.TimeoutExpired):
+        return False
+    return completed.returncode == 0
 
 
 def _hermes_script_candidates(hermes: Path) -> list[Path]:

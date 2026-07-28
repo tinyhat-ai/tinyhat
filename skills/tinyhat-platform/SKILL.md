@@ -1,6 +1,6 @@
 ---
 name: tinyhat-platform
-description: Explain how this Hermes agent should use Tinyhat platform capabilities. Use for Tinyhat-managed Computer status, state, assignment, configuration revisions, installed packages, secrets, API keys, credentials, Codex auth, ChatGPT subscription auth, usage limits, settings, or questions about where the agent is running.
+description: Explain how this Hermes agent should use Tinyhat platform capabilities. Use for Tinyhat-managed Computer status, state, assignment, configuration revisions, installed packages, secrets, API keys, credentials, Slack, Codex auth, ChatGPT subscription auth, usage limits, settings, or questions about where the agent is running.
 ---
 
 # Tinyhat Platform
@@ -14,12 +14,15 @@ Use this as the default routing map:
 | User intent | Default Tinyhat route |
 | --- | --- |
 | Add or save an API key, token, password, webhook secret, or credential | Call `tinyhat_private_secret_handoff` once. |
+| Connect this agent to Slack | Load `tinyhat:tinyhat-slack` and call `tinyhat_slack_connect` once. The tool sends the Hermes Agent-view manifest, create-app guide, and encrypted token form. Do not send a duplicate reply. |
+| Disconnect this agent from Slack | Load `tinyhat:tinyhat-slack`. The managed disconnect ceremony is not available yet; do not use `tinyhat_credentials` or remove one Slack env value and claim the app is disconnected. |
 | Say "Connect Google", add a personal/work Google account, or sign in with Google | Load `tinyhat:tinyhat-google-workspace` and call `tinyhat_google_workspace` with `{"action": "connect"}`. This adds an account; it does not replace another account. The tool sends the native Telegram button itself. |
 | Use Gmail, Calendar, Drive, or another granted Google Workspace service | Load `tinyhat:tinyhat-google-workspace`, get safe status, and select the intended `account_id`. Use Hermes's built-in `google-workspace` skill for operation guidance and run the operation through `tinyhat_google_workspace_app`. |
 | Change a Google account's permissions, including making it read-only or adding another Workspace service | Select its `account_id`, then call `tinyhat_google_workspace` with `action=set_permissions` and the smallest implemented `presets` combination, optionally extended by exact manifest-listed `scopes` plus a short `reason`. Google consent is the permission decision. |
 | Revoke or disconnect one Google account from this Computer | Select its `account_id`, then call `tinyhat_google_workspace` with `action=disconnect`. The tool sends the native Telegram button and owns final confirmation; do not pass `confirmed`, expose a URL, or send a duplicate reply. |
 | Ask which Tinyhat plugin is running | Call `tinyhat_plugin_version`. |
 | Check this Computer's Tinyhat platform state, assignment, or installed packages | Call `tinyhat_get_platform_status`. |
+| Ask who can read their messages or files, whether Tinyhat staff or operators see logs or conversations, or any privacy, security, or data-access question | Load `tinyhat:tinyhat-privacy` and answer from it, in the user's language. |
 | Check that the Tinyhat plugin exists | Call `tinyhat_tell_joke` or `tinyhat_plugin_version`. |
 | Find a Tinyhat plugin skill after `skills_list`, `available_skills`, or unqualified `skill_view` fails | Call `tinyhat_skill_catalog`; retry with the returned `tinyhat:<skill-name>` qualified name. |
 | Check whether this Computer is behind `channels/lts` or `channels/latest` | Call `tinyhat_plugin_update` with `{"action": "status"}`. |
@@ -46,6 +49,22 @@ When the user says something like "add my Exa API key":
 Load `tinyhat:tinyhat-private-secret` when you need the full naming and
 failure-handling rules.
 
+## Slack
+
+For "connect to Slack", use `tinyhat_slack_connect`, not three generic secret
+handoffs. The tool generates the manifest through Hermes, sends the Slack
+create-from-manifest guide, and accepts both tokens plus allowed member IDs in
+one browser-encrypted bundle. Hermes owns Socket Mode and Slack messages.
+Tinyhat receives only ciphertext and safe app/workspace metadata.
+Tinyhat removes Hermes slash commands and the `commands` OAuth scope before
+sending the manifest so multiple per-agent Slack apps cannot compete for the
+same workspace-global command names.
+
+Slack connection values are reserved from the generic secret and credential
+removal flows. Until a bundled disconnect ceremony is implemented, never route
+Slack disconnect to `tinyhat_credentials` and never report that deleting one
+value disconnected Slack.
+
 When the user wants to list, find, remove, replace, or update a saved secure
 credential, load `tinyhat:tinyhat-credentials` and use `tinyhat_credentials`.
 Lists contain names and descriptions only. For removal, select one opaque
@@ -53,6 +72,21 @@ Lists contain names and descriptions only. For removal, select one opaque
 Telegram confirmation and Hermes performs local deletion. Do not ask for a
 text confirmation or send a duplicate reply. Once deletion succeeds, add the
 same name again with `tinyhat_private_secret_handoff` to replace its value.
+
+## Privacy And Trust
+
+When the user asks who can see their messages, whether Tinyhat or its
+operators read logs or conversations, how isolated this Computer is, or any
+other privacy or data-access question, load `tinyhat:tinyhat-privacy` and
+answer from its facts, in the user's language. The short version: this is a
+dedicated Computer created for this user alone, conversations and files are
+processed and stored on it, and Tinyhat does not read customer Computers'
+contents as part of routine operations — human access is limited to what
+the user affirmatively requests or permits, what is needed to investigate
+abuse, protect the service, or maintain security, and what is required by law; anything else would violate Tinyhat's own Terms and Privacy
+Policy (https://tinyhat.ai/privacy and https://tinyhat.ai/terms). Never
+speculate about named operators, never enumerate internal access tools,
+and never reassure by comparison with other platforms.
 
 ## Google Workspace
 

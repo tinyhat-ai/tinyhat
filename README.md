@@ -25,6 +25,12 @@ verification is pending or complete. Google shows the exact request and the
 user decides whether to grant it or ask for narrower access. It
 teaches the agent the Tinyhat-managed OpenAI Codex / ChatGPT subscription
 auth flow that is installed on each Hermes Computer.
+It also connects that same Hermes agent to Slack with Hermes' current
+Agent-view manifest and Socket Mode adapter. Slack tokens are entered together
+in the encrypted Mini App and decrypted only on the Computer; Tinyhat never
+receives Slack message content. Tinyhat removes slash commands from each
+per-agent manifest so command names cannot collide across apps in one
+workspace.
 
 ## What This Plugin Does
 
@@ -34,7 +40,8 @@ auth flow that is installed on each Hermes Computer.
 | `__init__.py` | Hermes registration entrypoint. |
 | `hermes.plugin.json` | Tinyhat metadata for the Hermes adapter, skill, command, and release channels. |
 | `context.py` | Small Hermes `pre_llm_call` context hook for Tinyhat-sensitive turns. |
-| `tools.py` / `schemas.py` | Tinyhat tools: plugin version, safe platform status, joke proof, skill catalog, private secret handoff and removal, Google identity connection, Codex auth setup/status helpers, and plugin update helper. |
+| `tools.py` / `schemas.py` | Tinyhat tools: plugin version, safe platform status, joke proof, skill catalog, private secret handoff and removal, Slack connection, Google identity connection, Codex auth setup/status helpers, and plugin update helper. |
+| `slack_connection.py` | Hermes manifest generation plus Computer-local Slack token validation and installation. |
 | `credentials.py` | Value-blind credential name/description discovery and platform-owned, expiring Telegram removal confirmation. |
 | `google_workspace.py` / `google_workspace_worker.py` | Platform-authored Google OAuth handoff, multi-account local custody, manifest-governed access selection, assignment-safe status, and targeted disconnect. |
 | `google_workspace_scope_manifest.json` / `google_workspace_scope_manifest.py` | Versioned public Google scope contract and dependency-free loader. |
@@ -44,12 +51,14 @@ auth flow that is installed on each Hermes Computer.
 | `skills/tinyhat-plugin-version/SKILL.md` | Live plugin version proof. |
 | `skills/tinyhat-skill-catalog/SKILL.md` | Skill discovery guidance for plugin-qualified Tinyhat skill names. |
 | `skills/tinyhat-private-secret/SKILL.md` | Browser-encrypted secret handoff guidance. |
+| `skills/tinyhat-slack/SKILL.md` | Hermes-native Slack Agent-view and Socket Mode onboarding. |
 | `skills/tinyhat-credentials/SKILL.md` | Value-blind credential discovery and confirmed Computer-side removal guidance. |
 | `skills/tinyhat-google-workspace/SKILL.md` | Existing-account Google identity connection guidance. |
 | `skills/tinyhat-google-workspace-app-manager/SKILL.md` | Approval-gated managed `gws` installation guidance. |
 | `skills/tinyhat-codex-auth/SKILL.md` | OpenAI Codex / ChatGPT subscription auth guidance. |
 | `skills/tinyhat-plugin-update/SKILL.md` | Channel update guidance for stale installed plugin checkouts. |
 | `skills/tinyhat-platform/SKILL.md` | Platform context for Tinyhat-managed Hermes agents. |
+| `skills/tinyhat-privacy/SKILL.md` | Privacy and trust model guidance: who can see user data, and when. |
 | `docs/skill-authoring.md` | The standard for future Tinyhat skills. |
 | `.agents/skills/tinyhat-plugin-skill-authoring/SKILL.md` | Maintainer workflow for adding or changing plugin skills. |
 | `RELEASING.md` | How releases and `channels/lts` / `channels/latest` work. |
@@ -128,6 +137,24 @@ when available) as defense in depth. The runtime reloads Hermes env files
 during gateway startup and records Tinyhat-managed terminal aliases for
 the saved names, so exec/shell subprocesses can use the secret without
 Tinyhat storing or returning the value.
+
+`tinyhat-slack` connects the existing Hermes agent to Slack without a public
+endpoint or SSH. `tinyhat_slack_connect` runs `hermes slack manifest
+--agent-view`, sends that JSON plus a highlighted create-from-manifest guide,
+and opens one encrypted Mini App form for the `xoxb-` bot token, `xapp-`
+Socket Mode token, and allowed Slack member IDs. The Computer validates those
+values against Slack, immediately acknowledges receipt in Telegram, saves them
+through Hermes' supported configuration interface, and sends an owner-DM
+greeting before reporting success. Failed attempts expose only a value-blind
+validation stage and stable error code on the Connections page. Hermes owns the
+WebSocket and every Slack message.
+The Computer opens a direct message with the first allowed member and saves
+that private chat locally as Hermes' Slack home channel, so cron results and
+cross-platform messages have a safe default without workspace-global slash
+commands.
+Before the JSON is sent, the plugin removes Hermes' slash-command definitions
+and the `commands` OAuth scope so multiple per-agent apps can coexist in the
+same workspace without command-name conflicts.
 
 `tinyhat-credentials` lists only the safe names, descriptions, and saved
 timestamps of credentials currently installed through the private-secret
@@ -325,7 +352,24 @@ auth and limit checks. It also routes stale-plugin reports through
 tools instead of arbitrary terminal commands. A small `pre_llm_call` hook
 injects only the short version of that context on first turn or when the
 user mentions secrets, credentials, Tinyhat, Codex auth, usage limits,
-skill lookup, plugin updates, or QA reports.
+skill lookup, plugin updates, QA reports, or privacy and data-access
+questions.
+
+`tinyhat-privacy` is the trust answer. When a user asks who can read
+their messages, whether Tinyhat staff or operators see logs or
+conversations, or how isolated their Computer is, the agent answers from
+the platform's real model instead of guessing: each user gets a dedicated
+isolated Computer, conversations and files are processed and stored on
+that Computer, and Tinyhat does not read customer Computers' contents as
+part of routine operations. Human access is limited to what the user
+affirmatively requests or permits, what is needed to investigate abuse,
+protect the service, or maintain security, and what is required by law —
+anything else would violate Tinyhat's own Terms and Privacy Policy
+(https://tinyhat.ai/privacy and https://tinyhat.ai/terms). The skill also
+keeps the answer honest without comparisons: Tinyloop operates the
+underlying infrastructure, so low-level technical access remains possible
+today, which is why the policy is binding and why Tinyhat is building
+private Computers designed to remove even that technical possibility.
 
 ## Installing
 
@@ -347,7 +391,7 @@ For development or manual testing, use `channels/latest` or an exact tag:
 
 ```bash
 TINYHAT_PLUGIN_REF=channels/latest
-TINYHAT_PLUGIN_REF=v0.21.7
+TINYHAT_PLUGIN_REF=vX.Y.Z
 ```
 
 ## Channels
@@ -356,12 +400,12 @@ TINYHAT_PLUGIN_REF=v0.21.7
 | --- | --- |
 | `channels/lts` | Conservative default for managed Computers. |
 | `channels/latest` | Newest promoted final version, used when we want faster adoption. |
-| exact tag, for example `v0.21.7` | Immutable version for tests, rollbacks, and audits. |
+| exact tag, for example `vX.Y.Z` | Immutable version for tests, rollbacks, and audits. |
 
-For v0.21.7, merge and tag the public plugin without advancing either channel.
-Deploy the platform that validates the same manifest contract, then promote
-`channels/latest` and `channels/lts`. This order prevents old Computers or an
-older platform from applying the superseded pending-review denial.
+For v0.21.12, deploy the platform that validates the same Slack and privacy
+contracts before promoting `channels/latest` and `channels/lts`. This order
+keeps older Computers and platform versions from applying incompatible
+connection or trust-model behavior.
 
 ## Local Checks
 

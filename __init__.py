@@ -77,6 +77,12 @@ def register(ctx: Any) -> None:
         handler=tools.private_secret_handoff,
     )
     ctx.register_tool(
+        name="tinyhat_slack_connect",
+        toolset="tinyhat",
+        schema=schemas.TINYHAT_SLACK_CONNECT_SCHEMA,
+        handler=tools.slack_connect,
+    )
+    ctx.register_tool(
         name="tinyhat_credentials",
         toolset="tinyhat",
         schema=schemas.TINYHAT_CREDENTIALS_SCHEMA,

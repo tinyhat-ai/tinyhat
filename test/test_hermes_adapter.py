@@ -40,6 +40,7 @@ from tinyhat import (  # noqa: E402
     schemas,
     secret_handoff,
     secret_handoff_worker,
+    slack_connection,
     tools,
 )
 
@@ -75,6 +76,7 @@ class HermesAdapterTests(unittest.TestCase):
         self.assertIn("tinyhat_tell_joke", ctx.tools)
         self.assertIn("tinyhat_skill_catalog", ctx.tools)
         self.assertIn("tinyhat_private_secret_handoff", ctx.tools)
+        self.assertIn("tinyhat_slack_connect", ctx.tools)
         self.assertIn("tinyhat_credentials", ctx.tools)
         self.assertIn("tinyhat_codex_auth", ctx.tools)
         self.assertIn("tinyhat_plugin_update", ctx.tools)
@@ -86,18 +88,22 @@ class HermesAdapterTests(unittest.TestCase):
         self.assertIn("tinyhat-tell-joke", ctx.skills)
         self.assertIn("tinyhat-skill-catalog", ctx.skills)
         self.assertIn("tinyhat-private-secret", ctx.skills)
+        self.assertIn("tinyhat-slack", ctx.skills)
         self.assertIn("tinyhat-credentials", ctx.skills)
         self.assertIn("tinyhat-codex-auth", ctx.skills)
         self.assertIn("tinyhat-plugin-update", ctx.skills)
         self.assertIn("tinyhat-platform", ctx.skills)
+        self.assertIn("tinyhat-privacy", ctx.skills)
         self.assertTrue(ctx.skills["tinyhat-plugin-version"].is_file())
         self.assertTrue(ctx.skills["tinyhat-tell-joke"].is_file())
         self.assertTrue(ctx.skills["tinyhat-skill-catalog"].is_file())
         self.assertTrue(ctx.skills["tinyhat-private-secret"].is_file())
+        self.assertTrue(ctx.skills["tinyhat-slack"].is_file())
         self.assertTrue(ctx.skills["tinyhat-credentials"].is_file())
         self.assertTrue(ctx.skills["tinyhat-codex-auth"].is_file())
         self.assertTrue(ctx.skills["tinyhat-plugin-update"].is_file())
         self.assertTrue(ctx.skills["tinyhat-platform"].is_file())
+        self.assertTrue(ctx.skills["tinyhat-privacy"].is_file())
 
     def test_registered_commands_match_telegram_dispatch_names(self) -> None:
         ctx = FakeHermesContext()
@@ -143,6 +149,10 @@ class HermesAdapterTests(unittest.TestCase):
         self.assertNotIn("secret_name", secret_schema["properties"])
         self.assertNotIn("env_var", secret_schema["properties"])
         self.assertNotIn("key_name", secret_schema["properties"])
+        slack_schema = schemas.TINYHAT_SLACK_CONNECT_SCHEMA
+        self.assertEqual(slack_schema["properties"], {})
+        self.assertEqual(slack_schema["required"], [])
+        self.assertFalse(slack_schema["additionalProperties"])
 
         credentials_schema = schemas.TINYHAT_CREDENTIALS_SCHEMA
         self.assertEqual(credentials_schema["required"], ["action"])
@@ -164,7 +174,7 @@ class HermesAdapterTests(unittest.TestCase):
 
         self.assertEqual(payload["schema"], "tinyhat_plugin_version_v1")
         self.assertEqual(payload["name"], "tinyhat")
-        self.assertEqual(payload["version"], "0.21.8")
+        self.assertEqual(payload["version"], "0.21.12")
 
     def test_platform_status_uses_attested_computer_endpoint(self) -> None:
         original_build = tools.build_platform_client
@@ -177,7 +187,7 @@ class HermesAdapterTests(unittest.TestCase):
                     "computer_id": 5359,
                     "state": "active",
                     "assigned": True,
-                    "package_inventory": {"plugin": {"version": "0.21.7"}},
+                    "package_inventory": {"plugin": {"version": "0.21.12"}},
                 }
 
         try:
@@ -190,7 +200,7 @@ class HermesAdapterTests(unittest.TestCase):
         self.assertEqual(payload["computer_id"], 5359)
         self.assertEqual(payload["state"], "active")
         self.assertTrue(payload["assigned"])
-        self.assertEqual(payload["package_inventory"]["plugin"]["version"], "0.21.7")
+        self.assertEqual(payload["package_inventory"]["plugin"]["version"], "0.21.12")
 
     def test_platform_status_returns_structured_platform_error(self) -> None:
         original_build = tools.build_platform_client
@@ -213,7 +223,7 @@ class HermesAdapterTests(unittest.TestCase):
 
         self.assertEqual(payload["schema"], "tinyhat_skill_catalog_v1")
         self.assertEqual(payload["plugin"]["name"], "tinyhat")
-        self.assertEqual(payload["plugin"]["version"], "0.21.8")
+        self.assertEqual(payload["plugin"]["version"], "0.21.12")
         by_name = {skill["name"]: skill for skill in payload["skills"]}
         self.assertEqual(
             by_name["tinyhat-codex-auth"]["qualified_name"],
@@ -224,6 +234,11 @@ class HermesAdapterTests(unittest.TestCase):
             by_name["tinyhat-plugin-update"]["qualified_name"],
             "tinyhat:tinyhat-plugin-update",
         )
+        self.assertEqual(
+            by_name["tinyhat-privacy"]["qualified_name"],
+            "tinyhat:tinyhat-privacy",
+        )
+        self.assertIn("tinyhat-privacy", by_name["tinyhat-privacy"]["aliases"])
         manager_purpose = by_name["tinyhat-google-workspace-app-manager"]["purpose"]
         self.assertIn("only the pinned Google Workspace CLI app", manager_purpose)
         self.assertIn("Hermes supplies the native operation skill", manager_purpose)
@@ -413,6 +428,7 @@ class HermesAdapterTests(unittest.TestCase):
         self.assertIsNotNone(injected)
         assert injected is not None
         self.assertIn("tinyhat_private_secret_handoff", injected["context"])
+        self.assertIn("tinyhat_slack_connect", injected["context"])
         self.assertIn("Do not ask the user to paste secrets", injected["context"])
         self.assertIn("/codex_auth", injected["context"])
         self.assertIn("tinyhat:tinyhat-codex-auth", injected["context"])
@@ -484,6 +500,131 @@ class HermesAdapterTests(unittest.TestCase):
         self.assertIsNotNone(injected)
         assert injected is not None
         self.assertIn("do not use terminal/curl just to post the text", injected["context"])
+
+    def test_context_hook_injects_for_privacy_questions(self) -> None:
+        examples = (
+            "Can the operators read my messages?",
+            "Who can see my chat history with you?",
+            "Do you keep logs of this conversation anywhere?",
+            "Is this chat monitored by tinyhat staff?",
+            "How is my data protected here?",
+            "Where is this conversation stored?",
+            "Can support staff view this chat?",
+            "Is anyone reading this conversation?",
+            "Are you recording our chat?",
+            "Can employees inspect my files?",
+            "آیا ادمین‌ها به پیام‌های من دسترسی دارن؟",
+            "آیا ادمین ها به پیامهای من دسترسی دارن؟",
+            "آيا كسی به پیامهای من دسترسی داره؟",
+            "حریم خصوصی من اینجا چطور حفظ میشه؟",
+            "کسی مکالمه‌های منو می‌خونه؟",
+            "حریم خصوصی؟",
+            "درباره حریم خصوصی، توضیح بده",
+            "پیام‌هامو می‌خونید؟",
+            "آیا مکالمه‌های من ضبط می‌شوند؟",
+            "آیا کسی پیام‌های من را می‌خواند؟",
+            "آیا شما پیام‌های من را می‌خوانید؟",
+        )
+        for user_message in examples:
+            with self.subTest(user_message=user_message):
+                injected = tinyhat_context.inject_tinyhat_context(
+                    user_message=user_message,
+                    is_first_turn=False,
+                )
+                self.assertIsNotNone(injected)
+                assert injected is not None
+                self.assertIn("tinyhat:tinyhat-privacy", injected["context"])
+                self.assertIn("dedicated Computer", injected["context"])
+                self.assertIn("routine operations", injected["context"])
+                self.assertIn("affirmatively requests or permits", injected["context"])
+                self.assertIn("https://tinyhat.ai/privacy", injected["context"])
+                self.assertIn("private Computers", injected["context"])
+
+    def test_context_hook_skips_generic_developer_terms(self) -> None:
+        examples = (
+            "Make this GitHub repository private",
+            "Please log the HTTP response",
+            "Review the security headers",
+            "I trust this certificate",
+            "Tail the application logs",
+            "Explain operator precedence",
+            "Please migrate my database",
+            "برای سایت یه بلاگ بنویس",
+            "Read the application logs",
+            "Look at this file",
+            "Store this file under /tmp",
+            "فایل رو ذخیره کن",
+            "فایل رو بخون",
+            "فایل رو ببین",
+            "Can you read this file?",
+            "Could you look at my logs?",
+            "پیام من را بخوان",
+            "Please look at my logs",
+            "Please read my messages",
+        )
+        for user_message in examples:
+            with self.subTest(user_message=user_message):
+                self.assertIsNone(
+                    tinyhat_context.inject_tinyhat_context(
+                        user_message=user_message,
+                        is_first_turn=False,
+                    )
+                )
+
+    def test_privacy_access_wording_is_policy_exact_everywhere(self) -> None:
+        fragments = (
+            "affirmatively requests or permits",
+            "protect the service, or maintain security",
+            "required by law",
+        )
+        files = (
+            REPO_ROOT / "skills" / "tinyhat-privacy" / "SKILL.md",
+            REPO_ROOT / "skills" / "tinyhat-platform" / "SKILL.md",
+            REPO_ROOT / "README.md",
+            REPO_ROOT / "docs" / "capabilities.md",
+            REPO_ROOT / "CHANGELOG.md",
+        )
+        for path in files:
+            text = " ".join(path.read_text(encoding="utf-8").split())
+            for fragment in fragments:
+                with self.subTest(path=path.name, fragment=fragment):
+                    self.assertIn(fragment, text)
+        for fragment in fragments:
+            with self.subTest(path="context.py", fragment=fragment):
+                self.assertIn(fragment, tinyhat_context.TINYHAT_CONTEXT)
+        skill_text = (REPO_ROOT / "skills" / "tinyhat-privacy" / "SKILL.md").read_text(
+            encoding="utf-8"
+        )
+        facts_and_example = skill_text.split("## Do Not")[0].lower()
+        for banned in ("like any hosted service", "like every hosted service"):
+            with self.subTest(banned=banned):
+                self.assertNotIn(banned, facts_and_example)
+                self.assertNotIn(banned, tinyhat_context.TINYHAT_CONTEXT.lower())
+
+    def test_privacy_skill_states_the_trust_model(self) -> None:
+        skill_md = REPO_ROOT / "skills" / "tinyhat-privacy" / "SKILL.md"
+        text = " ".join(skill_md.read_text(encoding="utf-8").split())
+
+        self.assertIn("dedicated Computer created for this user alone", text)
+        self.assertIn(
+            "Tinyhat does not read the contents of a customer's Computer",
+            text,
+        )
+        self.assertIn("routine operations", text)
+        self.assertIn("affirmatively requests or permits", text)
+        self.assertIn("protect the service, or maintain security", text)
+        self.assertIn("required by law", text)
+        self.assertIn(
+            "violate Tinyhat's own Terms of Service and Privacy Policy",
+            text,
+        )
+        self.assertIn("https://tinyhat.ai/privacy", text)
+        self.assertIn("https://tinyhat.ai/terms", text)
+        self.assertIn("privacy@tinyloop.co", text)
+        self.assertIn("private Computers", text)
+        self.assertIn("Do not claim access is technically impossible today", text)
+        self.assertIn("Do not name individual operators", text)
+        self.assertIn("Answer in the user's language", text)
 
     def test_codex_auth_skill_packages_prerequisite_screenshot(self) -> None:
         skill_md = REPO_ROOT / "skills" / "tinyhat-codex-auth" / "SKILL.md"
@@ -846,6 +987,696 @@ class HermesAdapterTests(unittest.TestCase):
 
         self.assertEqual(payload["schema"], "tinyhat_tell_joke_v1")
         self.assertIn("Hermes", payload["joke"])
+
+    def test_slack_connect_sends_hermes_agent_manifest_and_starts_worker(self) -> None:
+        class FakeClient:
+            def __init__(self) -> None:
+                self.path = ""
+                self.payload: dict = {}
+
+            def post_json(self, path: str, payload: dict) -> dict:
+                self.path = path
+                self.payload = payload
+                return {
+                    "handoff_id": "sh_slack",
+                    "status": "pending",
+                    "secret_name": "SLACK_CONNECTION",
+                    "handoff_kind": "slack_connection",
+                }
+
+        fake_client = FakeClient()
+        manifest = {
+            "features": {"agent_view": {"agent_description": "Hermes"}},
+            "settings": {"socket_mode_enabled": True},
+        }
+        worker_calls: list[tuple[dict, str]] = []
+        with (
+            mock.patch.object(
+                slack_connection,
+                "_generate_hermes_slack_manifest",
+                return_value=manifest,
+            ),
+            mock.patch.object(
+                slack_connection,
+                "_generate_key_pair",
+                return_value=("PRIVATE", "PUBLIC"),
+            ),
+            mock.patch.object(
+                slack_connection,
+                "build_platform_client",
+                return_value=(fake_client, "local_dev"),
+            ),
+            mock.patch.object(
+                slack_connection,
+                "_start_worker_process",
+                side_effect=lambda handoff, key: worker_calls.append((handoff, key)),
+            ),
+        ):
+            reply = tools.slack_connect({})
+
+        self.assertEqual(
+            fake_client.path,
+            "/hapi/v1/computers/local-dev/private-secret-handoffs/v1",
+        )
+        self.assertEqual(fake_client.payload["handoff_kind"], "slack_connection")
+        self.assertEqual(fake_client.payload["expires_in_seconds"], 30 * 60)
+        self.assertIs(fake_client.payload["slack_manifest"], manifest)
+        self.assertEqual(worker_calls[0][1], "PRIVATE")
+        self.assertIn("Hermes Agent-view manifest", reply)
+        self.assertIn("never sees the tokens or Slack messages", reply)
+
+    def test_slack_bundle_installs_connection_and_private_home_channel(self) -> None:
+        bot_token = "xoxb-" + "placeholder"
+        app_token = "xapp-" + "placeholder"
+        plaintext = json.dumps(
+            {
+                "schema": "tinyhat_slack_connection_bundle_v1",
+                "bot_token": bot_token,
+                "app_token": app_token,
+                "allowed_users": "U012ABCDEF",
+            }
+        )
+        saved: list[tuple[str, str]] = []
+        claims: list[dict] = []
+        slack_calls: list[tuple[str, dict]] = []
+        notices: list[str] = []
+        metadata = {
+            "provider": "slack",
+            "app_id": "A012ABCDEF",
+            "app_name": "Forecast Agent",
+            "workspace_id": "T012ABCDEF",
+            "workspace_name": "Tinyloop",
+            "allowed_user_count": 1,
+        }
+        with (
+            mock.patch.object(
+                slack_connection,
+                "_decrypt_ciphertext",
+                return_value=plaintext,
+            ),
+            mock.patch.object(
+                slack_connection,
+                "_validate_slack_credentials",
+                return_value=metadata,
+            ),
+            mock.patch.object(
+                slack_connection,
+                "_open_slack_home_channel",
+                return_value="D012ABCDEF",
+            ),
+            mock.patch.object(
+                slack_connection,
+                "_set_hermes_secret",
+                side_effect=lambda name, value: saved.append((name, value)),
+            ),
+            mock.patch.object(
+                slack_connection,
+                "_slack_api_call",
+                side_effect=lambda method, **kwargs: (
+                    slack_calls.append((method, kwargs)) or {"ok": True}
+                ),
+            ),
+            mock.patch.object(
+                slack_connection,
+                "_send_secret_notice",
+                side_effect=lambda text: notices.append(text),
+            ),
+            mock.patch.object(
+                slack_connection,
+                "_claim_handoff",
+                side_effect=lambda *args, **kwargs: claims.append(kwargs),
+            ),
+        ):
+            slack_connection.install_submitted_slack_connection(
+                client=object(),
+                platform_auth="local_dev",
+                handoff_id="sh_slack",
+                private_key_pem="PRIVATE",
+                state={"ciphertext_payload": {"algorithm": "RSA-OAEP-256"}},
+            )
+
+        self.assertEqual(
+            [name for name, _ in saved],
+            [
+                "SLACK_BOT_TOKEN",
+                "SLACK_APP_TOKEN",
+                "SLACK_ALLOWED_USERS",
+                "SLACK_HOME_CHANNEL",
+                "SLACK_HOME_CHANNEL_NAME",
+            ],
+        )
+        self.assertEqual(
+            saved[-2:],
+            [
+                ("SLACK_HOME_CHANNEL", "D012ABCDEF"),
+                ("SLACK_HOME_CHANNEL_NAME", "Owner DM"),
+            ],
+        )
+        self.assertEqual(
+            claims[0]["connection_metadata"],
+            {**metadata, "connection_status": "connected"},
+        )
+        self.assertEqual(
+            claims[0]["outcome"],
+            secret_handoff.HANDOFF_OUTCOME_RESTART_PENDING,
+        )
+        self.assertEqual(
+            slack_calls,
+            [
+                (
+                    "chat.postMessage",
+                    {
+                        "token": bot_token,
+                        "params": {
+                            "channel": "D012ABCDEF",
+                            "text": slack_connection.SLACK_WELCOME_MESSAGE,
+                        },
+                        "stage": "greeting",
+                    },
+                )
+            ],
+        )
+        self.assertIn("details were received", notices[0])
+        self.assertIn("welcome message was sent", notices[1])
+
+    def test_slack_failure_reports_stage_to_telegram_and_platform(self) -> None:
+        plaintext = json.dumps(
+            {
+                "schema": "tinyhat_slack_connection_bundle_v1",
+                "bot_token": "xoxb-placeholder",
+                "app_token": "xapp-placeholder",
+                "allowed_users": "U012ABCDEF",
+            }
+        )
+        claims: list[dict] = []
+        notices: list[str] = []
+        failure = slack_connection.SlackConnectionError(
+            "Slack rejected users.info: user_not_found.",
+            stage="member_lookup",
+            code="user_not_found",
+            public_message=(
+                "Slack could not find an allowed member ID. Copy it from the "
+                "member profile and retry."
+            ),
+        )
+        with (
+            mock.patch.object(
+                slack_connection,
+                "_decrypt_ciphertext",
+                return_value=plaintext,
+            ),
+            mock.patch.object(
+                slack_connection,
+                "_validate_slack_credentials",
+                side_effect=failure,
+            ),
+            mock.patch.object(
+                slack_connection,
+                "_send_secret_notice",
+                side_effect=lambda text: notices.append(text),
+            ),
+            mock.patch.object(
+                slack_connection,
+                "_claim_handoff",
+                side_effect=lambda *args, **kwargs: claims.append(kwargs),
+            ),
+            mock.patch.object(
+                slack_connection,
+                "_set_hermes_secret",
+                side_effect=AssertionError("must not save failed details"),
+            ),
+        ):
+            slack_connection.install_submitted_slack_connection(
+                client=object(),
+                platform_auth="local_dev",
+                handoff_id="sh_slack",
+                private_key_pem="PRIVATE",
+                state={"ciphertext_payload": {"algorithm": "RSA-OAEP-256"}},
+            )
+
+        self.assertIn("details were received", notices[0])
+        self.assertIn("allowed-member validation", notices[1])
+        self.assertEqual(claims[0]["installed"], False)
+        self.assertEqual(
+            claims[0]["connection_metadata"],
+            {
+                "provider": "slack",
+                "connection_status": "failed",
+                "failure_stage": "member_lookup",
+                "failure_code": "user_not_found",
+            },
+        )
+
+    def test_slack_greeting_failure_is_not_reported_as_connected(self) -> None:
+        plaintext = json.dumps(
+            {
+                "schema": "tinyhat_slack_connection_bundle_v1",
+                "bot_token": "xoxb-placeholder",
+                "app_token": "xapp-placeholder",
+                "allowed_users": "U012ABCDEF",
+            }
+        )
+        metadata = {
+            "provider": "slack",
+            "app_id": "A012ABCDEF",
+            "app_name": "Forecast Agent",
+            "workspace_id": "T012ABCDEF",
+            "workspace_name": "Tinyloop",
+            "allowed_user_count": 1,
+        }
+        claims: list[dict] = []
+        notices: list[str] = []
+        greeting_failure = slack_connection.SlackConnectionError(
+            "Slack rejected chat.postMessage: missing_scope.",
+            stage="greeting",
+            code="missing_scope",
+            public_message=(
+                "The Slack app is missing a required permission. "
+                "Reinstall it and retry."
+            ),
+        )
+        with (
+            mock.patch.object(
+                slack_connection,
+                "_decrypt_ciphertext",
+                return_value=plaintext,
+            ),
+            mock.patch.object(
+                slack_connection,
+                "_validate_slack_credentials",
+                return_value=metadata,
+            ),
+            mock.patch.object(
+                slack_connection,
+                "_open_slack_home_channel",
+                return_value="D012ABCDEF",
+            ),
+            mock.patch.object(slack_connection, "_set_hermes_secret"),
+            mock.patch.object(
+                slack_connection,
+                "_slack_api_call",
+                side_effect=greeting_failure,
+            ),
+            mock.patch.object(
+                slack_connection,
+                "_send_secret_notice",
+                side_effect=lambda text: notices.append(text),
+            ),
+            mock.patch.object(
+                slack_connection,
+                "_claim_handoff",
+                side_effect=lambda *args, **kwargs: claims.append(kwargs),
+            ),
+        ):
+            slack_connection.install_submitted_slack_connection(
+                client=object(),
+                platform_auth="local_dev",
+                handoff_id="sh_slack",
+                private_key_pem="PRIVATE",
+                state={"ciphertext_payload": {"algorithm": "RSA-OAEP-256"}},
+            )
+
+        self.assertNotIn(True, [claim["installed"] for claim in claims])
+        self.assertEqual(claims[0]["installed"], False)
+        self.assertEqual(
+            claims[0]["connection_metadata"],
+            {
+                "provider": "slack",
+                "app_id": "A012ABCDEF",
+                "app_name": "Forecast Agent",
+                "workspace_id": "T012ABCDEF",
+                "workspace_name": "Tinyloop",
+                "connection_status": "failed",
+                "failure_stage": "greeting",
+                "failure_code": "missing_scope",
+            },
+        )
+        self.assertIn("welcome-message delivery", notices[-1])
+
+    def test_slack_failure_claim_retries_without_metadata_for_old_platform(
+        self,
+    ) -> None:
+        plaintext = json.dumps(
+            {
+                "schema": "tinyhat_slack_connection_bundle_v1",
+                "bot_token": "xoxb-placeholder",
+                "app_token": "xapp-placeholder",
+                "allowed_users": "U012ABCDEF",
+            }
+        )
+        failure = slack_connection.SlackConnectionError(
+            "Slack rejected auth.test: invalid_auth.",
+            stage="bot_auth",
+            code="invalid_auth",
+            public_message=(
+                "Slack did not accept the bot token. Copy the xoxb token and retry."
+            ),
+        )
+        claims: list[dict] = []
+
+        def fake_claim(*_args, **kwargs):
+            claims.append(kwargs)
+            if len(claims) == 1:
+                raise RuntimeError("old platform rejected failure metadata")
+
+        with (
+            mock.patch.object(
+                slack_connection,
+                "_decrypt_ciphertext",
+                return_value=plaintext,
+            ),
+            mock.patch.object(
+                slack_connection,
+                "_validate_slack_credentials",
+                side_effect=failure,
+            ),
+            mock.patch.object(slack_connection, "_send_secret_notice"),
+            mock.patch.object(
+                slack_connection,
+                "_claim_handoff",
+                side_effect=fake_claim,
+            ),
+        ):
+            slack_connection.install_submitted_slack_connection(
+                client=object(),
+                platform_auth="local_dev",
+                handoff_id="sh_slack",
+                private_key_pem="PRIVATE",
+                state={"ciphertext_payload": {"algorithm": "RSA-OAEP-256"}},
+            )
+
+        self.assertEqual(len(claims), 2)
+        self.assertEqual(claims[0]["installed"], False)
+        self.assertEqual(
+            claims[0]["connection_metadata"]["failure_code"],
+            "invalid_auth",
+        )
+        self.assertEqual(
+            claims[1],
+            {
+                "installed": False,
+                "message": (
+                    "Slack did not accept the bot token. "
+                    "Copy the xoxb token and retry."
+                ),
+            },
+        )
+
+    def test_slack_bundle_parser_rejects_schema_and_token_prefixes(self) -> None:
+        cases = (
+            (
+                {"schema": "wrong", "bot_token": "xoxb-ok", "app_token": "xapp-ok"},
+                "schema",
+            ),
+            (
+                {
+                    "schema": "tinyhat_slack_connection_bundle_v1",
+                    "bot_token": "xoxp-wrong",
+                    "app_token": "xapp-ok",
+                    "allowed_users": "U012ABCDEF",
+                },
+                "bot token",
+            ),
+            (
+                {
+                    "schema": "tinyhat_slack_connection_bundle_v1",
+                    "bot_token": "xoxb-ok",
+                    "app_token": "xoxb-wrong",
+                    "allowed_users": "U012ABCDEF",
+                },
+                "app token",
+            ),
+        )
+        for payload, message in cases:
+            with self.subTest(message=message), self.assertRaisesRegex(
+                secret_handoff.SecretHandoffError,
+                message,
+            ):
+                slack_connection._parse_connection_bundle(json.dumps(payload))
+
+    def test_slack_allowed_users_are_normalized_deduplicated_and_bounded(self) -> None:
+        self.assertEqual(
+            slack_connection._normalize_allowed_users(" u012abcdef, U012ABCDEF, w012abcdef "),
+            "U012ABCDEF,W012ABCDEF",
+        )
+        for value in (
+            "",
+            "not-a-member-id",
+            ",".join(f"U{i:09d}" for i in range(101)),
+        ):
+            with self.subTest(value=value[:40]), self.assertRaisesRegex(
+                secret_handoff.SecretHandoffError,
+                "member IDs",
+            ):
+                slack_connection._normalize_allowed_users(value)
+
+    def test_slack_home_channel_uses_first_allowed_member_dm(self) -> None:
+        calls: list[tuple[str, dict[str, object]]] = []
+
+        def fake_slack_call(method: str, **kwargs):
+            calls.append((method, kwargs))
+            return {"channel": {"id": "d012abcdef"}}
+
+        with mock.patch.object(
+            slack_connection,
+            "_slack_api_call",
+            side_effect=fake_slack_call,
+        ):
+            channel_id = slack_connection._open_slack_home_channel(
+                {
+                    "bot_token": "xoxb-placeholder",
+                    "allowed_users": "U012ABCDEF,U999ABCDEF",
+                }
+            )
+
+        self.assertEqual(channel_id, "D012ABCDEF")
+        self.assertEqual(
+            calls,
+            [
+                (
+                    "conversations.open",
+                    {
+                        "token": "xoxb-placeholder",
+                        "params": {"users": "U012ABCDEF"},
+                        "stage": "owner_dm",
+                    },
+                )
+            ],
+        )
+
+    def test_slack_home_channel_rejects_missing_dm_id(self) -> None:
+        with (
+            mock.patch.object(
+                slack_connection,
+                "_slack_api_call",
+                return_value={"channel": {}},
+            ),
+            self.assertRaisesRegex(
+                secret_handoff.SecretHandoffError,
+                "direct-message channel",
+            ),
+        ):
+            slack_connection._open_slack_home_channel(
+                {
+                    "bot_token": "xoxb-placeholder",
+                    "allowed_users": "U012ABCDEF",
+                }
+            )
+
+    def test_slack_validation_uses_bot_then_profile_app_id_fallbacks(self) -> None:
+        bundle = {
+            "bot_token": "xoxb-placeholder",
+            "app_token": "xapp-placeholder",
+            "allowed_users": "U012ABCDEF",
+        }
+
+        def bot_fallback(method: str, **kwargs):
+            if method == "auth.test":
+                return {
+                    "team_id": "T012ABCDEF",
+                    "team": "Tinyloop",
+                    "bot_id": "B012ABCDEF",
+                }
+            if method == "bots.info":
+                return {
+                    "bot": {
+                        "app_id": "A012ABCDEF",
+                        "name": "The Forecaster",
+                    }
+                }
+            return {"ok": True}
+
+        with mock.patch.object(
+            slack_connection,
+            "_slack_api_call",
+            side_effect=bot_fallback,
+        ):
+            metadata = slack_connection._validate_slack_credentials(bundle)
+        self.assertEqual(metadata["app_id"], "A012ABCDEF")
+        self.assertEqual(metadata["app_name"], "The Forecaster")
+
+        def profile_fallback(method: str, **kwargs):
+            if method == "auth.test":
+                return {
+                    "team_id": "T012ABCDEF",
+                    "team": "Tinyloop",
+                    "user_id": "U999ABCDEF",
+                }
+            if method == "users.info" and kwargs.get("params", {}).get("user") == "U999ABCDEF":
+                return {"user": {"profile": {"api_app_id": "A999ABCDEF"}}}
+            return {"ok": True}
+
+        with mock.patch.object(
+            slack_connection,
+            "_slack_api_call",
+            side_effect=profile_fallback,
+        ):
+            metadata = slack_connection._validate_slack_credentials(bundle)
+        self.assertEqual(metadata["app_id"], "A999ABCDEF")
+
+    def test_slack_api_call_maps_transport_and_slack_errors(self) -> None:
+        with (
+            mock.patch.object(
+                slack_connection.request,
+                "urlopen",
+                side_effect=error.URLError("offline"),
+            ),
+            self.assertRaises(slack_connection.SlackConnectionError) as raised,
+        ):
+            slack_connection._slack_api_call(
+                "conversations.open",
+                token="xoxb-placeholder",
+                stage="owner_dm",
+            )
+        self.assertEqual(raised.exception.stage, "owner_dm")
+        self.assertEqual(raised.exception.code, "network_error")
+        self.assertIn("could not be reached", raised.exception.public_message)
+
+        cases = (
+            ("invalid_auth", "bot_auth", "invalid_auth"),
+            ("not_allowed_token_type", "socket_mode", "not_allowed_token_type"),
+            ("missing_scope", "bot_auth", "missing_scope"),
+            ("user_not_found", "member_lookup", "user_not_found"),
+            ("cannot_dm_user", "owner_dm", "cannot_dm_user"),
+            ("ratelimited", "owner_dm", "slack_rejected"),
+        )
+        for provider_code, stage, expected_code in cases:
+            response = mock.MagicMock()
+            response.__enter__.return_value.read.return_value = json.dumps(
+                {"ok": False, "error": provider_code}
+            ).encode()
+            with (
+                self.subTest(provider_code=provider_code),
+                mock.patch.object(
+                    slack_connection.request,
+                    "urlopen",
+                    return_value=response,
+                ),
+                self.assertRaises(
+                    slack_connection.SlackConnectionError
+                ) as raised,
+            ):
+                slack_connection._slack_api_call(
+                    "auth.test",
+                    token="xoxb-placeholder",
+                    stage=stage,
+                )
+            self.assertEqual(raised.exception.stage, stage)
+            self.assertEqual(raised.exception.code, expected_code)
+
+    def test_slack_manifest_error_keeps_redaction_safe_stderr_tail(self) -> None:
+        completed = subprocess.CompletedProcess(
+            args=["hermes"],
+            returncode=2,
+            stdout="",
+            stderr="manifest flag is unavailable",
+        )
+        with (
+            mock.patch.object(slack_connection.shutil, "which", return_value="/bin/hermes"),
+            mock.patch.object(slack_connection.subprocess, "run", return_value=completed),
+            self.assertRaisesRegex(
+                secret_handoff.SecretHandoffError,
+                "manifest flag is unavailable",
+            ),
+        ):
+            slack_connection._generate_hermes_slack_manifest()
+
+    def test_slack_manifest_removes_workspace_global_slash_commands(self) -> None:
+        completed = subprocess.CompletedProcess(
+            args=["hermes"],
+            returncode=0,
+            stdout=json.dumps(
+                {
+                    "features": {
+                        "agent_view": {"agent_description": "Hermes"},
+                        "slash_commands": [
+                            {"command": "/hermes"},
+                            {"command": "/model"},
+                        ],
+                    },
+                    "oauth_config": {
+                        "scopes": {
+                            "bot": [
+                                "assistant:write",
+                                "chat:write",
+                                "commands",
+                                "users:read",
+                            ]
+                        }
+                    },
+                    "settings": {"socket_mode_enabled": True},
+                }
+            ),
+            stderr="",
+        )
+        with (
+            mock.patch.object(slack_connection.shutil, "which", return_value="/bin/hermes"),
+            mock.patch.object(slack_connection.subprocess, "run", return_value=completed),
+        ):
+            manifest = slack_connection._generate_hermes_slack_manifest()
+
+        self.assertNotIn("slash_commands", manifest["features"])
+        self.assertEqual(
+            manifest["oauth_config"]["scopes"]["bot"],
+            ["assistant:write", "chat:write", "users:read"],
+        )
+
+    def test_generic_secret_flow_refuses_reserved_slack_connection_values(self) -> None:
+        for name in secret_handoff.RESERVED_SLACK_CONNECTION_NAMES:
+            with self.subTest(name=name):
+                payload = json.loads(
+                    secret_handoff.start_private_secret_handoff(
+                        {
+                            "name": name,
+                            "description": "Slack connection value.",
+                        }
+                    )
+                )
+                self.assertEqual(payload["error"], "slack_connection_required")
+                self.assertIn("tinyhat_slack_connect", payload["message"])
+
+    def test_generic_installer_refuses_slack_bundle_name_under_version_skew(self) -> None:
+        with (
+            mock.patch.object(
+                secret_handoff,
+                "_decrypt_ciphertext",
+                side_effect=AssertionError("must reject before decrypting"),
+            ),
+            self.assertRaisesRegex(
+                secret_handoff.SecretHandoffError,
+                "Reserved Slack connection",
+            ),
+        ):
+            secret_handoff._install_submitted_secret(
+                client=object(),
+                platform_auth="local_dev",
+                handoff_id="sh_slack",
+                private_key_pem="PRIVATE",
+                state={
+                    "secret_name": "SLACK_CONNECTION",
+                    "ciphertext_payload": {"algorithm": "RSA-OAEP-256"},
+                },
+            )
 
     def test_private_secret_handoff_missing_params_error_is_actionable(self) -> None:
         payload = json.loads(tools.private_secret_handoff({}))
@@ -1286,6 +2117,7 @@ class HermesAdapterTests(unittest.TestCase):
                     key_path=key_path,
                     package_dir=package_dir,
                     env=env,
+                    expires_in_seconds=30 * 60,
                 )
             finally:
                 secret_handoff.shutil.which = original_which
@@ -1299,8 +2131,8 @@ class HermesAdapterTests(unittest.TestCase):
         self.assertIn("--setenv=TINYHAT_HERMES_HOME=/home/tinyhat/.hermes", args)
         self.assertIn("--setenv=TINYHAT_PLATFORM_URL=http://localhost:8000", args)
         self.assertIn("--setenv=TINYHAT_LOCAL_DEV_TOKEN=dev-token", args)
-        self.assertEqual(args[-4], "--handoff-id")
-        self.assertEqual(args[-3], "sh_test")
+        self.assertIn("--expires-in-seconds", args)
+        self.assertIn(str(30 * 60), args)
 
     def test_private_secret_worker_systemd_failure_falls_back_to_popen(self) -> None:
         original_which = secret_handoff.shutil.which
@@ -1335,7 +2167,10 @@ class HermesAdapterTests(unittest.TestCase):
                 stderr = io.StringIO()
                 with contextlib.redirect_stderr(stderr):
                     secret_handoff._start_worker_process(
-                        {"handoff_id": "sh_test"},
+                        {
+                            "handoff_id": "sh_test",
+                            "entry_window_seconds": 30 * 60,
+                        },
                         "PRIVATE",
                     )
             finally:
@@ -1351,8 +2186,37 @@ class HermesAdapterTests(unittest.TestCase):
         self.assertTrue(str(worker_args[1]).endswith("secret_handoff_worker.py"))
         self.assertIn("--handoff-id", worker_args)
         self.assertIn("sh_test", worker_args)
+        self.assertIn("--expires-in-seconds", worker_args)
+        self.assertIn(str(30 * 60), worker_args)
         self.assertIn("falling back to a detached process", stderr.getvalue())
         self.assertIn("Failed to start transient service unit", stderr.getvalue())
+
+    def test_private_secret_worker_uses_platform_entry_window(self) -> None:
+        with (
+            tempfile.TemporaryDirectory() as tmp,
+            mock.patch.object(
+                secret_handoff,
+                "STATE_DIR",
+                Path(tmp) / "handoffs",
+            ),
+            mock.patch.object(
+                secret_handoff,
+                "_start_worker_with_systemd",
+                return_value=True,
+            ) as start_worker,
+        ):
+            secret_handoff._start_worker_process(
+                {
+                    "handoff_id": "sh_slack",
+                    "entry_window_seconds": 30 * 60,
+                },
+                "PRIVATE",
+            )
+
+        self.assertEqual(
+            start_worker.call_args.kwargs["expires_in_seconds"],
+            30 * 60,
+        )
 
     def test_private_secret_save_ignores_worker_reload_failure(self) -> None:
         original_which = secret_handoff.shutil.which
@@ -1377,6 +2241,93 @@ class HermesAdapterTests(unittest.TestCase):
 
         self.assertEqual(calls[0]["args"][:3], ["/usr/bin/hermes", "config", "set"])
         self.assertEqual(calls[0]["redactions"], ("super-secret-value",))
+
+    def test_hermes_python_executable_prefers_production_wrapper_venv(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            bin_dir = root / "usr" / "local" / "bin"
+            project_dir = root / "usr" / "local" / "lib" / "hermes-agent"
+            wrapper = bin_dir / "hermes"
+            runtime_python = project_dir / "venv" / "bin" / "python"
+            unrelated_python = bin_dir / "python3"
+            runtime_python.parent.mkdir(parents=True)
+            bin_dir.mkdir(parents=True)
+            runtime_python.touch()
+            unrelated_python.touch()
+            wrapper.write_text(
+                "#!/bin/sh\n"
+                f'exec "{runtime_python}" -m hermes_cli.main "$@"\n',
+                encoding="utf-8",
+            )
+
+            with mock.patch.object(
+                secret_handoff,
+                "_python_can_import_hermes_cli",
+                return_value=True,
+            ) as probe:
+                resolved = secret_handoff._hermes_python_executable(str(wrapper))
+
+        self.assertEqual(resolved, str(runtime_python))
+        probe.assert_called_once_with(runtime_python)
+
+    def test_hermes_python_executable_uses_explicit_project_venv(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            wrapper = root / "bin" / "hermes"
+            project_dir = root / "hermes-agent"
+            runtime_python = project_dir / "venv" / "bin" / "python"
+            wrapper.parent.mkdir(parents=True)
+            runtime_python.parent.mkdir(parents=True)
+            wrapper.write_text("#!/bin/sh\nexit 0\n", encoding="utf-8")
+            runtime_python.touch()
+
+            with (
+                mock.patch.dict(
+                    os.environ,
+                    {"HERMES_PROJECT_DIR": str(project_dir)},
+                ),
+                mock.patch.object(
+                    secret_handoff,
+                    "_python_can_import_hermes_cli",
+                    return_value=True,
+                ) as probe,
+            ):
+                resolved = secret_handoff._hermes_python_executable(str(wrapper))
+
+        self.assertEqual(resolved, str(runtime_python))
+        probe.assert_called_once_with(runtime_python)
+
+    def test_save_hermes_env_value_uses_runtime_python_and_stdin(self) -> None:
+        calls: list[dict[str, object]] = []
+        runtime_python = "/opt/hermes-agent/venv/bin/python"
+        allowed_users = "U0123456789"
+
+        with (
+            mock.patch.object(
+                secret_handoff,
+                "_hermes_python_executable",
+                return_value=runtime_python,
+            ),
+            mock.patch.object(
+                secret_handoff,
+                "_run",
+                side_effect=lambda args, **kwargs: calls.append(
+                    {"args": args, **kwargs}
+                ),
+            ),
+        ):
+            secret_handoff._save_hermes_env_value(
+                "/usr/local/bin/hermes",
+                "SLACK_ALLOWED_USERS",
+                allowed_users,
+            )
+
+        self.assertEqual(calls[0]["args"][0], runtime_python)
+        self.assertEqual(calls[0]["args"][1], "-c")
+        self.assertEqual(calls[0]["args"][-1], "SLACK_ALLOWED_USERS")
+        self.assertEqual(calls[0]["input_text"], allowed_users)
+        self.assertEqual(calls[0]["redactions"], (allowed_users,))
+        self.assertNotIn(allowed_users, calls[0]["args"])
 
     def test_register_terminal_env_secret_calls_runtime_module(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:

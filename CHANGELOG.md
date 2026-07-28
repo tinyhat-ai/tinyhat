@@ -6,6 +6,46 @@ All notable changes to the Tinyhat plugin are documented here.
 
 ### Changed
 
+- Bump the Hermes plugin package to `0.21.12`; acknowledge encrypted Slack
+  detail receipt immediately in Telegram, report value-blind validation stages
+  and stable error codes to the platform, and require a successful owner-DM
+  welcome message before the connection is marked ready.
+- Add the `tinyhat:tinyhat-privacy`
+  skill and widen the `pre_llm_call` context so agents answer privacy and
+  data-access questions from the platform's real trust model instead of
+  guessing: each user gets a dedicated isolated Computer, conversations and
+  files are processed and stored on that Computer, and Tinyhat does not read
+  customer Computers' contents as part of routine operations — human access is
+  limited to what the user affirmatively requests or permits, what is needed
+  to investigate abuse, protect the service, or maintain security, and what
+  is required by law; anything else would violate Tinyhat's own Terms and
+  Privacy Policy (https://tinyhat.ai/terms, https://tinyhat.ai/privacy).
+  The skill keeps answers honest without comparisons (Tinyloop operates the
+  underlying infrastructure, so low-level technical access remains possible
+  today; private Computers are the direction that removes it) and forbids
+  speculating about named operators, enumerating internal access paths, or
+  claiming which internal dashboards or tools exist. Privacy routing is a
+  dedicated bilingual matcher: word-boundary phrases plus a bounded
+  subject+access rule in English and Persian, with Persian spelling
+  canonicalization (zero-width joiners, Arabic letter forms) — generic
+  developer wording such as "tail the application logs", "operator
+  precedence", "my database", or Persian "بلاگ" does not inject on its own.
+  Promotion gate: merge only after the matching Computer-wide access
+  commitments are live on https://tinyhat.ai/privacy and
+  https://tinyhat.ai/terms, re-verify those live pages, and only then
+  promote `channels/lts` and `channels/latest`.
+- Add `tinyhat_slack_connect`. The tool generates Hermes' current Slack
+  Agent-view manifest, removes its workspace-global slash commands and the
+  exact `commands` bot scope, sends the create-from-manifest guide in Telegram,
+  accepts the bot token, Socket Mode app token, and allowed member IDs as one
+  browser-encrypted bundle, validates and saves them on the Computer, and
+  leaves all Slack message handling to Hermes over Socket Mode. Direct env
+  writes resolve and verify Hermes' real Python runtime from its launcher or
+  project venv instead of accepting an unrelated system Python executable.
+  Detached handoff workers now also honor the platform's entry window, so the
+  Slack worker remains available for the advertised 30-minute setup period.
+  The Computer now opens the first allowed member's DM and saves it locally as
+  Hermes' Slack home channel, avoiding an unusable slash-command prompt.
 - Bump the Hermes plugin package to `0.21.8`; add `tinyhat_credentials` and
   `tinyhat:tinyhat-credentials` for value-blind name/description discovery and
   expiring two-stage Telegram removal. Confirmed deletion is executed by the

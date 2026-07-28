@@ -9,11 +9,13 @@ The current capability list is intentionally small.
 | `tinyhat_tell_joke` | Available now | Proves Hermes loaded the Tinyhat plugin and can call a plugin tool. |
 | `tinyhat_skill_catalog` | Available now | Lists Tinyhat plugin skills with `tinyhat:<skill>` qualified names and unqualified aliases. |
 | `tinyhat_private_secret_handoff` | Available now | Lets a user enter a secret in a Telegram Mini App while Tinyhat stores only short-lived ciphertext. |
+| `tinyhat_slack_connect` | Available now | Sends Hermes' current Agent-view manifest and transfers the Slack bot token, Socket Mode app token, and allowed member IDs as one browser-encrypted Computer-local bundle. |
 | `tinyhat_google_workspace` | Available now | Connects Google identity, composes implemented access presets and requestable Custom scopes, lets Google handle its pending-verification warning, blocks unimplemented requests before OAuth, and starts an account-targeted local disconnect ceremony. |
 | `tinyhat_google_workspace_app` | Available now | Lends one selected account's assignment-verified Google access to one bounded `gws` invocation. |
 | `tinyhat_google_workspace_app_manager` | Available now | After approval, installs or removes the pinned integrity-verified `gws` app; Hermes supplies the operation skill. |
 | `tinyhat-codex-auth` skill | Available now | Teaches the agent to start and inspect the Tinyhat-installed OpenAI Codex / ChatGPT subscription auth flow. |
 | `tinyhat_plugin_update` | Available now | Checks and applies the configured plugin channel through installed runtime commands. |
+| `tinyhat-privacy` skill | Available now | Teaches the agent Tinyhat's privacy and trust model: dedicated isolated Computers, no routine platform reading of Computer contents, policy-bound human access, and the private-Computer direction. |
 | `pre_llm_call` context | Available now | Gives Hermes a short Tinyhat operating reminder on first turn and Tinyhat-sensitive requests. |
 
 Each capability should be visible in this document, represented by a small
@@ -34,7 +36,35 @@ After save, the worker reports the install to the platform with
 one-shot gateway restart and sends the final ready-or-failed confirmation
 after that restart settles. The worker never restarts the gateway itself.
 
-To find or remove one of these new value-blind credentials, load
+## Slack
+
+The agent calls `tinyhat_slack_connect` once. The tool sends the current
+Hermes-generated Agent-view manifest, a highlighted Slack app-creation guide,
+and a secure Mini App button. The browser encrypts the two Slack tokens and the
+allowed member IDs together for the Computer. The Computer validates them
+directly with Slack, acknowledges receipt in Telegram, saves them through
+Hermes, and sends an owner-DM greeting before reporting success. Failed
+attempts report a value-blind validation stage and stable error code; both
+failures and validated app/workspace metadata appear on the Connections page.
+Hermes then connects through Socket Mode; Tinyhat has no public Slack ingress
+and never receives Slack messages.
+The Computer opens the first allowed member's direct message and saves its
+channel ID locally as Hermes' Slack home channel. That gives cron results and
+cross-platform deliveries a private default without exposing the channel ID
+to Tinyhat.
+Before delivery, the plugin removes slash-command definitions and the
+`commands` OAuth scope from Hermes' manifest. Slack command names are
+workspace-global, so per-agent commands would collide when more than one
+Hermes agent is connected to the same workspace.
+
+Slack is a bundled provider connection. Its metadata row and the names
+`SLACK_CONNECTION`, `SLACK_BOT_TOKEN`, `SLACK_APP_TOKEN`, and
+`SLACK_ALLOWED_USERS` are excluded from generic secret entry/removal. A managed
+Slack disconnect ceremony is not part of this release; the agent must not use
+`tinyhat_credentials` or claim that removing one env value disconnected the
+app.
+
+To find or remove a generic value-blind credential, load
 `tinyhat:tinyhat-credentials` and call `tinyhat_credentials`. Search returns
 only safe name and description metadata. Removal is bound to the exact handoff
 generation and requires the platform's expiring Telegram confirmation before
@@ -45,12 +75,33 @@ deletes its metadata only after the Computer proves the local name is absent.
 
 The plugin injects a short context note when the user asks about secrets,
 credentials, Tinyhat, Codex auth, usage limits, plugin updates, skill
-lookup, QA reports, or on the first turn of a session. The context tells
+lookup, QA reports, privacy or data access, or on the first turn of a
+session. The context tells
 the agent to prefer Tinyhat private secret entry for credentials,
-Tinyhat's installed Codex commands for OpenAI Codex auth, identity-only bare
+Tinyhat's installed Codex commands for OpenAI Codex auth, the Hermes-owned
+Slack connection flow, identity-only bare
 Google connect, implemented Google access presets, the plugin catalog for missing
 skill lookup, and runtime channel commands for stale installed plugins. The longer playbook lives in
 `skills/tinyhat-platform/SKILL.md`.
+
+## Privacy And Trust
+
+When a user asks who can read their messages or files, whether Tinyhat
+staff or operators see logs or conversations, or how isolated their
+Computer is, the agent loads `tinyhat:tinyhat-privacy` and answers from
+the platform's real trust model: each user gets a dedicated isolated
+Computer, conversations and files are processed and stored on that
+Computer, and Tinyhat does not read customer Computers' contents as part
+of routine operations. Human access is limited to what the user
+affirmatively requests or permits, what is needed to investigate abuse,
+protect the service, or maintain security, and what is required by law;
+anything else would violate Tinyhat's Terms and Privacy Policy. The skill
+requires an honest, comparison-free caveat — Tinyloop operates the
+underlying infrastructure, so low-level technical access remains possible
+today — and names the direction that removes it: private Computers. It
+forbids speculating about named operators, enumerating internal access
+tools or claiming which internal dashboards exist, and deflecting with
+comparisons to other platforms.
 
 ## Google Workspace
 
