@@ -583,6 +583,10 @@ class HermesAdapterTests(unittest.TestCase):
             "What are your prices?",
             "What are your rates?",
             "What are your fees?",
+            "Can you tell me your prices?",
+            "Could you explain your rates?",
+            "Would you show me your fees?",
+            "Check my balance?",
         )
         for user_message in examples:
             with self.subTest(user_message=user_message):
@@ -801,6 +805,28 @@ class HermesAdapterTests(unittest.TestCase):
         self.assertLess(len(first["context"]), 10_000)
         self.assertIn("do not use terminal/curl", first["context"])
 
+    def test_onboarding_turn_keeps_privacy_bullet_for_modal_wordings(
+        self,
+    ) -> None:
+        # "privacy" is owner-ranked, and a modal inquiry wrapper ("can
+        # you tell me ...") is a question about access, not a work
+        # request — both first-turn phrasings must keep the trust-model
+        # bullet.
+        for user_message in (
+            "Could you explain Tinyhat's privacy policy?",
+            "Can you tell me who can read my messages?",
+        ):
+            with self.subTest(user_message=user_message):
+                first = tinyhat_context.inject_tinyhat_context(
+                    user_message=user_message,
+                    is_first_turn=True,
+                )
+                assert first is not None
+                self.assertLess(len(first["context"]), 10_000)
+                self.assertIn("tinyhat:tinyhat-privacy", first["context"])
+                self.assertIn("https://tinyhat.ai/privacy", first["context"])
+                self._reset_funding_marker()
+
     def test_onboarding_turn_maps_privacy_terms_to_privacy_bullet(self) -> None:
         # gdpr / surveillance route through the generic term table but
         # appear nowhere in the privacy bullet text; the term hints must
@@ -912,6 +938,16 @@ class HermesAdapterTests(unittest.TestCase):
             "Can you show who pays for each invoice in this CSV?",
             "Could you look for free to use in the README?",
             "Could you list projects funded by NASA?",
+            "Check my balance factor in this AVL tree?",
+            "Show who pays for each invoice in this CSV?",
+            "Look for free to use in the README?",
+            "List projects funded by NASA?",
+            "Can you rename how_much_do_you_cost?",
+            "Could you add a test named is_it_free?",
+            'Could you search for "how much do you cost" in README.md?',
+            "Rename your_prices to price_list",
+            "Sort your_rates before rendering",
+            "Serialize your_fees as JSON",
             "Estimate the cost of this query",
             "Balance this binary tree",
             "Change the price field",

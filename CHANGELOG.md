@@ -33,15 +33,16 @@ All notable changes to the Tinyhat plugin are documented here.
   `tinyhat_codex_auth` `action=status` before claiming a subscription is not
   connected, never state a remaining credit balance they cannot see, and
   answer how-is-this-paid-for / is-this-free / credits-ran-out questions
-  from the model. Funding routing is bounded: imperative work requests
-  are suppressed outright, precise self-contained question forms match
-  even inside a polite modal wrapper ("can you tell me what this
-  costs?"), and the modal frame then suppresses every looser route —
-  broad funding fragments, the standalone word billing, the possessive
-  "your price/rates/fees" bigram, and a funding word bound to the
-  agent/service — so generic developer wording ("balance this binary
-  tree", "check the balance factor", "could you list projects funded
-  by NASA?") does not inject.
+  from the model. Funding routing is bounded: start-anchored
+  full-question grammar (optionally behind a polite modal wrapper —
+  "can you tell me what this costs?", "could you explain your
+  rates?") matches first; leading work commands are suppressed even
+  with a terminal question mark, and the modal frame suppresses the
+  remaining routes — broad funding fragments, the standalone word
+  billing, and a funding word bound to the agent/service — so generic
+  developer wording ("balance this binary tree", "can you rename
+  how_much_do_you_cost?", "could you list projects funded by NASA?")
+  does not inject.
 - Bump the Hermes plugin package to `0.21.12`; acknowledge encrypted Slack
   detail receipt immediately in Telegram, report value-blind validation stages
   and stable error codes to the platform, and require a successful owner-DM

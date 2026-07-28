@@ -402,14 +402,15 @@ to a disk preview.
 Tool-owned native first replies (the Codex auth prerequisite photo, a
 Connect Google button) or an explicit connect request satisfy the
 step on their own. Funding questions route through bounded matching:
-imperative work requests are suppressed outright, precise
-self-contained question forms match even inside a polite modal wrapper
-("can you tell me what this costs?"), and the modal frame then
-suppresses every looser route — broad funding fragments, the
-standalone word billing, the possessive "your price/rates/fees"
-bigram, and a funding word bound to the agent or service — so generic
-developer wording such as "check the balance factor", "look for free
-variables", "balance your binary tree", or "could you list projects
+start-anchored full-question grammar (optionally behind a polite
+modal wrapper — "can you tell me what this costs?", "could you
+explain your rates?") matches first; leading work commands are then
+suppressed even with a terminal question mark ("check my balance
+factor in this AVL tree?"), and the modal frame suppresses the
+remaining routes — broad funding fragments, the standalone word
+billing, and a funding word bound to the agent or service — so
+generic developer wording such as "balance your binary tree",
+"can you rename how_much_do_you_cost?", or "could you list projects
 funded by NASA?" does not inject.
 
 ## Installing

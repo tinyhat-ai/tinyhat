@@ -102,6 +102,8 @@ _ROUTE_SIGNAL_BULLET_HINTS = {
 _ROUTE_TERM_BULLET_HINTS = {
     "gdpr": "- For privacy, security, or data-access questions",
     "surveillance": "- For privacy, security, or data-access questions",
+    "privacy": "- For privacy, security, or data-access questions",
+    "credits": "- Funding model:",
 }
 
 
@@ -352,24 +354,35 @@ _CONTEXT_TERMS = (
 # it cost to sort this list", "how do i pay attention") are end-anchored;
 # self-contained funding phrases ("my balance", "funded by") use word
 # boundaries only.
-# Precise, self-contained funding questions: end-anchored or full
-# question forms. Only these may match before modal-request suppression
-# — a polite wrapper around them ("can you tell me what this costs?")
-# is still a funding question.
+# Precise, self-contained funding questions: start-anchored full-match
+# grammar, never a suffix or substring search. An optional greeting and
+# an optional polite modal wrapper ("can you tell me ...") may precede
+# the core, so these match before modal-request suppression while a
+# developer command that merely CONTAINS the words — "can you rename
+# how_much_do_you_cost?" — cannot.
+_FUNDING_POLITE_PREFIX = (
+    r"^(?:(?:hi|hey|hello|ok|okay|so)[, ]+)?"
+    r"(?:(?:can|could|would|will) you (?:please )?"
+    r"(?:tell (?:me|us),? (?:about )?|explain (?:to (?:me|us) )?|"
+    r"show (?:me|us) (?:about )?)?)?"
+)
+_FUNDING_QUESTION_CORES = (
+    r"(?:how much|what) (?:does|do|will|would) (?:it|this|you) cost",
+    r"how much (?:is|are) (?:it|this)",
+    r"what(?:'s| is) the price",
+    r"is (?:it|this) free",
+    r"how is (?:it|this) funded",
+    r"how do i pay(?: for (?:it|this|you))?",
+    r"check (?:my|the) balance",
+    r"how much do you cost",
+    r"what (?:it|this|you) costs?",
+    r"how much (?:you|it|this) costs?",
+    r"(?:what (?:are|is) |what's )?your "
+    r"(?:price|prices|pricing|rates?|fees?|costs?|plans?)",
+)
 _FUNDING_QUESTION_PATTERNS_PRECISE = tuple(
-    re.compile(pattern)
-    for pattern in (
-        r"(?:how much|what) (?:does|do|will|would) (?:it|this|you) cost\s*\??$",
-        r"how much (?:is|are) (?:it|this)\s*\??$",
-        r"what(?:'s| is) the price\s*\??$",
-        r"is (?:it|this) free\s*\??$",
-        r"how is (?:it|this) funded\s*\??$",
-        r"how do i pay(?: for (?:it|this|you))?\s*\??$",
-        r"check (?:my|the) balance\s*\??$",
-        r"(?<!\w)how much do you cost(?!\w)",
-        r"what (?:it|this|you) costs?\s*\??$",
-        r"how much (?:you|it|this) costs?\s*\??$",
-    )
+    re.compile(_FUNDING_POLITE_PREFIX + core + r"\s*\??$")
+    for core in _FUNDING_QUESTION_CORES
 )
 
 # Broad, mid-string funding fragments. These match only after command
@@ -444,13 +457,6 @@ _FUNDING_SERVICE_ANCHORS = (
     "credits",
     "credit",
     "starter",
-)
-
-# Possessive funding anchor: "your" counts only immediately before a
-# funding word, never as a generic possessive in a developer imperative.
-_FUNDING_POSSESSIVE_ANCHOR = re.compile(
-    r"(?<!\w)your (?:price|pricing|prices|cost|costs|rate|rates|fee|fees|"
-    r"plan|plans|subscription|credit|credits|balance|billing|charges?)(?!\w)"
 )
 
 _FUNDING_STANDALONE_TERMS = (
@@ -670,19 +676,26 @@ _ZERO_WIDTH_MARKS = ("\u200c", "\u200d", "\u200e", "\u200f")
 
 
 def _matches_funding_intent(normalized: str) -> bool:
-    """Bounded funding routing. Imperative work requests ("check my
-    balance factor in this AVL tree") suppress everything. Precise
-    self-contained question forms match next, so a polite modal wrapper
-    — "could you explain how much you cost?" — is still a funding
-    question. The modal frame then suppresses every looser route: broad
-    mid-string fragments, the standalone word billing, the possessive
-    "your <funding word>" bigram, and a funding word bound to the
+    """Bounded funding routing, most precise first. Start-anchored
+    full-question grammar (optionally behind a polite modal wrapper)
+    matches before any suppression: "check my balance?" and "can you
+    tell me what this costs?" are funding questions. Work-command
+    frames then suppress everything looser — the leading imperative
+    check deliberately ignores a terminal question mark, so "check my
+    balance factor in this AVL tree?" stays a command — and the modal
+    frame suppresses the remaining routes: broad mid-string fragments,
+    the standalone word billing, and a funding word bound to the
     agent/service."""
-    if _is_imperative_frame(normalized):
-        return False
     for pattern in _FUNDING_QUESTION_PATTERNS_PRECISE:
         if pattern.search(normalized):
             return True
+    if _ENGLISH_COMMAND_FRAME.search(normalized):
+        return False
+    if any(
+        token in set(re.findall(r"\w+", normalized))
+        for token in _PRIVACY_IMPERATIVE_MARKERS_FA
+    ):
+        return False
     if _ENGLISH_MODAL_REQUEST.search(normalized):
         return False
     for pattern in _FUNDING_QUESTION_PATTERNS_BROAD:
@@ -690,13 +703,6 @@ def _matches_funding_intent(normalized: str) -> bool:
             return True
     tokens = set(re.findall(r"\w+", normalized))
     if any(term in tokens for term in _FUNDING_STANDALONE_TERMS):
-        return True
-    # The possessive bigram carries its own funding word ("your prices",
-    # "your fees"), including forms absent from the word-term table, so
-    # it is checked before the word-term gate. A bare "your" never
-    # counts — developer imperatives like "balance your binary tree"
-    # must not read as funding requests.
-    if _FUNDING_POSSESSIVE_ANCHOR.search(normalized):
         return True
     if not any(term in tokens for term in _FUNDING_WORD_TERMS):
         return False
@@ -737,9 +743,21 @@ def _is_imperative_frame(normalized: str) -> bool:
     )
 
 
+# "can/could you tell me / explain / describe ..." is an inquiry
+# wrapper, not a work request: "can you tell me who can read my
+# messages?" asks ABOUT access, while "can you read my messages" asks
+# to perform it. Only reporting verbs qualify.
+_ENGLISH_MODAL_INQUIRY = re.compile(
+    r"(?<!\w)(?:can|could|would|will) you (?:please )?"
+    r"(?:tell|explain|describe|clarify)(?!\w)"
+)
+
+
 def _is_command_frame(normalized: str) -> bool:
     if _is_imperative_frame(normalized):
         return True
+    if _ENGLISH_MODAL_INQUIRY.search(normalized):
+        return False
     return bool(_ENGLISH_MODAL_REQUEST.search(normalized))
 
 

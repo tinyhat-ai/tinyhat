@@ -76,10 +76,11 @@ deletes its metadata only after the Computer proves the local name is absent.
 The plugin injects a short context note when the user asks about secrets,
 credentials, Tinyhat, Codex auth, usage limits, plugin updates, skill
 lookup, QA reports, privacy or data access, funding (how the agent is
-paid for, what it costs, credits running out — imperative requests are
-suppressed outright, precise question forms match even inside a modal
-wrapper, and the modal frame suppresses the looser fragment, billing,
-possessive, and agent/service-bound word routes),
+paid for, what it costs, credits running out — start-anchored
+full-question grammar matches first, optionally behind a polite modal
+wrapper, then leading work commands are suppressed even with a
+terminal question mark, and the modal frame suppresses the looser
+fragment, billing, and agent/service-bound word routes),
 or on the first turn of a
 session. On the first conversation turn after setup or an in-place
 upgrade the context also adds a one-time funding-note directive ahead
