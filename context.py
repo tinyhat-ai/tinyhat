@@ -2,7 +2,9 @@
 
 from __future__ import annotations
 
+import os
 import re
+from pathlib import Path
 from typing import Any
 
 from .google_workspace import remove_credentials_if_assignment_changed_for_context
@@ -19,11 +21,237 @@ TINYHAT_CONTEXT = """Tinyhat context: this Hermes agent runs on a Tinyhat-manage
 - To disconnect or revoke one Google account, select its account_id and call tinyhat_google_workspace once with action=disconnect; never pass confirmed=true. The tool owns the two-stage Telegram ceremony and sends exactly one Revoke this Computer's access button; its first tap shows final Confirm revoke and Cancel buttons. Do not ask for text confirmation, expose a URL, or send a duplicate reply. Confirm deletes only that account's local credential and marks its safe connection metadata disconnected. It does not revoke Google's provider grant or affect another account or Computer.
 - When the user asks to connect ChatGPT, OpenAI, Codex, ChatGPT Plus/Pro/Team, a paid ChatGPT account, their Codex subscription, or to stop using Tinyhat/platform credits, load tinyhat:tinyhat-codex-auth and call tinyhat_codex_auth once with action=prerequisite. That sends the ChatGPT Settings > Security screenshot and /codex_auth instruction on its own line. Do not send an extra text reply after that tool call. Do not ask a multiple-choice clarification unless they explicitly ask for ChatGPT history/data or an OpenAI API key.
 - For OpenAI Codex auth status, recent auth output, or usage limits, prefer tinyhat_codex_auth with action=status, action=log, or action=limits. The auth flow sends the Telegram button and copyable device code after the ChatGPT Security setting is confirmed; do not ask for auth.json, refresh tokens, passwords, or raw OAuth tokens.
+- Funding model: a new agent starts on Tinyhat's included platform credits — a small starter credit (about $10) so the agent works immediately — and the intended ongoing fund is the user's own ChatGPT/Codex subscription connected through /codex_auth. If unsure whether a subscription is already connected, check tinyhat_codex_auth with action=status before claiming it is not. Never state a remaining credit balance — the agent cannot see one. If the starter credit runs out before a subscription is connected, the agent cannot answer until funding is connected. For questions like how the agent is paid for, whether it is free, or what happens when credits run out, answer from this model and load tinyhat:tinyhat-codex-auth for the connect flow.
 - If skill_view or skills_list omits Tinyhat plugin skills, call tinyhat_skill_catalog and retry with qualified names such as tinyhat:tinyhat-codex-auth.
 - If this Computer reports update_available=true or target_ref_changed for the Tinyhat plugin, load tinyhat:tinyhat-plugin-update and use tinyhat_plugin_update with action=status before applying updates. Only call action=update after the user/operator asks to update, and use restart_gateway=true when the live Telegram gateway should reload the new plugin commands.
 - For Tinyhat QA or Slack-style bug reports that mention words like restart, reload, update, or gateway, do not use terminal/curl just to post the text. Use a native Slack/reporting tool if available, or return the report in chat.
 - For privacy, security, or data-access questions — who can read the user's messages or files, whether Tinyhat staff or operators see logs or conversations, whether chats are monitored or stored — load tinyhat:tinyhat-privacy and answer from it, in the user's language. Core facts: this agent runs on a dedicated Computer created for this user alone; conversations and files are processed and stored on this Computer; Tinyhat does not read customer Computers' conversations, files, or logs as part of routine operations, and human access is limited to what the user affirmatively requests or permits, what is needed to investigate abuse, protect the service, or maintain security, and what is required by law — anything else would violate Tinyhat's own Terms and Privacy Policy (https://tinyhat.ai/privacy and https://tinyhat.ai/terms). Stay honest that Tinyloop operates the underlying infrastructure, so low-level technical access remains possible today — that is why the policy is binding and why Tinyhat is building private Computers designed to remove even that technical possibility. Never speculate about named operators, never enumerate internal tools or access paths, never claim which internal dashboards or tools do or do not exist, and never reassure by comparing Tinyhat to other platforms or hosting providers.
 - Load tinyhat:tinyhat-platform, tinyhat:tinyhat-privacy, tinyhat:tinyhat-private-secret, tinyhat:tinyhat-credentials, tinyhat:tinyhat-slack, tinyhat:tinyhat-google-workspace, tinyhat:tinyhat-codex-auth, tinyhat:tinyhat-plugin-update, tinyhat:tinyhat-skill-catalog, or tinyhat:tinyhat-plugin-version when you need the longer Tinyhat playbook."""
+
+# Added ahead of the injected context at most once per Computer (durable
+# marker below): the one-time funding note. The marker cannot tell a
+# brand-new Computer from an established one that just received this
+# plugin in an in-place upgrade, so the note never asserts "this is your
+# first conversation" — it instructs step placement for onboarding
+# replies and degrades to one brief line for returning users, and it is
+# skipped outright when a subscription is already connected.
+#
+# Framed as a [System note: ...] on purpose: Hermes appends its own
+# first-message system note (introduce yourself, mention /help, offer a
+# profile build), and the model executes that script for the onboarding
+# reply. A bullet inside the Tinyhat context blob loses to it; a system
+# note in the same register, coordinated with the profile note, does not.
+FUNDING_REMINDER_DIRECTIVE = (
+    "[System note: One-time funding note for this Computer — it is shown "
+    "exactly once (the first conversation turn after setup or an in-place "
+    "upgrade) and never again. Present connecting the user's own "
+    "ChatGPT/Codex subscription prominently in this reply. When this "
+    "reply is a new user's onboarding message, make it one of the "
+    "onboarding steps — a numbered or bulleted step when the reply lists "
+    "getting-started steps, otherwise one standalone step line — kept in "
+    "the same reply as any introduction or profile-build offer another "
+    "first-message note requests. For a clearly returning user, one "
+    "brief standalone line is enough. Never demote it to a footnote, "
+    'aside, or parenthetical. Example step: "Connect your ChatGPT/Codex '
+    "subscription with /codex_auth — you're starting on a small included "
+    "starter credit (about $10), and your own plan keeps me running "
+    'after it." If the subscription is already connected (check '
+    "tinyhat_codex_auth with action=status when unsure), skip this note "
+    "silently. Precedence: if this reply is a tool-owned native response "
+    "(for example the Codex auth prerequisite photo or a Connect Google "
+    "button), or the user is already asking to connect their "
+    "subscription, that flow satisfies the note — do not add a separate "
+    "text reply for it. Never repeat this note in later replies and "
+    "never block the user's actual request on it.]"
+)
+
+
+# Hermes spills any pre_llm_call context above ~10,000 chars to a disk
+# file and injects only a 500-char head/tail preview in its place
+# (hermes-agent hook_output_spill). The full TINYHAT_CONTEXT sits just
+# under that cap, so appending the onboarding note would push exactly the
+# one turn that carries it over the cliff — the model would never see the
+# directive inline. Compose the onboarding turn under a safe budget: the
+# directive leads, and whole bullets are dropped from the tail when
+# needed — except bullets the user's own first message matches, which
+# must survive (a first-ever privacy question keeps the trust-model
+# bullet). Later matched turns re-inject the full context unchanged.
+_HOOK_SPILL_SAFE_CHARS = 9_500
+
+# Bullet-identifying prefixes protected when the first message matches
+# the corresponding intent matcher. These carry contractual answers (the
+# privacy trust model, the funding model) whose matchers fire on
+# wording that shares no routing token with the bullet text (including
+# Persian phrasings), so signal-sharing alone cannot protect them.
+_PRIVACY_BULLET_MARKER = "- For privacy, security, or data-access questions"
+_FUNDING_BULLET_MARKER = "- Funding model:"
+
+
+# Routing signals whose owning bullet does not contain the signal text
+# literally. Protection derives from the routing decision, so each such
+# alias names the bullet it routes to. Phrase hints and term hints are
+# owner-level signals: their bullets rank with exact phrase matches,
+# ahead of broad literal term matches.
+_ROUTE_SIGNAL_BULLET_HINTS = {
+    "qa report": "- For Tinyhat QA or Slack-style bug reports",
+    "bug report": "- For Tinyhat QA or Slack-style bug reports",
+    "slack report": "- For Tinyhat QA or Slack-style bug reports",
+    "plugin update": "- If this Computer reports update_available",
+}
+
+_ROUTE_TERM_BULLET_HINTS = {
+    "gdpr": "- For privacy, security, or data-access questions",
+    "surveillance": "- For privacy, security, or data-access questions",
+    "privacy": "- For privacy, security, or data-access questions",
+    "credits": "- Funding model:",
+}
+
+
+def _route_signals(user_message: str) -> tuple[set[str], set[str]]:
+    """The routing-table phrases and terms this message actually matches.
+
+    Protection must derive from the same signals that route a request to
+    the context (``_CONTEXT_PHRASES`` / ``_CONTEXT_TERMS``), not from a
+    narrower parallel predicate — otherwise a first-turn request routed
+    by a generic phrase or term can lose the very bullet it asked for.
+    Phrases are checked against both the raw and the separator-split
+    forms, exactly as ``should_inject_tinyhat_context`` checks them, so
+    underscore phrases such as ``skills_list`` count here too.
+    """
+    raw = _normalize_message_raw(user_message)
+    normalized = re.sub(r"[_-]+", " ", raw)
+    phrases = {
+        phrase
+        for phrase in _CONTEXT_PHRASES
+        if phrase in raw or phrase in normalized
+    }
+    tokens = set(re.findall(r"[a-z0-9]+", normalized))
+    terms = {term for term in _CONTEXT_TERMS if term in tokens}
+    return phrases, terms
+
+
+def _bullet_owns_request(bullet: str, *, phrases: set[str], terms: set[str]) -> bool:
+    """Owner-level match: the bullet the routed signal is about.
+
+    Exact phrase text in the bullet, a phrase-alias hint, or a term hint
+    (``gdpr``/``surveillance`` → the privacy bullet). Owner bullets rank
+    ahead of broad literal term matches so a generic co-occurring term
+    like ``tinyhat`` cannot crowd out the bullet the request is for.
+    """
+    for phrase in phrases:
+        hint = _ROUTE_SIGNAL_BULLET_HINTS.get(phrase)
+        if hint is not None and hint in bullet:
+            return True
+    for term in terms:
+        hint = _ROUTE_TERM_BULLET_HINTS.get(term)
+        if hint is not None and hint in bullet:
+            return True
+    lowered = bullet.lower()
+    return any(phrase in lowered for phrase in phrases)
+
+
+def _bullet_matches_terms(bullet: str, *, terms: set[str]) -> bool:
+    bullet_tokens = set(re.findall(r"[a-z0-9]+", bullet.lower()))
+    return any(term in bullet_tokens for term in terms)
+
+
+def _compose_onboarding_context(context: str, user_message: str) -> str:
+    composed = FUNDING_REMINDER_DIRECTIVE + "\n" + context
+    if len(composed) <= _HOOK_SPILL_SAFE_CHARS:
+        return composed
+    budget = _HOOK_SPILL_SAFE_CHARS - len(FUNDING_REMINDER_DIRECTIVE) - 1
+    if budget <= 0:
+        # Fail closed on a directive at or above the cap: the cap is the
+        # harder invariant, so ship a truncated directive alone rather
+        # than ever exceeding it.
+        return FUNDING_REMINDER_DIRECTIVE[:_HOOK_SPILL_SAFE_CHARS]
+
+    starts = [m.start() for m in re.finditer(r"\n- ", context)]
+    if not starts:
+        return FUNDING_REMINDER_DIRECTIVE + "\n" + context[:budget]
+    heading = context[: starts[0]]
+    if len(heading) > budget:
+        # A heading alone that exceeds the retained-context budget is
+        # hard-capped: no bullet could fit after it anyway.
+        return FUNDING_REMINDER_DIRECTIVE + "\n" + heading[:budget]
+    bounds = starts + [len(context)]
+    bullets = [context[bounds[i] : bounds[i + 1]] for i in range(len(starts))]
+
+    phrases, terms = _route_signals(user_message)
+    normalized = _normalize_message(user_message)
+    intent_markers = []
+    if _matches_privacy_intent(normalized):
+        intent_markers.append(_PRIVACY_BULLET_MARKER)
+    if _matches_funding_intent(normalized):
+        intent_markers.append(_FUNDING_BULLET_MARKER)
+
+    # Four passes, each in source order and capped: explicit intent
+    # bullets reserve budget first (a privacy question must keep the
+    # trust-model bullet even when generic terms like "tinyhat" also
+    # match many earlier bullets), then owner bullets (the bullet an
+    # exact phrase, alias hint, or term hint routes to), then broad
+    # literal term matches, then everything else fills the rest.
+    # Over-subscription degrades in order instead of all-or-nothing,
+    # and nothing can exceed the cap.
+    used = len(heading)
+    kept: set[int] = set()
+
+    def _take(i: int) -> None:
+        nonlocal used
+        kept.add(i)
+        used += len(bullets[i])
+
+    for i, bullet in enumerate(bullets):
+        if any(marker in bullet for marker in intent_markers):
+            if used + len(bullet) <= budget:
+                _take(i)
+    for i, bullet in enumerate(bullets):
+        if i in kept:
+            continue
+        if _bullet_owns_request(bullet, phrases=phrases, terms=terms):
+            if used + len(bullet) <= budget:
+                _take(i)
+    for i, bullet in enumerate(bullets):
+        if i in kept:
+            continue
+        if _bullet_matches_terms(bullet, terms=terms):
+            if used + len(bullet) <= budget:
+                _take(i)
+    for i, bullet in enumerate(bullets):
+        if i in kept:
+            continue
+        if used + len(bullet) <= budget:
+            _take(i)
+    trimmed = heading + "".join(bullets[i] for i in range(len(bullets)) if i in kept)
+    return FUNDING_REMINDER_DIRECTIVE + "\n" + trimmed
+
+
+def _hermes_home() -> Path:
+    override = os.environ.get("TINYHAT_HERMES_HOME")
+    if override:
+        return Path(override)
+    return Path.home() / ".hermes"
+
+
+def _funding_reminder_marker_path() -> Path:
+    return _hermes_home() / "tinyhat-funding-reminder-shown"
+
+
+def _claim_funding_reminder() -> bool:
+    """Atomically claim the once-per-Computer reminder; fail closed.
+
+    The exclusive create is the claim: the directive is issued only when
+    this call creates the marker. A pre-existing marker, a missing or
+    unwritable Hermes home, and a lost concurrent race all return False,
+    so a persistence problem can never re-issue the "mandatory" line.
+    """
+    try:
+        with open(_funding_reminder_marker_path(), "x", encoding="utf-8") as fh:
+            fh.write("shown\n")
+        return True
+    except OSError:
+        return False
+
 
 _CONTEXT_PHRASES = (
     "api key",
@@ -116,6 +344,123 @@ _CONTEXT_TERMS = (
     "privacy",
     "gdpr",
     "surveillance",
+)
+
+# Funding routing binds funding wording to the funding question itself.
+# Command frames are suppressed first; then an end-anchored question
+# form or a bounded funding phrase, a funding word bound to the
+# agent/service, or the lone precise standalone word "billing" can
+# route. Question forms that can take a non-service object ("what does
+# it cost to sort this list", "how do i pay attention") are end-anchored;
+# self-contained funding phrases ("my balance", "funded by") use word
+# boundaries only.
+# Precise, self-contained funding questions: start-anchored full-match
+# grammar, never a suffix or substring search. An optional greeting and
+# an optional polite modal wrapper ("can you tell me ...") may precede
+# the core, so these match before modal-request suppression while a
+# developer command that merely CONTAINS the words — "can you rename
+# how_much_do_you_cost?" — cannot.
+_FUNDING_POLITE_PREFIX = (
+    r"^(?:(?:hi|hey|hello|ok|okay|so)[, ]+)?"
+    r"(?:(?:can|could|would|will) you (?:please )?"
+    r"(?:tell (?:me|us),? (?:about )?|explain (?:to (?:me|us) )?|"
+    r"show (?:me|us) (?:about )?)?)?"
+)
+_FUNDING_QUESTION_CORES = (
+    r"(?:how much|what) (?:does|do|will|would) (?:it|this|you) cost",
+    r"how much (?:is|are) (?:it|this)",
+    r"what(?:'s| is) the price",
+    r"is (?:it|this) free",
+    r"how is (?:it|this) funded",
+    r"how do i pay(?: for (?:it|this|you))?",
+    r"check (?:my|the) balance",
+    r"how much do you cost",
+    r"what (?:it|this|you) costs?",
+    r"how much (?:you|it|this) costs?",
+    r"(?:what (?:are|is) |what's )?your "
+    r"(?:price|prices|pricing|rates?|fees?|costs?|plans?)",
+)
+_FUNDING_QUESTION_PATTERNS_PRECISE = tuple(
+    re.compile(_FUNDING_POLITE_PREFIX + core + r"\s*\??$")
+    for core in _FUNDING_QUESTION_CORES
+)
+
+# Broad, mid-string funding fragments. These match only after command
+# frames (imperative or modal) are suppressed, so a modal developer
+# request that merely contains a fragment — "could you check my balance
+# factor in this AVL tree?" — cannot ride them into the context.
+_FUNDING_QUESTION_PATTERNS_BROAD = tuple(
+    re.compile(pattern)
+    for pattern in (
+        r"(?<!\w)payment (?:option|options|method|methods|plan|plans)(?!\w)",
+        r"(?<!\w)how (?:much|many) credits?(?!\w)",
+        r"(?<!\w)credits? (?:is|are) left(?!\w)",
+        r"(?<!\w)remaining (?:credit|credits|balance)(?!\w)",
+        r"(?<!\w)my balance(?!\w)",
+        r"(?<!\w)my billing(?!\w)",
+        r"(?<!\w)how does billing(?!\w)",
+        r"(?<!\w)who pays for(?!\w)",
+        r"(?<!\w)who is paying for(?!\w)",
+        r"(?<!\w)paying for (?:this|you)(?!\w)",
+        r"(?<!\w)pay for (?:this|you)(?!\w)",
+        r"(?<!\w)you cost(?!\w)",
+        r"(?<!\w)free to use(?!\w)",
+        r"(?<!\w)(?:run out of|out of) credits(?!\w)",
+        r"(?<!\w)credits? runs? out(?!\w)",
+        r"(?<!\w)starter credit(?!\w)",
+        r"(?<!\w)platform credits(?!\w)",
+        r"(?<!\w)who is funding(?!\w)",
+        r"(?<!\w)funded by(?!\w)",
+    )
+)
+
+_FUNDING_WORD_TERMS = (
+    "pay",
+    "pays",
+    "paying",
+    "paid",
+    "payment",
+    "payments",
+    "cost",
+    "costs",
+    "costing",
+    "price",
+    "pricing",
+    "priced",
+    "bill",
+    "billed",
+    "billing",
+    "balance",
+    "credit",
+    "credits",
+    "fund",
+    "funded",
+    "funding",
+    "free",
+    "charge",
+    "charges",
+    "charged",
+    "money",
+)
+
+_FUNDING_SERVICE_ANCHORS = (
+    "you",
+    "agent",
+    "bot",
+    "assistant",
+    "tinyhat",
+    "service",
+    "subscription",
+    "chatgpt",
+    "codex",
+    "plan",
+    "credits",
+    "credit",
+    "starter",
+)
+
+_FUNDING_STANDALONE_TERMS = (
+    "billing",
 )
 
 # Privacy/data-access routing is separate from the generic short-circuits
@@ -330,6 +675,40 @@ _PERSIAN_CHAR_MAP = str.maketrans({"ي": "ی", "ك": "ک"})
 _ZERO_WIDTH_MARKS = ("\u200c", "\u200d", "\u200e", "\u200f")
 
 
+def _matches_funding_intent(normalized: str) -> bool:
+    """Bounded funding routing, most precise first. Start-anchored
+    full-question grammar (optionally behind a polite modal wrapper)
+    matches before any suppression: "check my balance?" and "can you
+    tell me what this costs?" are funding questions. Work-command
+    frames then suppress everything looser — the leading imperative
+    check deliberately ignores a terminal question mark, so "check my
+    balance factor in this AVL tree?" stays a command — and the modal
+    frame suppresses the remaining routes: broad mid-string fragments,
+    the standalone word billing, and a funding word bound to the
+    agent/service."""
+    for pattern in _FUNDING_QUESTION_PATTERNS_PRECISE:
+        if pattern.search(normalized):
+            return True
+    if _ENGLISH_COMMAND_FRAME.search(normalized):
+        return False
+    if any(
+        token in set(re.findall(r"\w+", normalized))
+        for token in _PRIVACY_IMPERATIVE_MARKERS_FA
+    ):
+        return False
+    if _ENGLISH_MODAL_REQUEST.search(normalized):
+        return False
+    for pattern in _FUNDING_QUESTION_PATTERNS_BROAD:
+        if pattern.search(normalized):
+            return True
+    tokens = set(re.findall(r"\w+", normalized))
+    if any(term in tokens for term in _FUNDING_STANDALONE_TERMS):
+        return True
+    if not any(term in tokens for term in _FUNDING_WORD_TERMS):
+        return False
+    return any(term in tokens for term in _FUNDING_SERVICE_ANCHORS)
+
+
 def _matches_privacy_phrase(normalized: str) -> bool:
     for phrase in _PRIVACY_PHRASES:
         # \w-based boundaries treat Arabic punctuation (؟ ،) as boundaries
@@ -351,15 +730,34 @@ _ENGLISH_COMMAND_FRAME = re.compile(
 _ENGLISH_MODAL_REQUEST = re.compile(r"(?<!\w)(can|could|would|will) you(?!\w)")
 
 
-def _is_command_frame(normalized: str) -> bool:
+def _is_imperative_frame(normalized: str) -> bool:
+    """Non-question work request: bare/please-prefixed verb, FA marker."""
     has_question_mark = "?" in normalized or "؟" in normalized
-    if not has_question_mark and _ENGLISH_COMMAND_FRAME.search(normalized):
+    if has_question_mark:
+        return False
+    if _ENGLISH_COMMAND_FRAME.search(normalized):
         return True
-    if not has_question_mark and any(
+    return any(
         token in set(re.findall(r"\w+", normalized))
         for token in _PRIVACY_IMPERATIVE_MARKERS_FA
-    ):
+    )
+
+
+# "can/could you tell me / explain / describe ..." is an inquiry
+# wrapper, not a work request: "can you tell me who can read my
+# messages?" asks ABOUT access, while "can you read my messages" asks
+# to perform it. Only reporting verbs qualify.
+_ENGLISH_MODAL_INQUIRY = re.compile(
+    r"(?<!\w)(?:can|could|would|will) you (?:please )?"
+    r"(?:tell|explain|describe|clarify)(?!\w)"
+)
+
+
+def _is_command_frame(normalized: str) -> bool:
+    if _is_imperative_frame(normalized):
         return True
+    if _ENGLISH_MODAL_INQUIRY.search(normalized):
+        return False
     return bool(_ENGLISH_MODAL_REQUEST.search(normalized))
 
 
@@ -396,6 +794,20 @@ def _matches_privacy_intent(normalized: str) -> bool:
     return has_fa_subject and has_fa_access
 
 
+def _normalize_message_raw(user_message: str) -> str:
+    """Lowercased, Persian-normalized form with separators intact."""
+    normalized = " ".join((user_message or "").lower().split())
+    normalized = normalized.translate(_PERSIAN_CHAR_MAP)
+    for mark in _ZERO_WIDTH_MARKS:
+        normalized = normalized.replace(mark, "")
+    return normalized
+
+
+def _normalize_message(user_message: str) -> str:
+    """Canonical matcher input: lowercased, Persian-normalized, term-split."""
+    return re.sub(r"[_-]+", " ", _normalize_message_raw(user_message))
+
+
 def should_inject_tinyhat_context(user_message: str, *, is_first_turn: bool = False) -> bool:
     """Return whether this turn benefits from Tinyhat operating context."""
     if is_first_turn:
@@ -409,6 +821,8 @@ def should_inject_tinyhat_context(user_message: str, *, is_first_turn: bool = Fa
         return True
     terms = set(re.findall(r"[a-z0-9]+", normalized_for_terms))
     if any(term in terms for term in _CONTEXT_TERMS):
+        return True
+    if _matches_funding_intent(normalized_for_terms):
         return True
     return _matches_privacy_intent(normalized_for_terms)
 
@@ -436,4 +850,7 @@ def inject_tinyhat_context(  # noqa: PLR0913
     except Exception:
         assignment_cleanup = "unavailable"
     _ = assignment_cleanup
-    return {"context": TINYHAT_CONTEXT}
+    context = TINYHAT_CONTEXT
+    if is_first_turn and _claim_funding_reminder():
+        context = _compose_onboarding_context(context, user_message)
+    return {"context": context}

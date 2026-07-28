@@ -320,7 +320,18 @@ changing the runtime. The disconnect ceremony also stays inside the existing
 plugin-and-platform boundary; it adds no runtime callback or command.
 
 `tinyhat-codex-auth` teaches the agent how to start and inspect the
-Tinyhat-managed OpenAI Codex / ChatGPT subscription sign-in flow. When
+Tinyhat-managed OpenAI Codex / ChatGPT subscription sign-in flow — and
+the funding model behind it: a new agent starts on Tinyhat's included
+platform credits, a small starter credit (about $10) that exists so the
+agent works immediately, while the intended ongoing fund is the user's
+own ChatGPT / Codex subscription. The skill has the agent present
+connecting the subscription as one of the onboarding steps in a new
+user's onboarding reply — once per Computer, without nagging (a durable
+marker, tool-owned native first replies satisfying the note, a brief
+line for returning users after an in-place upgrade, and a silent skip
+when already connected) — check `{"action": "status"}` before claiming
+it is not connected, and never state a remaining credit balance it
+cannot see. When
 the user says "connect you to my ChatGPT account", "use my Codex
 subscription", or "switch from platform credits", the agent calls
 `tinyhat_codex_auth` with `{"action": "prerequisite"}`. The helper sends
@@ -352,8 +363,8 @@ auth and limit checks. It also routes stale-plugin reports through
 tools instead of arbitrary terminal commands. A small `pre_llm_call` hook
 injects only the short version of that context on first turn or when the
 user mentions secrets, credentials, Tinyhat, Codex auth, usage limits,
-skill lookup, plugin updates, QA reports, or privacy and data-access
-questions.
+skill lookup, plugin updates, QA reports, privacy and data-access
+questions, or funding questions.
 
 `tinyhat-privacy` is the trust answer. When a user asks who can read
 their messages, whether Tinyhat staff or operators see logs or
@@ -370,6 +381,37 @@ keeps the answer honest without comparisons: Tinyloop operates the
 underlying infrastructure, so low-level technical access remains possible
 today, which is why the policy is binding and why Tinyhat is building
 private Computers designed to remove even that technical possibility.
+
+The context hook also carries the funding model and a once-per-Computer
+funding note. On the first conversation turn after setup or an in-place
+upgrade it adds a one-time directive ahead of the context: a new user's
+onboarding reply presents connecting the ChatGPT/Codex subscription as
+one of its onboarding steps (a numbered or bulleted step when the reply
+lists getting-started steps, a standalone step line otherwise, never a
+footnote), a clearly returning user gets one brief line, and an
+already-connected subscription skips the note silently. The claim is recorded with a durable
+marker so a later `/new` or `/reset` session does not re-arm it. The
+onboarding turn's payload is composed under Hermes's hook-context spill
+cap (directive first, whole tail bullets dropped when needed — except
+bullets the first message itself matches through the same routing
+phrases, terms, or intent matchers that inject the context, such as
+the privacy trust-model bullet on a first privacy question or the
+QA-reporting guard on a first bug report, which survive in source
+order) so the note reaches the model inline instead of being spilled
+to a disk preview.
+Tool-owned native first replies (the Codex auth prerequisite photo, a
+Connect Google button) or an explicit connect request satisfy the
+step on their own. Funding questions route through bounded matching:
+start-anchored full-question grammar (optionally behind a polite
+modal wrapper — "can you tell me what this costs?", "could you
+explain your rates?") matches first; leading work commands are then
+suppressed even with a terminal question mark ("check my balance
+factor in this AVL tree?"), and the modal frame suppresses the
+remaining routes — broad funding fragments, the standalone word
+billing, and a funding word bound to the agent or service — so
+generic developer wording such as "balance your binary tree",
+"can you rename how_much_do_you_cost?", or "could you list projects
+funded by NASA?" does not inject.
 
 ## Installing
 
@@ -402,7 +444,7 @@ TINYHAT_PLUGIN_REF=vX.Y.Z
 | `channels/latest` | Newest promoted final version, used when we want faster adoption. |
 | exact tag, for example `vX.Y.Z` | Immutable version for tests, rollbacks, and audits. |
 
-For v0.21.13, deploy the platform that supports retrying the same encrypted
+For v0.21.14, deploy the platform that supports retrying the same encrypted
 Slack handoff before promoting `channels/latest` and `channels/lts`. The
 matching Mini App keeps editable details only in Telegram SecureStorage on
 supported user devices; Tinyhat backend APIs never receive plaintext.

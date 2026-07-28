@@ -207,14 +207,24 @@ its local-client authentication and script execution. The skill calls
 `tinyhat_google_workspace_app_manager` only after that approval.
 
 `tinyhat-codex-auth` is the default way to connect a Tinyhat-managed
-Hermes agent to the user's OpenAI Codex / ChatGPT subscription. It should
+Hermes agent to the user's OpenAI Codex / ChatGPT subscription, and it
+carries the funding model: a small included starter credit (about $10)
+now, the user's own subscription as the intended ongoing fund. It should
 trigger for common user wording such as "connect my ChatGPT account" or
-"use my Codex subscription". It should call `tinyhat_codex_auth` once
+"use my Codex subscription", and for funding questions such as how the
+agent is paid for or what happens when credits run out. It should call
+`tinyhat_codex_auth` once
 with `{"action": "prerequisite"}` so the user receives the ChatGPT
 Settings > Security screenshot and `/codex_auth` on its own line. The
 skill should not send an extra text reply, duplicate links, or start the
 helper twice. It may use `{"action": "status"}`, `{"action": "log"}`, or
-`{"action": "limits"}` for follow-up inspection.
+`{"action": "limits"}` for follow-up inspection. The once-per-Computer
+funding note is directed by the platform context with a durable
+marker: a new user's onboarding reply presents the subscription
+connection as one of the onboarding steps, a returning user gets one
+brief line, and an already-connected subscription skips it. Tool-owned
+native first replies satisfy it, and the agent must never state a
+remaining credit balance it cannot see.
 
 `tinyhat-plugin-update` checks and applies the configured plugin channel
 through installed runtime commands. It should start with

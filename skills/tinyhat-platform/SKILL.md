@@ -28,6 +28,7 @@ Use this as the default routing map:
 | Check whether this Computer is behind `channels/lts` or `channels/latest` | Call `tinyhat_plugin_update` with `{"action": "status"}`. |
 | Apply a plugin channel update the user/operator asked for | Call `tinyhat_plugin_update` with `{"action": "update", "confirmed": true, "restart_gateway": true}`. |
 | Connect ChatGPT / OpenAI Codex auth or use the user's OpenAI paid access | Load `tinyhat:tinyhat-codex-auth`; call `tinyhat_codex_auth` once with `{"action": "prerequisite"}` so it sends the screenshot and `/codex_auth`. Do not send an extra text reply. |
+| Ask how this agent is paid for, whether it is free, what the starter credits are, or what happens when credits run out | Answer from the funding model in `tinyhat:tinyhat-codex-auth`: a small included starter credit (about $10) now, the user's own ChatGPT/Codex subscription as the ongoing fund via `/codex_auth`. Never state a remaining balance. |
 | Check Codex auth | Call `tinyhat_codex_auth` with `{"action": "status"}`. |
 | Inspect recent Codex auth output | Call `tinyhat_codex_auth` with `{"action": "log"}`. |
 | Show Codex usage limits | Call `tinyhat_codex_auth` with `{"action": "limits"}`. |
