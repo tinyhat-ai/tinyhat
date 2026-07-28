@@ -219,11 +219,12 @@ Settings > Security screenshot and `/codex_auth` on its own line. The
 skill should not send an extra text reply, duplicate links, or start the
 helper twice. It may use `{"action": "status"}`, `{"action": "log"}`, or
 `{"action": "limits"}` for follow-up inspection. The once-per-Computer
-onboarding step is directed by the platform context with a durable
-marker: the first substantive reply presents the subscription
-connection as one of the onboarding steps. Tool-owned native first
-replies satisfy it, and the agent must never state a remaining credit
-balance it cannot see.
+funding note is directed by the platform context with a durable
+marker: a new user's onboarding reply presents the subscription
+connection as one of the onboarding steps, a returning user gets one
+brief line, and an already-connected subscription skips it. Tool-owned
+native first replies satisfy it, and the agent must never state a
+remaining credit balance it cannot see.
 
 `tinyhat-plugin-update` checks and applies the configured plugin channel
 through installed runtime commands. It should start with

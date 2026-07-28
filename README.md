@@ -326,10 +326,12 @@ platform credits, a small starter credit (about $10) that exists so the
 agent works immediately, while the intended ongoing fund is the user's
 own ChatGPT / Codex subscription. The skill has the agent present
 connecting the subscription as one of the onboarding steps in a new
-user's first reply — once, without nagging (tracked by a durable
-per-Computer marker, with tool-owned native first replies satisfying
-the step) — check `{"action": "status"}` before claiming it is not
-connected, and never state a remaining credit balance it cannot see. When
+user's onboarding reply — once per Computer, without nagging (a durable
+marker, tool-owned native first replies satisfying the note, a brief
+line for returning users after an in-place upgrade, and a silent skip
+when already connected) — check `{"action": "status"}` before claiming
+it is not connected, and never state a remaining credit balance it
+cannot see. When
 the user says "connect you to my ChatGPT account", "use my Codex
 subscription", or "switch from platform credits", the agent calls
 `tinyhat_codex_auth` with `{"action": "prerequisite"}`. The helper sends
@@ -381,12 +383,13 @@ today, which is why the policy is binding and why Tinyhat is building
 private Computers designed to remove even that technical possibility.
 
 The context hook also carries the funding model and a once-per-Computer
-onboarding step. On the very first conversation of a Computer it
-appends a one-time directive requiring the first substantive reply —
-the onboarding message — to present connecting the user's ChatGPT/Codex
-subscription as one of its onboarding steps: a numbered or bulleted
-step when the reply lists getting-started steps, a standalone step line
-otherwise, never a footnote. The claim is recorded with a durable
+funding note. On the first conversation turn after setup or an in-place
+upgrade it adds a one-time directive ahead of the context: a new user's
+onboarding reply presents connecting the ChatGPT/Codex subscription as
+one of its onboarding steps (a numbered or bulleted step when the reply
+lists getting-started steps, a standalone step line otherwise, never a
+footnote), a clearly returning user gets one brief line, and an
+already-connected subscription skips the note silently. The claim is recorded with a durable
 marker so a later `/new` or `/reset` session does not re-arm it. The
 onboarding turn's payload is composed under Hermes's hook-context spill
 cap (directive first, whole tail bullets dropped when needed — except

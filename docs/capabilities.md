@@ -82,10 +82,12 @@ phrases, agent/service-bound funding words, or the standalone word
 billing),
 or on the first turn of a
 session. On a Computer's very first conversation the context also
-appends a one-time onboarding-step directive — the first reply must
-present connecting the ChatGPT/Codex subscription as one of its
-onboarding steps — tracked by a durable marker so later /new sessions
-do not re-arm it; tool-owned native first replies satisfy the step. The context tells
+adds a one-time funding-note directive ahead of the context — a new
+user's onboarding reply presents connecting the ChatGPT/Codex
+subscription as one of its onboarding steps, a returning user gets one
+brief line, an already-connected subscription skips it — tracked by a
+durable marker so later /new sessions do not re-arm it; tool-owned
+native first replies satisfy the note. The context tells
 the agent to prefer Tinyhat private secret entry for credentials,
 Tinyhat's installed Codex commands for OpenAI Codex auth, the Hermes-owned
 Slack connection flow, identity-only bare

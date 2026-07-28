@@ -12,19 +12,21 @@ All notable changes to the Tinyhat plugin are documented here.
   starts on Tinyhat's included platform credits — a small starter credit
   (about $10) so it works immediately — and the intended ongoing fund is the
   user's own ChatGPT / Codex subscription connected through `/codex_auth`.
-  On a Computer's very first conversation the injected context appends a
-  one-time directive requiring the first substantive reply — the
-  onboarding message — to present connecting the ChatGPT / Codex
-  subscription as one of its onboarding steps (a numbered or bulleted
-  step when the reply lists steps, a standalone step line otherwise,
-  never a footnote), recorded with a durable per-Computer marker so a later
-  `/new` or `/reset` session does not re-arm it. The directive is a
-  first-message `[System note]` sequenced against Hermes's own
-  profile-build note, and the onboarding turn's payload stays under
-  Hermes's ~10k hook-context spill cap (directive first, whole tail
-  bullets dropped when needed while bullets matched by the user's own
-  first message — privacy, funding — always survive) so the step
-  reaches the model inline; tool-owned native first
+  On the first conversation turn after setup or an in-place upgrade the
+  injected context adds a one-time funding-note directive ahead of the
+  context: a new user's onboarding reply presents connecting the
+  ChatGPT / Codex subscription as one of its onboarding steps (a
+  numbered or bulleted step when the reply lists steps, a standalone
+  step line otherwise, never a footnote), a clearly returning user gets
+  one brief line, and an already-connected subscription skips the note
+  silently. The claim is recorded with a durable per-Computer marker so
+  a later `/new` or `/reset` session does not re-arm it. The directive
+  is a first-message `[System note]` coordinated with Hermes's own
+  profile-build note, and the payload stays under Hermes's ~10k
+  hook-context spill cap (directive first, whole tail bullets dropped
+  when needed while bullets matched by the user's own first message —
+  privacy, funding — always survive) so the note reaches the model
+  inline; tool-owned native first
   replies (the Codex auth prerequisite photo, a Connect Google button) or an
   explicit connect request satisfy the step on their own. Agents check
   `tinyhat_codex_auth` `action=status` before claiming a subscription is not
