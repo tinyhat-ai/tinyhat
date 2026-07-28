@@ -81,8 +81,9 @@ suppressed first, then end-anchored question forms and bounded funding
 phrases, agent/service-bound funding words, or the standalone word
 billing),
 or on the first turn of a
-session. On a Computer's very first conversation the context also
-adds a one-time funding-note directive ahead of the context — a new
+session. On the first conversation turn after setup or an in-place
+upgrade the context also adds a one-time funding-note directive ahead
+of the context — a new
 user's onboarding reply presents connecting the ChatGPT/Codex
 subscription as one of its onboarding steps, a returning user gets one
 brief line, an already-connected subscription skips it — tracked by a

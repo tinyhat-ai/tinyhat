@@ -79,21 +79,43 @@ FUNDING_REMINDER_DIRECTIVE = (
 _HOOK_SPILL_SAFE_CHARS = 9_500
 
 # Bullet-identifying prefixes protected when the first message matches
-# the corresponding intent. These carry contractual answers (the privacy
-# trust model, the funding model) that must not lose to the trim on the
-# very turn that asks for them.
+# the corresponding intent matcher. These carry contractual answers (the
+# privacy trust model, the funding model) whose matchers fire on
+# wording that shares no routing token with the bullet text (including
+# Persian phrasings), so signal-sharing alone cannot protect them.
 _PRIVACY_BULLET_MARKER = "- For privacy, security, or data-access questions"
 _FUNDING_BULLET_MARKER = "- Funding model:"
 
 
-def _protected_bullet_markers(user_message: str) -> tuple[str, ...]:
+def _route_signals(user_message: str) -> tuple[set[str], set[str]]:
+    """The routing-table phrases and terms this message actually matches.
+
+    Protection must derive from the same signals that route a request to
+    the context (``_CONTEXT_PHRASES`` / ``_CONTEXT_TERMS``), not from a
+    narrower parallel predicate — otherwise a first-turn request routed
+    by a generic phrase or term can lose the very bullet it asked for.
+    """
     normalized = _normalize_message(user_message)
-    markers = []
-    if _matches_privacy_intent(normalized):
-        markers.append(_PRIVACY_BULLET_MARKER)
-    if _matches_funding_intent(normalized):
-        markers.append(_FUNDING_BULLET_MARKER)
-    return tuple(markers)
+    phrases = {phrase for phrase in _CONTEXT_PHRASES if phrase in normalized}
+    tokens = set(re.findall(r"[a-z0-9]+", normalized))
+    terms = {term for term in _CONTEXT_TERMS if term in tokens}
+    return phrases, terms
+
+
+def _bullet_matches_request(
+    bullet: str,
+    *,
+    phrases: set[str],
+    terms: set[str],
+    intent_markers: tuple[str, ...],
+) -> bool:
+    if any(marker in bullet for marker in intent_markers):
+        return True
+    lowered = bullet.lower()
+    if any(phrase in lowered for phrase in phrases):
+        return True
+    bullet_tokens = set(re.findall(r"[a-z0-9]+", lowered))
+    return any(term in bullet_tokens for term in terms)
 
 
 def _compose_onboarding_context(context: str, user_message: str) -> str:
@@ -109,23 +131,29 @@ def _compose_onboarding_context(context: str, user_message: str) -> str:
     bounds = starts + [len(context)]
     bullets = [context[bounds[i] : bounds[i + 1]] for i in range(len(starts))]
 
-    markers = _protected_bullet_markers(user_message)
-    protected = {
-        i
-        for i, bullet in enumerate(bullets)
-        if any(marker in bullet for marker in markers)
-    }
-    used = len(heading) + sum(len(bullets[i]) for i in protected)
-    if used > budget:
-        # The cap is the harder invariant: fall back to the plain
-        # bullet-boundary prefix trim rather than ever exceeding it.
-        trimmed = context[:budget]
-        boundary = trimmed.rfind("\n- ")
-        if boundary > 0:
-            trimmed = trimmed[:boundary]
-        return FUNDING_REMINDER_DIRECTIVE + "\n" + trimmed
+    phrases, terms = _route_signals(user_message)
+    normalized = _normalize_message(user_message)
+    intent_markers = []
+    if _matches_privacy_intent(normalized):
+        intent_markers.append(_PRIVACY_BULLET_MARKER)
+    if _matches_funding_intent(normalized):
+        intent_markers.append(_FUNDING_BULLET_MARKER)
 
-    kept = set(protected)
+    # Two passes, both in source order and both capped: request-matched
+    # bullets reserve budget first (over-subscription degrades in order
+    # instead of all-or-nothing), then remaining bullets fill the rest.
+    # The cap is the harder invariant — nothing here can exceed it.
+    used = len(heading)
+    kept: set[int] = set()
+    for i, bullet in enumerate(bullets):
+        if _bullet_matches_request(
+            bullet,
+            phrases=phrases,
+            terms=terms,
+            intent_markers=tuple(intent_markers),
+        ) and used + len(bullet) <= budget:
+            kept.add(i)
+            used += len(bullet)
     for i, bullet in enumerate(bullets):
         if i in kept:
             continue

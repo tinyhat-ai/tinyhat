@@ -653,6 +653,9 @@ class HermesAdapterTests(unittest.TestCase):
         self.assertLessEqual(
             len(first["context"]), tinyhat_context._HOOK_SPILL_SAFE_CHARS
         )
+        # Literal ceiling: Hermes spills at ~10,000 chars regardless of our
+        # tunable safe margin, so producer and test cannot drift together.
+        self.assertLess(len(first["context"]), 10_000)
         self.assertTrue(first["context"].startswith("[System note:"))
         self.assertIn("Tinyhat context:", first["context"])
 
@@ -672,6 +675,7 @@ class HermesAdapterTests(unittest.TestCase):
         self.assertLessEqual(
             len(composed), tinyhat_context._HOOK_SPILL_SAFE_CHARS
         )
+        self.assertLess(len(composed), 10_000)
         self.assertTrue(
             composed.startswith(
                 tinyhat_context.FUNDING_REMINDER_DIRECTIVE
@@ -679,8 +683,11 @@ class HermesAdapterTests(unittest.TestCase):
             )
         )
         # Whole bullets only, never a mid-bullet cut: every kept bullet is
-        # complete (full 400-character payload).
-        for kept in composed.split("\n- ")[1:]:
+        # complete (full 400-character payload) — and at least one bullet
+        # must survive so this loop cannot pass vacuously.
+        kept_bullets = composed.split("\n- ")[1:]
+        self.assertGreaterEqual(len(kept_bullets), 1)
+        for kept in kept_bullets:
             self.assertTrue(kept.startswith("bullet"))
             self.assertTrue(kept.rstrip().endswith("x" * 400))
 
@@ -714,10 +721,38 @@ class HermesAdapterTests(unittest.TestCase):
         self.assertLessEqual(
             len(first["context"]), tinyhat_context._HOOK_SPILL_SAFE_CHARS
         )
+        self.assertLess(len(first["context"]), 10_000)
         self.assertTrue(first["context"].startswith("[System note:"))
         self.assertIn("tinyhat:tinyhat-privacy", first["context"])
         self.assertIn("https://tinyhat.ai/privacy", first["context"])
         self.assertIn("routine operations", first["context"])
+
+    def test_onboarding_turn_preserves_privacy_context_for_routed_wording(
+        self,
+    ) -> None:
+        # Routed by the generic term table ("privacy"), not the strict
+        # privacy-intent matcher: protection must derive from the same
+        # signals that route the request.
+        first = tinyhat_context.inject_tinyhat_context(
+            user_message="Could you explain the privacy policy?",
+            is_first_turn=True,
+        )
+        assert first is not None
+        self.assertLess(len(first["context"]), 10_000)
+        self.assertIn("tinyhat:tinyhat-privacy", first["context"])
+        self.assertIn("https://tinyhat.ai/privacy", first["context"])
+
+    def test_onboarding_turn_preserves_qa_report_guard(self) -> None:
+        # An existing routed contract must not regress on the one turn
+        # that carries the funding note: the QA/reporting guard bullet
+        # survives its own first-turn request.
+        first = tinyhat_context.inject_tinyhat_context(
+            user_message="Post this Slack report about a gateway restart bug",
+            is_first_turn=True,
+        )
+        assert first is not None
+        self.assertLess(len(first["context"]), 10_000)
+        self.assertIn("do not use terminal/curl", first["context"])
 
     def test_onboarding_turn_preserves_funding_context_for_funding_question(
         self,
@@ -730,6 +765,7 @@ class HermesAdapterTests(unittest.TestCase):
         self.assertLessEqual(
             len(first["context"]), tinyhat_context._HOOK_SPILL_SAFE_CHARS
         )
+        self.assertLess(len(first["context"]), 10_000)
         self.assertIn("- Funding model:", first["context"])
         self.assertIn("Never state a remaining credit balance", first["context"])
 

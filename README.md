@@ -393,9 +393,11 @@ already-connected subscription skips the note silently. The claim is recorded wi
 marker so a later `/new` or `/reset` session does not re-arm it. The
 onboarding turn's payload is composed under Hermes's hook-context spill
 cap (directive first, whole tail bullets dropped when needed — except
-bullets the first message itself matches, such as the privacy
-trust-model bullet on a first-ever privacy question, which always
-survive) so the note reaches the model inline instead of being spilled
+bullets the first message itself matches through the same routing
+phrases, terms, or intent matchers that inject the context, such as
+the privacy trust-model bullet on a first privacy question or the
+QA-reporting guard on a first bug report, which survive in source
+order) so the note reaches the model inline instead of being spilled
 to a disk preview.
 Tool-owned native first replies (the Codex auth prerequisite photo, a
 Connect Google button) or an explicit connect request satisfy the

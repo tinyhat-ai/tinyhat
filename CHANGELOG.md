@@ -24,9 +24,10 @@ All notable changes to the Tinyhat plugin are documented here.
   is a first-message `[System note]` coordinated with Hermes's own
   profile-build note, and the payload stays under Hermes's ~10k
   hook-context spill cap (directive first, whole tail bullets dropped
-  when needed while bullets matched by the user's own first message —
-  privacy, funding — always survive) so the note reaches the model
-  inline; tool-owned native first
+  when needed while bullets the first message matches through the same
+  routing phrases, terms, or intent matchers that inject the context —
+  privacy, funding, QA reporting — survive in source order) so the
+  note reaches the model inline; tool-owned native first
   replies (the Codex auth prerequisite photo, a Connect Google button) or an
   explicit connect request satisfy the step on their own. Agents check
   `tinyhat_codex_auth` `action=status` before claiming a subscription is not
