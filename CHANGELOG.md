@@ -6,6 +6,11 @@ All notable changes to the Tinyhat plugin are documented here.
 
 ### Changed
 
+- Bump the Hermes plugin package to `0.21.15`; failed Slack setup notices now
+  link directly to the validated Slack app settings page and concisely guide
+  the owner to reinstall the app before retrying. Generated manifests now
+  include every scope used during setup, including `im:write`, so first-time
+  installs do not immediately need a permission update.
 - Bump the Hermes plugin package to `0.21.14`; stop blocking setup on the
   optional Slack `users.info` display-name lookup, keep the Computer-local
   private key worker alive after a failed Slack validation, and accept an
