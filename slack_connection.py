@@ -27,8 +27,15 @@ SLACK_CONNECTION_EXPIRES_IN_SECONDS = 30 * 60
 MAX_ALLOWED_USERS = 100
 SLACK_ID_RE = re.compile(r"^[A-Z][A-Z0-9]{8,}$")
 SLACK_API_BASE_URL = "https://slack.com/api"
+SLACK_APP_SETTINGS_BASE_URL = "https://api.slack.com/apps"
 SLACK_HOME_CHANNEL_NAME = "Owner DM"
 SLACK_WELCOME_MESSAGE = "Hi there! Slack is connected to this Hermes agent."
+REQUIRED_CONNECTION_BOT_SCOPES = (
+    "assistant:write",
+    "chat:write",
+    "im:write",
+    "users:read",
+)
 SAFE_SLACK_ERROR_CODES = {
     "account_inactive",
     "cannot_dm_bot",
@@ -124,6 +131,7 @@ def _generate_hermes_slack_manifest() -> dict[str, Any]:
     if not isinstance(manifest, dict):
         raise SecretHandoffError("Hermes Slack manifest output was not an object.")
     _remove_slack_commands(manifest)
+    _ensure_connection_scopes(manifest)
     return manifest
 
 
@@ -143,6 +151,28 @@ def _remove_slack_commands(manifest: dict[str, Any]) -> None:
     bot_scopes = scopes.get("bot")
     if isinstance(bot_scopes, list):
         scopes["bot"] = [scope for scope in bot_scopes if scope != "commands"]
+
+
+def _ensure_connection_scopes(manifest: dict[str, Any]) -> None:
+    """Make the first installed token sufficient for Tinyhat's Slack checks."""
+
+    oauth_config = manifest.get("oauth_config")
+    scopes = oauth_config.get("scopes") if isinstance(oauth_config, dict) else None
+    bot_scopes = scopes.get("bot") if isinstance(scopes, dict) else None
+    if not isinstance(bot_scopes, list):
+        raise SecretHandoffError(
+            "Hermes Slack manifest did not include bot scopes.",
+            public_message="I could not generate a complete Slack app manifest.",
+        )
+    normalized = [
+        str(scope).strip()
+        for scope in bot_scopes
+        if isinstance(scope, str) and str(scope).strip()
+    ]
+    for scope in REQUIRED_CONNECTION_BOT_SCOPES:
+        if scope not in normalized:
+            normalized.append(scope)
+    scopes["bot"] = normalized
 
 
 def install_submitted_slack_connection(
@@ -220,10 +250,7 @@ def install_submitted_slack_connection(
         return True
     except Exception as exc:
         failure = _slack_connection_failure(exc)
-        _send_secret_notice(
-            f"Slack connection failed during {_slack_stage_label(failure.stage)}. "
-            f"{failure.public_message}"
-        )
+        _send_secret_notice(_slack_failure_notice(failure, metadata))
         failure_metadata = {
             "provider": "slack",
             "connection_status": "failed",
@@ -281,6 +308,23 @@ def _slack_connection_failure(exc: Exception) -> SlackConnectionError:
         code="connection_failed",
         public_message="Slack could not be connected. Please retry the setup.",
     )
+
+
+def _slack_failure_notice(
+    failure: SlackConnectionError,
+    metadata: dict[str, Any],
+) -> str:
+    prefix = f"Slack connection failed during {_slack_stage_label(failure.stage)}. "
+    app_id = str(metadata.get("app_id") or "").strip().upper()
+    if not SLACK_ID_RE.fullmatch(app_id):
+        return f"{prefix}{failure.public_message}"
+    app_url = f"{SLACK_APP_SETTINGS_BASE_URL}/{app_id}"
+    if failure.code == "missing_scope":
+        return (
+            f"{prefix}Open the Slack app, reinstall it in your workspace, "
+            f"then retry: {app_url}"
+        )
+    return f"{prefix}{failure.public_message} Open the Slack app: {app_url}"
 
 
 def _slack_stage_label(stage: str) -> str:
@@ -473,8 +517,7 @@ def _slack_api_call(
 def _slack_failure_message(stage: str, code: str) -> str:
     if code == "missing_scope":
         return (
-            "The submitted bot token cannot perform this Slack step. Copy the "
-            "Bot User OAuth Token from the app you just created, then retry."
+            "Slack needs updated permissions. Reinstall the app, then retry."
         )
     if stage == "bot_auth":
         return "Slack did not accept the bot token. Copy the xoxb token and retry."

@@ -195,7 +195,7 @@ class HermesAdapterTests(unittest.TestCase):
 
         self.assertEqual(payload["schema"], "tinyhat_plugin_version_v1")
         self.assertEqual(payload["name"], "tinyhat")
-        self.assertEqual(payload["version"], "0.21.14")
+        self.assertEqual(payload["version"], "0.21.15")
 
     def test_platform_status_uses_attested_computer_endpoint(self) -> None:
         original_build = tools.build_platform_client
@@ -208,7 +208,7 @@ class HermesAdapterTests(unittest.TestCase):
                     "computer_id": 5359,
                     "state": "active",
                     "assigned": True,
-                    "package_inventory": {"plugin": {"version": "0.21.14"}},
+                    "package_inventory": {"plugin": {"version": "0.21.15"}},
                 }
 
         try:
@@ -221,7 +221,7 @@ class HermesAdapterTests(unittest.TestCase):
         self.assertEqual(payload["computer_id"], 5359)
         self.assertEqual(payload["state"], "active")
         self.assertTrue(payload["assigned"])
-        self.assertEqual(payload["package_inventory"]["plugin"]["version"], "0.21.14")
+        self.assertEqual(payload["package_inventory"]["plugin"]["version"], "0.21.15")
 
     def test_platform_status_returns_structured_platform_error(self) -> None:
         original_build = tools.build_platform_client
@@ -244,7 +244,7 @@ class HermesAdapterTests(unittest.TestCase):
 
         self.assertEqual(payload["schema"], "tinyhat_skill_catalog_v1")
         self.assertEqual(payload["plugin"]["name"], "tinyhat")
-        self.assertEqual(payload["plugin"]["version"], "0.21.14")
+        self.assertEqual(payload["plugin"]["version"], "0.21.15")
         by_name = {skill["name"]: skill for skill in payload["skills"]}
         self.assertEqual(
             by_name["tinyhat-codex-auth"]["qualified_name"],
@@ -1727,9 +1727,7 @@ class HermesAdapterTests(unittest.TestCase):
             stage="greeting",
             code="missing_scope",
             public_message=(
-                "The submitted bot token cannot perform this Slack step. "
-                "Copy the Bot User OAuth Token from the app you just created, "
-                "then retry."
+                "Slack needs updated permissions. Reinstall the app, then retry."
             ),
         )
         with (
@@ -1791,6 +1789,67 @@ class HermesAdapterTests(unittest.TestCase):
             },
         )
         self.assertIn("welcome-message delivery", notices[-1])
+        self.assertIn(
+            "https://api.slack.com/apps/A012ABCDEF",
+            notices[-1],
+        )
+        self.assertIn("reinstall it in your workspace", notices[-1])
+        self.assertNotIn("xoxb-placeholder", notices[-1])
+        self.assertNotIn("xapp-placeholder", notices[-1])
+
+    def test_slack_owner_dm_failure_notice_links_only_validated_app_id(
+        self,
+    ) -> None:
+        failure = slack_connection.SlackConnectionError(
+            "Slack rejected conversations.open: missing_scope.",
+            stage="owner_dm",
+            code="missing_scope",
+            public_message="The submitted bot token cannot perform this Slack step.",
+        )
+
+        self.assertEqual(
+            slack_connection._slack_failure_notice(
+                failure,
+                {"app_id": "a012abcdef"},
+            ),
+            (
+                "Slack connection failed during owner direct-message setup. "
+                "Open the Slack app, reinstall it in your workspace, then retry: "
+                "https://api.slack.com/apps/A012ABCDEF"
+            ),
+        )
+        self.assertNotIn(
+            "api.slack.com/apps",
+            slack_connection._slack_failure_notice(
+                failure,
+                {"app_id": "https://example.test/not-an-app"},
+            ),
+        )
+
+    def test_slack_owner_dm_non_scope_failure_does_not_request_reinstall(
+        self,
+    ) -> None:
+        failure = slack_connection.SlackConnectionError(
+            "Slack rejected conversations.open: user_not_found.",
+            stage="owner_dm",
+            code="user_not_found",
+            public_message="Slack could not open the owner's direct message.",
+        )
+
+        notice = slack_connection._slack_failure_notice(
+            failure,
+            {"app_id": "A012ABCDEF"},
+        )
+
+        self.assertEqual(
+            notice,
+            (
+                "Slack connection failed during owner direct-message setup. "
+                "Slack could not open the owner's direct message. "
+                "Open the Slack app: https://api.slack.com/apps/A012ABCDEF"
+            ),
+        )
+        self.assertNotIn("reinstall", notice)
 
     def test_slack_failure_claim_retries_without_metadata_for_old_platform(
         self,
@@ -2138,7 +2197,7 @@ class HermesAdapterTests(unittest.TestCase):
         self.assertNotIn("slash_commands", manifest["features"])
         self.assertEqual(
             manifest["oauth_config"]["scopes"]["bot"],
-            ["assistant:write", "chat:write", "users:read"],
+            ["assistant:write", "chat:write", "users:read", "im:write"],
         )
 
     def test_generic_secret_flow_refuses_reserved_slack_connection_values(self) -> None:
