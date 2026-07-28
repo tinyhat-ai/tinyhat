@@ -32,22 +32,31 @@ TINYHAT_CONTEXT = """Tinyhat context: this Hermes agent runs on a Tinyhat-manage
 # marker below): the first-conversation onboarding step. It is issued on
 # the first turn of the first session only, so /new or /reset later does
 # not re-arm a "mandatory" step for a user who already saw it.
+#
+# Framed as a [System note: ...] on purpose: Hermes appends its own
+# first-message system note (introduce yourself, mention /help, offer a
+# profile build), and the model executes that script for the onboarding
+# reply. A bullet inside the Tinyhat context blob loses to it; a system
+# note in the same register, sequenced against the profile note, does not.
 FUNDING_REMINDER_DIRECTIVE = (
-    "- This is this user's first conversation on this Computer, so your "
-    "first substantive reply is the onboarding message. It must present "
-    "connecting the user's own ChatGPT/Codex subscription as one of the "
-    "onboarding steps: when the reply lists getting-started steps, one "
-    "numbered or bulleted step is the subscription connection; when it "
-    "lists none, add one standalone step line of its own. Never demote it "
-    'to a footnote, aside, or parenthetical. Example step: "Connect your '
-    "ChatGPT/Codex subscription with /codex_auth — you're starting on a "
-    "small included starter credit (about $10), and your own plan keeps me "
-    'running after it." Precedence: if your first reply is a tool-owned '
-    "native response (for example the Codex auth prerequisite photo or a "
-    "Connect Google button), or the user is already asking to connect "
-    "their subscription, that flow satisfies the step — do not add a "
-    "separate text reply for it. Never repeat this step in later replies "
-    "and never block the user's actual request on it."
+    "[System note: This is also this user's first conversation on this "
+    "Tinyhat Computer, so this reply is the onboarding message. One of its "
+    "onboarding steps must be connecting the user's own ChatGPT/Codex "
+    'subscription — include a step like: "Connect your ChatGPT/Codex '
+    "subscription with /codex_auth — you're starting on a small included "
+    "starter credit (about $10), and your own plan keeps me running after "
+    'it." Put it as a numbered or bulleted step when the reply lists '
+    "getting-started steps, otherwise as one standalone step line right "
+    "after the introduction or profile offer. Never demote it to a "
+    "footnote, aside, or parenthetical. If another first-message note asks "
+    "for an introduction or a profile-build offer, do both in this same "
+    "reply: introduction, then the offer, then this connect step. "
+    "Precedence: if this reply is a tool-owned native response (for example "
+    "the Codex auth prerequisite photo or a Connect Google button), or the "
+    "user is already asking to connect their subscription, that flow "
+    "satisfies the step — do not add a separate text reply for it. Never "
+    "repeat this step in later replies and never block the user's actual "
+    "request on it.]"
 )
 
 

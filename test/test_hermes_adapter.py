@@ -588,20 +588,26 @@ class HermesAdapterTests(unittest.TestCase):
 
     def test_context_states_funding_reminder_rules(self) -> None:
         directive = tinyhat_context.FUNDING_REMINDER_DIRECTIVE
+        self.assertTrue(directive.startswith("[System note:"))
+        self.assertTrue(directive.endswith("]"))
         self.assertIn(
-            "first substantive reply is the onboarding message",
+            "this reply is the onboarding message",
             directive,
         )
         self.assertIn(
-            "as one of the onboarding steps",
+            "One of its onboarding steps must be connecting",
             directive,
         )
         self.assertIn(
-            "numbered or bulleted step is the subscription connection",
+            "numbered or bulleted step when the reply lists",
             directive,
         )
         self.assertIn(
-            "add one standalone step line of its own",
+            "one standalone step line",
+            directive,
+        )
+        self.assertIn(
+            "introduction, then the offer, then this connect step",
             directive,
         )
         self.assertIn(
