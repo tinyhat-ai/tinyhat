@@ -387,7 +387,11 @@ the onboarding message — to present connecting the user's ChatGPT/Codex
 subscription as one of its onboarding steps: a numbered or bulleted
 step when the reply lists getting-started steps, a standalone step line
 otherwise, never a footnote. The claim is recorded with a durable
-marker so a later `/new` or `/reset` session does not re-arm it.
+marker so a later `/new` or `/reset` session does not re-arm it. The
+onboarding turn's payload is composed under Hermes's hook-context spill
+cap (directive first, context truncated at a bullet boundary when
+needed) so the note reaches the model inline instead of being spilled
+to a disk preview.
 Tool-owned native first replies (the Codex auth prerequisite photo, a
 Connect Google button) or an explicit connect request satisfy the
 step on their own. Funding questions route through bounded matching:

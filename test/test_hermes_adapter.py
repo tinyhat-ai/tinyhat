@@ -630,6 +630,54 @@ class HermesAdapterTests(unittest.TestCase):
             tinyhat_context.TINYHAT_CONTEXT,
         )
 
+    def test_context_stays_under_hermes_hook_spill_cap(self) -> None:
+        # Hermes spills pre_llm_call context above ~10,000 chars to a disk
+        # file and injects only a 500-char head/tail preview. A context blob
+        # over the cap silently stops reaching the model inline on every
+        # injected turn. If this fails, slim TINYHAT_CONTEXT — do not raise
+        # the number.
+        self.assertLess(len(tinyhat_context.TINYHAT_CONTEXT), 10_000)
+
+    def test_onboarding_turn_payload_fits_under_spill_cap(self) -> None:
+        first = tinyhat_context.inject_tinyhat_context(
+            user_message="hello",
+            is_first_turn=True,
+        )
+        assert first is not None
+        self.assertLessEqual(
+            len(first["context"]), tinyhat_context._HOOK_SPILL_SAFE_CHARS
+        )
+        self.assertTrue(first["context"].startswith("[System note:"))
+        self.assertIn("Tinyhat context:", first["context"])
+
+    def test_compose_onboarding_context_trims_at_bullet_boundary(self) -> None:
+        small = "Tinyhat context: heading.\n- first bullet.\n- second bullet."
+        untouched = tinyhat_context._compose_onboarding_context(small)
+        self.assertEqual(
+            untouched,
+            tinyhat_context.FUNDING_REMINDER_DIRECTIVE + "\n" + small,
+        )
+
+        bullets = "".join(
+            f"\n- bullet {i} " + "x" * 400 for i in range(40)
+        )
+        oversized = "Tinyhat context: heading." + bullets
+        composed = tinyhat_context._compose_onboarding_context(oversized)
+        self.assertLessEqual(
+            len(composed), tinyhat_context._HOOK_SPILL_SAFE_CHARS
+        )
+        self.assertTrue(
+            composed.startswith(
+                tinyhat_context.FUNDING_REMINDER_DIRECTIVE
+                + "\nTinyhat context: heading."
+            )
+        )
+        # The cut lands on a bullet boundary, never mid-bullet: the last
+        # surviving bullet is complete (full 400-character payload).
+        last_bullet = composed.rsplit("\n- ", 1)[-1]
+        self.assertTrue(last_bullet.startswith("bullet"))
+        self.assertTrue(last_bullet.endswith("x" * 400))
+
     def test_funding_reminder_directive_is_once_per_computer(self) -> None:
         first = tinyhat_context.inject_tinyhat_context(
             user_message="hello",

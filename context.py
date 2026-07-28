@@ -60,6 +60,29 @@ FUNDING_REMINDER_DIRECTIVE = (
 )
 
 
+# Hermes spills any pre_llm_call context above ~10,000 chars to a disk
+# file and injects only a 500-char head/tail preview in its place
+# (hermes-agent hook_output_spill). The full TINYHAT_CONTEXT sits just
+# under that cap, so appending the onboarding note would push exactly the
+# one turn that carries it over the cliff — the model would never see the
+# directive inline. Compose the onboarding turn under a safe budget: the
+# directive leads, and the context is truncated at a bullet boundary when
+# needed. Later matched turns re-inject the full context unchanged.
+_HOOK_SPILL_SAFE_CHARS = 9_500
+
+
+def _compose_onboarding_context(context: str) -> str:
+    composed = FUNDING_REMINDER_DIRECTIVE + "\n" + context
+    if len(composed) <= _HOOK_SPILL_SAFE_CHARS:
+        return composed
+    budget = _HOOK_SPILL_SAFE_CHARS - len(FUNDING_REMINDER_DIRECTIVE) - 1
+    trimmed = context[:budget]
+    boundary = trimmed.rfind("\n- ")
+    if boundary > 0:
+        trimmed = trimmed[:boundary]
+    return FUNDING_REMINDER_DIRECTIVE + "\n" + trimmed
+
+
 def _hermes_home() -> Path:
     override = os.environ.get("TINYHAT_HERMES_HOME")
     if override:
@@ -612,5 +635,5 @@ def inject_tinyhat_context(  # noqa: PLR0913
     _ = assignment_cleanup
     context = TINYHAT_CONTEXT
     if is_first_turn and _claim_funding_reminder():
-        context = context + "\n" + FUNDING_REMINDER_DIRECTIVE
+        context = _compose_onboarding_context(context)
     return {"context": context}
