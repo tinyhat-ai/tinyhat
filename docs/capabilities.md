@@ -13,7 +13,7 @@ The current capability list is intentionally small.
 | `tinyhat_google_workspace` | Available now | Connects Google identity, composes implemented access presets and requestable Custom scopes, lets Google handle its pending-verification warning, blocks unimplemented requests before OAuth, and starts an account-targeted local disconnect ceremony. |
 | `tinyhat_google_workspace_app` | Available now | Lends one selected account's assignment-verified Google access to one bounded `gws` invocation. |
 | `tinyhat_google_workspace_app_manager` | Available now | After approval, installs or removes the pinned integrity-verified `gws` app; Hermes supplies the operation skill. |
-| `tinyhat-codex-auth` skill | Available now | Teaches the agent to start and inspect the Tinyhat-installed OpenAI Codex / ChatGPT subscription auth flow. |
+| `tinyhat-codex-auth` skill | Available now | Teaches the agent the starter-credit funding model, the one-time connect-your-subscription onboarding step, and how to start and inspect the Tinyhat-installed OpenAI Codex / ChatGPT subscription auth flow. |
 | `tinyhat_plugin_update` | Available now | Checks and applies the configured plugin channel through installed runtime commands. |
 | `tinyhat-privacy` skill | Available now | Teaches the agent Tinyhat's privacy and trust model: dedicated isolated Computers, no routine platform reading of Computer contents, policy-bound human access, and the private-Computer direction. |
 | `pre_llm_call` context | Available now | Gives Hermes a short Tinyhat operating reminder on first turn and Tinyhat-sensitive requests. |
@@ -75,8 +75,21 @@ deletes its metadata only after the Computer proves the local name is absent.
 
 The plugin injects a short context note when the user asks about secrets,
 credentials, Tinyhat, Codex auth, usage limits, plugin updates, skill
-lookup, QA reports, privacy or data access, or on the first turn of a
-session. The context tells
+lookup, QA reports, privacy or data access, funding (how the agent is
+paid for, what it costs, credits running out — start-anchored
+full-question grammar matches first, optionally behind a polite modal
+wrapper, then leading work commands are suppressed even with a
+terminal question mark, and the modal frame suppresses the looser
+fragment, billing, and agent/service-bound word routes),
+or on the first turn of a
+session. On the first conversation turn after setup or an in-place
+upgrade the context also adds a one-time funding-note directive ahead
+of the context — a new
+user's onboarding reply presents connecting the ChatGPT/Codex
+subscription as one of its onboarding steps, a returning user gets one
+brief line, an already-connected subscription skips it — tracked by a
+durable marker so later /new sessions do not re-arm it; tool-owned
+native first replies satisfy the note. The context tells
 the agent to prefer Tinyhat private secret entry for credentials,
 Tinyhat's installed Codex commands for OpenAI Codex auth, the Hermes-owned
 Slack connection flow, identity-only bare

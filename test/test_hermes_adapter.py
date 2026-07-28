@@ -66,6 +66,27 @@ class FakeHermesContext:
 
 
 class HermesAdapterTests(unittest.TestCase):
+    def setUp(self) -> None:
+        # Isolate the durable funding-reminder marker from the real Hermes
+        # home so tests never write outside their sandbox and each test
+        # starts un-reminded.
+        self._hermes_home = tempfile.TemporaryDirectory(prefix="tinyhat-hermes-home-")
+        self._original_hermes_home = os.environ.get("TINYHAT_HERMES_HOME")
+        os.environ["TINYHAT_HERMES_HOME"] = self._hermes_home.name
+
+    def tearDown(self) -> None:
+        if self._original_hermes_home is None:
+            os.environ.pop("TINYHAT_HERMES_HOME", None)
+        else:
+            os.environ["TINYHAT_HERMES_HOME"] = self._original_hermes_home
+        self._hermes_home.cleanup()
+
+    def _reset_funding_marker(self) -> None:
+        """Re-arm the once-per-Computer marker inside one test method."""
+        marker = Path(self._hermes_home.name) / "tinyhat-funding-reminder-shown"
+        if marker.exists():
+            marker.unlink()
+
     def test_register_exposes_proof_tool_command_and_skill(self) -> None:
         ctx = FakeHermesContext()
 
@@ -539,6 +560,458 @@ class HermesAdapterTests(unittest.TestCase):
                 self.assertIn("affirmatively requests or permits", injected["context"])
                 self.assertIn("https://tinyhat.ai/privacy", injected["context"])
                 self.assertIn("private Computers", injected["context"])
+
+    def test_context_hook_injects_for_funding_questions(self) -> None:
+        examples = (
+            "How am I paying for this?",
+            "What happens when my credits run out?",
+            "Is this bot free to use?",
+            "Who is funding this agent?",
+            "What does it cost to keep you running?",
+            "What is my balance?",
+            "How does billing work?",
+            "What is the price?",
+            "What payment methods do you accept?",
+            "How much does it cost?",
+            "How much does this cost?",
+            "Is it free?",
+            "How is this funded?",
+            "What are my payment options?",
+            "How much credit is left?",
+            "Can you tell me what this costs?",
+            "Could you explain how much you cost?",
+            "What are your prices?",
+            "What are your rates?",
+            "What are your fees?",
+            "Can you tell me your prices?",
+            "Could you explain your rates?",
+            "Would you show me your fees?",
+            "Check my balance?",
+        )
+        for user_message in examples:
+            with self.subTest(user_message=user_message):
+                injected = tinyhat_context.inject_tinyhat_context(
+                    user_message=user_message,
+                    is_first_turn=False,
+                )
+                self.assertIsNotNone(injected)
+                assert injected is not None
+                self.assertIn("starter credit", injected["context"])
+                self.assertIn("about $10", injected["context"])
+                self.assertIn("/codex_auth", injected["context"])
+                self.assertIn("tinyhat:tinyhat-codex-auth", injected["context"])
+
+    def test_context_states_funding_reminder_rules(self) -> None:
+        directive = tinyhat_context.FUNDING_REMINDER_DIRECTIVE
+        self.assertTrue(directive.startswith("[System note:"))
+        self.assertTrue(directive.endswith("]"))
+        self.assertIn(
+            "One-time funding note for this Computer",
+            directive,
+        )
+        self.assertNotIn(
+            "first conversation on this",
+            directive,
+        )
+        self.assertIn(
+            "make it one of the onboarding steps",
+            directive,
+        )
+        self.assertIn(
+            "numbered or bulleted step when the reply lists",
+            directive,
+        )
+        self.assertIn(
+            "one standalone step line",
+            directive,
+        )
+        self.assertIn(
+            "same reply as any introduction or profile-build offer",
+            directive,
+        )
+        self.assertIn(
+            "Never demote it to a footnote,",
+            directive,
+        )
+        self.assertIn(
+            "Connect your ChatGPT/Codex subscription with /codex_auth",
+            directive,
+        )
+        self.assertIn("skip this note silently", directive)
+        self.assertIn("action=status", directive)
+        self.assertIn("tool-owned native response", directive)
+        self.assertIn("Never repeat this note", directive)
+        self.assertIn("never block the user's actual request", directive)
+        self.assertIn(
+            "Never state a remaining credit balance",
+            tinyhat_context.TINYHAT_CONTEXT,
+        )
+        self.assertIn(
+            "check tinyhat_codex_auth with action=status",
+            tinyhat_context.TINYHAT_CONTEXT,
+        )
+
+    def test_context_stays_under_hermes_hook_spill_cap(self) -> None:
+        # Hermes spills pre_llm_call context above ~10,000 chars to a disk
+        # file and injects only a 500-char head/tail preview. A context blob
+        # over the cap silently stops reaching the model inline on every
+        # injected turn. If this fails, slim TINYHAT_CONTEXT — do not raise
+        # the number.
+        self.assertLess(len(tinyhat_context.TINYHAT_CONTEXT), 10_000)
+
+    def test_onboarding_turn_payload_fits_under_spill_cap(self) -> None:
+        first = tinyhat_context.inject_tinyhat_context(
+            user_message="hello",
+            is_first_turn=True,
+        )
+        assert first is not None
+        self.assertLessEqual(
+            len(first["context"]), tinyhat_context._HOOK_SPILL_SAFE_CHARS
+        )
+        # Literal ceiling: Hermes spills at ~10,000 chars regardless of our
+        # tunable safe margin, so producer and test cannot drift together.
+        self.assertLess(len(first["context"]), 10_000)
+        self.assertTrue(first["context"].startswith("[System note:"))
+        self.assertIn("Tinyhat context:", first["context"])
+
+    def test_compose_onboarding_context_trims_at_bullet_boundary(self) -> None:
+        small = "Tinyhat context: heading.\n- first bullet.\n- second bullet."
+        untouched = tinyhat_context._compose_onboarding_context(small, "hi")
+        self.assertEqual(
+            untouched,
+            tinyhat_context.FUNDING_REMINDER_DIRECTIVE + "\n" + small,
+        )
+
+        bullets = "".join(
+            f"\n- bullet {i} " + "x" * 400 for i in range(40)
+        )
+        oversized = "Tinyhat context: heading." + bullets
+        composed = tinyhat_context._compose_onboarding_context(oversized, "hi")
+        self.assertLessEqual(
+            len(composed), tinyhat_context._HOOK_SPILL_SAFE_CHARS
+        )
+        self.assertLess(len(composed), 10_000)
+        self.assertTrue(
+            composed.startswith(
+                tinyhat_context.FUNDING_REMINDER_DIRECTIVE
+                + "\nTinyhat context: heading."
+            )
+        )
+        # Whole bullets only, never a mid-bullet cut: every kept bullet is
+        # complete (full 400-character payload) — and at least one bullet
+        # must survive so this loop cannot pass vacuously.
+        kept_bullets = composed.split("\n- ")[1:]
+        self.assertGreaterEqual(len(kept_bullets), 1)
+        for kept in kept_bullets:
+            self.assertTrue(kept.startswith("bullet"))
+            self.assertTrue(kept.rstrip().endswith("x" * 400))
+
+    def test_compose_onboarding_context_protects_matched_bullets(self) -> None:
+        filler = "".join(f"\n- filler {i} " + "x" * 400 for i in range(40))
+        privacy_bullet = (
+            "\n"
+            + tinyhat_context._PRIVACY_BULLET_MARKER
+            + " trust model facts "
+            + "y" * 400
+        )
+        oversized = "Tinyhat context: heading." + filler + privacy_bullet
+        # A neutral first message drops the tail privacy bullet.
+        neutral = tinyhat_context._compose_onboarding_context(oversized, "hi")
+        self.assertNotIn(tinyhat_context._PRIVACY_BULLET_MARKER, neutral)
+        # A privacy question keeps it despite its tail position.
+        asking = tinyhat_context._compose_onboarding_context(
+            oversized, "Can the operators read my messages?"
+        )
+        self.assertIn(tinyhat_context._PRIVACY_BULLET_MARKER, asking)
+        self.assertLessEqual(len(asking), tinyhat_context._HOOK_SPILL_SAFE_CHARS)
+        self.assertLess(len(asking), 10_000)
+
+    def test_onboarding_turn_preserves_privacy_context_for_privacy_question(
+        self,
+    ) -> None:
+        first = tinyhat_context.inject_tinyhat_context(
+            user_message="Can the operators read my messages?",
+            is_first_turn=True,
+        )
+        assert first is not None
+        self.assertLessEqual(
+            len(first["context"]), tinyhat_context._HOOK_SPILL_SAFE_CHARS
+        )
+        self.assertLess(len(first["context"]), 10_000)
+        self.assertTrue(first["context"].startswith("[System note:"))
+        self.assertIn("tinyhat:tinyhat-privacy", first["context"])
+        self.assertIn("https://tinyhat.ai/privacy", first["context"])
+        self.assertIn("routine operations", first["context"])
+
+    def test_onboarding_turn_preserves_privacy_context_for_routed_wording(
+        self,
+    ) -> None:
+        # Routed by the generic term table ("privacy"), not the strict
+        # privacy-intent matcher: protection must derive from the same
+        # signals that route the request.
+        first = tinyhat_context.inject_tinyhat_context(
+            user_message="Could you explain the privacy policy?",
+            is_first_turn=True,
+        )
+        assert first is not None
+        self.assertLess(len(first["context"]), 10_000)
+        self.assertIn("tinyhat:tinyhat-privacy", first["context"])
+        self.assertIn("https://tinyhat.ai/privacy", first["context"])
+
+    def test_onboarding_turn_preserves_qa_report_guard(self) -> None:
+        # An existing routed contract must not regress on the one turn
+        # that carries the funding note: the QA/reporting guard bullet
+        # survives its own first-turn request — including alias phrases
+        # ("qa report", "bug report") whose text does not appear in the
+        # bullet literally.
+        for user_message in (
+            "Post this Slack report about a gateway restart bug",
+            "Please post this QA report about a restart bug",
+            "Please post this QA report about a reload bug",
+        ):
+            with self.subTest(user_message=user_message):
+                first = tinyhat_context.inject_tinyhat_context(
+                    user_message=user_message,
+                    is_first_turn=True,
+                )
+                assert first is not None
+                self.assertLess(len(first["context"]), 10_000)
+                self.assertIn("do not use terminal/curl", first["context"])
+                self._reset_funding_marker()
+
+    def test_onboarding_turn_prioritizes_intent_bullet_over_terms(self) -> None:
+        # "tinyhat" is a generic routing term matching many early
+        # bullets; the explicit privacy intent must still reserve the
+        # trust-model bullet first.
+        first = tinyhat_context.inject_tinyhat_context(
+            user_message="Is this chat monitored by tinyhat staff?",
+            is_first_turn=True,
+        )
+        assert first is not None
+        self.assertLess(len(first["context"]), 10_000)
+        self.assertIn("tinyhat:tinyhat-privacy", first["context"])
+        self.assertIn("routine operations", first["context"])
+        self.assertIn("https://tinyhat.ai/privacy", first["context"])
+
+    def test_onboarding_turn_reserves_owner_bullet_over_terms(self) -> None:
+        # The alias-owned bullet must outrank broad literal term matches:
+        # adding the generic "tinyhat" term to a QA-report request must
+        # not crowd out the QA guard bullet the phrase routes to.
+        first = tinyhat_context.inject_tinyhat_context(
+            user_message="Please post this Tinyhat QA report about a reload bug",
+            is_first_turn=True,
+        )
+        assert first is not None
+        self.assertLess(len(first["context"]), 10_000)
+        self.assertIn("do not use terminal/curl", first["context"])
+
+    def test_onboarding_turn_keeps_privacy_bullet_for_modal_wordings(
+        self,
+    ) -> None:
+        # "privacy" is owner-ranked, and a modal inquiry wrapper ("can
+        # you tell me ...") is a question about access, not a work
+        # request — both first-turn phrasings must keep the trust-model
+        # bullet.
+        for user_message in (
+            "Could you explain Tinyhat's privacy policy?",
+            "Can you tell me who can read my messages?",
+        ):
+            with self.subTest(user_message=user_message):
+                first = tinyhat_context.inject_tinyhat_context(
+                    user_message=user_message,
+                    is_first_turn=True,
+                )
+                assert first is not None
+                self.assertLess(len(first["context"]), 10_000)
+                self.assertIn("tinyhat:tinyhat-privacy", first["context"])
+                self.assertIn("https://tinyhat.ai/privacy", first["context"])
+                self._reset_funding_marker()
+
+    def test_onboarding_turn_maps_privacy_terms_to_privacy_bullet(self) -> None:
+        # gdpr / surveillance route through the generic term table but
+        # appear nowhere in the privacy bullet text; the term hints must
+        # carry them to it.
+        for user_message in ("GDPR?", "Is this surveillance?"):
+            with self.subTest(user_message=user_message):
+                first = tinyhat_context.inject_tinyhat_context(
+                    user_message=user_message,
+                    is_first_turn=True,
+                )
+                assert first is not None
+                self.assertLess(len(first["context"]), 10_000)
+                self.assertIn("tinyhat:tinyhat-privacy", first["context"])
+                self._reset_funding_marker()
+
+    def test_onboarding_turn_preserves_underscore_phrase_guards(self) -> None:
+        # Raw-form phrases ("skills_list") must count as route signals
+        # exactly as the router counts them.
+        first = tinyhat_context.inject_tinyhat_context(
+            user_message="skills_list does not show the privacy skill",
+            is_first_turn=True,
+        )
+        assert first is not None
+        self.assertLess(len(first["context"]), 10_000)
+        self.assertIn("tinyhat_skill_catalog", first["context"])
+        self.assertIn("tinyhat:tinyhat-privacy", first["context"])
+
+    def test_compose_onboarding_context_degenerate_inputs_stay_capped(
+        self,
+    ) -> None:
+        with mock.patch.object(
+            tinyhat_context, "FUNDING_REMINDER_DIRECTIVE", "X" * 12_000
+        ):
+            capped = tinyhat_context._compose_onboarding_context(
+                "Tinyhat context: heading.\n- a bullet.", "hi"
+            )
+            self.assertLessEqual(
+                len(capped), tinyhat_context._HOOK_SPILL_SAFE_CHARS
+            )
+        heading_only = tinyhat_context._compose_onboarding_context(
+            "H" * 12_000, "hi"
+        )
+        self.assertLessEqual(
+            len(heading_only), tinyhat_context._HOOK_SPILL_SAFE_CHARS
+        )
+        self.assertLess(len(heading_only), 10_000)
+        # The oversized-heading branch with bullets present must also
+        # stay hard-capped (a different code path than no-bullet input).
+        heading_with_bullet = tinyhat_context._compose_onboarding_context(
+            "H" * 12_000 + "\n- tail bullet after a giant heading.", "hi"
+        )
+        self.assertLessEqual(
+            len(heading_with_bullet), tinyhat_context._HOOK_SPILL_SAFE_CHARS
+        )
+        self.assertLess(len(heading_with_bullet), 10_000)
+
+    def test_onboarding_turn_preserves_funding_context_for_funding_question(
+        self,
+    ) -> None:
+        first = tinyhat_context.inject_tinyhat_context(
+            user_message="How am I paying for you?",
+            is_first_turn=True,
+        )
+        assert first is not None
+        self.assertLessEqual(
+            len(first["context"]), tinyhat_context._HOOK_SPILL_SAFE_CHARS
+        )
+        self.assertLess(len(first["context"]), 10_000)
+        self.assertIn("- Funding model:", first["context"])
+        self.assertIn("Never state a remaining credit balance", first["context"])
+
+    def test_funding_reminder_directive_is_once_per_computer(self) -> None:
+        first = tinyhat_context.inject_tinyhat_context(
+            user_message="hello",
+            is_first_turn=True,
+        )
+        assert first is not None
+        self.assertIn(tinyhat_context.FUNDING_REMINDER_DIRECTIVE, first["context"])
+        marker = Path(self._hermes_home.name) / "tinyhat-funding-reminder-shown"
+        self.assertTrue(marker.is_file())
+
+        reset_session = tinyhat_context.inject_tinyhat_context(
+            user_message="hello again after /new",
+            is_first_turn=True,
+        )
+        assert reset_session is not None
+        self.assertNotIn(
+            tinyhat_context.FUNDING_REMINDER_DIRECTIVE,
+            reset_session["context"],
+        )
+
+        later_turn = tinyhat_context.inject_tinyhat_context(
+            user_message="tinyhat status",
+            is_first_turn=False,
+        )
+        assert later_turn is not None
+        self.assertNotIn(
+            tinyhat_context.FUNDING_REMINDER_DIRECTIVE,
+            later_turn["context"],
+        )
+
+    def test_context_hook_skips_generic_funding_terms(self) -> None:
+        examples = (
+            "Please free this buffer",
+            "Balance your binary tree",
+            "Price your API response",
+            "Fund your test fixture",
+            "Could you check my balance factor in this AVL tree?",
+            "Can you show who pays for each invoice in this CSV?",
+            "Could you look for free to use in the README?",
+            "Could you list projects funded by NASA?",
+            "Check my balance factor in this AVL tree?",
+            "Show who pays for each invoice in this CSV?",
+            "Look for free to use in the README?",
+            "List projects funded by NASA?",
+            "Can you rename how_much_do_you_cost?",
+            "Could you add a test named is_it_free?",
+            'Could you search for "how much do you cost" in README.md?',
+            "Rename your_prices to price_list",
+            "Sort your_rates before rendering",
+            "Serialize your_fees as JSON",
+            "Estimate the cost of this query",
+            "Balance this binary tree",
+            "Change the price field",
+            "Fund the test fixture",
+            "Can you free this buffer?",
+            "Could you balance this binary tree?",
+            "Estimate the cost of running this query",
+            "Who pays attention to this warning?",
+            "Is this free variable captured?",
+            "The balance factor of this AVL tree is wrong",
+            "How do I pay attention to failing tests?",
+            "What does it cost to sort this list?",
+            "Check the balance factor in this AVL tree",
+            "Look for free variables in this closure",
+            "Check my balance factor in this AVL tree",
+            "Look for free to use in the README",
+            "Show who pays for each invoice in this CSV",
+        )
+        for user_message in examples:
+            with self.subTest(user_message=user_message):
+                self.assertIsNone(
+                    tinyhat_context.inject_tinyhat_context(
+                        user_message=user_message,
+                        is_first_turn=False,
+                    )
+                )
+
+    def test_codex_auth_skill_states_funding_model(self) -> None:
+        skill_md = REPO_ROOT / "skills" / "tinyhat-codex-auth" / "SKILL.md"
+        text = " ".join(skill_md.read_text(encoding="utf-8").split())
+
+        self.assertIn("small starter credit (about $10)", text)
+        self.assertIn("intended ongoing fund", text)
+        self.assertIn("one-time funding note exactly once per Computer", text)
+        self.assertIn("as **one of the onboarding steps**", text)
+        self.assertIn("Never demote it to a footnote", text)
+        self.assertIn("skip it silently when a subscription is already connected", text)
+        self.assertIn("Present it once — not in every reply", text)
+        self.assertIn("durable per-Computer marker", text)
+        self.assertIn("tool-owned native response", text)
+        self.assertIn("Never block or delay the user's actual request", text)
+        self.assertIn("Never state a remaining credit balance", text)
+        self.assertIn('{"action": "status"}', text)
+        self.assertIn("/codex_auth", text)
+
+    def test_funding_reminder_claim_fails_closed_without_hermes_home(self) -> None:
+        os.environ["TINYHAT_HERMES_HOME"] = str(
+            Path(self._hermes_home.name) / "does-not-exist"
+        )
+        for attempt in range(2):
+            with self.subTest(attempt=attempt):
+                injected = tinyhat_context.inject_tinyhat_context(
+                    user_message="hello",
+                    is_first_turn=True,
+                )
+                assert injected is not None
+                self.assertNotIn(
+                    tinyhat_context.FUNDING_REMINDER_DIRECTIVE,
+                    injected["context"],
+                )
+
+    def test_funding_reminder_claim_is_exclusive(self) -> None:
+        self.assertTrue(tinyhat_context._claim_funding_reminder())
+        self.assertFalse(tinyhat_context._claim_funding_reminder())
 
     def test_context_hook_skips_generic_developer_terms(self) -> None:
         examples = (

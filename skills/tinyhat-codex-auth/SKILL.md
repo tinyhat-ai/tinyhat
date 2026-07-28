@@ -1,6 +1,6 @@
 ---
 name: tinyhat-codex-auth
-description: Start Tinyhat's OpenAI Codex / ChatGPT subscription device-auth flow. Use when the user says things like "connect you to my ChatGPT account", "use my Codex subscription", "use my ChatGPT Plus/Pro/Team plan", "switch from platform credits", "use my own OpenAI paid access", or "connect OpenAI auth".
+description: Start Tinyhat's OpenAI Codex / ChatGPT subscription device-auth flow, and explain the funding model. Use when the user says things like "connect you to my ChatGPT account", "use my Codex subscription", "use my ChatGPT Plus/Pro/Team plan", "switch from platform credits", "use my own OpenAI paid access", or "connect OpenAI auth" — and when they ask how the agent is paid for, whether it is free, what the starter credits are, or what happens when credits run out.
 ---
 
 # Tinyhat Codex Auth
@@ -8,6 +8,48 @@ description: Start Tinyhat's OpenAI Codex / ChatGPT subscription device-auth flo
 Use this when the user wants this Tinyhat-managed Hermes agent to use
 their OpenAI Codex / ChatGPT subscription instead of Tinyhat-funded
 platform credits.
+
+## Funding Model And The Onboarding Step
+
+A new agent starts on Tinyhat's included platform credits — a small
+starter credit (about $10). It exists so the agent works the moment it
+is created, not as the long-term fund. The intended ongoing fund is the
+user's own ChatGPT / Codex subscription, connected through the
+`/codex_auth` flow below. If the starter credit runs out before a
+subscription is connected, the agent cannot answer until funding is
+connected.
+
+The platform context shows a one-time funding note exactly once per
+Computer — on the first conversation turn after setup or an in-place
+upgrade. In a new user's onboarding reply, present connecting the
+subscription as **one of the onboarding steps** — a numbered or
+bulleted step when the reply lists getting-started steps, or a
+standalone step line of its own when it does not. For a clearly
+returning user (the Computer was upgraded mid-life), one brief
+standalone line is enough. Never demote it to a footnote, aside, or
+parenthetical, and skip it silently when a subscription is already
+connected. Example step: "Connect your ChatGPT/Codex subscription with
+/codex_auth — you're starting on a small included starter credit
+(about $10), and your own plan keeps me running after it."
+Rules for that step:
+
+- Present it once — not in every reply, and never as a nag. The
+  platform context tracks this with a durable per-Computer marker, so
+  a later /new or /reset session does not re-arm the step for a user
+  who already saw it.
+- Precedence: if the first reply is a tool-owned native response (for
+  example the Codex auth prerequisite photo or a Connect Google button),
+  or the user is already asking to connect their subscription, that flow
+  satisfies the step — do not add a separate text reply for it.
+- Never block or delay the user's actual request on it.
+- If unsure whether a subscription is already connected, check
+  `tinyhat_codex_auth` with `{"action": "status"}` before claiming it
+  is not connected.
+- Never state a remaining credit balance or an exact spend — the agent
+  cannot see one. Say the starter credit is small and limited, not a
+  number you cannot verify beyond its rough size.
+- When the user says yes, start the flow below; do not re-explain the
+  funding model first.
 
 Do not ask a multiple-choice clarification for common wording like
 "connect my ChatGPT account" or "use my Codex subscription". Treat that

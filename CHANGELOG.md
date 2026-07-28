@@ -10,6 +10,43 @@ All notable changes to the Tinyhat plugin are documented here.
   optional Slack `users.info` display-name lookup, keep the Computer-local
   private key worker alive after a failed Slack validation, and accept an
   owner-edited retry through the same expiring encrypted handoff.
+- Bump the Hermes plugin package to `0.21.13`; teach agents the funding model
+  and make connecting the subscription an explicit onboarding step
+  (relands the `0.21.10` funding work that missed the release channels). A new agent
+  starts on Tinyhat's included platform credits — a small starter credit
+  (about $10) so it works immediately — and the intended ongoing fund is the
+  user's own ChatGPT / Codex subscription connected through `/codex_auth`.
+  On the first conversation turn after setup or an in-place upgrade the
+  injected context adds a one-time funding-note directive ahead of the
+  context: a new user's onboarding reply presents connecting the
+  ChatGPT / Codex subscription as one of its onboarding steps (a
+  numbered or bulleted step when the reply lists steps, a standalone
+  step line otherwise, never a footnote), a clearly returning user gets
+  one brief line, and an already-connected subscription skips the note
+  silently. The claim is recorded with a durable per-Computer marker so
+  a later `/new` or `/reset` session does not re-arm it. The directive
+  is a first-message `[System note]` coordinated with Hermes's own
+  profile-build note, and the payload stays under Hermes's ~10k
+  hook-context spill cap (directive first, whole tail bullets dropped
+  when needed while bullets the first message matches through the same
+  routing phrases, terms, or intent matchers that inject the context —
+  privacy, funding, QA reporting — survive in source order) so the
+  note reaches the model inline; tool-owned native first
+  replies (the Codex auth prerequisite photo, a Connect Google button) or an
+  explicit connect request satisfy the step on their own. Agents check
+  `tinyhat_codex_auth` `action=status` before claiming a subscription is not
+  connected, never state a remaining credit balance they cannot see, and
+  answer how-is-this-paid-for / is-this-free / credits-ran-out questions
+  from the model. Funding routing is bounded: start-anchored
+  full-question grammar (optionally behind a polite modal wrapper —
+  "can you tell me what this costs?", "could you explain your
+  rates?") matches first; leading work commands are suppressed even
+  with a terminal question mark, and the modal frame suppresses the
+  remaining routes — broad funding fragments, the standalone word
+  billing, and a funding word bound to the agent/service — so generic
+  developer wording ("balance this binary tree", "can you rename
+  how_much_do_you_cost?", "could you list projects funded by NASA?")
+  does not inject.
 - Bump the Hermes plugin package to `0.21.12`; acknowledge encrypted Slack
   detail receipt immediately in Telegram, report value-blind validation stages
   and stable error codes to the platform, and require a successful owner-DM
