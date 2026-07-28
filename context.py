@@ -29,21 +29,25 @@ TINYHAT_CONTEXT = """Tinyhat context: this Hermes agent runs on a Tinyhat-manage
 - Load tinyhat:tinyhat-platform, tinyhat:tinyhat-privacy, tinyhat:tinyhat-private-secret, tinyhat:tinyhat-credentials, tinyhat:tinyhat-slack, tinyhat:tinyhat-google-workspace, tinyhat:tinyhat-codex-auth, tinyhat:tinyhat-plugin-update, tinyhat:tinyhat-skill-catalog, or tinyhat:tinyhat-plugin-version when you need the longer Tinyhat playbook."""
 
 # Appended to the injected context at most once per Computer (durable
-# marker below): the first-conversation funding reminder. It is issued on
+# marker below): the first-conversation onboarding step. It is issued on
 # the first turn of the first session only, so /new or /reset later does
-# not re-arm a "mandatory" line for a user who already saw it.
+# not re-arm a "mandatory" step for a user who already saw it.
 FUNDING_REMINDER_DIRECTIVE = (
-    "- This is this user's first conversation on this Computer: your first "
-    "substantive reply must also include one short funding line, alongside "
-    'any introduction or profile offer — for example: "Heads up: I\'m '
-    "running on a small included starter credit right now — when you're "
-    "ready, connect your ChatGPT/Codex subscription with /codex_auth so I "
-    'keep running on your own plan." Precedence: if your first reply is a '
-    "tool-owned native response (for example the Codex auth prerequisite "
-    "photo or a Connect Google button), or the user is already asking to "
-    "connect their subscription, that flow satisfies the reminder — do not "
-    "add a separate text reply for it. Never repeat this reminder in later "
-    "replies and never block the user's actual request on it."
+    "- This is this user's first conversation on this Computer, so your "
+    "first substantive reply is the onboarding message. It must present "
+    "connecting the user's own ChatGPT/Codex subscription as one of the "
+    "onboarding steps: when the reply lists getting-started steps, one "
+    "numbered or bulleted step is the subscription connection; when it "
+    "lists none, add one standalone step line of its own. Never demote it "
+    'to a footnote, aside, or parenthetical. Example step: "Connect your '
+    "ChatGPT/Codex subscription with /codex_auth — you're starting on a "
+    "small included starter credit (about $10), and your own plan keeps me "
+    'running after it." Precedence: if your first reply is a tool-owned '
+    "native response (for example the Codex auth prerequisite photo or a "
+    "Connect Google button), or the user is already asking to connect "
+    "their subscription, that flow satisfies the step — do not add a "
+    "separate text reply for it. Never repeat this step in later replies "
+    "and never block the user's actual request on it."
 )
 
 

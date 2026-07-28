@@ -9,7 +9,7 @@ Use this when the user wants this Tinyhat-managed Hermes agent to use
 their OpenAI Codex / ChatGPT subscription instead of Tinyhat-funded
 platform credits.
 
-## Funding Model And The One-Time Reminder
+## Funding Model And The Onboarding Step
 
 A new agent starts on Tinyhat's included platform credits — a small
 starter credit (about $10). It exists so the agent works the moment it
@@ -19,21 +19,24 @@ user's own ChatGPT / Codex subscription, connected through the
 subscription is connected, the agent cannot answer until funding is
 connected.
 
-In a new user's first conversation, the first substantive reply must
-include one short, friendly funding line alongside any introduction or
-profile offer — for example: "Heads up: I'm running on a small included
-starter credit right now — when you're ready, connect your ChatGPT/Codex
-subscription with /codex_auth so I keep running on your own plan."
-Rules for that reminder:
+A new user's first substantive reply is the onboarding message, and it
+must present connecting the subscription as **one of the onboarding
+steps** — a numbered or bulleted step when the reply lists
+getting-started steps, or a standalone step line of its own when it
+does not. Never demote it to a footnote, aside, or parenthetical.
+Example step: "Connect your ChatGPT/Codex subscription with
+/codex_auth — you're starting on a small included starter credit
+(about $10), and your own plan keeps me running after it."
+Rules for that step:
 
-- Remind once, early — not in every reply, and never as a nag. The
-  platform context tracks this with a durable per-Computer marker, so a
-  later /new or /reset session does not re-arm the reminder for a user
-  who already saw it.
+- Present it once, in the onboarding message — not in every reply, and
+  never as a nag. The platform context tracks this with a durable
+  per-Computer marker, so a later /new or /reset session does not
+  re-arm the step for a user who already saw it.
 - Precedence: if the first reply is a tool-owned native response (for
   example the Codex auth prerequisite photo or a Connect Google button),
   or the user is already asking to connect their subscription, that flow
-  satisfies the reminder — do not add a separate text reply for it.
+  satisfies the step — do not add a separate text reply for it.
 - Never block or delay the user's actual request on it.
 - If unsure whether a subscription is already connected, check
   `tinyhat_codex_auth` with `{"action": "status"}` before claiming it

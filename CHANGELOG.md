@@ -7,18 +7,20 @@ All notable changes to the Tinyhat plugin are documented here.
 ### Changed
 
 - Bump the Hermes plugin package to `0.21.13`; teach agents the funding model
-  and the one-time onboarding reminder (relands the `0.21.10` funding
-  work that missed the release channels). A new agent
+  and make connecting the subscription an explicit onboarding step
+  (relands the `0.21.10` funding work that missed the release channels). A new agent
   starts on Tinyhat's included platform credits — a small starter credit
   (about $10) so it works immediately — and the intended ongoing fund is the
   user's own ChatGPT / Codex subscription connected through `/codex_auth`.
   On a Computer's very first conversation the injected context appends a
-  one-time directive requiring the first substantive reply to carry a
-  short connect-your-subscription line, recorded with a durable
-  per-Computer marker so a later
+  one-time directive requiring the first substantive reply — the
+  onboarding message — to present connecting the ChatGPT / Codex
+  subscription as one of its onboarding steps (a numbered or bulleted
+  step when the reply lists steps, a standalone step line otherwise,
+  never a footnote), recorded with a durable per-Computer marker so a later
   `/new` or `/reset` session does not re-arm it; tool-owned native first
   replies (the Codex auth prerequisite photo, a Connect Google button) or an
-  explicit connect request satisfy the reminder on their own. Agents check
+  explicit connect request satisfy the step on their own. Agents check
   `tinyhat_codex_auth` `action=status` before claiming a subscription is not
   connected, never state a remaining credit balance they cannot see, and
   answer how-is-this-paid-for / is-this-free / credits-ran-out questions

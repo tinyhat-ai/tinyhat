@@ -13,7 +13,7 @@ The current capability list is intentionally small.
 | `tinyhat_google_workspace` | Available now | Connects Google identity, composes implemented access presets and requestable Custom scopes, lets Google handle its pending-verification warning, blocks unimplemented requests before OAuth, and starts an account-targeted local disconnect ceremony. |
 | `tinyhat_google_workspace_app` | Available now | Lends one selected account's assignment-verified Google access to one bounded `gws` invocation. |
 | `tinyhat_google_workspace_app_manager` | Available now | After approval, installs or removes the pinned integrity-verified `gws` app; Hermes supplies the operation skill. |
-| `tinyhat-codex-auth` skill | Available now | Teaches the agent the starter-credit funding model, the one-time connect-your-subscription reminder, and how to start and inspect the Tinyhat-installed OpenAI Codex / ChatGPT subscription auth flow. |
+| `tinyhat-codex-auth` skill | Available now | Teaches the agent the starter-credit funding model, the one-time connect-your-subscription onboarding step, and how to start and inspect the Tinyhat-installed OpenAI Codex / ChatGPT subscription auth flow. |
 | `tinyhat_plugin_update` | Available now | Checks and applies the configured plugin channel through installed runtime commands. |
 | `tinyhat-privacy` skill | Available now | Teaches the agent Tinyhat's privacy and trust model: dedicated isolated Computers, no routine platform reading of Computer contents, policy-bound human access, and the private-Computer direction. |
 | `pre_llm_call` context | Available now | Gives Hermes a short Tinyhat operating reminder on first turn and Tinyhat-sensitive requests. |
@@ -82,9 +82,10 @@ phrases, agent/service-bound funding words, or the standalone word
 billing),
 or on the first turn of a
 session. On a Computer's very first conversation the context also
-appends a one-time funding-reminder directive, tracked by a durable
-marker so later /new sessions do not re-arm it; tool-owned native first
-replies satisfy the reminder. The context tells
+appends a one-time onboarding-step directive — the first reply must
+present connecting the ChatGPT/Codex subscription as one of its
+onboarding steps — tracked by a durable marker so later /new sessions
+do not re-arm it; tool-owned native first replies satisfy the step. The context tells
 the agent to prefer Tinyhat private secret entry for credentials,
 Tinyhat's installed Codex commands for OpenAI Codex auth, the Hermes-owned
 Slack connection flow, identity-only bare

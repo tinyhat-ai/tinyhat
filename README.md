@@ -324,12 +324,12 @@ Tinyhat-managed OpenAI Codex / ChatGPT subscription sign-in flow — and
 the funding model behind it: a new agent starts on Tinyhat's included
 platform credits, a small starter credit (about $10) that exists so the
 agent works immediately, while the intended ongoing fund is the user's
-own ChatGPT / Codex subscription. The skill has the agent remind a new
-user once, early and without nagging, to connect their subscription
-(tracked by a durable per-Computer marker, with tool-owned native first
-replies satisfying the reminder), check `{"action": "status"}` before
-claiming it is not connected, and
-never state a remaining credit balance it cannot see. When
+own ChatGPT / Codex subscription. The skill has the agent present
+connecting the subscription as one of the onboarding steps in a new
+user's first reply — once, without nagging (tracked by a durable
+per-Computer marker, with tool-owned native first replies satisfying
+the step) — check `{"action": "status"}` before claiming it is not
+connected, and never state a remaining credit balance it cannot see. When
 the user says "connect you to my ChatGPT account", "use my Codex
 subscription", or "switch from platform credits", the agent calls
 `tinyhat_codex_auth` with `{"action": "prerequisite"}`. The helper sends
@@ -381,13 +381,16 @@ today, which is why the policy is binding and why Tinyhat is building
 private Computers designed to remove even that technical possibility.
 
 The context hook also carries the funding model and a once-per-Computer
-onboarding reminder. On the very first conversation of a Computer it
-appends a one-time directive requiring the first substantive reply to
-include a short connect-your-subscription line, recorded with a durable
+onboarding step. On the very first conversation of a Computer it
+appends a one-time directive requiring the first substantive reply —
+the onboarding message — to present connecting the user's ChatGPT/Codex
+subscription as one of its onboarding steps: a numbered or bulleted
+step when the reply lists getting-started steps, a standalone step line
+otherwise, never a footnote. The claim is recorded with a durable
 marker so a later `/new` or `/reset` session does not re-arm it.
 Tool-owned native first replies (the Codex auth prerequisite photo, a
 Connect Google button) or an explicit connect request satisfy the
-reminder on their own. Funding questions route through bounded matching:
+step on their own. Funding questions route through bounded matching:
 command frames are suppressed before any funding matching, then
 end-anchored question forms and bounded funding phrases, a funding
 word bound to the

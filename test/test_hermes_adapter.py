@@ -589,15 +589,31 @@ class HermesAdapterTests(unittest.TestCase):
     def test_context_states_funding_reminder_rules(self) -> None:
         directive = tinyhat_context.FUNDING_REMINDER_DIRECTIVE
         self.assertIn(
-            "first substantive reply must also include one short funding line",
+            "first substantive reply is the onboarding message",
             directive,
         )
         self.assertIn(
-            "connect your ChatGPT/Codex subscription with /codex_auth",
+            "as one of the onboarding steps",
+            directive,
+        )
+        self.assertIn(
+            "numbered or bulleted step is the subscription connection",
+            directive,
+        )
+        self.assertIn(
+            "add one standalone step line of its own",
+            directive,
+        )
+        self.assertIn(
+            "Never demote it to a footnote, aside, or parenthetical",
+            directive,
+        )
+        self.assertIn(
+            "Connect your ChatGPT/Codex subscription with /codex_auth",
             directive,
         )
         self.assertIn("tool-owned native response", directive)
-        self.assertIn("Never repeat this reminder", directive)
+        self.assertIn("Never repeat this step", directive)
         self.assertIn("never block the user's actual request", directive)
         self.assertIn(
             "Never state a remaining credit balance",
@@ -674,8 +690,10 @@ class HermesAdapterTests(unittest.TestCase):
 
         self.assertIn("small starter credit (about $10)", text)
         self.assertIn("intended ongoing fund", text)
-        self.assertIn("first substantive reply must include", text)
-        self.assertIn("Remind once, early", text)
+        self.assertIn("first substantive reply is the onboarding message", text)
+        self.assertIn("as **one of the onboarding steps**", text)
+        self.assertIn("Never demote it to a footnote", text)
+        self.assertIn("Present it once, in the onboarding message", text)
         self.assertIn("durable per-Computer marker", text)
         self.assertIn("tool-owned native response", text)
         self.assertIn("Never block or delay the user's actual request", text)
