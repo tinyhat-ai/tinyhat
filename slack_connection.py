@@ -28,6 +28,36 @@ MAX_ALLOWED_USERS = 100
 SLACK_ID_RE = re.compile(r"^[A-Z][A-Z0-9]{8,}$")
 SLACK_API_BASE_URL = "https://slack.com/api"
 SLACK_HOME_CHANNEL_NAME = "Owner DM"
+SLACK_WELCOME_MESSAGE = "Hi there! Slack is connected to this Hermes agent."
+SAFE_SLACK_ERROR_CODES = {
+    "account_inactive",
+    "cannot_dm_bot",
+    "cannot_dm_user",
+    "invalid_app_token",
+    "invalid_auth",
+    "missing_scope",
+    "not_allowed_token_type",
+    "not_authed",
+    "token_revoked",
+    "user_not_found",
+    "users_not_found",
+}
+
+
+class SlackConnectionError(SecretHandoffError):
+    """A value-blind, stage-aware Slack connection failure."""
+
+    def __init__(
+        self,
+        message: str,
+        *,
+        stage: str,
+        code: str,
+        public_message: str,
+    ) -> None:
+        super().__init__(message, public_message=public_message)
+        self.stage = stage
+        self.code = code
 
 
 def start_slack_connection(args: dict[str, Any] | None = None, **_: Any) -> str:
@@ -127,35 +157,139 @@ def install_submitted_slack_connection(
     if not isinstance(ciphertext_payload, dict):
         raise SecretHandoffError("Platform did not return Slack ciphertext.")
     plaintext = _decrypt_ciphertext(private_key_pem, ciphertext_payload)
+    _send_secret_notice(
+        "Slack details were received on this Computer. I am validating them now."
+    )
+    bundle: dict[str, str] = {}
+    metadata: dict[str, Any] = {}
+    parse_failure: SlackConnectionError | None = None
     try:
         bundle = _parse_connection_bundle(plaintext)
+    except Exception as exc:
+        parse_failure = _slack_connection_failure(exc)
     finally:
         plaintext = ""
+    try:
+        if parse_failure is not None:
+            raise parse_failure
+        metadata = _validate_slack_credentials(bundle)
+        home_channel = _open_slack_home_channel(bundle)
+        try:
+            for name, value in (
+                ("SLACK_BOT_TOKEN", bundle["bot_token"]),
+                ("SLACK_APP_TOKEN", bundle["app_token"]),
+                ("SLACK_ALLOWED_USERS", bundle["allowed_users"]),
+                ("SLACK_HOME_CHANNEL", home_channel),
+                ("SLACK_HOME_CHANNEL_NAME", SLACK_HOME_CHANNEL_NAME),
+            ):
+                _set_hermes_secret(name, value)
+        except Exception as exc:
+            raise SlackConnectionError(
+                "Hermes could not save the validated Slack credentials.",
+                stage="credential_save",
+                code="secret_save_failed",
+                public_message=(
+                    "Slack accepted the details, but Hermes could not save them "
+                    "on this Computer."
+                ),
+            ) from exc
+        _slack_api_call(
+            "chat.postMessage",
+            token=bundle["bot_token"],
+            params={"channel": home_channel, "text": SLACK_WELCOME_MESSAGE},
+            stage="greeting",
+        )
+        _send_secret_notice(
+            "Slack accepted the details and the welcome message was sent. "
+            "The platform is refreshing Hermes now — I will confirm when Slack "
+            "is ready."
+        )
+        _claim_handoff(
+            client,
+            platform_auth,
+            handoff_id,
+            installed=True,
+            message=None,
+            outcome=HANDOFF_OUTCOME_RESTART_PENDING,
+            connection_metadata={
+                **metadata,
+                "connection_status": "connected",
+            },
+        )
+    except Exception as exc:
+        failure = _slack_connection_failure(exc)
+        _send_secret_notice(
+            f"Slack connection failed during {_slack_stage_label(failure.stage)}. "
+            f"{failure.public_message}"
+        )
+        failure_metadata = {
+            "provider": "slack",
+            "connection_status": "failed",
+            "failure_stage": failure.stage,
+            "failure_code": failure.code,
+            **{
+                key: metadata[key]
+                for key in (
+                    "app_id",
+                    "app_name",
+                    "workspace_id",
+                    "workspace_name",
+                )
+                if key in metadata
+            },
+        }
+        try:
+            _claim_handoff(
+                client,
+                platform_auth,
+                handoff_id,
+                installed=False,
+                message=failure.public_message,
+                connection_metadata=failure_metadata,
+            )
+        except Exception:
+            # Compatibility with platform versions that predate failed
+            # connection metadata.
+            _claim_handoff(
+                client,
+                platform_auth,
+                handoff_id,
+                installed=False,
+                message=failure.public_message,
+            )
+    finally:
+        bundle.clear()
 
-    metadata = _validate_slack_credentials(bundle)
-    home_channel = _open_slack_home_channel(bundle)
-    for name, value in (
-        ("SLACK_BOT_TOKEN", bundle["bot_token"]),
-        ("SLACK_APP_TOKEN", bundle["app_token"]),
-        ("SLACK_ALLOWED_USERS", bundle["allowed_users"]),
-        ("SLACK_HOME_CHANNEL", home_channel),
-        ("SLACK_HOME_CHANNEL_NAME", SLACK_HOME_CHANNEL_NAME),
-    ):
-        _set_hermes_secret(name, value)
-    bundle.clear()
-    _send_secret_notice(
-        "Slack tokens are saved on this Computer. The platform is refreshing "
-        "Hermes now — I will confirm when Slack is ready."
+
+def _slack_connection_failure(exc: Exception) -> SlackConnectionError:
+    if isinstance(exc, SlackConnectionError):
+        return exc
+    if isinstance(exc, SecretHandoffError):
+        return SlackConnectionError(
+            str(exc),
+            stage="input_validation",
+            code="invalid_input",
+            public_message=exc.public_message,
+        )
+    return SlackConnectionError(
+        "Unexpected Slack connection failure.",
+        stage="unknown",
+        code="connection_failed",
+        public_message="Slack could not be connected. Please retry the setup.",
     )
-    _claim_handoff(
-        client,
-        platform_auth,
-        handoff_id,
-        installed=True,
-        message=None,
-        outcome=HANDOFF_OUTCOME_RESTART_PENDING,
-        connection_metadata=metadata,
-    )
+
+
+def _slack_stage_label(stage: str) -> str:
+    return {
+        "bot_auth": "bot-token validation",
+        "socket_mode": "Socket Mode validation",
+        "member_lookup": "allowed-member validation",
+        "app_identity": "Slack app identification",
+        "owner_dm": "owner direct-message setup",
+        "credential_save": "credential saving",
+        "greeting": "welcome-message delivery",
+        "input_validation": "submitted-detail validation",
+    }.get(stage, "Slack setup")
 
 
 def _parse_connection_bundle(plaintext: str) -> dict[str, str]:
@@ -210,6 +344,7 @@ def _open_slack_home_channel(bundle: dict[str, str]) -> str:
         "conversations.open",
         token=bundle["bot_token"],
         params={"users": owner_user_id},
+        stage="owner_dm",
     )
     channel = result.get("channel")
     channel_id = (
@@ -218,8 +353,10 @@ def _open_slack_home_channel(bundle: dict[str, str]) -> str:
         else ""
     )
     if not channel_id.startswith("D") or not SLACK_ID_RE.fullmatch(channel_id):
-        raise SecretHandoffError(
+        raise SlackConnectionError(
             "Slack did not return the owner's direct-message channel.",
+            stage="owner_dm",
+            code="invalid_response",
             public_message=(
                 "Slack accepted the tokens but could not open the owner's "
                 "direct message."
@@ -229,13 +366,22 @@ def _open_slack_home_channel(bundle: dict[str, str]) -> str:
 
 
 def _validate_slack_credentials(bundle: dict[str, str]) -> dict[str, Any]:
-    auth = _slack_api_call("auth.test", token=bundle["bot_token"])
-    _slack_api_call("apps.connections.open", token=bundle["app_token"])
+    auth = _slack_api_call(
+        "auth.test",
+        token=bundle["bot_token"],
+        stage="bot_auth",
+    )
+    _slack_api_call(
+        "apps.connections.open",
+        token=bundle["app_token"],
+        stage="socket_mode",
+    )
     for user_id in bundle["allowed_users"].split(","):
         _slack_api_call(
             "users.info",
             token=bundle["bot_token"],
             params={"user": user_id},
+            stage="member_lookup",
         )
 
     app_id = str(auth.get("app_id") or "").strip().upper()
@@ -246,6 +392,7 @@ def _validate_slack_credentials(bundle: dict[str, str]) -> dict[str, Any]:
             "bots.info",
             token=bundle["bot_token"],
             params={"bot": bot_id},
+            stage="app_identity",
         ).get("bot")
         if isinstance(bot, dict):
             app_id = str(bot.get("app_id") or app_id).strip().upper()
@@ -257,14 +404,17 @@ def _validate_slack_credentials(bundle: dict[str, str]) -> dict[str, Any]:
                 "users.info",
                 token=bundle["bot_token"],
                 params={"user": user_id},
+                stage="app_identity",
             ).get("user")
             profile = user.get("profile") if isinstance(user, dict) else None
             if isinstance(profile, dict):
                 app_id = str(profile.get("api_app_id") or "").strip().upper()
     workspace_id = str(auth.get("team_id") or "").strip().upper()
     if not SLACK_ID_RE.fullmatch(app_id) or not SLACK_ID_RE.fullmatch(workspace_id):
-        raise SecretHandoffError(
+        raise SlackConnectionError(
             "Slack did not return the app and workspace identifiers.",
+            stage="app_identity",
+            code="identity_missing",
             public_message="Slack accepted the tokens but did not identify the app.",
         )
     return {
@@ -282,6 +432,7 @@ def _slack_api_call(
     *,
     token: str,
     params: dict[str, str] | None = None,
+    stage: str = "unknown",
 ) -> dict[str, Any]:
     body = parse.urlencode(params or {}).encode("utf-8")
     req = request.Request(
@@ -297,9 +448,13 @@ def _slack_api_call(
         with request.urlopen(req, timeout=20) as response:
             payload = json.loads(response.read().decode("utf-8"))
     except (error.URLError, TimeoutError, ValueError) as exc:
-        raise SecretHandoffError(
+        raise SlackConnectionError(
             f"Slack API validation failed for {method}.",
-            public_message="Slack could not validate these connection details.",
+            stage=stage,
+            code="network_error",
+            public_message=(
+                "Slack could not be reached from this Computer. Please retry."
+            ),
         ) from exc
     if not isinstance(payload, dict) or payload.get("ok") is not True:
         error_name = (
@@ -307,11 +462,31 @@ def _slack_api_call(
             if isinstance(payload, dict)
             else "invalid_response"
         )
-        raise SecretHandoffError(
+        safe_error_code = (
+            error_name if error_name in SAFE_SLACK_ERROR_CODES else "slack_rejected"
+        )
+        raise SlackConnectionError(
             f"Slack rejected {method}: {error_name[:80]}.",
+            stage=stage,
+            code=safe_error_code,
             public_message=(
-                "Slack rejected one of the tokens or member IDs. Check the values "
-                "in the Slack app settings and try again."
+                _slack_failure_message(stage, safe_error_code)
             ),
         )
     return payload
+
+
+def _slack_failure_message(stage: str, code: str) -> str:
+    if code == "missing_scope":
+        return "The Slack app is missing a required permission. Reinstall it and retry."
+    if stage == "bot_auth":
+        return "Slack did not accept the bot token. Copy the xoxb token and retry."
+    if stage == "socket_mode":
+        return "Slack did not accept the Socket Mode app token. Copy the xapp token and retry."
+    if stage == "member_lookup":
+        return "Slack could not find an allowed member ID. Copy it from the member profile and retry."
+    if stage == "owner_dm":
+        return "Slack could not open the owner's direct message."
+    if stage == "greeting":
+        return "Slack connected, but Hermes could not send the welcome message."
+    return "Slack rejected the connection details. Check the Slack app settings and retry."

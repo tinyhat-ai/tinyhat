@@ -143,9 +143,11 @@ endpoint or SSH. `tinyhat_slack_connect` runs `hermes slack manifest
 --agent-view`, sends that JSON plus a highlighted create-from-manifest guide,
 and opens one encrypted Mini App form for the `xoxb-` bot token, `xapp-`
 Socket Mode token, and allowed Slack member IDs. The Computer validates those
-values against Slack, saves them through Hermes' supported configuration
-interface, and reports only the app and workspace identifiers needed by the
-Connections page. Hermes owns the WebSocket and every Slack message.
+values against Slack, immediately acknowledges receipt in Telegram, saves them
+through Hermes' supported configuration interface, and sends an owner-DM
+greeting before reporting success. Failed attempts expose only a value-blind
+validation stage and stable error code on the Connections page. Hermes owns the
+WebSocket and every Slack message.
 The Computer opens a direct message with the first allowed member and saves
 that private chat locally as Hermes' Slack home channel, so cron results and
 cross-platform messages have a safe default without workspace-global slash
@@ -400,7 +402,7 @@ TINYHAT_PLUGIN_REF=vX.Y.Z
 | `channels/latest` | Newest promoted final version, used when we want faster adoption. |
 | exact tag, for example `vX.Y.Z` | Immutable version for tests, rollbacks, and audits. |
 
-For v0.21.11, deploy the platform that validates the same Slack and privacy
+For v0.21.12, deploy the platform that validates the same Slack and privacy
 contracts before promoting `channels/latest` and `channels/lts`. This order
 keeps older Computers and platform versions from applying incompatible
 connection or trust-model behavior.
