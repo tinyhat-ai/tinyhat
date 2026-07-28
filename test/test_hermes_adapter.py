@@ -195,7 +195,7 @@ class HermesAdapterTests(unittest.TestCase):
 
         self.assertEqual(payload["schema"], "tinyhat_plugin_version_v1")
         self.assertEqual(payload["name"], "tinyhat")
-        self.assertEqual(payload["version"], "0.21.13")
+        self.assertEqual(payload["version"], "0.21.14")
 
     def test_platform_status_uses_attested_computer_endpoint(self) -> None:
         original_build = tools.build_platform_client
@@ -208,7 +208,7 @@ class HermesAdapterTests(unittest.TestCase):
                     "computer_id": 5359,
                     "state": "active",
                     "assigned": True,
-                    "package_inventory": {"plugin": {"version": "0.21.13"}},
+                    "package_inventory": {"plugin": {"version": "0.21.14"}},
                 }
 
         try:
@@ -221,7 +221,7 @@ class HermesAdapterTests(unittest.TestCase):
         self.assertEqual(payload["computer_id"], 5359)
         self.assertEqual(payload["state"], "active")
         self.assertTrue(payload["assigned"])
-        self.assertEqual(payload["package_inventory"]["plugin"]["version"], "0.21.13")
+        self.assertEqual(payload["package_inventory"]["plugin"]["version"], "0.21.14")
 
     def test_platform_status_returns_structured_platform_error(self) -> None:
         original_build = tools.build_platform_client
@@ -244,7 +244,7 @@ class HermesAdapterTests(unittest.TestCase):
 
         self.assertEqual(payload["schema"], "tinyhat_skill_catalog_v1")
         self.assertEqual(payload["plugin"]["name"], "tinyhat")
-        self.assertEqual(payload["plugin"]["version"], "0.21.13")
+        self.assertEqual(payload["plugin"]["version"], "0.21.14")
         by_name = {skill["name"]: skill for skill in payload["skills"]}
         self.assertEqual(
             by_name["tinyhat-codex-auth"]["qualified_name"],

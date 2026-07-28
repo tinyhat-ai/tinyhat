@@ -444,7 +444,7 @@ TINYHAT_PLUGIN_REF=vX.Y.Z
 | `channels/latest` | Newest promoted final version, used when we want faster adoption. |
 | exact tag, for example `vX.Y.Z` | Immutable version for tests, rollbacks, and audits. |
 
-For v0.21.13, deploy the platform that supports retrying the same encrypted
+For v0.21.14, deploy the platform that supports retrying the same encrypted
 Slack handoff before promoting `channels/latest` and `channels/lts`. The
 matching Mini App keeps editable details only in Telegram SecureStorage on
 supported user devices; Tinyhat backend APIs never receive plaintext.

@@ -6,12 +6,12 @@ All notable changes to the Tinyhat plugin are documented here.
 
 ### Changed
 
-- Bump the Hermes plugin package to `0.21.13`; stop blocking setup on the
+- Bump the Hermes plugin package to `0.21.14`; stop blocking setup on the
   optional Slack `users.info` display-name lookup, keep the Computer-local
   private key worker alive after a failed Slack validation, and accept an
   owner-edited retry through the same expiring encrypted handoff.
-- Bump the Hermes plugin package to `0.21.13`; teach agents the funding model
-  and make connecting the subscription an explicit onboarding step
+- Include the funding model and make connecting the subscription an explicit
+  onboarding step
   (relands the `0.21.10` funding work that missed the release channels). A new agent
   starts on Tinyhat's included platform credits — a small starter credit
   (about $10) so it works immediately — and the intended ongoing fund is the
