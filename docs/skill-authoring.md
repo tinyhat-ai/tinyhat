@@ -133,9 +133,11 @@ skills must never guess between multiple accounts. Bare connect requests only
 `openid`, `email`, and `profile`.
 
 When the user needs Workspace data, the skill chooses the smallest composable
-`presets` array from Workspace Reader (`workspace_reader`), Mail Writer
+`presets` array from Mail Reader (`mail_reader`), Mail Sender
+(`mail_sender`), Workspace Reader (`workspace_reader`), Mail Writer
 (`mail_writer`), Inbox Manager (`inbox_manager`), Calendar Coordinator
 (`calendar_coordinator`), and File Collaborator (`file_collaborator`). Mail
+Mail Sender's `gmail.send` cannot read the inbox or manage drafts. Mail
 Writer's `gmail.compose` includes drafts and sending. Inbox Manager's
 `gmail.modify` includes reading, composing, sending, drafts, labels, archive,
 and read state, but not immediate permanent deletion. Workspace Reader's

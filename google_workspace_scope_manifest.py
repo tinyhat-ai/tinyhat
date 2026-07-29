@@ -86,6 +86,8 @@ _COMPATIBILITY_SCOPE_DISCLOSURE_KEYS = frozenset(
     {"canonical_url", "service", "status", "user_copy", "rationale"}
 )
 _EXPECTED_PRESETS = {
+    "mail_reader": (("gmail.readonly",), "restricted", True, False),
+    "mail_sender": (("gmail.send",), "sensitive", True, False),
     "workspace_reader": (
         ("gmail.readonly", "calendar.events.readonly", "drive.readonly"),
         "restricted",

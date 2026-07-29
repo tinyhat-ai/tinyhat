@@ -54,7 +54,7 @@ class GoogleWorkspaceScopeManifestTests(unittest.TestCase):
 
     def test_manifest_is_strictly_loaded_and_recursively_immutable(self) -> None:
         self.assertEqual(manifest.MANIFEST["schema"], manifest.MANIFEST_SCHEMA)
-        self.assertEqual(manifest.MANIFEST["manifest_version"], "1.0.1")
+        self.assertEqual(manifest.MANIFEST["manifest_version"], "1.1.0")
         self.assertEqual(manifest.IDENTITY_BUNDLE_ID, "google_workspace_identity_v1")
         self.assertIsInstance(manifest.MANIFEST, MappingProxyType)
         self.assertIsInstance(manifest.MANIFEST["scopes"], tuple)
@@ -76,8 +76,10 @@ class GoogleWorkspaceScopeManifestTests(unittest.TestCase):
         self.assertTrue(resolved.read_only)
         self.assertTrue(resolved.approved)
 
-    def test_five_presets_have_the_required_exact_scope_membership(self) -> None:
+    def test_seven_presets_have_the_required_exact_scope_membership(self) -> None:
         expected = {
+            "mail_reader": (("gmail.readonly",), "restricted"),
+            "mail_sender": (("gmail.send",), "sensitive"),
             "workspace_reader": (
                 ("gmail.readonly", "calendar.events.readonly", "drive.readonly"),
                 "restricted",
@@ -505,7 +507,7 @@ class GoogleWorkspaceScopeManifestTests(unittest.TestCase):
 
     def test_strict_loader_rejects_preset_membership_drift(self) -> None:
         raw = self.raw_manifest()
-        raw["presets"][0]["scope_ids"] = ["gmail.readonly"]  # type: ignore[index]
+        raw["presets"][2]["scope_ids"] = ["gmail.readonly"]  # type: ignore[index]
         with self.assertRaisesRegex(ValueError, "required preset contract"):
             self.load_changed(raw)
 

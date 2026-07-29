@@ -16,7 +16,7 @@ a private secret handoff that lets the user enter a secret in a Telegram
 Mini App without sending the plaintext to Tinyhat's servers. It also
 connects multiple existing Google identities to a Computer without asking the
 user for a Google Cloud project, OAuth client, secret, or SSH access. A bare
-connection requests identity only. Five composable presets cover common
+connection requests identity only. Seven composable presets cover common
 read-only Workspace access, mail writing, inbox management, Calendar event
 management, and limited file collaboration. Custom requests can select only
 implemented scopes that the packaged public manifest marks requestable for the
@@ -170,11 +170,13 @@ The Computer creates a fresh RSA keypair and asks the
 platform for identity only: `openid`, `email`, and `profile`. Workspace data
 access is explicit and comes from the versioned
 `google_workspace_scope_manifest.json` contract (schema
-`tinyhat_google_workspace_scope_manifest_v1`, manifest version `1.0.1`). It
+`tinyhat_google_workspace_scope_manifest_v1`, manifest version `1.1.0`). It
 defines these composable presets:
 
 | Preset | Id | Exact data scope |
 | --- | --- | --- |
+| Mail Reader | `mail_reader` | `https://www.googleapis.com/auth/gmail.readonly` for messages, threads, and Gmail settings without changes |
+| Mail Sender | `mail_sender` | `https://www.googleapis.com/auth/gmail.send` for confirmed sends without inbox or draft access |
 | Workspace Reader | `workspace_reader` | `https://www.googleapis.com/auth/gmail.readonly` for messages, threads, and Gmail settings; `https://www.googleapis.com/auth/calendar.events.readonly`; and `https://www.googleapis.com/auth/drive.readonly` |
 | Mail Writer | `mail_writer` | `https://www.googleapis.com/auth/gmail.compose` for drafts and sending |
 | Inbox Manager | `inbox_manager` | `https://www.googleapis.com/auth/gmail.modify` for reading, composing, sending, drafts, labels, archive, and read state, without immediate permanent deletion |
@@ -260,6 +262,13 @@ current set, while `action=set_permissions` replaces the selected account with
 the exact requested presets and Custom scopes, plus identity. A narrower
 replacement makes this Computer stop using removed scopes; it does not perform
 Google provider-side granular revocation or erase consent history.
+
+When the user asks vaguely to connect Gmail or grant normal Google access, the
+plugin sends a Telegram Mini App chooser instead of guessing a broad grant.
+Clear natural-language tasks still go directly to the narrow preset: reading
+mail uses Mail Reader, sending only uses Mail Sender, and drafting uses Mail
+Writer. Google does not expose a draft-only scope, so `gmail.compose` includes
+sending.
 
 Google's consent screen is the permission decision. A cancelled, failed, or
 expired change leaves the existing local credential untouched; a valid
@@ -443,6 +452,11 @@ TINYHAT_PLUGIN_REF=vX.Y.Z
 | `channels/lts` | Conservative default for managed Computers. |
 | `channels/latest` | Newest promoted final version, used when we want faster adoption. |
 | exact tag, for example `vX.Y.Z` | Immutable version for tests, rollbacks, and audits. |
+
+For v0.21.17, deploy the matching platform Google-access chooser before
+promoting `channels/latest` and `channels/lts`. Vague Google-access requests
+open the Mini App; explicit mail reading, sending, draft, and inbox-management
+requests still map directly to their narrowest preset.
 
 For v0.21.16, deploy the matching platform Mini App before promoting
 `channels/latest` and `channels/lts`. Permission failures preserve the

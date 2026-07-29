@@ -122,8 +122,8 @@ TINYHAT_CREDENTIALS_SCHEMA = {
 TINYHAT_GOOGLE_WORKSPACE_SCHEMA = {
     "type": "object",
     "description": (
-        "Connect, inspect, change permissions for, or disconnect Google Workspace "
-        "accounts on this Tinyhat Computer. A bare connect requests identity only. "
+        "Connect, inspect, choose or change permissions for, or disconnect Google "
+        "Workspace accounts on this Tinyhat Computer. A bare connect requests identity only. "
         "Workspace data access must be selected explicitly with one or more implemented "
         "presets or an exact custom subset of the public scope manifest. Pending Google "
         "verification may produce a provider warning but does not block an implemented "
@@ -135,9 +135,18 @@ TINYHAT_GOOGLE_WORKSPACE_SCHEMA = {
     "properties": {
         "action": {
             "type": "string",
-            "enum": ["connect", "status", "set_permissions", "disconnect"],
+            "enum": [
+                "connect",
+                "choose_permissions",
+                "status",
+                "set_permissions",
+                "disconnect",
+            ],
             "description": (
-                "Use connect to add an account or, with account_id, retain the "
+                "Use choose_permissions when the user wants Google or Gmail access "
+                "but has not said what the Computer should be allowed to do; it sends "
+                "a concise Telegram Mini App chooser. Use connect to add an account "
+                "with a known exact preset or scope set or, with account_id, retain the "
                 "additive behavior by combining current and requested scopes. Use "
                 "set_permissions with account_id to replace one account's permissions "
                 "with the exact named profile or scope set. "
@@ -168,11 +177,13 @@ TINYHAT_GOOGLE_WORKSPACE_SCHEMA = {
         "presets": {
             "type": "array",
             "minItems": 1,
-            "maxItems": 5,
+            "maxItems": 7,
             "uniqueItems": True,
             "items": {
                 "type": "string",
                 "enum": [
+                    "mail_reader",
+                    "mail_sender",
                     "workspace_reader",
                     "mail_writer",
                     "inbox_manager",
@@ -181,9 +192,12 @@ TINYHAT_GOOGLE_WORKSPACE_SCHEMA = {
                 ],
             },
             "description": (
-                "One or more composable implemented presets: Workspace Reader reads "
+                "One or more composable implemented presets: Mail Reader reads Gmail "
+                "without changing it; Mail Sender only sends confirmed email and "
+                "cannot read the inbox or manage drafts; Workspace Reader reads "
                 "Gmail messages, threads, and settings, Calendar events, and Drive; "
-                "Mail Writer prepares and sends "
+                "Mail Writer creates and manages drafts and can send because Google's "
+                "gmail.compose scope includes sending; "
                 "mail; Inbox Manager reads and manages Gmail messages, drafts, and "
                 "labels; Calendar Coordinator manages events; File Collaborator "
                 "works with files Tinyhat creates or files you explicitly share with "
