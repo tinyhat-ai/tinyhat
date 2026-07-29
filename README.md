@@ -268,7 +268,8 @@ plugin sends a Telegram Mini App chooser instead of guessing a broad grant.
 Clear natural-language tasks still go directly to the narrow preset: reading
 mail uses Mail Reader, sending only uses Mail Sender, and drafting uses Mail
 Writer. Google does not expose a draft-only scope, so `gmail.compose` includes
-sending.
+sending. An exact Custom request remains Custom even when its scope set happens
+to match a preset; it is never replaced with the closest broader preset.
 
 Google's consent screen is the permission decision. A cancelled, failed, or
 expired change leaves the existing local credential untouched; a valid

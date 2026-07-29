@@ -128,7 +128,8 @@ TINYHAT_GOOGLE_WORKSPACE_SCHEMA = {
         "presets or an exact custom subset of the public scope manifest. Pending Google "
         "verification may produce a provider warning but does not block an implemented "
         "scope. Unknown, unimplemented, and legacy-only requests stop before an "
-        "authorization URL or worker is created and return review_required. Legacy "
+        "authorization URL or worker is created and return review_required. Never "
+        "substitute the nearest broader preset for an exact or Custom request. Legacy "
         "named profiles remain available for compatibility. The user provides no "
         "Google Cloud project or OAuth secret."
     ),
@@ -198,11 +199,13 @@ TINYHAT_GOOGLE_WORKSPACE_SCHEMA = {
                 "Gmail messages, threads, and settings, Calendar events, and Drive; "
                 "Mail Writer creates and manages drafts and can send because Google's "
                 "gmail.compose scope includes sending; "
-                "mail; Inbox Manager reads and manages Gmail messages, drafts, and "
+                "Inbox Manager reads and manages Gmail messages, drafts, and "
                 "labels; Calendar Coordinator manages events; File Collaborator "
                 "works with files Tinyhat creates or files you explicitly share with "
                 "the app, not other Drive files. Tinyhat "
-                "normalizes overlapping scopes to the narrowest equivalent request."
+                "normalizes overlapping scopes to the narrowest equivalent request. "
+                "Use a preset only when it exactly covers the requested work; never "
+                "choose the nearest broader preset."
             ),
         },
         "scopes": {
@@ -216,7 +219,8 @@ TINYHAT_GOOGLE_WORKSPACE_SCHEMA = {
                 "normalizes superseded scopes, and allows only scopes declared in the "
                 "versioned public manifest. Requestable subsets and unions may launch "
                 "even while Google verification is pending; an unimplemented scope "
-                "returns review_required before OAuth. "
+                "returns review_required before OAuth. An explicit Custom request "
+                "must remain exact and must never be coerced to a nearby preset. "
                 "Requires reason; it may extend presets but cannot be combined with "
                 "the deprecated profile input."
             ),

@@ -538,9 +538,18 @@ class GoogleWorkspaceTests(unittest.TestCase):
         )
         self.assertIn("bare connect requests identity only", schema["description"])
         self.assertIn("review_required", schema["description"])
+        self.assertIn("nearest broader preset", schema["description"])
         self.assertIn("versioned public manifest", schema["properties"]["scopes"]["description"])
+        self.assertIn(
+            "must never be coerced",
+            schema["properties"]["scopes"]["description"],
+        )
         self.assertIn("Bare connect requests identity only", tinyhat_context.TINYHAT_CONTEXT)
         self.assertIn("presets compose with each other", tinyhat_context.TINYHAT_CONTEXT)
+        self.assertIn(
+            "Never substitute the nearest broader preset", tinyhat_context.TINYHAT_CONTEXT
+        )
+        self.assertIn("must never call bare connect first", tinyhat_context.TINYHAT_CONTEXT)
         self.assertEqual(schema["properties"]["scopes"]["maxItems"], 32)
         self.assertEqual(schema["properties"]["reason"]["maxLength"], 280)
         self.assertIn("Required with scopes", schema["properties"]["reason"]["description"])
@@ -569,9 +578,7 @@ class GoogleWorkspaceTests(unittest.TestCase):
                         "https://mini.example.test/tinyhat/miniapp/google-access/"
                         "gwp_abcdefghijklmnopqrstuvwxyz"
                     ),
-                    "expires_at": (
-                        datetime.now(timezone.utc) + timedelta(minutes=5)
-                    ).isoformat(),
+                    "expires_at": (datetime.now(timezone.utc) + timedelta(minutes=5)).isoformat(),
                     "poll_after_ms": 750,
                 }
 
@@ -603,9 +610,7 @@ class GoogleWorkspaceTests(unittest.TestCase):
                 return_value={"sent": True, "ok": True},
             ) as send_button,
         ):
-            result = json.loads(
-                tools.google_workspace({"action": "choose_permissions"})
-            )
+            result = json.loads(tools.google_workspace({"action": "choose_permissions"}))
 
         self.assertEqual(result["status"], "waiting_for_user")
         self.assertTrue(result["button_sent"])
@@ -616,8 +621,7 @@ class GoogleWorkspaceTests(unittest.TestCase):
             state_path=state_path,
         )
         send_button.assert_called_once_with(
-            "https://mini.example.test/tinyhat/miniapp/google-access/"
-            "gwp_abcdefghijklmnopqrstuvwxyz"
+            "https://mini.example.test/tinyhat/miniapp/google-access/gwp_abcdefghijklmnopqrstuvwxyz"
         )
 
     def test_permission_chooser_owner_token_stays_off_worker_argv(self) -> None:
@@ -628,9 +632,7 @@ class GoogleWorkspaceTests(unittest.TestCase):
                 chooser_id=chooser_id,
                 owner_token=owner_token,
                 account_id=None,
-                expires_at=(
-                    datetime.now(timezone.utc) + timedelta(minutes=5)
-                ).isoformat(),
+                expires_at=(datetime.now(timezone.utc) + timedelta(minutes=5)).isoformat(),
             )
             command = workspace._permission_chooser_worker_command(
                 chooser_id=chooser_id,
@@ -653,9 +655,7 @@ class GoogleWorkspaceTests(unittest.TestCase):
                 chooser_id=chooser_id,
                 owner_token="o" * 43,
                 account_id=None,
-                expires_at=(
-                    datetime.now(timezone.utc) + timedelta(minutes=5)
-                ).isoformat(),
+                expires_at=(datetime.now(timezone.utc) + timedelta(minutes=5)).isoformat(),
             )
 
             def start_process(*_args, **_kwargs):
@@ -765,6 +765,37 @@ class GoogleWorkspaceTests(unittest.TestCase):
         self.assertIn("https://www.googleapis.com/auth/gmail.labels", labels_only.scopes)
         self.assertNotIn("https://www.googleapis.com/auth/gmail.modify", labels_only.scopes)
         self.assertEqual(labels_only.blocked_scopes, ())
+
+    def test_exact_custom_send_scope_is_never_coerced_to_compose_preset(self) -> None:
+        requested = workspace._requested_profile(
+            None,
+            scopes=["https://www.googleapis.com/auth/gmail.send"],
+            reason="Use exactly Google's send-only permission",
+        )
+
+        self.assertEqual(requested.name, "workspace_custom")
+        self.assertEqual(requested.capability_bundle, CUSTOM_BUNDLE)
+        self.assertEqual(requested.preset_ids, ())
+        self.assertEqual(
+            list(requested.scopes),
+            [*IDENTITY_SCOPES, "https://www.googleapis.com/auth/gmail.send"],
+        )
+        self.assertNotIn(
+            "https://www.googleapis.com/auth/gmail.compose",
+            requested.scopes,
+        )
+        self.assertNotIn(
+            "https://www.googleapis.com/auth/gmail.modify",
+            requested.scopes,
+        )
+
+        resolved = workspace._resolve_profile_for_connection_read_only(
+            requested,
+            exact_permissions=True,
+        )
+        self.assertEqual(resolved.name, "workspace_custom")
+        self.assertEqual(resolved.capability_bundle, CUSTOM_BUNDLE)
+        self.assertEqual(resolved.scopes, requested.scopes)
 
     def test_production_workspace_write_request_reaches_google_while_review_pending(
         self,

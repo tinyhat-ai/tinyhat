@@ -22,6 +22,12 @@ tokens.
 
 ## Connect and change permissions
 
+If the current `tinyhat_google_workspace` schema is not already visible, call
+`tool_describe` before the first invocation. Never discover the schema by
+probing with `{"action": "connect"}`: that creates a real identity-only OAuth
+attempt. For a message that names a Gmail action, make one correctly parameterized
+call with the matching preset or exact Custom scopes.
+
 `{"action": "connect"}` adds another account with identity only: `openid`,
 `email`, and `profile`. Phrases such as "add my personal account" or "connect my
 work Google account" mean add, not replace. Do not add Workspace data access
@@ -44,6 +50,14 @@ an exact permission URL. A request to draft email must use `mail_writer`
 because Google does not offer a draft-only scope: `gmail.compose` also permits
 sending. A request only to send must use the narrower `mail_sender` preset and
 must not use `mail_writer` or `inbox_manager`.
+
+Use a preset only when its capabilities exactly cover what the user asked for.
+Never translate an exact or Custom request to the "closest" preset, and never
+silently broaden access because a broader preset is already implemented. If no
+preset is an exact match, use an exact manifest-listed `scopes` subset or union
+with a precise `reason`. If the requested access is ambiguous or cannot be
+represented exactly by implemented scopes, ask the user to clarify or return
+the tool's `review_required` result; do not retry with broader access.
 
 Use the `presets` array for common access. Presets compose, so request the
 smallest combination that supports the user's task:
@@ -74,6 +88,9 @@ Examples:
 
 For Custom access, supply an exact subset or union of manifest-listed canonical
 `scopes` and a short `reason`. Custom scopes may extend a `presets` selection.
+An explicit Custom request stays Custom even when its scope set happens to
+equal a preset. Do not replace it with a nearby preset or infer extra
+capabilities from the user's reason.
 Tinyhat always includes the identity baseline and normalizes redundant scopes
 before it prepares consent:
 
