@@ -6,6 +6,15 @@ All notable changes to the Tinyhat plugin are documented here.
 
 ### Changed
 
+- Bump the Hermes plugin package to `0.21.17`; add explicit Gmail read-only
+  and send-only presets, teach the agent to map ordinary language to the
+  narrowest preset, and route vague Google-access requests to a concise
+  Telegram Mini App chooser. A custom choice returns the user to Telegram so
+  the agent can ask what access they want in their own words. Exact Custom
+  requests are never approximated with a nearby preset, and the agent must
+  load the tool schema before its first connection call so it cannot probe
+  with an identity-only grant. Deploy the matching platform chooser before
+  promoting `channels/latest` and `channels/lts`.
 - Bump the Hermes plugin package to `0.21.16`; preserve the Slack app ID
   embedded in the submitted app-level token so permission failures can link
   directly to the correct app even when Slack omits `app_id` from `auth.test`.

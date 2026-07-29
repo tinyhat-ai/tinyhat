@@ -61,6 +61,18 @@ GOOGLE_IDENTITY_BUNDLE_ID = "google_workspace_identity_v1"
 GOOGLE_CUSTOM_BUNDLE_ID = "google_workspace_custom_v1"
 GOOGLE_IDENTITY_SCOPE_IDS = ("openid", "email", "profile")
 GOOGLE_REQUIRED_PRESETS = {
+    "mail_reader": (
+        "Mail Reader",
+        "google_workspace_mail_reader_v1",
+        ("gmail.readonly",),
+        "restricted",
+    ),
+    "mail_sender": (
+        "Mail Sender",
+        "google_workspace_mail_sender_v1",
+        ("gmail.send",),
+        "sensitive",
+    ),
     "workspace_reader": (
         "Workspace Reader",
         "google_workspace_workspace_reader_v1",
@@ -957,6 +969,8 @@ def validate_docs(root: Path) -> None:
             "existing Google account",
             "Connect my Google Workspace",
             "identity only",
+            "mail_reader",
+            "mail_sender",
             "workspace_reader",
             "mail_writer",
             "inbox_manager",

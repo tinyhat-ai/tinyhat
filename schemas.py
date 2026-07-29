@@ -122,22 +122,32 @@ TINYHAT_CREDENTIALS_SCHEMA = {
 TINYHAT_GOOGLE_WORKSPACE_SCHEMA = {
     "type": "object",
     "description": (
-        "Connect, inspect, change permissions for, or disconnect Google Workspace "
-        "accounts on this Tinyhat Computer. A bare connect requests identity only. "
+        "Connect, inspect, choose or change permissions for, or disconnect Google "
+        "Workspace accounts on this Tinyhat Computer. A bare connect requests identity only. "
         "Workspace data access must be selected explicitly with one or more implemented "
         "presets or an exact custom subset of the public scope manifest. Pending Google "
         "verification may produce a provider warning but does not block an implemented "
         "scope. Unknown, unimplemented, and legacy-only requests stop before an "
-        "authorization URL or worker is created and return review_required. Legacy "
+        "authorization URL or worker is created and return review_required. Never "
+        "substitute the nearest broader preset for an exact or Custom request. Legacy "
         "named profiles remain available for compatibility. The user provides no "
         "Google Cloud project or OAuth secret."
     ),
     "properties": {
         "action": {
             "type": "string",
-            "enum": ["connect", "status", "set_permissions", "disconnect"],
+            "enum": [
+                "connect",
+                "choose_permissions",
+                "status",
+                "set_permissions",
+                "disconnect",
+            ],
             "description": (
-                "Use connect to add an account or, with account_id, retain the "
+                "Use choose_permissions when the user wants Google or Gmail access "
+                "but has not said what the Computer should be allowed to do; it sends "
+                "a concise Telegram Mini App chooser. Use connect to add an account "
+                "with a known exact preset or scope set or, with account_id, retain the "
                 "additive behavior by combining current and requested scopes. Use "
                 "set_permissions with account_id to replace one account's permissions "
                 "with the exact named profile or scope set. "
@@ -168,11 +178,13 @@ TINYHAT_GOOGLE_WORKSPACE_SCHEMA = {
         "presets": {
             "type": "array",
             "minItems": 1,
-            "maxItems": 5,
+            "maxItems": 7,
             "uniqueItems": True,
             "items": {
                 "type": "string",
                 "enum": [
+                    "mail_reader",
+                    "mail_sender",
                     "workspace_reader",
                     "mail_writer",
                     "inbox_manager",
@@ -181,14 +193,19 @@ TINYHAT_GOOGLE_WORKSPACE_SCHEMA = {
                 ],
             },
             "description": (
-                "One or more composable implemented presets: Workspace Reader reads "
+                "One or more composable implemented presets: Mail Reader reads Gmail "
+                "without changing it; Mail Sender only sends confirmed email and "
+                "cannot read the inbox or manage drafts; Workspace Reader reads "
                 "Gmail messages, threads, and settings, Calendar events, and Drive; "
-                "Mail Writer prepares and sends "
-                "mail; Inbox Manager reads and manages Gmail messages, drafts, and "
+                "Mail Writer creates and manages drafts and can send because Google's "
+                "gmail.compose scope includes sending; "
+                "Inbox Manager reads and manages Gmail messages, drafts, and "
                 "labels; Calendar Coordinator manages events; File Collaborator "
                 "works with files Tinyhat creates or files you explicitly share with "
                 "the app, not other Drive files. Tinyhat "
-                "normalizes overlapping scopes to the narrowest equivalent request."
+                "normalizes overlapping scopes to the narrowest equivalent request. "
+                "Use a preset only when it exactly covers the requested work; never "
+                "choose the nearest broader preset."
             ),
         },
         "scopes": {
@@ -202,7 +219,8 @@ TINYHAT_GOOGLE_WORKSPACE_SCHEMA = {
                 "normalizes superseded scopes, and allows only scopes declared in the "
                 "versioned public manifest. Requestable subsets and unions may launch "
                 "even while Google verification is pending; an unimplemented scope "
-                "returns review_required before OAuth. "
+                "returns review_required before OAuth. An explicit Custom request "
+                "must remain exact and must never be coerced to a nearby preset. "
                 "Requires reason; it may extend presets but cannot be combined with "
                 "the deprecated profile input."
             ),

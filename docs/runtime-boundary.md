@@ -33,12 +33,14 @@ The platform owns stable connection ids, the central Web OAuth client, callback,
 code exchange, identity and exact-grant validation, and short-lived encrypted
 credential handoff.
 Bare connect requests only `openid`, `email`, and `profile`. The manifest then
-defines five composable access presets: Workspace Reader (`workspace_reader`),
-Mail Writer (`mail_writer`), Inbox Manager (`inbox_manager`), Calendar
+defines seven composable access presets: Mail Reader (`mail_reader`), Mail
+Sender (`mail_sender`), Workspace Reader (`workspace_reader`), Mail Writer
+(`mail_writer`), Inbox Manager (`inbox_manager`), Calendar
 Coordinator (`calendar_coordinator`), and File Collaborator
 (`file_collaborator`). Custom access can add exact manifest-listed scopes.
-Workspace Reader's `gmail.readonly` also exposes Gmail settings.
-`gmail.compose` covers drafts and sending; `gmail.modify` covers reading,
+Mail Sender's `gmail.send` cannot read the inbox or manage drafts. Workspace
+Reader's `gmail.readonly` also exposes Gmail settings. `gmail.compose` covers
+drafts and sending because Google has no draft-only scope; `gmail.modify` covers reading,
 composing, sending, drafts, labels, archive, and read state without immediate
 permanent deletion; and the implemented `drive.file` workflow covers files
 Tinyhat creates or files the user explicitly shares with the app, not other

@@ -1,6 +1,6 @@
 {
   "schema": "tinyhat_google_workspace_scope_manifest_v1",
-  "manifest_version": "1.0.1",
+  "manifest_version": "1.1.0",
   "identity_capability_bundle": "google_workspace_identity_v1",
   "identity_scope_ids": [
     "openid",
@@ -470,6 +470,28 @@
     }
   ],
   "presets": [
+    {
+      "id": "mail_reader",
+      "display_name": "Mail Reader",
+      "capability_bundle": "google_workspace_mail_reader_v1",
+      "scope_ids": ["gmail.readonly"],
+      "user_copy": "Read Gmail messages, threads, and settings without changing them.",
+      "risk_class": "restricted",
+      "recommended": true,
+      "default": false,
+      "read_only": true
+    },
+    {
+      "id": "mail_sender",
+      "display_name": "Mail Sender",
+      "capability_bundle": "google_workspace_mail_sender_v1",
+      "scope_ids": ["gmail.send"],
+      "user_copy": "Send confirmed email without reading the inbox or managing drafts.",
+      "risk_class": "sensitive",
+      "recommended": true,
+      "default": false,
+      "read_only": false
+    },
     {
       "id": "workspace_reader",
       "display_name": "Workspace Reader",

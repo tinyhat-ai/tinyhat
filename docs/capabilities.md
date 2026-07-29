@@ -133,16 +133,24 @@ The Computer creates a fresh RSA keypair for every attempt. The packaged
 `google_workspace_scope_manifest.json` and its dependency-free loader are the
 public source of truth for scopes, presets, normalization, user copy, and the
 request state of each OAuth client. The contract uses schema
-`tinyhat_google_workspace_scope_manifest_v1` and manifest version `1.0.1`.
-Five composable presets cover common jobs:
+`tinyhat_google_workspace_scope_manifest_v1` and manifest version `1.1.0`.
+Seven composable presets cover common jobs:
 
 | Preset | Id | Exact scopes and capability |
 | --- | --- | --- |
+| Mail Reader | `mail_reader` | `https://www.googleapis.com/auth/gmail.readonly` for messages, threads, and Gmail settings without changes |
+| Mail Sender | `mail_sender` | `https://www.googleapis.com/auth/gmail.send` for confirmed sends without inbox or draft access |
 | Workspace Reader | `workspace_reader` | `https://www.googleapis.com/auth/gmail.readonly` for messages, threads, and Gmail settings; `https://www.googleapis.com/auth/calendar.events.readonly`; and `https://www.googleapis.com/auth/drive.readonly` |
 | Mail Writer | `mail_writer` | `https://www.googleapis.com/auth/gmail.compose` for creating and managing drafts and sending email |
 | Inbox Manager | `inbox_manager` | `https://www.googleapis.com/auth/gmail.modify` for reading, composing, sending, drafts, labels, archive, and read state; no immediate permanent deletion |
 | Calendar Coordinator | `calendar_coordinator` | `https://www.googleapis.com/auth/calendar.events` for reading, creating, updating, and deleting events |
 | File Collaborator | `file_collaborator` | `https://www.googleapis.com/auth/drive.file` for files Tinyhat creates or files you explicitly share with the app; no access to other Drive files |
+
+Vague Gmail or Google-access requests use `choose_permissions`, which sends a
+short Telegram Mini App preset chooser. Clear natural-language tasks go
+straight to the narrow preset; users do not need to know scope names. Google
+does not expose draft-only access, so Mail Writer's `gmail.compose` also
+includes sending.
 
 The `presets` input is an array and may be combined with exact
 manifest-listed Custom `scopes` plus a short `reason`. Custom access is an exact

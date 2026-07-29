@@ -22,16 +22,50 @@ tokens.
 
 ## Connect and change permissions
 
+If the current `tinyhat_google_workspace` schema is not already visible, call
+`tool_describe` before the first invocation. Never discover the schema by
+probing with `{"action": "connect"}`: that creates a real identity-only OAuth
+attempt. For a message that names a Gmail action, make one correctly parameterized
+call with the matching preset or exact Custom scopes.
+
 `{"action": "connect"}` adds another account with identity only: `openid`,
 `email`, and `profile`. Phrases such as "add my personal account" or "connect my
 work Google account" mean add, not replace. Do not add Workspace data access
 unless the user's request needs it.
+
+When the user asks vaguely to connect Gmail or grant "reasonable", "normal",
+or unspecified Google access, call `{"action": "choose_permissions"}`. The
+tool sends a concise Telegram Mini App chooser. Do not guess a broad preset,
+and do not ask the user to know OAuth scope names. If the user clearly states
+the intended work, skip the chooser and request the narrowest matching preset:
+
+- "send email", "email people", or "send messages" → `mail_sender`
+- "draft", "prepare", "write", or "edit email drafts" → `mail_writer`
+- "read", "search", "summarize", or "review email" → `mail_reader`
+- "organize", "label", "archive", "mark read", or "manage my inbox" →
+  `inbox_manager`
+
+Normal wording is enough. Do not require phrases such as "send-only scope" or
+an exact permission URL. A request to draft email must use `mail_writer`
+because Google does not offer a draft-only scope: `gmail.compose` also permits
+sending. A request only to send must use the narrower `mail_sender` preset and
+must not use `mail_writer` or `inbox_manager`.
+
+Use a preset only when its capabilities exactly cover what the user asked for.
+Never translate an exact or Custom request to the "closest" preset, and never
+silently broaden access because a broader preset is already implemented. If no
+preset is an exact match, use an exact manifest-listed `scopes` subset or union
+with a precise `reason`. If the requested access is ambiguous or cannot be
+represented exactly by implemented scopes, ask the user to clarify or return
+the tool's `review_required` result; do not retry with broader access.
 
 Use the `presets` array for common access. Presets compose, so request the
 smallest combination that supports the user's task:
 
 | Preset | Id | Access |
 | --- | --- | --- |
+| Mail Reader | `mail_reader` | Read Gmail messages, threads, and settings without changing them. |
+| Mail Sender | `mail_sender` | Send confirmed email without reading the inbox or managing drafts. |
 | Workspace Reader | `workspace_reader` | Read Gmail messages, threads, and settings, Calendar events, and Drive files. |
 | Mail Writer | `mail_writer` | Create and manage Gmail drafts and send email through `gmail.compose`. |
 | Inbox Manager | `inbox_manager` | Read, compose, send, draft, label, archive, and change read state through `gmail.modify`; it cannot bypass Trash for immediate permanent deletion. |
@@ -39,6 +73,10 @@ smallest combination that supports the user's task:
 | File Collaborator | `file_collaborator` | Work with Drive files Tinyhat creates or files you explicitly share with the app through `drive.file`; it does not grant access to other Drive files. |
 
 Examples:
+
+```json
+{"action": "connect", "presets": ["mail_sender"]}
+```
 
 ```json
 {"action": "connect", "presets": ["workspace_reader"]}
@@ -50,6 +88,9 @@ Examples:
 
 For Custom access, supply an exact subset or union of manifest-listed canonical
 `scopes` and a short `reason`. Custom scopes may extend a `presets` selection.
+An explicit Custom request stays Custom even when its scope set happens to
+equal a preset. Do not replace it with a nearby preset or infer extra
+capabilities from the user's reason.
 Tinyhat always includes the identity baseline and normalizes redundant scopes
 before it prepares consent:
 
@@ -110,6 +151,9 @@ URL. Never paste, repeat, or invent a plain sign-in link. A cancelled, failed,
 or expired permission change leaves the current local credential usable.
 After `connect` or `set_permissions` returns `waiting_for_user`, send no extra
 ordinary reply; the native button is the complete response.
+After `choose_permissions` returns `waiting_for_user`, also send no extra
+ordinary reply. The chooser either starts the exact Google request or returns
+to Telegram and asks the user to describe Custom access in normal language.
 Never print, paste, repeat, or construct an authorization URL.
 
 ## Use Google services

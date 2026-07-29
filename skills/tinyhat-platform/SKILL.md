@@ -108,9 +108,13 @@ Do not print, paste, repeat, or ask for a plain authorization link. If button
 delivery fails, report the safe failure and let the user retry.
 
 Bare connect requests identity only: `openid`, `email`, and `profile`. Add
-Workspace access only when the user's task needs it. Use the five implemented
+Workspace access only when the user's task needs it. Use the implemented
 presets through the composable `presets` array:
 
+- Mail Reader (`mail_reader`): read Gmail messages, threads, and settings
+  without changing them.
+- Mail Sender (`mail_sender`): send confirmed email without inbox or draft
+  access.
 - Workspace Reader (`workspace_reader`): read Gmail messages, threads, and settings,
   Calendar events, and Drive.
 - Mail Writer (`mail_writer`): create and manage drafts and send email through

@@ -50,6 +50,16 @@ READONLY_SERVICES = ["identity", "gmail", "calendar", "drive"]
 IDENTITY_BUNDLE = "google_workspace_identity_v1"
 IDENTITY_SERVICES = ["identity"]
 IDENTITY_SCOPES = ["openid", "email", "profile"]
+MAIL_READER_BUNDLE = "google_workspace_mail_reader_v1"
+MAIL_READER_SCOPES = [
+    *IDENTITY_SCOPES,
+    "https://www.googleapis.com/auth/gmail.readonly",
+]
+MAIL_SENDER_BUNDLE = "google_workspace_mail_sender_v1"
+MAIL_SENDER_SCOPES = [
+    *IDENTITY_SCOPES,
+    "https://www.googleapis.com/auth/gmail.send",
+]
 WORKSPACE_READER_BUNDLE = "google_workspace_workspace_reader_v1"
 WORKSPACE_READER_SCOPES = [
     *IDENTITY_SCOPES,
@@ -372,6 +382,7 @@ class GoogleWorkspaceTests(unittest.TestCase):
             "INSTALL_RECEIPTS_DIR": state / "install-receipts",
             "ACTIVE_HANDOFF_PATH": state / "active-handoff.json",
             "DISCONNECTS_DIR": state / "disconnects",
+            "PERMISSION_CHOOSERS_DIR": state / "permission-choosers",
             "ACTIVE_DISCONNECT_PATH": state / "active-disconnect.json",
             "LIFECYCLE_LOCK_PATH": state / "lifecycle.lock",
         }
@@ -495,7 +506,13 @@ class GoogleWorkspaceTests(unittest.TestCase):
         )
         self.assertEqual(
             schema["properties"]["action"]["enum"],
-            ["connect", "status", "set_permissions", "disconnect"],
+            [
+                "connect",
+                "choose_permissions",
+                "status",
+                "set_permissions",
+                "disconnect",
+            ],
         )
         self.assertEqual(
             schema["properties"]["profile"]["enum"],
@@ -510,6 +527,8 @@ class GoogleWorkspaceTests(unittest.TestCase):
         self.assertEqual(
             schema["properties"]["presets"]["items"]["enum"],
             [
+                "mail_reader",
+                "mail_sender",
                 "workspace_reader",
                 "mail_writer",
                 "inbox_manager",
@@ -519,16 +538,165 @@ class GoogleWorkspaceTests(unittest.TestCase):
         )
         self.assertIn("bare connect requests identity only", schema["description"])
         self.assertIn("review_required", schema["description"])
+        self.assertIn("nearest broader preset", schema["description"])
         self.assertIn("versioned public manifest", schema["properties"]["scopes"]["description"])
+        self.assertIn(
+            "must never be coerced",
+            schema["properties"]["scopes"]["description"],
+        )
         self.assertIn("Bare connect requests identity only", tinyhat_context.TINYHAT_CONTEXT)
         self.assertIn("presets compose with each other", tinyhat_context.TINYHAT_CONTEXT)
+        self.assertIn(
+            "Never substitute the nearest broader preset", tinyhat_context.TINYHAT_CONTEXT
+        )
+        self.assertIn("must never call bare connect first", tinyhat_context.TINYHAT_CONTEXT)
         self.assertEqual(schema["properties"]["scopes"]["maxItems"], 32)
         self.assertEqual(schema["properties"]["reason"]["maxLength"], 280)
         self.assertIn("Required with scopes", schema["properties"]["reason"]["description"])
         self.assertIn("never trusts", schema["properties"]["action"]["description"])
 
-    def test_five_current_presets_resolve_to_exact_manifest_bundles(self) -> None:
+    def test_choose_permissions_sends_native_web_app_and_starts_watcher(self) -> None:
+        class ChooserClient:
+            base_url = PLATFORM_BASE_URL
+
+            def __init__(self) -> None:
+                self.posts: list[tuple[str, dict[str, object]]] = []
+
+            def post_json(
+                self,
+                path: str,
+                payload: dict[str, object],
+            ) -> dict[str, object]:
+                self.posts.append((path, payload))
+                return {
+                    "schema": "tinyhat_google_workspace_permission_chooser_v1",
+                    "chooser_id": "gwp_abcdefghijklmnopqrstuvwxyz",
+                    "owner_token": "o" * 43,
+                    "status": "waiting",
+                    "connection_action": "add",
+                    "mini_app_url": (
+                        "https://mini.example.test/tinyhat/miniapp/google-access/"
+                        "gwp_abcdefghijklmnopqrstuvwxyz"
+                    ),
+                    "expires_at": (datetime.now(timezone.utc) + timedelta(minutes=5)).isoformat(),
+                    "poll_after_ms": 750,
+                }
+
+        client = ChooserClient()
+        state_path = Path("/tmp/chooser.json")
+        with (
+            mock.patch.object(
+                workspace,
+                "build_platform_client",
+                return_value=(client, "local_dev"),
+            ),
+            mock.patch.object(
+                tools,
+                "_telegram_credentials",
+                return_value=("bot-token", "998877"),
+            ),
+            mock.patch.object(
+                workspace,
+                "_write_permission_chooser_worker_state",
+                return_value=state_path,
+            ) as write_state,
+            mock.patch.object(
+                workspace,
+                "_start_permission_chooser_worker_process",
+            ) as start_worker,
+            mock.patch.object(
+                workspace,
+                "_send_permission_chooser_button",
+                return_value={"sent": True, "ok": True},
+            ) as send_button,
+        ):
+            result = json.loads(tools.google_workspace({"action": "choose_permissions"}))
+
+        self.assertEqual(result["status"], "waiting_for_user")
+        self.assertTrue(result["button_sent"])
+        self.assertEqual(client.posts[0][1], {"telegram_user_id": 998877})
+        write_state.assert_called_once()
+        start_worker.assert_called_once_with(
+            chooser_id="gwp_abcdefghijklmnopqrstuvwxyz",
+            state_path=state_path,
+        )
+        send_button.assert_called_once_with(
+            "https://mini.example.test/tinyhat/miniapp/google-access/gwp_abcdefghijklmnopqrstuvwxyz"
+        )
+
+    def test_permission_chooser_owner_token_stays_off_worker_argv(self) -> None:
+        chooser_id = "gwp_abcdefghijklmnopqrstuvwxyz"
+        owner_token = "o" * 43
+        with tempfile.TemporaryDirectory() as tmp, self._patched_state(Path(tmp)):
+            state_path = workspace._write_permission_chooser_worker_state(
+                chooser_id=chooser_id,
+                owner_token=owner_token,
+                account_id=None,
+                expires_at=(datetime.now(timezone.utc) + timedelta(minutes=5)).isoformat(),
+            )
+            command = workspace._permission_chooser_worker_command(
+                chooser_id=chooser_id,
+                state_path=state_path,
+                package_dir=Path(workspace.__file__).resolve().parent,
+            )
+
+            self.assertEqual(stat.S_IMODE(state_path.stat().st_mode), 0o600)
+            self.assertIn(owner_token, state_path.read_text(encoding="utf-8"))
+            self.assertNotIn(owner_token, " ".join(command))
+            self.assertIn(
+                "google_workspace_permission_chooser_worker.py",
+                command[1],
+            )
+
+    def test_permission_chooser_process_waits_for_worker_readiness(self) -> None:
+        chooser_id = "gwp_abcdefghijklmnopqrstuvwxyz"
+        with tempfile.TemporaryDirectory() as tmp, self._patched_state(Path(tmp)):
+            state_path = workspace._write_permission_chooser_worker_state(
+                chooser_id=chooser_id,
+                owner_token="o" * 43,
+                account_id=None,
+                expires_at=(datetime.now(timezone.utc) + timedelta(minutes=5)).isoformat(),
+            )
+
+            def start_process(*_args, **_kwargs):
+                workspace._write_permission_chooser_worker_ready(
+                    chooser_id=chooser_id,
+                    state_path=state_path,
+                )
+                return mock.Mock()
+
+            with (
+                mock.patch.object(
+                    workspace,
+                    "_start_permission_chooser_worker_with_systemd",
+                    return_value=False,
+                ),
+                mock.patch.object(
+                    workspace.subprocess,
+                    "Popen",
+                    side_effect=start_process,
+                ) as popen,
+            ):
+                workspace._start_permission_chooser_worker_process(
+                    chooser_id=chooser_id,
+                    state_path=state_path,
+                )
+
+            popen.assert_called_once()
+            self.assertTrue((state_path.parent / "ready.json").exists())
+
+    def test_seven_current_presets_resolve_to_exact_manifest_bundles(self) -> None:
         expected = {
+            "mail_reader": (
+                MAIL_READER_BUNDLE,
+                MAIL_READER_SCOPES,
+                ["identity", "gmail"],
+            ),
+            "mail_sender": (
+                MAIL_SENDER_BUNDLE,
+                MAIL_SENDER_SCOPES,
+                ["identity", "gmail"],
+            ),
             "workspace_reader": (
                 WORKSPACE_READER_BUNDLE,
                 WORKSPACE_READER_SCOPES,
@@ -597,6 +765,37 @@ class GoogleWorkspaceTests(unittest.TestCase):
         self.assertIn("https://www.googleapis.com/auth/gmail.labels", labels_only.scopes)
         self.assertNotIn("https://www.googleapis.com/auth/gmail.modify", labels_only.scopes)
         self.assertEqual(labels_only.blocked_scopes, ())
+
+    def test_exact_custom_send_scope_is_never_coerced_to_compose_preset(self) -> None:
+        requested = workspace._requested_profile(
+            None,
+            scopes=["https://www.googleapis.com/auth/gmail.send"],
+            reason="Use exactly Google's send-only permission",
+        )
+
+        self.assertEqual(requested.name, "workspace_custom")
+        self.assertEqual(requested.capability_bundle, CUSTOM_BUNDLE)
+        self.assertEqual(requested.preset_ids, ())
+        self.assertEqual(
+            list(requested.scopes),
+            [*IDENTITY_SCOPES, "https://www.googleapis.com/auth/gmail.send"],
+        )
+        self.assertNotIn(
+            "https://www.googleapis.com/auth/gmail.compose",
+            requested.scopes,
+        )
+        self.assertNotIn(
+            "https://www.googleapis.com/auth/gmail.modify",
+            requested.scopes,
+        )
+
+        resolved = workspace._resolve_profile_for_connection_read_only(
+            requested,
+            exact_permissions=True,
+        )
+        self.assertEqual(resolved.name, "workspace_custom")
+        self.assertEqual(resolved.capability_bundle, CUSTOM_BUNDLE)
+        self.assertEqual(resolved.scopes, requested.scopes)
 
     def test_production_workspace_write_request_reaches_google_while_review_pending(
         self,
@@ -1855,6 +2054,8 @@ class GoogleWorkspaceTests(unittest.TestCase):
                 "calendar_write",
                 "gmail_send_calendar_write",
                 "identity_only",
+                "mail_reader",
+                "mail_sender",
                 "workspace_reader",
                 "mail_writer",
                 "inbox_manager",

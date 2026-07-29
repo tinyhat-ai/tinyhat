@@ -53,7 +53,13 @@ from .platform import (
 from .secret_handoff import KEY_ALGORITHM, _decrypt_ciphertext, _generate_key_pair
 from .tool_errors import tool_error_json
 
-GOOGLE_WORKSPACE_ACTIONS = ("connect", "status", "set_permissions", "disconnect")
+GOOGLE_WORKSPACE_ACTIONS = (
+    "connect",
+    "choose_permissions",
+    "status",
+    "set_permissions",
+    "disconnect",
+)
 HTTP_FORBIDDEN = 403
 HTTP_NOT_FOUND = 404
 GOOGLE_WORKSPACE_CREDENTIAL_SCHEMA = "tinyhat_google_workspace_credentials_v1"
@@ -68,6 +74,9 @@ GOOGLE_WORKSPACE_DISCONNECT_WORKER_STATE_SCHEMA = (
 GOOGLE_WORKSPACE_DISCONNECT_WORKER_READY_SCHEMA = (
     "tinyhat_google_workspace_disconnect_worker_ready_v1"
 )
+GOOGLE_WORKSPACE_PERMISSION_CHOOSER_WORKER_READY_SCHEMA = (
+    "tinyhat_google_workspace_permission_chooser_worker_ready_v1"
+)
 GOOGLE_WORKSPACE_DISCONNECT_COMPLETION_RECEIPT_SCHEMA = (
     "tinyhat_google_workspace_disconnect_completion_receipt_v1"
 )
@@ -75,6 +84,9 @@ GOOGLE_WORKSPACE_API_SUFFIX = "google-workspace-oauth/v1"
 GOOGLE_WORKSPACE_PREFLIGHT_SUFFIX = f"{GOOGLE_WORKSPACE_API_SUFFIX}/preflight"
 GOOGLE_WORKSPACE_CONNECTIONS_SUFFIX = f"{GOOGLE_WORKSPACE_API_SUFFIX}/connections"
 GOOGLE_WORKSPACE_DISCONNECT_INTENTS_SUFFIX = f"{GOOGLE_WORKSPACE_API_SUFFIX}/disconnect-intents"
+GOOGLE_WORKSPACE_PERMISSION_CHOOSERS_SUFFIX = (
+    f"{GOOGLE_WORKSPACE_API_SUFFIX}/permission-choosers"
+)
 GOOGLE_TOKEN_URI = "https://oauth2.googleapis.com/token"
 GOOGLE_WORKSPACE_PROFILE_RECOMMENDED = "workspace_recommended"
 GOOGLE_WORKSPACE_PROFILE_CUSTOM = "workspace_custom"
@@ -86,6 +98,8 @@ GOOGLE_WORKSPACE_PROFILE_GMAIL_SEND_CALENDAR_WRITE = "gmail_send_calendar_write"
 # below remain accepted only so callers receive a safe, explicit migration
 # result and historical credentials can be reconstructed unchanged.
 GOOGLE_WORKSPACE_PROFILE_IDENTITY = "identity_only"
+GOOGLE_WORKSPACE_PROFILE_MAIL_READER = "mail_reader"
+GOOGLE_WORKSPACE_PROFILE_MAIL_SENDER = "mail_sender"
 GOOGLE_WORKSPACE_PROFILE_WORKSPACE_READER = "workspace_reader"
 GOOGLE_WORKSPACE_PROFILE_MAIL_WRITER = "mail_writer"
 GOOGLE_WORKSPACE_PROFILE_INBOX_MANAGER = "inbox_manager"
@@ -100,6 +114,12 @@ GOOGLE_WORKSPACE_PROFILES = (
     GOOGLE_WORKSPACE_PROFILE_GMAIL_SEND_CALENDAR_WRITE,
 )
 GOOGLE_IDENTITY_CAPABILITY_BUNDLE = IDENTITY_BUNDLE_ID
+GOOGLE_MAIL_READER_CAPABILITY_BUNDLE = str(
+    PRESETS_BY_ID[GOOGLE_WORKSPACE_PROFILE_MAIL_READER]["capability_bundle"]
+)
+GOOGLE_MAIL_SENDER_CAPABILITY_BUNDLE = str(
+    PRESETS_BY_ID[GOOGLE_WORKSPACE_PROFILE_MAIL_SENDER]["capability_bundle"]
+)
 GOOGLE_WORKSPACE_READER_CAPABILITY_BUNDLE = str(
     PRESETS_BY_ID[GOOGLE_WORKSPACE_PROFILE_WORKSPACE_READER]["capability_bundle"]
 )
@@ -230,6 +250,8 @@ INSTALL_CLAIM_MAX_ATTEMPTS = 3
 INSTALL_CLAIM_RETRY_SECONDS = 1.0
 DISCONNECT_WORKER_READY_TIMEOUT_SECONDS = 15.0
 DISCONNECT_WORKER_READY_POLL_SECONDS = 0.05
+PERMISSION_CHOOSER_WORKER_READY_TIMEOUT_SECONDS = 15.0
+PERMISSION_CHOOSER_WORKER_READY_POLL_SECONDS = 0.05
 DISCONNECT_COMPLETION_RETRY_SECONDS = 60 * 60
 DISCONNECT_COMPLETION_MAX_RETRY_DELAY_SECONDS = 30.0
 DISCONNECT_AUTO_RESUME_LIMIT = 8
@@ -246,6 +268,7 @@ GOOGLE_TOKEN_EXPIRY_MAX_LENGTH = 64
 OWNER_ONLY_FILE_MODE = 0o600
 HANDOFF_ID_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_.-]{0,127}$")
 GOOGLE_CONNECTION_ID_RE = re.compile(r"^gwo_[A-Za-z0-9_-]{1,60}$")
+GOOGLE_PERMISSION_CHOOSER_ID_RE = re.compile(r"^gwp_[A-Za-z0-9_-]{20,80}$")
 GOOGLE_LAUNCH_TICKET_MAX_LENGTH = 32 * 1024
 GOOGLE_LAUNCH_TICKET_RE = re.compile(
     rf"^gwol1\.[1-9][0-9]{{0,9}}\."
@@ -260,6 +283,7 @@ HANDOFFS_DIR = STATE_DIR / "handoffs"
 INSTALL_RECEIPTS_DIR = STATE_DIR / "install-receipts"
 ACTIVE_HANDOFF_PATH = STATE_DIR / "active-handoff.json"
 DISCONNECTS_DIR = STATE_DIR / "disconnects"
+PERMISSION_CHOOSERS_DIR = STATE_DIR / "permission-choosers"
 ACTIVE_DISCONNECT_PATH = STATE_DIR / "active-disconnect.json"
 LIFECYCLE_LOCK_PATH = STATE_DIR / "lifecycle.lock"
 WORKER_SYSTEMD_ENV_KEYS = (
@@ -522,7 +546,8 @@ def google_workspace(  # noqa: PLR0911, PLR0912
             error_name="missing_required_parameter",
             message=(
                 "Call tinyhat_google_workspace with action='connect', "
-                "action='status', action='set_permissions', or action='disconnect'."
+                "action='choose_permissions', action='status', "
+                "action='set_permissions', or action='disconnect'."
             ),
             missing=["action"],
             example_call={"action": "connect"},
@@ -639,6 +664,20 @@ def google_workspace(  # noqa: PLR0911, PLR0912
                 "message": (
                     "I could not start the Google Workspace disconnect prompt. "
                     "The existing connection is unchanged. Please try again."
+                ),
+            }
+    elif action == "choose_permissions":
+        try:
+            result = _start_permission_chooser(account_id=account_id)
+        except Exception:
+            result = {
+                "schema": "tinyhat_google_workspace_action_v1",
+                "action": action,
+                "status": "failed",
+                "button_sent": False,
+                "message": (
+                    "I could not open the Google access chooser on this Computer. "
+                    "Please try again."
                 ),
             }
     else:
@@ -1647,6 +1686,343 @@ def _start_connection(  # noqa: PLR0912, PLR0915
             "handoff completes successfully."
         ),
         "handoff_started": bool(handoff_id),
+    }
+
+
+def _validated_permission_chooser_id(value: Any) -> str:
+    chooser_id = str(value or "").strip()
+    if GOOGLE_PERMISSION_CHOOSER_ID_RE.fullmatch(chooser_id) is None:
+        raise GoogleWorkspaceError("Platform returned an invalid Google access chooser.")
+    return chooser_id
+
+
+def _validated_permission_chooser_url(
+    value: Any,
+    *,
+    platform_base_url: str | None,
+) -> str:
+    url = str(value or "").strip()
+    parsed = parse.urlsplit(url)
+    platform = parse.urlsplit(str(platform_base_url or "").strip())
+    try:
+        port = parsed.port
+    except ValueError as exc:
+        raise GoogleWorkspaceError("Platform returned an invalid Google access chooser.") from exc
+    trusted = (
+        parsed.scheme == "https"
+        and parsed.hostname is not None
+        and parsed.username is None
+        and parsed.password is None
+        and port in {None, 443}
+        and parsed.path.startswith("/tinyhat/miniapp/google-access/gwp_")
+        and not parsed.query
+        and not parsed.fragment
+        and platform.scheme == "https"
+        and len(url) <= 2048
+    )
+    if not trusted:
+        raise GoogleWorkspaceError("Platform returned an invalid Google access chooser.")
+    return url
+
+
+def _write_permission_chooser_worker_state(
+    *,
+    chooser_id: str,
+    owner_token: str,
+    account_id: str | None,
+    expires_at: str,
+) -> Path:
+    _ensure_private_directory(STATE_DIR)
+    _ensure_private_directory(PERMISSION_CHOOSERS_DIR)
+    directory = PERMISSION_CHOOSERS_DIR / _validated_permission_chooser_id(chooser_id)
+    directory.mkdir(mode=0o700, parents=False, exist_ok=False)
+    directory.chmod(0o700)
+    state_path = directory / "chooser.json"
+    try:
+        _write_private_file(
+            state_path,
+            json.dumps(
+                {
+                    "schema": "tinyhat_google_workspace_permission_chooser_worker_v1",
+                    "chooser_id": chooser_id,
+                    "owner_token": owner_token,
+                    "account_id": account_id,
+                    "expires_at": expires_at,
+                },
+                separators=(",", ":"),
+                sort_keys=True,
+            ),
+        )
+    except Exception:
+        with contextlib.suppress(OSError):
+            state_path.unlink()
+            directory.rmdir()
+        raise
+    return state_path
+
+
+def _cleanup_permission_chooser_worker_state(state_path: Path) -> None:
+    with contextlib.suppress(OSError):
+        (state_path.parent / "ready.json").unlink()
+    with contextlib.suppress(OSError):
+        state_path.unlink()
+    with contextlib.suppress(OSError):
+        state_path.parent.rmdir()
+
+
+def _permission_chooser_worker_command(
+    *,
+    chooser_id: str,
+    state_path: Path,
+    package_dir: Path,
+) -> list[str]:
+    return [
+        sys.executable,
+        str(package_dir / "google_workspace_permission_chooser_worker.py"),
+        "--chooser-id",
+        _validated_permission_chooser_id(chooser_id),
+        "--state-path",
+        str(state_path),
+    ]
+
+
+def _write_permission_chooser_worker_ready(
+    *,
+    chooser_id: str,
+    state_path: Path,
+) -> None:
+    ready_path = state_path.parent / "ready.json"
+    expected = {
+        "schema": GOOGLE_WORKSPACE_PERMISSION_CHOOSER_WORKER_READY_SCHEMA,
+        "chooser_id": _validated_permission_chooser_id(chooser_id),
+    }
+    if os.path.lexists(ready_path):
+        existing = _read_owner_only_json(
+            ready_path,
+            label="Google access chooser worker readiness",
+        )
+        if existing == expected:
+            return
+        raise GoogleWorkspaceError("Google access chooser worker readiness is invalid.")
+    _write_private_file(
+        ready_path,
+        json.dumps(expected, separators=(",", ":"), sort_keys=True),
+    )
+
+
+def _wait_for_permission_chooser_worker_ready(
+    *,
+    chooser_id: str,
+    state_path: Path,
+    timeout_seconds: float = PERMISSION_CHOOSER_WORKER_READY_TIMEOUT_SECONDS,
+) -> None:
+    ready_path = state_path.parent / "ready.json"
+    deadline = time.monotonic() + max(0.0, timeout_seconds)
+    expected = {
+        "schema": GOOGLE_WORKSPACE_PERMISSION_CHOOSER_WORKER_READY_SCHEMA,
+        "chooser_id": _validated_permission_chooser_id(chooser_id),
+    }
+    while time.monotonic() < deadline:
+        try:
+            ready = _read_owner_only_json(
+                ready_path,
+                label="Google access chooser worker readiness",
+            )
+        except GoogleWorkspaceError as exc:
+            if os.path.lexists(ready_path):
+                raise
+            if not os.path.lexists(state_path):
+                raise GoogleWorkspaceError(
+                    "Google access chooser worker stopped before readiness."
+                ) from exc
+            time.sleep(PERMISSION_CHOOSER_WORKER_READY_POLL_SECONDS)
+            continue
+        if ready != expected:
+            raise GoogleWorkspaceError(
+                "Google access chooser worker readiness is invalid."
+            )
+        return
+    raise GoogleWorkspaceError("Google access chooser worker did not become ready.")
+
+
+def _start_permission_chooser_worker_with_systemd(
+    *,
+    chooser_id: str,
+    command: list[str],
+    package_dir: Path,
+    env: dict[str, str],
+) -> bool:
+    if env.get("TINYHAT_LOCAL_DEV_TOKEN"):
+        return False
+    systemd_run = shutil.which("systemd-run")
+    if not systemd_run:
+        return False
+    systemd_command = [
+        systemd_run,
+        "--user",
+        "--collect",
+        "--quiet",
+        f"--unit=tinyhat-google-access-{chooser_id[:48]}",
+    ]
+    for key in WORKER_SYSTEMD_ENV_KEYS:
+        if key in env:
+            systemd_command.append(f"--setenv={key}={env[key]}")
+    systemd_command.extend(command)
+    try:
+        completed = subprocess.run(
+            systemd_command,
+            cwd=str(package_dir.parent),
+            capture_output=True,
+            text=True,
+            timeout=15,
+            check=False,
+        )
+    except (OSError, subprocess.TimeoutExpired):
+        return False
+    return completed.returncode == 0
+
+
+def _start_permission_chooser_worker_process(
+    *,
+    chooser_id: str,
+    state_path: Path,
+) -> None:
+    package_dir = Path(__file__).resolve().parent
+    env = os.environ.copy()
+    pythonpath = str(package_dir.parent)
+    if env.get("PYTHONPATH"):
+        pythonpath = f"{pythonpath}{os.pathsep}{env['PYTHONPATH']}"
+    env["PYTHONPATH"] = pythonpath
+    command = _permission_chooser_worker_command(
+        chooser_id=chooser_id,
+        state_path=state_path,
+        package_dir=package_dir,
+    )
+    try:
+        started_with_systemd = _start_permission_chooser_worker_with_systemd(
+            chooser_id=chooser_id,
+            command=command,
+            package_dir=package_dir,
+            env=env,
+        )
+        if not started_with_systemd:
+            subprocess.Popen(
+                command,
+                cwd=str(package_dir.parent),
+                env=env,
+                stdin=subprocess.DEVNULL,
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+                start_new_session=True,
+                close_fds=True,
+            )
+        _wait_for_permission_chooser_worker_ready(
+            chooser_id=chooser_id,
+            state_path=state_path,
+        )
+    except Exception as exc:
+        _cleanup_permission_chooser_worker_state(state_path)
+        raise GoogleWorkspaceError(
+            "Could not start the Google access chooser worker."
+        ) from exc
+
+
+def _send_permission_chooser_button(url: str) -> dict[str, bool]:
+    try:
+        from .tools import _telegram_credentials, _telegram_send_message  # noqa: PLC0415
+
+        token, chat_id = _telegram_credentials()
+        sent = _telegram_send_message(
+            token=token,
+            chat_id=chat_id,
+            text=(
+                "Choose what this Computer should be allowed to do with your "
+                "Google account."
+            ),
+            reply_markup={
+                "inline_keyboard": [
+                    [
+                        {
+                            "text": "Choose Google access",
+                            "web_app": {"url": url},
+                        }
+                    ]
+                ]
+            },
+        )
+        ok = bool(sent.get("ok"))
+        return {"sent": ok, "ok": ok}
+    except Exception:
+        return {"sent": False, "ok": False}
+
+
+def _start_permission_chooser(*, account_id: str | None) -> dict[str, Any]:
+    """Send a Mini App chooser while keeping OAuth execution on the Computer."""
+    from .tools import _telegram_credentials  # noqa: PLC0415
+
+    _token, chat_id = _telegram_credentials()
+    try:
+        telegram_user_id = int(chat_id)
+    except (TypeError, ValueError) as exc:
+        raise GoogleWorkspaceError(
+            "Google access selection is available only in a private Telegram chat."
+        ) from exc
+    if telegram_user_id <= 0:
+        raise GoogleWorkspaceError(
+            "Google access selection is available only in a private Telegram chat."
+        )
+    client, platform_auth = build_platform_client()
+    request_payload: dict[str, Any] = {"telegram_user_id": telegram_user_id}
+    if account_id is not None:
+        request_payload["connection_id"] = account_id
+    chooser = client.post_json(
+        computer_api_path(
+            platform_auth,
+            GOOGLE_WORKSPACE_PERMISSION_CHOOSERS_SUFFIX,
+        ),
+        request_payload,
+    )
+    chooser_id = _validated_permission_chooser_id(chooser.get("chooser_id"))
+    owner_token = str(chooser.get("owner_token") or "").strip()
+    if DISCONNECT_OWNER_TOKEN_RE.fullmatch(owner_token) is None:
+        raise GoogleWorkspaceError("Platform returned an invalid Google access chooser.")
+    expires_at = str(chooser.get("expires_at") or "").strip()
+    try:
+        parsed_expiry = datetime.fromisoformat(expires_at.replace("Z", "+00:00"))
+    except ValueError as exc:
+        raise GoogleWorkspaceError(
+            "Platform returned an invalid Google access chooser."
+        ) from exc
+    if parsed_expiry.tzinfo is None or parsed_expiry.utcoffset() is None:
+        raise GoogleWorkspaceError("Platform returned an invalid Google access chooser.")
+    mini_app_url = _validated_permission_chooser_url(
+        chooser.get("mini_app_url"),
+        platform_base_url=getattr(client, "base_url", None),
+    )
+    state_path = _write_permission_chooser_worker_state(
+        chooser_id=chooser_id,
+        owner_token=owner_token,
+        account_id=account_id,
+        expires_at=expires_at,
+    )
+    _start_permission_chooser_worker_process(
+        chooser_id=chooser_id,
+        state_path=state_path,
+    )
+    button = _send_permission_chooser_button(mini_app_url)
+    if not button.get("ok"):
+        raise GoogleWorkspaceError("Could not deliver the Google access chooser.")
+    return {
+        "schema": "tinyhat_google_workspace_action_v1",
+        "action": "choose_permissions",
+        "status": "waiting_for_user",
+        "button_sent": True,
+        "account_id": account_id,
+        "message": (
+            "I sent a native Google access chooser in Telegram. The user can "
+            "select a narrow preset or ask to describe Custom access. No Google "
+            "authorization URL or credential is returned to the agent."
+        ),
     }
 
 
@@ -3472,6 +3848,14 @@ TELEGRAM_NOTICE_MESSAGES = {
         "Google Workspace is connected on this Computer with read-only access to "
         "Gmail messages, threads, and settings, Calendar events, and Drive files."
     ),
+    "ready_mail_reader": (
+        "Google Workspace Mail Reader access is connected on this Computer. "
+        "It can read Gmail messages, threads, and settings without changing them."
+    ),
+    "ready_mail_sender": (
+        "Google Workspace Mail Sender access is connected on this Computer for "
+        "confirmed email sending only. It cannot read the inbox or manage drafts."
+    ),
     "ready_mail_writer": (
         "Google Workspace Mail Writer access is connected on this Computer for "
         "drafts and confirmed email sending. It does not manage the inbox."
@@ -3704,6 +4088,8 @@ def _read_install_receipt(path: Path) -> dict[str, str]:
         "ready_workspace_custom",
         "ready_workspace_readonly",
         "ready_identity_only",
+        "ready_mail_reader",
+        "ready_mail_sender",
         "ready_workspace_reader",
         "ready_mail_writer",
         "ready_inbox_manager",
