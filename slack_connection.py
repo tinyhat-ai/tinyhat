@@ -30,6 +30,10 @@ SLACK_API_BASE_URL = "https://slack.com/api"
 SLACK_APP_SETTINGS_BASE_URL = "https://api.slack.com/apps"
 SLACK_HOME_CHANNEL_NAME = "Owner DM"
 SLACK_WELCOME_MESSAGE = "Hi there! Slack is connected to this Hermes agent."
+SLACK_APP_TOKEN_APP_ID_RE = re.compile(
+    r"^xapp-(?:\d+-)?(A[A-Z0-9]{8,})(?:-|$)",
+    re.IGNORECASE,
+)
 REQUIRED_CONNECTION_BOT_SCOPES = (
     "assistant:write",
     "chat:write",
@@ -250,7 +254,12 @@ def install_submitted_slack_connection(
         return True
     except Exception as exc:
         failure = _slack_connection_failure(exc)
-        _send_secret_notice(_slack_failure_notice(failure, metadata))
+        failure_identity = dict(metadata)
+        if "app_id" not in failure_identity:
+            app_id = _app_id_from_app_token(bundle.get("app_token"))
+            if app_id is not None:
+                failure_identity["app_id"] = app_id
+        _send_secret_notice(_slack_failure_notice(failure, failure_identity))
         failure_metadata = {
             "provider": "slack",
             "connection_status": "failed",
@@ -258,14 +267,14 @@ def install_submitted_slack_connection(
             "failure_code": failure.code,
             "retryable": True,
             **{
-                key: metadata[key]
+                key: failure_identity[key]
                 for key in (
                     "app_id",
                     "app_name",
                     "workspace_id",
                     "workspace_name",
                 )
-                if key in metadata
+                if key in failure_identity
             },
         }
         try:
@@ -384,6 +393,16 @@ def _normalize_allowed_users(value: Any) -> str:
     return ",".join(dict.fromkeys(users))
 
 
+def _app_id_from_app_token(value: Any) -> str | None:
+    """Read the non-secret app ID embedded in Slack's xapp token shape."""
+
+    match = SLACK_APP_TOKEN_APP_ID_RE.match(str(value or "").strip())
+    if match is None:
+        return None
+    app_id = match.group(1).upper()
+    return app_id if SLACK_ID_RE.fullmatch(app_id) else None
+
+
 def _open_slack_home_channel(bundle: dict[str, str]) -> str:
     """Open the first allowed member's DM and use it as Hermes' home channel."""
 
@@ -426,6 +445,8 @@ def _validate_slack_credentials(bundle: dict[str, str]) -> dict[str, Any]:
     )
 
     app_id = str(auth.get("app_id") or "").strip().upper()
+    if not SLACK_ID_RE.fullmatch(app_id):
+        app_id = _app_id_from_app_token(bundle["app_token"]) or ""
     app_name = str(
         auth.get("app_name") or auth.get("user") or "Tinyhat Agent"
     ).strip()[:80]

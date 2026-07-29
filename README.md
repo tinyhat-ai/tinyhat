@@ -444,6 +444,11 @@ TINYHAT_PLUGIN_REF=vX.Y.Z
 | `channels/latest` | Newest promoted final version, used when we want faster adoption. |
 | exact tag, for example `vX.Y.Z` | Immutable version for tests, rollbacks, and audits. |
 
+For v0.21.16, deploy the matching platform Mini App before promoting
+`channels/latest` and `channels/lts`. Permission failures preserve the
+non-secret app ID embedded in Slack's app-level token, allowing Telegram and
+the Mini App to link directly to the correct app settings page.
+
 For v0.21.15, deploy the matching platform Mini App before promoting
 `channels/latest` and `channels/lts`. Failed Slack setup notices link to the
 validated Slack app page so the owner can reinstall the app and retry without
