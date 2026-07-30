@@ -38,6 +38,7 @@ from tinyhat import context as tinyhat_context  # noqa: E402
 from tinyhat import google_workspace as workspace  # noqa: E402
 from tinyhat import (  # noqa: E402
     google_workspace_disconnect_worker,
+    google_workspace_permission_chooser_worker,
     google_workspace_worker,
     schemas,
     tools,
@@ -684,6 +685,185 @@ class GoogleWorkspaceTests(unittest.TestCase):
 
             popen.assert_called_once()
             self.assertTrue((state_path.parent / "ready.json").exists())
+
+    def test_permission_chooser_worker_starts_one_combined_google_request(self) -> None:
+        class ChooserClient:
+            def __init__(self) -> None:
+                self.posts: list[tuple[str, dict[str, object]]] = []
+
+            def post_json(
+                self,
+                path: str,
+                payload: dict[str, object],
+            ) -> dict[str, object]:
+                self.posts.append((path, payload))
+                if path.endswith("/poll"):
+                    return {
+                        "status": "selected",
+                        "selection_ids": [
+                            "mail_reader",
+                            "mail_sender",
+                            "mail_writer",
+                            "inbox_manager",
+                            "workspace_reader",
+                            "calendar_coordinator",
+                            "file_collaborator",
+                        ],
+                    }
+                return {"status": "completed"}
+
+        client = ChooserClient()
+        chooser_id = "gwp_abcdefghijklmnopqrstuvwxyz"
+        owner_token = "o" * 43
+        started_profiles: list[workspace.GoogleWorkspaceProfile] = []
+
+        def start_connection(**kwargs):
+            started_profiles.append(kwargs["profile"])
+            return {"status": "waiting_for_user"}
+
+        with (
+            mock.patch.object(
+                google_workspace_permission_chooser_worker,
+                "_load_state",
+                return_value={
+                    "owner_token": owner_token,
+                    "account_id": None,
+                    "expires_at_epoch": (
+                        datetime.now(timezone.utc) + timedelta(minutes=5)
+                    ).timestamp(),
+                },
+            ),
+            mock.patch.object(
+                google_workspace_permission_chooser_worker,
+                "build_platform_client",
+                return_value=(client, "local_dev"),
+            ),
+            mock.patch.object(
+                google_workspace_permission_chooser_worker,
+                "_write_permission_chooser_worker_ready",
+            ),
+            mock.patch.object(
+                google_workspace_permission_chooser_worker,
+                "_cleanup_permission_chooser_worker_state",
+            ),
+            mock.patch.object(
+                google_workspace_permission_chooser_worker,
+                "_start_connection",
+                side_effect=start_connection,
+            ),
+        ):
+            google_workspace_permission_chooser_worker.run_worker(
+                chooser_id=chooser_id,
+                state_path=Path("/tmp/chooser.json"),
+            )
+
+        self.assertEqual(len(started_profiles), 1)
+        profile = started_profiles[0]
+        self.assertEqual(
+            profile.preset_ids,
+            (
+                "mail_reader",
+                "mail_sender",
+                "workspace_reader",
+                "mail_writer",
+                "inbox_manager",
+                "calendar_coordinator",
+                "file_collaborator",
+            ),
+        )
+        self.assertEqual(
+            list(profile.scopes),
+            [
+                *IDENTITY_SCOPES,
+                "https://www.googleapis.com/auth/gmail.modify",
+                "https://www.googleapis.com/auth/calendar.events",
+                "https://www.googleapis.com/auth/drive.file",
+                "https://www.googleapis.com/auth/drive.readonly",
+            ],
+        )
+        self.assertTrue(
+            client.posts[-1][0].endswith(
+                f"/permission-choosers/{chooser_id}/complete"
+            )
+        )
+        self.assertEqual(
+            client.posts[-1][1],
+            {"owner_token": owner_token, "outcome": "completed"},
+        )
+
+    def test_permission_chooser_worker_accepts_legacy_single_selection(self) -> None:
+        class ChooserClient:
+            def __init__(self) -> None:
+                self.posts: list[tuple[str, dict[str, object]]] = []
+
+            def post_json(
+                self,
+                path: str,
+                payload: dict[str, object],
+            ) -> dict[str, object]:
+                self.posts.append((path, payload))
+                if path.endswith("/poll"):
+                    return {
+                        "status": "selected",
+                        "selection_id": "mail_reader",
+                    }
+                return {"status": "completed"}
+
+        client = ChooserClient()
+        chooser_id = "gwp_abcdefghijklmnopqrstuvwxyz"
+        owner_token = "o" * 43
+        started_profiles: list[workspace.GoogleWorkspaceProfile] = []
+
+        def start_connection(**kwargs):
+            started_profiles.append(kwargs["profile"])
+            return {"status": "waiting_for_user"}
+
+        with (
+            mock.patch.object(
+                google_workspace_permission_chooser_worker,
+                "_load_state",
+                return_value={
+                    "owner_token": owner_token,
+                    "account_id": None,
+                    "expires_at_epoch": (
+                        datetime.now(timezone.utc) + timedelta(minutes=5)
+                    ).timestamp(),
+                },
+            ),
+            mock.patch.object(
+                google_workspace_permission_chooser_worker,
+                "build_platform_client",
+                return_value=(client, "local_dev"),
+            ),
+            mock.patch.object(
+                google_workspace_permission_chooser_worker,
+                "_write_permission_chooser_worker_ready",
+            ),
+            mock.patch.object(
+                google_workspace_permission_chooser_worker,
+                "_cleanup_permission_chooser_worker_state",
+            ),
+            mock.patch.object(
+                google_workspace_permission_chooser_worker,
+                "_start_connection",
+                side_effect=start_connection,
+            ),
+        ):
+            google_workspace_permission_chooser_worker.run_worker(
+                chooser_id=chooser_id,
+                state_path=Path("/tmp/chooser.json"),
+            )
+
+        self.assertEqual(len(started_profiles), 1)
+        self.assertEqual(started_profiles[0].preset_ids, ("mail_reader",))
+        self.assertEqual(
+            list(started_profiles[0].scopes),
+            list(MAIL_READER_SCOPES),
+        )
+        self.assertEqual(
+            client.posts[-1][1],
+            {"owner_token": owner_token, "outcome": "completed"},
+        )
 
     def test_seven_current_presets_resolve_to_exact_manifest_bundles(self) -> None:
         expected = {

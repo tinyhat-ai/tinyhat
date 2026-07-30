@@ -42,6 +42,41 @@ from .platform import build_platform_client, computer_api_path
 WORKER_SCHEMA = "tinyhat_google_workspace_permission_chooser_worker_v1"
 
 
+def _selection_ids(result: dict[str, object]) -> tuple[str, ...]:
+    """Return one identity choice or one-or-more composable preset ids."""
+    raw_selection_ids = result.get("selection_ids")
+    if raw_selection_ids is None:
+        legacy_selection_id = str(result.get("selection_id") or "").strip()
+        raw_selection_ids = [legacy_selection_id] if legacy_selection_id else []
+    if (
+        not isinstance(raw_selection_ids, list)
+        or not raw_selection_ids
+        or len(raw_selection_ids) > len(GOOGLE_WORKSPACE_PRESETS)
+        or any(
+            not isinstance(item, str) or not item or item != item.strip()
+            for item in raw_selection_ids
+        )
+    ):
+        raise GoogleWorkspaceError(
+            "Google access chooser returned an invalid selection."
+        )
+    selection_ids = tuple(raw_selection_ids)
+    if len(selection_ids) != len(set(selection_ids)):
+        raise GoogleWorkspaceError(
+            "Google access chooser returned duplicate selections."
+        )
+    if selection_ids == ("identity_only",):
+        return selection_ids
+    if "identity_only" in selection_ids or any(
+        selection_id not in GOOGLE_WORKSPACE_PRESETS
+        for selection_id in selection_ids
+    ):
+        raise GoogleWorkspaceError(
+            "Google access chooser returned an invalid selection."
+        )
+    return selection_ids
+
+
 def _load_state(*, chooser_id: str, state_path: Path) -> dict[str, object]:
     try:
         value = json.loads(state_path.read_text(encoding="utf-8"))
@@ -131,15 +166,11 @@ def run_worker(*, chooser_id: str, state_path: Path) -> None:
                 return
             if status != "selected":
                 raise GoogleWorkspaceError("Google access chooser returned an invalid state.")
-            selection_id = str(result.get("selection_id") or "").strip()
-            if selection_id == "identity_only":
+            selection_ids = _selection_ids(result)
+            if selection_ids == ("identity_only",):
                 profile = _requested_profile(None)
-            elif selection_id in GOOGLE_WORKSPACE_PRESETS:
-                profile = _requested_profile(None, presets=[selection_id])
             else:
-                raise GoogleWorkspaceError(
-                    "Google access chooser returned an invalid selection."
-                )
+                profile = _requested_profile(None, presets=list(selection_ids))
             started = _start_connection(
                 profile=profile,
                 account_id=account_id if isinstance(account_id, str) else None,

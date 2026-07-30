@@ -6,6 +6,10 @@ All notable changes to the Tinyhat plugin are documented here.
 
 ### Changed
 
+- Bump the Hermes plugin package to `0.21.18`; let the Google access chooser
+  carry multiple preset selections into one normalized authorization request.
+  Combined Gmail, Calendar, and Drive choices now reach the existing
+  composable preset resolver instead of being reduced to one preset.
 - Bump the Hermes plugin package to `0.21.17`; add explicit Gmail read-only
   and send-only presets, teach the agent to map ordinary language to the
   narrowest preset, and route vague Google-access requests to a concise
