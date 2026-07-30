@@ -53,6 +53,19 @@ python3 -m compileall -q .
 When adding or changing plugin skills, read
 `.agents/skills/tinyhat-plugin-skill-authoring/SKILL.md` first.
 
+## Version Bumps
+
+Follow `RELEASING.md` section **Version Bump Checklist** for every plugin
+version change. Update all listed live manifests, package metadata, and
+adapter-test expectations in the same PR. Do not assume the loader manifest
+is the running-version source: `tinyhat_plugin_version` and the
+`/tinyhat-plugin-version` command report the `version` field from
+`hermes.plugin.json`.
+
+Run the package validator, full unittest suite, and `compileall` before
+promoting a version. Read back `hermes.plugin.json` from each promoted channel
+to verify the live command will report the intended version.
+
 ## Writing
 
 Use simple public language. The README is part of the trust surface: it

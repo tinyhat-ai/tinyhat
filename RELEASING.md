@@ -15,6 +15,43 @@ GitHub release titles should match the tag exactly. Final releases are
 not pre-releases. Release candidates and development releases are
 pre-releases.
 
+## Version Bump Checklist
+
+Update every live version surface in one change. `package.json` is the
+validator's canonical package version, but the version shown by a running
+agent comes from `hermes.plugin.json`.
+
+| File | What the version controls |
+| --- | --- |
+| `package.json` | Canonical plugin package version used by release automation and `scripts/validate_framework_package.py`. |
+| `hermes.plugin.json` | Loaded adapter version. `tinyhat_plugin_version` and `/tinyhat-plugin-version` read this exact value through `tools.plugin_version_payload()`. |
+| `plugin.yaml` | Hermes plugin-loader manifest version. Release Please does not currently update this file automatically. |
+| `pyproject.toml` | Python project/package metadata version. |
+| `.release-please-manifest.json` | Release Please's current version state for the repository root. |
+| `test/test_hermes_adapter.py` | Hard-coded live-version expectations and version-bearing platform-status fixtures. |
+
+Also add the new version and its user-visible changes to `CHANGELOG.md`. Add
+or update a version-specific `README.md` rollout note when the plugin requires
+a matching platform deployment before channel promotion.
+
+Before committing a version bump:
+
+```bash
+PLUGIN_OLD_VERSION='<current-version>'
+PLUGIN_NEW_VERSION='<next-version>'
+rg -n --hidden --glob '!.git/**' \
+  "$PLUGIN_OLD_VERSION|$PLUGIN_NEW_VERSION"
+python3 scripts/validate_framework_package.py
+python3 -m unittest discover -s test -p "*.py"
+python3 -m compileall -q .
+```
+
+Review every search result. Historical changelog entries keep their original
+versions; all live manifests, package metadata, and current adapter-test
+expectations must use `PLUGIN_NEW_VERSION`. The validator fails when the five
+live manifest/package values disagree, while the adapter suite proves the
+running-version command and related projections report the same value.
+
 ## Channels
 
 | Branch | Meaning |

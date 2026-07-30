@@ -63,6 +63,12 @@ workspace.
 | `.agents/skills/tinyhat-plugin-skill-authoring/SKILL.md` | Maintainer workflow for adding or changing plugin skills. |
 | `RELEASING.md` | How releases and `channels/lts` / `channels/latest` work. |
 
+For version changes, follow the complete
+[Version Bump Checklist](RELEASING.md#version-bump-checklist). In particular,
+the running `tinyhat_plugin_version` tool and `/tinyhat-plugin-version`
+command report the version from `hermes.plugin.json`; the checklist keeps that
+live value aligned with every package and loader manifest.
+
 There is no legacy framework adapter in this branch. Additional framework
 adapters will come later as separate, small files once the Hermes path is
 proven.
