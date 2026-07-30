@@ -454,6 +454,10 @@ TINYHAT_PLUGIN_REF=vX.Y.Z
 | `channels/latest` | Newest promoted final version, used when we want faster adoption. |
 | exact tag, for example `vX.Y.Z` | Immutable version for tests, rollbacks, and audits. |
 
+For v0.21.18, deploy the matching platform multi-select Google-access chooser
+before promoting `channels/latest` and `channels/lts`. The chooser can combine
+Gmail, Calendar, and Drive presets into one normalized least-privilege request.
+
 For v0.21.17, deploy the matching platform Google-access chooser before
 promoting `channels/latest` and `channels/lts`. Vague Google-access requests
 open the Mini App; explicit mail reading, sending, draft, and inbox-management
