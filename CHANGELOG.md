@@ -6,6 +6,11 @@ All notable changes to the Tinyhat plugin are documented here.
 
 ### Changed
 
+- Bump the Hermes plugin package to `0.21.19`; let the platform-owned Slack
+  checklist replace per-attempt Telegram notices. A predictable Slack
+  `missing_scope` response is now presented as setup step 4, with a safe link
+  to the validated app's Install App page and encrypted-detail reuse for the
+  final attempt. Deploy the matching Tinyloop platform before promotion.
 - Preserve the platform's safe terminal Google refresh result as a durable,
   account-local `reauthorization_required` state. Status now identifies the
   affected account without exposing credentials, repeat app and scheduled
