@@ -195,7 +195,7 @@ class HermesAdapterTests(unittest.TestCase):
 
         self.assertEqual(payload["schema"], "tinyhat_plugin_version_v1")
         self.assertEqual(payload["name"], "tinyhat")
-        self.assertEqual(payload["version"], "0.21.18")
+        self.assertEqual(payload["version"], "0.21.19")
 
     def test_platform_status_uses_attested_computer_endpoint(self) -> None:
         original_build = tools.build_platform_client
@@ -208,7 +208,7 @@ class HermesAdapterTests(unittest.TestCase):
                     "computer_id": 5359,
                     "state": "active",
                     "assigned": True,
-                    "package_inventory": {"plugin": {"version": "0.21.18"}},
+                    "package_inventory": {"plugin": {"version": "0.21.19"}},
                 }
 
         try:
@@ -221,7 +221,7 @@ class HermesAdapterTests(unittest.TestCase):
         self.assertEqual(payload["computer_id"], 5359)
         self.assertEqual(payload["state"], "active")
         self.assertTrue(payload["assigned"])
-        self.assertEqual(payload["package_inventory"]["plugin"]["version"], "0.21.18")
+        self.assertEqual(payload["package_inventory"]["plugin"]["version"], "0.21.19")
 
     def test_platform_status_returns_structured_platform_error(self) -> None:
         original_build = tools.build_platform_client
@@ -244,7 +244,7 @@ class HermesAdapterTests(unittest.TestCase):
 
         self.assertEqual(payload["schema"], "tinyhat_skill_catalog_v1")
         self.assertEqual(payload["plugin"]["name"], "tinyhat")
-        self.assertEqual(payload["plugin"]["version"], "0.21.18")
+        self.assertEqual(payload["plugin"]["version"], "0.21.19")
         by_name = {skill["name"]: skill for skill in payload["skills"]}
         self.assertEqual(
             by_name["tinyhat-codex-auth"]["qualified_name"],
@@ -1630,8 +1630,7 @@ class HermesAdapterTests(unittest.TestCase):
                 )
             ],
         )
-        self.assertIn("details were received", notices[0])
-        self.assertIn("welcome message was sent", notices[1])
+        self.assertEqual(notices, [])
 
     def test_slack_failure_reports_stage_to_telegram_and_platform(self) -> None:
         plaintext = json.dumps(
@@ -1689,8 +1688,7 @@ class HermesAdapterTests(unittest.TestCase):
             )
 
         self.assertFalse(installed)
-        self.assertIn("details were received", notices[0])
-        self.assertIn("allowed-member validation", notices[1])
+        self.assertEqual(notices, [])
         self.assertEqual(claims[0]["installed"], False)
         self.assertEqual(
             claims[0]["connection_metadata"],
@@ -1757,11 +1755,7 @@ class HermesAdapterTests(unittest.TestCase):
             claims[0]["connection_metadata"]["app_id"],
             "A012ABCDEF",
         )
-        self.assertIn(
-            "https://api.slack.com/apps/A012ABCDEF",
-            notices[-1],
-        )
-        self.assertNotIn("xapp-1-A012ABCDEF-secret", notices[-1])
+        self.assertEqual(notices, [])
 
     def test_slack_greeting_failure_is_not_reported_as_connected(self) -> None:
         plaintext = json.dumps(
@@ -1848,14 +1842,7 @@ class HermesAdapterTests(unittest.TestCase):
                 "retryable": True,
             },
         )
-        self.assertIn("welcome-message delivery", notices[-1])
-        self.assertIn(
-            "https://api.slack.com/apps/A012ABCDEF",
-            notices[-1],
-        )
-        self.assertIn("reinstall it in your workspace", notices[-1])
-        self.assertNotIn("xoxb-placeholder", notices[-1])
-        self.assertNotIn("xapp-placeholder", notices[-1])
+        self.assertEqual(notices, [])
 
     def test_slack_owner_dm_failure_notice_links_only_validated_app_id(
         self,
@@ -1873,9 +1860,9 @@ class HermesAdapterTests(unittest.TestCase):
                 {"app_id": "a012abcdef"},
             ),
             (
-                "Slack connection failed during owner direct-message setup. "
-                "Open the Slack app, reinstall it in your workspace, then retry: "
-                "https://api.slack.com/apps/A012ABCDEF"
+                "Slack setup · Step 4 of 5. Reinstall the app once to apply the "
+                "manifest permissions, then finish setup: "
+                "https://api.slack.com/apps/A012ABCDEF/install-on-team"
             ),
         )
         self.assertNotIn(
@@ -1948,7 +1935,9 @@ class HermesAdapterTests(unittest.TestCase):
                 "_validate_slack_credentials",
                 side_effect=failure,
             ),
-            mock.patch.object(slack_connection, "_send_secret_notice"),
+            mock.patch.object(
+                slack_connection, "_send_secret_notice"
+            ) as send_notice,
             mock.patch.object(
                 slack_connection,
                 "_claim_handoff",
@@ -1965,6 +1954,8 @@ class HermesAdapterTests(unittest.TestCase):
 
         self.assertFalse(installed)
         self.assertEqual(len(claims), 2)
+        send_notice.assert_called_once()
+        self.assertIn("Slack connection failed", send_notice.call_args.args[0])
         self.assertEqual(claims[0]["installed"], False)
         self.assertEqual(
             claims[0]["connection_metadata"]["failure_code"],

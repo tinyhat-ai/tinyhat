@@ -6,6 +6,11 @@ All notable changes to the Tinyhat plugin are documented here.
 
 ### Changed
 
+- Bump the Hermes plugin package to `0.21.19`; let the platform-owned Slack
+  checklist replace per-attempt Telegram notices. A predictable Slack
+  `missing_scope` response is now presented as setup step 4, with a safe link
+  to the validated app's Install App page and encrypted-detail reuse for the
+  final attempt. Deploy the matching Tinyloop platform before promotion.
 - Bump the Hermes plugin package to `0.21.18`; let the Google access chooser
   carry multiple preset selections into one normalized authorization request.
   Combined Gmail, Calendar, and Drive choices now reach the existing

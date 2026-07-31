@@ -28,6 +28,7 @@ MAX_ALLOWED_USERS = 100
 SLACK_ID_RE = re.compile(r"^[A-Z][A-Z0-9]{8,}$")
 SLACK_API_BASE_URL = "https://slack.com/api"
 SLACK_APP_SETTINGS_BASE_URL = "https://api.slack.com/apps"
+SLACK_APP_INSTALL_PATH = "install-on-team"
 SLACK_HOME_CHANNEL_NAME = "Owner DM"
 SLACK_WELCOME_MESSAGE = "Hi there! Slack is connected to this Hermes agent."
 SLACK_APP_TOKEN_APP_ID_RE = re.compile(
@@ -192,9 +193,6 @@ def install_submitted_slack_connection(
     if not isinstance(ciphertext_payload, dict):
         raise SecretHandoffError("Platform did not return Slack ciphertext.")
     plaintext = _decrypt_ciphertext(private_key_pem, ciphertext_payload)
-    _send_secret_notice(
-        "Slack details were received on this Computer. I am validating them now."
-    )
     bundle: dict[str, str] = {}
     metadata: dict[str, Any] = {}
     parse_failure: SlackConnectionError | None = None
@@ -234,11 +232,6 @@ def install_submitted_slack_connection(
             params={"channel": home_channel, "text": SLACK_WELCOME_MESSAGE},
             stage="greeting",
         )
-        _send_secret_notice(
-            "Slack accepted the details and the welcome message was sent. "
-            "The platform is refreshing Hermes now — I will confirm when Slack "
-            "is ready."
-        )
         _claim_handoff(
             client,
             platform_auth,
@@ -259,7 +252,6 @@ def install_submitted_slack_connection(
             app_id = _app_id_from_app_token(bundle.get("app_token"))
             if app_id is not None:
                 failure_identity["app_id"] = app_id
-        _send_secret_notice(_slack_failure_notice(failure, failure_identity))
         failure_metadata = {
             "provider": "slack",
             "connection_status": "failed",
@@ -289,6 +281,7 @@ def install_submitted_slack_connection(
         except Exception:
             # Compatibility with platform versions that predate failed
             # connection metadata.
+            _send_secret_notice(_slack_failure_notice(failure, failure_identity))
             _claim_handoff(
                 client,
                 platform_auth,
@@ -329,9 +322,10 @@ def _slack_failure_notice(
         return f"{prefix}{failure.public_message}"
     app_url = f"{SLACK_APP_SETTINGS_BASE_URL}/{app_id}"
     if failure.code == "missing_scope":
+        install_url = f"{app_url}/{SLACK_APP_INSTALL_PATH}"
         return (
-            f"{prefix}Open the Slack app, reinstall it in your workspace, "
-            f"then retry: {app_url}"
+            "Slack setup · Step 4 of 5. Reinstall the app once to apply the "
+            f"manifest permissions, then finish setup: {install_url}"
         )
     return f"{prefix}{failure.public_message} Open the Slack app: {app_url}"
 
@@ -538,7 +532,8 @@ def _slack_api_call(
 def _slack_failure_message(stage: str, code: str) -> str:
     if code == "missing_scope":
         return (
-            "Slack needs updated permissions. Reinstall the app, then retry."
+            "Reinstall the app once to apply the manifest permissions, then "
+            "finish setup."
         )
     if stage == "bot_auth":
         return "Slack did not accept the bot token. Copy the xoxb token and retry."
