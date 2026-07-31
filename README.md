@@ -161,6 +161,12 @@ commands.
 Before the JSON is sent, the plugin removes Hermes' slash-command definitions
 and the `commands` OAuth scope so multiple per-agent apps can coexist in the
 same workspace without command-name conflicts.
+`tinyhat_slack_disconnect` sends an owner-confirmed two-stage Telegram prompt.
+After final confirmation, the Computer asks Slack to revoke the bot token when
+it is still active, removes the complete local Slack configuration together,
+and restarts Hermes. The platform marks the connection disconnected only after
+that local absence and restart are verified; if Slack cannot confirm provider
+revocation, the final message asks the owner to remove the app in Slack.
 
 `tinyhat-credentials` lists only the safe names, descriptions, and saved
 timestamps of credentials currently installed through the private-secret
@@ -467,6 +473,11 @@ TINYHAT_PLUGIN_REF=vX.Y.Z
 | `channels/lts` | Conservative default for managed Computers. |
 | `channels/latest` | Newest promoted final version, used when we want faster adoption. |
 | exact tag, for example `vX.Y.Z` | Immutable version for tests, rollbacks, and audits. |
+
+For v0.21.20, deploy the matching Tinyloop platform and Hermes runtime before
+promoting `channels/latest` and `channels/lts`. The dedicated Slack disconnect
+tool uses the platform's two-stage Telegram ceremony and the runtime's bundled
+revocation, removal, and restart command.
 
 For v0.21.19, deploy the matching Tinyloop platform before promoting
 `channels/latest` and `channels/lts`. The platform owns the editable Telegram

@@ -78,6 +78,18 @@ TINYHAT_SLACK_CONNECT_SCHEMA = {
     ),
 }
 
+TINYHAT_SLACK_DISCONNECT_SCHEMA = {
+    "type": "object",
+    "properties": {},
+    "required": [],
+    "additionalProperties": False,
+    "description": (
+        "Start Tinyhat's owner-confirmed Slack disconnect. The Computer asks "
+        "Slack to revoke the bot token when possible, removes the complete "
+        "local Slack bundle, and restarts Hermes before reporting success."
+    ),
+}
+
 
 TINYHAT_CREDENTIALS_SCHEMA = {
     "type": "object",

@@ -20,6 +20,7 @@ REQUIRED_TOOLS = [
     "tinyhat_skill_catalog",
     "tinyhat_private_secret_handoff",
     "tinyhat_slack_connect",
+    "tinyhat_slack_disconnect",
     "tinyhat_credentials",
     "tinyhat_google_workspace",
     "tinyhat_google_workspace_app",

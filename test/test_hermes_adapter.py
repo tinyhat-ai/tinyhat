@@ -98,6 +98,7 @@ class HermesAdapterTests(unittest.TestCase):
         self.assertIn("tinyhat_skill_catalog", ctx.tools)
         self.assertIn("tinyhat_private_secret_handoff", ctx.tools)
         self.assertIn("tinyhat_slack_connect", ctx.tools)
+        self.assertIn("tinyhat_slack_disconnect", ctx.tools)
         self.assertIn("tinyhat_credentials", ctx.tools)
         self.assertIn("tinyhat_codex_auth", ctx.tools)
         self.assertIn("tinyhat_plugin_update", ctx.tools)
@@ -174,6 +175,10 @@ class HermesAdapterTests(unittest.TestCase):
         self.assertEqual(slack_schema["properties"], {})
         self.assertEqual(slack_schema["required"], [])
         self.assertFalse(slack_schema["additionalProperties"])
+        slack_disconnect_schema = schemas.TINYHAT_SLACK_DISCONNECT_SCHEMA
+        self.assertEqual(slack_disconnect_schema["properties"], {})
+        self.assertEqual(slack_disconnect_schema["required"], [])
+        self.assertFalse(slack_disconnect_schema["additionalProperties"])
 
         credentials_schema = schemas.TINYHAT_CREDENTIALS_SCHEMA
         self.assertEqual(credentials_schema["required"], ["action"])
@@ -195,7 +200,7 @@ class HermesAdapterTests(unittest.TestCase):
 
         self.assertEqual(payload["schema"], "tinyhat_plugin_version_v1")
         self.assertEqual(payload["name"], "tinyhat")
-        self.assertEqual(payload["version"], "0.21.19")
+        self.assertEqual(payload["version"], "0.21.20")
 
     def test_platform_status_uses_attested_computer_endpoint(self) -> None:
         original_build = tools.build_platform_client
@@ -208,7 +213,7 @@ class HermesAdapterTests(unittest.TestCase):
                     "computer_id": 5359,
                     "state": "active",
                     "assigned": True,
-                    "package_inventory": {"plugin": {"version": "0.21.19"}},
+                    "package_inventory": {"plugin": {"version": "0.21.20"}},
                 }
 
         try:
@@ -221,7 +226,7 @@ class HermesAdapterTests(unittest.TestCase):
         self.assertEqual(payload["computer_id"], 5359)
         self.assertEqual(payload["state"], "active")
         self.assertTrue(payload["assigned"])
-        self.assertEqual(payload["package_inventory"]["plugin"]["version"], "0.21.19")
+        self.assertEqual(payload["package_inventory"]["plugin"]["version"], "0.21.20")
 
     def test_platform_status_returns_structured_platform_error(self) -> None:
         original_build = tools.build_platform_client
@@ -244,7 +249,7 @@ class HermesAdapterTests(unittest.TestCase):
 
         self.assertEqual(payload["schema"], "tinyhat_skill_catalog_v1")
         self.assertEqual(payload["plugin"]["name"], "tinyhat")
-        self.assertEqual(payload["plugin"]["version"], "0.21.19")
+        self.assertEqual(payload["plugin"]["version"], "0.21.20")
         by_name = {skill["name"]: skill for skill in payload["skills"]}
         self.assertEqual(
             by_name["tinyhat-codex-auth"]["qualified_name"],
@@ -1517,6 +1522,39 @@ class HermesAdapterTests(unittest.TestCase):
         self.assertEqual(worker_calls[0][1], "PRIVATE")
         self.assertIn("Hermes Agent-view manifest", reply)
         self.assertIn("never sees the tokens or Slack messages", reply)
+
+    def test_slack_disconnect_starts_platform_owned_confirmation(self) -> None:
+        calls: list[tuple[str, dict]] = []
+
+        class FakeClient:
+            def post_json(self, path: str, payload: dict) -> dict:
+                calls.append((path, payload))
+                return {
+                    "schema": "tinyhat_private_credential_removal_v1",
+                    "removal_id": "scr_slack",
+                    "handoff_id": "sh_slack",
+                    "credential_name": "SLACK_CONNECTION",
+                    "status": "offered",
+                    "expires_at": "2026-07-31T20:00:00Z",
+                    "telegram_message_sent": True,
+                    "detail": "Review the Telegram confirmation.",
+                }
+
+        with mock.patch.object(
+            slack_connection,
+            "build_platform_client",
+            return_value=(FakeClient(), "local_dev"),
+        ):
+            payload = json.loads(tools.slack_disconnect({}))
+
+        self.assertEqual(
+            calls,
+            [("/hapi/v1/computers/local-dev/slack/disconnect/v1", {})],
+        )
+        self.assertEqual(payload["status"], "offered")
+        self.assertTrue(payload["telegram_message_sent"])
+        self.assertFalse(payload["chat_response_required"])
+        self.assertIn("two-stage Slack disconnect", payload["agent_instruction"])
 
     def test_slack_bundle_installs_connection_and_private_home_channel(self) -> None:
         bot_token = "xoxb-" + "placeholder"

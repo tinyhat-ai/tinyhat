@@ -17,7 +17,7 @@ from .google_workspace_app_manager import (
 )
 from .platform import PlatformError, build_platform_client, computer_api_path
 from .secret_handoff import start_private_secret_handoff
-from .slack_connection import start_slack_connection
+from .slack_connection import start_slack_connection, start_slack_disconnect
 from .tool_errors import tool_error_json
 
 CODEX_AUTH_SCREENSHOT = (
@@ -163,6 +163,12 @@ def slack_connect(args: dict[str, Any] | None = None, **kwargs: Any) -> str:
     """Start the Hermes-owned Slack connection onboarding."""
 
     return start_slack_connection(args, **kwargs)
+
+
+def slack_disconnect(args: dict[str, Any] | None = None, **kwargs: Any) -> str:
+    """Start the owner-confirmed Slack revocation and local bundle removal."""
+
+    return start_slack_disconnect(args, **kwargs)
 
 
 def credentials(args: dict[str, Any] | None = None, **kwargs: Any) -> str:

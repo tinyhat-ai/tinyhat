@@ -83,6 +83,12 @@ def register(ctx: Any) -> None:
         handler=tools.slack_connect,
     )
     ctx.register_tool(
+        name="tinyhat_slack_disconnect",
+        toolset="tinyhat",
+        schema=schemas.TINYHAT_SLACK_DISCONNECT_SCHEMA,
+        handler=tools.slack_disconnect,
+    )
+    ctx.register_tool(
         name="tinyhat_credentials",
         toolset="tinyhat",
         schema=schemas.TINYHAT_CREDENTIALS_SCHEMA,
