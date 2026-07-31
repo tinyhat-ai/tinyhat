@@ -208,6 +208,15 @@ agent uses it to select an account without seeing credentials. When more than
 one account exists, operations and mutations require the intended `account_id`
 instead of silently choosing one.
 
+If the platform proves that a saved refresh credential requires new Google
+consent, the plugin records `reauthorization_required` only for that account.
+Status exposes safe refresh health, the last attempt time and opaque
+correlation id, and an exact `set_permissions` recovery call using the saved
+scopes. Later app and scheduled runs stop before retrying the refresh broker or
+launching `gws`. Plain `connect` is not recovery because it adds an account;
+only a successful exact replacement clears the affected account's terminal
+state.
+
 Permission changes accept a composable `presets` array and optional requestable
 Custom `scopes` plus `reason`. The legacy `profile` field is accepted only for
 compatibility and cannot be combined with either new field. `connect` with an

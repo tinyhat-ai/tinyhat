@@ -285,6 +285,14 @@ mutation, Calendar event change, Drive write, or other external operation. If
 Google returns a different scope set, Tinyhat saves no new Computer credential
 and tells the user to choose the exact narrower access before another request.
 
+If a refresh proves that Google consent must be renewed, the plugin stores a
+safe `reauthorization_required` marker on only that account. Status stops
+calling it connected, reports bounded refresh health and an opaque correlation
+id, and recommends `set_permissions` for the same account with its exact saved
+scopes. Later app and scheduled runs do not retry the terminal refresh or
+launch `gws`; only a successful exact replacement clears the marker. Plain
+`connect` adds an account and is not a repair path.
+
 The authentication plugin does not implement mail, event, or file operations.
 Hermes's bundled `google-workspace` skill supplies operation semantics while the
 external managed `gws` app performs the API call through Tinyhat's bridge. Its

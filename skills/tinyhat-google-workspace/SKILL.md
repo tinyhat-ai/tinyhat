@@ -135,6 +135,17 @@ For "reconnect" or "reauthorize" an existing account, call status, select its
 manifest scopes. Plain connect means add and can correctly hit the
 duplicate-account guard.
 
+If status or the app bridge reports `reauthorization_required: true` with
+reason `authorization_renewal_required`, the saved grant is terminal until the
+user completes fresh Google consent. Do not retry the app command, reinstall
+`gws`, or let a scheduled job loop on refresh. Call status for the affected
+`account_id`, then use its `recommended_tool_call`: `set_permissions` for that
+same account with the exact saved scopes. Never replace this recovery with
+plain `connect`, and never broaden or narrow the saved permissions unless the
+user separately asks to change them. A successful exact replacement clears
+the renewal state for only that account; a failed or abandoned consent flow
+leaves the state and all other accounts unchanged.
+
 The user needs only an existing Google account. Never ask for a Google Cloud
 project, OAuth client ID or secret, credentials JSON, app password,
 authorization code, raw token, `gcloud`, `gws auth`, or any second OAuth flow.
