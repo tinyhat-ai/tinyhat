@@ -60,12 +60,16 @@ GOOGLE_WORKSPACE_ACTIONS = (
     "set_permissions",
     "disconnect",
 )
+HTTP_UNAUTHORIZED = 401
 HTTP_FORBIDDEN = 403
 HTTP_NOT_FOUND = 404
 GOOGLE_WORKSPACE_CREDENTIAL_SCHEMA = "tinyhat_google_workspace_credentials_v1"
 GOOGLE_WORKSPACE_ACCOUNTS_SCHEMA = "tinyhat_google_workspace_accounts_v1"
 GOOGLE_WORKSPACE_CONNECTIONS_SCHEMA = "tinyhat_google_workspace_connections_v1"
 GOOGLE_WORKSPACE_REFRESH_SCHEMA = "tinyhat_google_workspace_refresh_v1"
+GOOGLE_WORKSPACE_REFRESH_STATE_SCHEMA = "tinyhat_google_workspace_refresh_state_v1"
+GOOGLE_WORKSPACE_RENEWAL_REASON = "authorization_renewal_required"
+GOOGLE_WORKSPACE_RENEWAL_MESSAGE = "Google Workspace authorization must be renewed."
 GOOGLE_WORKSPACE_INSTALL_RECEIPT_SCHEMA = "tinyhat_google_workspace_install_receipt_v1"
 GOOGLE_WORKSPACE_DISCONNECT_INTENT_SCHEMA = "tinyhat_google_workspace_disconnect_intent_v1"
 GOOGLE_WORKSPACE_DISCONNECT_WORKER_STATE_SCHEMA = (
@@ -268,6 +272,7 @@ GOOGLE_TOKEN_EXPIRY_MAX_LENGTH = 64
 OWNER_ONLY_FILE_MODE = 0o600
 HANDOFF_ID_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_.-]{0,127}$")
 GOOGLE_CONNECTION_ID_RE = re.compile(r"^gwo_[A-Za-z0-9_-]{1,60}$")
+GOOGLE_REFRESH_CORRELATION_ID_RE = re.compile(r"^gwr_[A-Za-z0-9_-]{8,60}$")
 GOOGLE_PERMISSION_CHOOSER_ID_RE = re.compile(r"^gwp_[A-Za-z0-9_-]{20,80}$")
 GOOGLE_LAUNCH_TICKET_MAX_LENGTH = 32 * 1024
 GOOGLE_LAUNCH_TICKET_RE = re.compile(
@@ -299,6 +304,16 @@ _context_assignment_check_cache_lock = threading.Lock()
 
 class GoogleWorkspaceError(RuntimeError):
     """A Google Workspace connection step failed safely."""
+
+
+class GoogleWorkspaceAuthorizationRenewalRequired(GoogleWorkspaceError):
+    """The platform proved that one saved Google grant needs fresh consent."""
+
+    def __init__(self, *, correlation_id: str, last_refresh_attempt_at: str) -> None:
+        self.reason = GOOGLE_WORKSPACE_RENEWAL_REASON
+        self.correlation_id = correlation_id
+        self.last_refresh_attempt_at = last_refresh_attempt_at
+        super().__init__(GOOGLE_WORKSPACE_RENEWAL_MESSAGE)
 
 
 class GoogleWorkspaceAccountSelectionRequired(GoogleWorkspaceError):
@@ -4631,6 +4646,8 @@ def _safe_account_metadata(credentials: dict[str, Any]) -> dict[str, Any]:
         credentials.get("tinyhat_connection_id"),
         required=False,
     )
+    refresh_state = _saved_refresh_state(credentials)
+    reauthorization_required = refresh_state is not None
     payload: dict[str, Any] = {
         "account_id": connection_id,
         "email": credentials["email"],
@@ -4642,7 +4659,21 @@ def _safe_account_metadata(credentials: dict[str, Any]) -> dict[str, Any]:
         "expires_at": credentials["expires_at"],
         "connected_at": credentials["connected_at"],
         "refresh_supported": True,
+        "status": "reauthorization_required" if reauthorization_required else "connected",
+        "connected": not reauthorization_required,
+        "usable": not reauthorization_required,
+        "token_state": "reauthorization_required" if reauthorization_required else "saved",
+        "refresh_health": "failed" if reauthorization_required else "not_checked",
+        "reauthorization_required": reauthorization_required,
     }
+    if refresh_state is not None:
+        payload.update(
+            {
+                "last_refresh_attempt_at": refresh_state["last_refresh_attempt_at"],
+                "last_refresh_error_code": refresh_state["reason"],
+                "refresh_correlation_id": refresh_state["correlation_id"],
+            }
+        )
     return payload
 
 
@@ -4717,7 +4748,68 @@ def _normalize_saved_credentials(
         value.pop("tinyhat_connection_id", None)
     else:
         value["tinyhat_connection_id"] = connection_id
+    refresh_state = value.get("tinyhat_refresh_state")
+    if refresh_state is None:
+        value.pop("tinyhat_refresh_state", None)
+    else:
+        value["tinyhat_refresh_state"] = _normalize_refresh_state(refresh_state)
     return value
+
+
+def _normalize_refresh_state(value: Any) -> dict[str, str]:
+    if not isinstance(value, dict) or set(value) != {
+        "schema",
+        "status",
+        "reason",
+        "last_refresh_attempt_at",
+        "correlation_id",
+    }:
+        raise GoogleWorkspaceError("Saved Google refresh state is invalid.")
+    if (
+        value.get("schema") != GOOGLE_WORKSPACE_REFRESH_STATE_SCHEMA
+        or value.get("status") != "reauthorization_required"
+        or value.get("reason") != GOOGLE_WORKSPACE_RENEWAL_REASON
+    ):
+        raise GoogleWorkspaceError("Saved Google refresh state is invalid.")
+    correlation_id = value.get("correlation_id")
+    if (
+        not isinstance(correlation_id, str)
+        or GOOGLE_REFRESH_CORRELATION_ID_RE.fullmatch(correlation_id) is None
+    ):
+        raise GoogleWorkspaceError("Saved Google refresh state is invalid.")
+    last_refresh_attempt_at = value.get("last_refresh_attempt_at")
+    if not isinstance(last_refresh_attempt_at, str):
+        raise GoogleWorkspaceError("Saved Google refresh state is invalid.")
+    try:
+        parsed_attempt = datetime.fromisoformat(last_refresh_attempt_at.replace("Z", "+00:00"))
+    except ValueError as exc:
+        raise GoogleWorkspaceError("Saved Google refresh state is invalid.") from exc
+    if parsed_attempt.tzinfo is None or parsed_attempt.utcoffset() is None:
+        raise GoogleWorkspaceError("Saved Google refresh state is invalid.")
+    return {
+        "schema": GOOGLE_WORKSPACE_REFRESH_STATE_SCHEMA,
+        "status": "reauthorization_required",
+        "reason": GOOGLE_WORKSPACE_RENEWAL_REASON,
+        "last_refresh_attempt_at": last_refresh_attempt_at,
+        "correlation_id": correlation_id,
+    }
+
+
+def _saved_refresh_state(credentials: dict[str, Any]) -> dict[str, str] | None:
+    value = credentials.get("tinyhat_refresh_state")
+    if value is None:
+        return None
+    return _normalize_refresh_state(value)
+
+
+def _raise_if_authorization_renewal_required(credentials: dict[str, Any]) -> None:
+    terminal_state = _saved_refresh_state(credentials)
+    if terminal_state is None:
+        return
+    raise GoogleWorkspaceAuthorizationRenewalRequired(
+        correlation_id=terminal_state["correlation_id"],
+        last_refresh_attempt_at=terminal_state["last_refresh_attempt_at"],
+    )
 
 
 def _fetch_assignment_binding(*, client: PlatformClient, platform_auth: str) -> str:
@@ -5108,6 +5200,7 @@ def refresh_verified_google_workspace_credentials(
     if credentials.get("tinyhat_connection_id") is None:
         _migrate_legacy_credentials()
         credentials = load_verified_google_workspace_credentials(account_id)
+    _raise_if_authorization_renewal_required(credentials)
     connection_id = _validated_connection_id(credentials.get("tinyhat_connection_id"))
     profile = _profile_for_capability_bundle(
         credentials["capability_bundle"],
@@ -5117,23 +5210,38 @@ def refresh_verified_google_workspace_credentials(
     private_key_pem, public_key_pem = _generate_key_pair()
     try:
         client, platform_auth = build_platform_client()
-        response = client.post_json(
-            computer_api_path(
-                platform_auth,
-                f"{GOOGLE_WORKSPACE_API_SUFFIX}/refresh",
-            ),
-            {
-                "public_key_pem": public_key_pem,
-                "key_algorithm": KEY_ALGORITHM,
-                "client_id": credentials["client_id"],
-                "refresh_token": credentials["refresh_token"],
-                "tinyhat_connection_id": connection_id,
-                "tinyhat_assignment_binding": credentials["tinyhat_assignment_binding"],
-                "capability_bundle": profile.capability_bundle,
-                "requested_services": list(profile.services),
-                "requested_scopes": list(profile.scopes),
-            },
-        )
+        try:
+            response = client.post_json(
+                computer_api_path(
+                    platform_auth,
+                    f"{GOOGLE_WORKSPACE_API_SUFFIX}/refresh",
+                ),
+                {
+                    "public_key_pem": public_key_pem,
+                    "key_algorithm": KEY_ALGORITHM,
+                    "client_id": credentials["client_id"],
+                    "refresh_token": credentials["refresh_token"],
+                    "tinyhat_connection_id": connection_id,
+                    "tinyhat_assignment_binding": credentials["tinyhat_assignment_binding"],
+                    "capability_bundle": profile.capability_bundle,
+                    "requested_services": list(profile.services),
+                    "requested_scopes": list(profile.scopes),
+                },
+            )
+        except PlatformError as exc:
+            renewal = _platform_authorization_renewal(exc)
+            if renewal is None:
+                raise
+            last_refresh_attempt_at = datetime.now(timezone.utc).isoformat()
+            _persist_authorization_renewal_required(
+                expected=credentials,
+                correlation_id=renewal,
+                last_refresh_attempt_at=last_refresh_attempt_at,
+            )
+            raise GoogleWorkspaceAuthorizationRenewalRequired(
+                correlation_id=renewal,
+                last_refresh_attempt_at=last_refresh_attempt_at,
+            ) from exc
         ciphertext_payload = response.get("ciphertext_payload")
         if not isinstance(ciphertext_payload, dict):
             raise GoogleWorkspaceError("Platform did not return encrypted refreshed Google access.")
@@ -5162,6 +5270,64 @@ def refresh_verified_google_workspace_credentials(
         raise GoogleWorkspaceError("Google access could not be refreshed safely.") from exc
     finally:
         private_key_pem = ""
+
+
+def _platform_authorization_renewal(exc: PlatformError) -> str | None:
+    """Recognize only the platform's bounded, safe terminal-refresh contract."""
+    if exc.status_code != HTTP_UNAUTHORIZED or not isinstance(exc.response, dict):
+        return None
+    if set(exc.response) != {"detail"}:
+        return None
+    detail = exc.response.get("detail")
+    if not isinstance(detail, dict) or set(detail) != {
+        "error",
+        "reason",
+        "message",
+        "reauthorization_required",
+        "http_status",
+        "correlation_id",
+    }:
+        return None
+    correlation_id = detail.get("correlation_id")
+    if (
+        detail.get("error") != "refresh_failed"
+        or detail.get("reason") != GOOGLE_WORKSPACE_RENEWAL_REASON
+        or detail.get("message") != GOOGLE_WORKSPACE_RENEWAL_MESSAGE
+        or detail.get("reauthorization_required") is not True
+        or detail.get("http_status") != HTTP_UNAUTHORIZED
+        or not isinstance(correlation_id, str)
+        or GOOGLE_REFRESH_CORRELATION_ID_RE.fullmatch(correlation_id) is None
+    ):
+        return None
+    return correlation_id
+
+
+def _persist_authorization_renewal_required(
+    *,
+    expected: dict[str, Any],
+    correlation_id: str,
+    last_refresh_attempt_at: str,
+) -> None:
+    """Mark only the unchanged local connection that produced the terminal 401."""
+    refresh_state = _normalize_refresh_state(
+        {
+            "schema": GOOGLE_WORKSPACE_REFRESH_STATE_SCHEMA,
+            "status": "reauthorization_required",
+            "reason": GOOGLE_WORKSPACE_RENEWAL_REASON,
+            "last_refresh_attempt_at": last_refresh_attempt_at,
+            "correlation_id": correlation_id,
+        }
+    )
+    with _lifecycle_lock():
+        connection_id = _validated_connection_id(expected.get("tinyhat_connection_id"))
+        current = _read_credentials(connection_id)
+        if current is None or not hmac.compare_digest(
+            _refresh_credential_generation(current),
+            _refresh_credential_generation(expected),
+        ):
+            raise GoogleWorkspaceError("Google credentials changed during refresh.")
+        current["tinyhat_refresh_state"] = refresh_state
+        _atomic_save_credentials(current)
 
 
 def _normalize_refresh_document(
@@ -5352,7 +5518,7 @@ def _account_store_generation(accounts: list[dict[str, Any]]) -> str:
     return hashlib.sha256(encoded).hexdigest()
 
 
-def _status_payload(*, account_id: str | None = None) -> dict[str, Any]:
+def _status_payload(*, account_id: str | None = None) -> dict[str, Any]:  # noqa: PLR0912
     if _owner_entry_exists(LEGACY_CREDENTIALS_PATH):
         try:
             _migrate_legacy_credentials()
@@ -5420,14 +5586,26 @@ def _status_payload(*, account_id: str | None = None) -> dict[str, Any]:
     elif len(safe_accounts) == 1:
         selected = safe_accounts[0]
 
+    usable_accounts = [item for item in safe_accounts if item["usable"] is True]
+    selected_usable = selected is not None and selected["usable"] is True
+    overall_connected = selected_usable if selected is not None else bool(usable_accounts)
+    overall_status = (
+        str(selected["status"])
+        if selected is not None
+        else ("connected" if usable_accounts else "reauthorization_required")
+    )
     result: dict[str, Any] = {
         "schema": "tinyhat_google_workspace_status_v1",
         "action": "status",
-        "status": "connected",
-        "connected": True,
+        "status": overall_status,
+        "connected": overall_connected,
+        "credential_saved": True,
         "account_count": len(safe_accounts),
         "accounts": safe_accounts,
         "account_selection_required": len(safe_accounts) > 1 and account_id is None,
+        "any_account_reauthorization_required": any(
+            item["reauthorization_required"] is True for item in safe_accounts
+        ),
         "platform_sync_pending": _has_unresolved_install_receipts(),
         "refresh_mode": "tinyhat_platform_broker_v1",
     }
@@ -5442,7 +5620,30 @@ def _status_payload(*, account_id: str | None = None) -> dict[str, Any]:
         )
         result.update(selected)
         result["refresh_token_present"] = bool(selected_credentials.get("refresh_token"))
-        result["refresh_available"] = bool(selected_credentials.get("refresh_token"))
+        result["refresh_available"] = bool(selected_credentials.get("refresh_token")) and not bool(
+            selected["reauthorization_required"]
+        )
+        if selected["reauthorization_required"] is True:
+            result["message"] = (
+                "Google authorization for this account must be renewed. Use "
+                "set_permissions for this same account and its exact existing scopes; "
+                "plain connect would add an account instead of repairing this one."
+            )
+            result["recommended_tool_call"] = {
+                "tool": "tinyhat_google_workspace",
+                "arguments": {
+                    "action": "set_permissions",
+                    "account_id": selected["account_id"],
+                    "scopes": selected["scopes"],
+                    "reason": "Restore this account's existing Google Workspace permissions.",
+                },
+            }
+    elif not usable_accounts:
+        result["message"] = (
+            "Every saved Google Workspace account requires renewed authorization. "
+            "Select an account_id, call status for that account, then use its exact "
+            "set_permissions recommendation."
+        )
     return result
 
 

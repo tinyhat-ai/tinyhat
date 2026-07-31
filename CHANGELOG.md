@@ -11,6 +11,12 @@ All notable changes to the Tinyhat plugin are documented here.
   `missing_scope` response is now presented as setup step 4, with a safe link
   to the validated app's Install App page and encrypted-detail reuse for the
   final attempt. Deploy the matching Tinyloop platform before promotion.
+- Preserve the platform's safe terminal Google refresh result as a durable,
+  account-local `reauthorization_required` state. Status now identifies the
+  affected account without exposing credentials, repeat app and scheduled
+  runs stop before launching `gws` or retrying the refresh broker, and recovery
+  recommends `set_permissions` for the same account with its exact saved
+  scopes instead of adding a duplicate account with plain `connect`.
 - Bump the Hermes plugin package to `0.21.18`; let the Google access chooser
   carry multiple preset selections into one normalized authorization request.
   Combined Gmail, Calendar, and Drive choices now reach the existing
