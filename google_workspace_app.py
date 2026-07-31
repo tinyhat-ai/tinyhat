@@ -21,12 +21,14 @@ from typing import Any
 from .google_workspace import (
     GOOGLE_TOKEN_VALUE_MAX_LENGTH,
     GoogleWorkspaceAccountSelectionRequired,
+    GoogleWorkspaceAuthorizationRenewalRequired,
     GoogleWorkspaceError,
     _assignment_binding_matches_platform,
     _cancel_all_pending_handoffs_locked,
     _delete_credentials_locked,
     _install_credential_generation,
     _lifecycle_lock,
+    _raise_if_authorization_renewal_required,
     _read_credentials,
     _validated_connection_id,
     load_verified_google_workspace_credentials,
@@ -117,9 +119,16 @@ BEARER_RE = re.compile(r"(?i)\bBearer\s+[A-Za-z0-9._~+/=-]+")
 class GoogleWorkspaceAppError(RuntimeError):
     """A safe generic app-bridge failure."""
 
-    def __init__(self, code: str, message: str) -> None:
+    def __init__(
+        self,
+        code: str,
+        message: str,
+        *,
+        public_details: dict[str, Any] | None = None,
+    ) -> None:
         self.code = code
         self.public_message = message
+        self.public_details = public_details or {}
         super().__init__(code)
 
 
@@ -265,6 +274,7 @@ def google_workspace_app(args: dict[str, Any] | None = None, **_: Any) -> str:
                     "error": exc.code,
                     "message": exc.public_message,
                     "content_is_untrusted": False,
+                    **exc.public_details,
                 },
                 sort_keys=True,
             )
@@ -323,6 +333,7 @@ def google_workspace_app(args: dict[str, Any] | None = None, **_: Any) -> str:
             "error": exc.code,
             "message": exc.public_message,
             "content_is_untrusted": True,
+            **exc.public_details,
         }
     except Exception:
         result = {
@@ -521,6 +532,11 @@ def run_google_workspace_app(
                 "Connect Google Workspace through Tinyhat on this Computer before using gws.",
             ) from exc
 
+        try:
+            _raise_if_authorization_renewal_required(credentials)
+        except GoogleWorkspaceAuthorizationRenewalRequired as exc:
+            raise _authorization_renewal_app_error(exc) from exc
+
         if expected_credential_generation is not None and not hmac.compare_digest(
             _install_credential_generation(credentials),
             expected_credential_generation,
@@ -569,11 +585,28 @@ def _refresh_credentials(*, account_id: str | None = None) -> dict[str, Any]:
         )
     except GoogleWorkspaceAccountSelectionRequired as exc:
         raise GoogleWorkspaceAppAccountSelectionRequired(exc.accounts) from exc
+    except GoogleWorkspaceAuthorizationRenewalRequired as exc:
+        raise _authorization_renewal_app_error(exc) from exc
     except GoogleWorkspaceError as exc:
         raise GoogleWorkspaceAppError(
             "refresh_failed",
             "Google authorization could not be refreshed safely through Tinyhat.",
         ) from exc
+
+
+def _authorization_renewal_app_error(
+    exc: GoogleWorkspaceAuthorizationRenewalRequired,
+) -> GoogleWorkspaceAppError:
+    return GoogleWorkspaceAppError(
+        "refresh_failed",
+        "Google authorization must be renewed through Tinyhat.",
+        public_details={
+            "reason": exc.reason,
+            "reauthorization_required": True,
+            "http_status": 401,
+            "correlation_id": exc.correlation_id,
+        },
+    )
 
 
 def _access_token_needs_refresh(

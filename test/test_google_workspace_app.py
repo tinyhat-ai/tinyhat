@@ -903,6 +903,177 @@ class GoogleRefreshTransportTests(unittest.TestCase):
         self.assertEqual(saved["refresh_token"], "rotated-refresh-value")
         self.assertEqual(saved["email"], "owner@example.com")
 
+    def test_terminal_refresh_marks_only_the_account_and_repeat_short_circuits(self) -> None:
+        class Client:
+            def __init__(self) -> None:
+                self.posts = 0
+
+            def post_json(self, _path: str, _payload: dict[str, object]) -> dict[str, object]:
+                self.posts += 1
+                raise google_workspace.PlatformError(
+                    "safe terminal refresh",
+                    status_code=401,
+                    response={
+                        "detail": {
+                            "error": "refresh_failed",
+                            "reason": "authorization_renewal_required",
+                            "message": "Google Workspace authorization must be renewed.",
+                            "reauthorization_required": True,
+                            "http_status": 401,
+                            "correlation_id": "gwr_terminal123",
+                        }
+                    },
+                )
+
+        client = Client()
+        with tempfile.TemporaryDirectory() as tmp, self._patched_state(Path(tmp)):
+            initial = google_workspace._normalize_saved_credentials(credentials())
+            google_workspace._atomic_save_credentials(initial)
+            with (
+                mock.patch.object(
+                    google_workspace,
+                    "load_verified_google_workspace_credentials",
+                    return_value=dict(initial),
+                ),
+                mock.patch.object(
+                    google_workspace,
+                    "build_platform_client",
+                    return_value=(client, "local_dev"),
+                ),
+                mock.patch.object(
+                    google_workspace,
+                    "_generate_key_pair",
+                    return_value=("private", "public"),
+                ),
+                self.assertRaises(
+                    google_workspace.GoogleWorkspaceAuthorizationRenewalRequired
+                ) as raised,
+            ):
+                google_workspace.refresh_verified_google_workspace_credentials("gwo_connection123")
+
+            saved = google_workspace._read_credentials("gwo_connection123")
+            self.assertIsNotNone(saved)
+            assert saved is not None
+            marker = saved["tinyhat_refresh_state"]
+            self.assertEqual(marker["reason"], "authorization_renewal_required")
+            self.assertEqual(marker["correlation_id"], "gwr_terminal123")
+            self.assertEqual(raised.exception.correlation_id, "gwr_terminal123")
+
+            with (
+                mock.patch.object(
+                    google_workspace,
+                    "load_verified_google_workspace_credentials",
+                    return_value=dict(saved),
+                ),
+                mock.patch.object(google_workspace, "build_platform_client") as build,
+                mock.patch.object(google_workspace, "_generate_key_pair") as generate,
+                self.assertRaises(
+                    google_workspace.GoogleWorkspaceAuthorizationRenewalRequired
+                ) as repeated,
+            ):
+                google_workspace.refresh_verified_google_workspace_credentials("gwo_connection123")
+
+        self.assertEqual(client.posts, 1)
+        build.assert_not_called()
+        generate.assert_not_called()
+        self.assertEqual(repeated.exception.correlation_id, "gwr_terminal123")
+
+    def test_malformed_terminal_refresh_stays_generic_and_is_not_persisted(self) -> None:
+        class Client:
+            def post_json(self, _path: str, _payload: dict[str, object]) -> dict[str, object]:
+                raise google_workspace.PlatformError(
+                    "malformed terminal refresh",
+                    status_code=401,
+                    response={
+                        "detail": {
+                            "error": "refresh_failed",
+                            "reason": "authorization_renewal_required",
+                            "message": "Google Workspace authorization must be renewed.",
+                            "reauthorization_required": True,
+                            "http_status": 401,
+                        }
+                    },
+                )
+
+        with tempfile.TemporaryDirectory() as tmp, self._patched_state(Path(tmp)):
+            initial = google_workspace._normalize_saved_credentials(credentials())
+            google_workspace._atomic_save_credentials(initial)
+            with (
+                mock.patch.object(
+                    google_workspace,
+                    "load_verified_google_workspace_credentials",
+                    return_value=dict(initial),
+                ),
+                mock.patch.object(
+                    google_workspace,
+                    "build_platform_client",
+                    return_value=(Client(), "local_dev"),
+                ),
+                mock.patch.object(
+                    google_workspace,
+                    "_generate_key_pair",
+                    return_value=("private", "public"),
+                ),
+                self.assertRaises(google_workspace.GoogleWorkspaceError) as raised,
+            ):
+                google_workspace.refresh_verified_google_workspace_credentials("gwo_connection123")
+            saved = google_workspace._read_credentials("gwo_connection123")
+
+        self.assertNotIsInstance(
+            raised.exception,
+            google_workspace.GoogleWorkspaceAuthorizationRenewalRequired,
+        )
+        self.assertIsNotNone(saved)
+        assert saved is not None
+        self.assertNotIn("tinyhat_refresh_state", saved)
+
+    def test_app_exposes_safe_renewal_reason_without_launching_gws(self) -> None:
+        marked = credentials(expires_at="2030-01-01T00:00:00+00:00")
+        marked["tinyhat_refresh_state"] = {
+            "schema": "tinyhat_google_workspace_refresh_state_v1",
+            "status": "reauthorization_required",
+            "reason": "authorization_renewal_required",
+            "last_refresh_attempt_at": "2026-07-31T13:07:44+00:00",
+            "correlation_id": "gwr_terminal123",
+        }
+        with (
+            mock.patch.object(
+                google_workspace_app,
+                "_open_trusted_gws_binary",
+                return_value=fake_open_binary("/proc/self/fd/7", fd=7),
+            ),
+            mock.patch.object(
+                google_workspace_app,
+                "load_verified_google_workspace_credentials",
+                return_value=marked,
+            ),
+            mock.patch.object(
+                google_workspace_app,
+                "refresh_verified_google_workspace_credentials",
+            ) as refresh,
+            mock.patch.object(
+                google_workspace_app,
+                "_invoke_with_assignment_guard",
+            ) as invoke,
+        ):
+            result = json.loads(
+                google_workspace_app.google_workspace_app(
+                    {
+                        "argv": ["gmail", "users", "getProfile", "--params", "{}"],
+                        "effect": "read",
+                        "account_id": "gwo_connection123",
+                    }
+                )
+            )
+
+        self.assertEqual(result["error"], "refresh_failed")
+        self.assertEqual(result["reason"], "authorization_renewal_required")
+        self.assertTrue(result["reauthorization_required"])
+        self.assertEqual(result["http_status"], 401)
+        self.assertEqual(result["correlation_id"], "gwr_terminal123")
+        refresh.assert_not_called()
+        invoke.assert_not_called()
+
     def test_refresh_updates_only_the_selected_account(self) -> None:
         class Client:
             def post_json(self, _path: str, _payload: dict[str, object]) -> dict[str, object]:
@@ -1378,6 +1549,77 @@ class GoogleRefreshTransportTests(unittest.TestCase):
                 expected_connection_id="gwo_connection123",
                 expected_assignment_binding="assignment-binding-123",
             )
+
+    def test_status_and_replacement_isolate_renewal_state_by_account(self) -> None:
+        marker = {
+            "schema": "tinyhat_google_workspace_refresh_state_v1",
+            "status": "reauthorization_required",
+            "reason": "authorization_renewal_required",
+            "last_refresh_attempt_at": "2026-07-31T13:07:44+00:00",
+            "correlation_id": "gwr_terminal123",
+        }
+        with tempfile.TemporaryDirectory() as tmp, self._patched_state(Path(tmp)):
+            work = google_workspace._normalize_saved_credentials(credentials())
+            work["tinyhat_refresh_state"] = marker
+            personal = google_workspace._normalize_saved_credentials(
+                credentials(
+                    connection_id="gwo_personal456",
+                    google_subject="google-user-456",
+                    email="personal@example.com",
+                    access_token="personal-access-value",
+                )
+            )
+            google_workspace._atomic_save_credentials(work)
+            google_workspace._atomic_save_credentials(personal)
+            accounts = google_workspace._read_account_store()
+            with mock.patch.object(
+                google_workspace,
+                "_verified_accounts",
+                return_value=(accounts, "match"),
+            ):
+                work_status = google_workspace._status_payload(account_id="gwo_connection123")
+                personal_status = google_workspace._status_payload(account_id="gwo_personal456")
+
+            replacement = dict(work)
+            replacement.pop("tinyhat_refresh_state")
+            replacement["access_token"] = "replacement-access-value"
+            google_workspace._atomic_save_credentials(replacement)
+            saved_after_replacement = {
+                item["tinyhat_connection_id"]: item
+                for item in google_workspace._read_account_store()
+            }
+
+        self.assertEqual(work_status["status"], "reauthorization_required")
+        self.assertFalse(work_status["connected"])
+        self.assertFalse(work_status["usable"])
+        self.assertFalse(work_status["refresh_available"])
+        self.assertEqual(work_status["refresh_health"], "failed")
+        self.assertEqual(
+            work_status["last_refresh_error_code"],
+            "authorization_renewal_required",
+        )
+        self.assertEqual(
+            work_status["recommended_tool_call"]["arguments"],
+            {
+                "action": "set_permissions",
+                "account_id": "gwo_connection123",
+                "scopes": list(google_workspace.GOOGLE_REQUESTED_SCOPES),
+                "reason": "Restore this account's existing Google Workspace permissions.",
+            },
+        )
+        self.assertEqual(personal_status["status"], "connected")
+        self.assertTrue(personal_status["connected"])
+        self.assertTrue(personal_status["usable"])
+        self.assertTrue(personal_status["refresh_available"])
+        self.assertTrue(personal_status["any_account_reauthorization_required"])
+        self.assertNotIn(
+            "tinyhat_refresh_state",
+            saved_after_replacement["gwo_connection123"],
+        )
+        self.assertNotIn(
+            "tinyhat_refresh_state",
+            saved_after_replacement["gwo_personal456"],
+        )
 
     def test_status_names_the_supported_platform_refresh_mode(self) -> None:
         with mock.patch.object(
