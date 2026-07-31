@@ -40,9 +40,9 @@ Slack is a bundled provider connection, not a generic removable credential.
 When the user asks to disconnect, remove, or revoke Slack, call
 `tinyhat_slack_disconnect` once with no arguments. The platform sends an
 expiring two-stage Telegram confirmation. After final confirmation, the
-Computer asks Slack to revoke the bot token when it is still active, removes
-the complete local Slack bundle together, and restarts Hermes. Do not ask for
-text confirmation, expose a URL, call `tinyhat_credentials`, or send an extra
-reply after the tool returns. If Slack cannot confirm provider revocation, the
-final Telegram message says to remove the app in Slack; never claim provider
-access was revoked from local deletion alone.
+detached plugin worker asks Slack to revoke the bot token and removes the
+complete local Slack bundle together. The platform then uses its existing
+generic Hermes restart path. Do not ask for text confirmation, expose a URL,
+call `tinyhat_credentials`, or send an extra reply after the tool returns. A
+transient revocation failure preserves the local bundle for retry; never claim
+provider access was revoked from local deletion alone.

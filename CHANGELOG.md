@@ -8,9 +8,10 @@ All notable changes to the Tinyhat plugin are documented here.
 
 - Bump the Hermes plugin package to `0.21.20`; add an owner-confirmed Slack
   disconnect tool. The platform sends the two-stage Telegram ceremony, and
-  the public Hermes runtime revokes an active Slack bot token when possible,
-  removes the complete local Slack bundle, and requires a healthy restart
-  before the connection is marked disconnected.
+  a detached plugin worker revokes an active Slack bot token, removes the
+  complete local bundle, and asks the platform for the existing generic
+  healthy restart proof before the connection is marked disconnected. No new
+  runtime command is required.
 - Bump the Hermes plugin package to `0.21.19`; let the platform-owned Slack
   checklist replace per-attempt Telegram notices. A predictable Slack
   `missing_scope` response is now presented as setup step 4, with a safe link

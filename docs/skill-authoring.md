@@ -118,9 +118,10 @@ Tinyhat removes slash-command definitions and the `commands` OAuth scope from
 that manifest because Slack command names are workspace-global and per-agent
 apps must not collide.
 For disconnect, the same skill calls `tinyhat_slack_disconnect` once. The
-platform owns the expiring two-stage Telegram confirmation, and the Computer
-removes the whole bundle only after confirmation; generic credential removal
-must remain blocked for individual Slack names.
+platform owns the expiring two-stage Telegram confirmation, and a detached
+plugin worker revokes Slack and removes the whole bundle only after
+confirmation. The runtime adds no Slack-specific command; generic credential
+removal must remain blocked for individual Slack names.
 
 `tinyhat-credentials` is the value-blind discovery and removal path for those
 new secure credentials. It lists names, descriptions, and opaque handoff ids,

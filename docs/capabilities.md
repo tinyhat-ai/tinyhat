@@ -62,11 +62,11 @@ Slack is a bundled provider connection. Its metadata row and the names
 `SLACK_CONNECTION`, `SLACK_BOT_TOKEN`, `SLACK_APP_TOKEN`, and
 `SLACK_ALLOWED_USERS` are excluded from generic secret entry/removal. For a
 disconnect, `tinyhat_slack_disconnect` sends a two-stage Telegram confirmation.
-After final confirmation, the Computer calls Slack's token-revocation API when
-the bot token is still valid, removes every local Slack value together, and
-requires a healthy Hermes restart before the platform marks the connection
-disconnected. If Slack cannot confirm provider revocation, the final message
-directs the owner to remove the app in Slack instead of overstating success.
+After final confirmation, a detached plugin worker calls Slack's token-
+revocation API, removes every local Slack value together, and reports safe
+proof to the platform. A transient revocation failure preserves the local
+bundle for retry. The platform uses the existing generic restart command and
+marks the connection disconnected only after Hermes is healthy without Slack.
 
 To find or remove a generic value-blind credential, load
 `tinyhat:tinyhat-credentials` and call `tinyhat_credentials`. Search returns

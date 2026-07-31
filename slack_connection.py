@@ -21,6 +21,7 @@ from .secret_handoff import (
     _set_hermes_secret,
     _start_worker_process,
 )
+from .slack_disconnect import start_slack_disconnect_worker
 
 SLACK_CONNECTION_SECRET_NAME = "SLACK_CONNECTION"
 SLACK_CONNECTION_EXPIRES_IN_SECONDS = 30 * 60
@@ -108,6 +109,14 @@ def start_slack_disconnect(args: dict[str, Any] | None = None, **_: Any) -> str:
         computer_api_path(platform_auth, "slack/disconnect/v1"),
         {},
     )
+    if str(result.get("status") or "") not in {
+        "removed",
+        "cancelled",
+        "expired",
+        "failed",
+        "superseded",
+    }:
+        start_slack_disconnect_worker(result)
     result.update(
         {
             "chat_response_required": False,
