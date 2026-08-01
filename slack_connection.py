@@ -21,6 +21,7 @@ from .secret_handoff import (
     _set_hermes_secret,
     _start_worker_process,
 )
+from .slack_disconnect import start_slack_disconnect_worker
 
 SLACK_CONNECTION_SECRET_NAME = "SLACK_CONNECTION"
 SLACK_CONNECTION_EXPIRES_IN_SECONDS = 30 * 60
@@ -97,6 +98,36 @@ def start_slack_connection(args: dict[str, Any] | None = None, **_: Any) -> str:
         "I sent the Slack app guide, Hermes Agent-view manifest, and secure "
         "Enter Slack details button. Tinyhat never sees the tokens or Slack messages."
     )
+
+
+def start_slack_disconnect(args: dict[str, Any] | None = None, **_: Any) -> str:
+    """Send the owner-confirmed Slack revocation and local removal ceremony."""
+
+    del args
+    client, platform_auth = build_platform_client()
+    result = client.post_json(
+        computer_api_path(platform_auth, "slack/disconnect/v1"),
+        {},
+    )
+    if str(result.get("status") or "") not in {
+        "removed",
+        "cancelled",
+        "expired",
+        "failed",
+        "superseded",
+    }:
+        start_slack_disconnect_worker(result)
+    result.update(
+        {
+            "chat_response_required": False,
+            "agent_instruction": (
+                "The platform sent the expiring two-stage Slack disconnect "
+                "confirmation. Do not ask for text confirmation, expose a URL, "
+                "or send a duplicate reply."
+            ),
+        }
+    )
+    return json.dumps(result, sort_keys=True)
 
 
 def _generate_hermes_slack_manifest() -> dict[str, Any]:

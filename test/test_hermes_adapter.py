@@ -41,6 +41,8 @@ from tinyhat import (  # noqa: E402
     secret_handoff,
     secret_handoff_worker,
     slack_connection,
+    slack_disconnect,
+    slack_disconnect_worker,
     tools,
 )
 
@@ -98,6 +100,7 @@ class HermesAdapterTests(unittest.TestCase):
         self.assertIn("tinyhat_skill_catalog", ctx.tools)
         self.assertIn("tinyhat_private_secret_handoff", ctx.tools)
         self.assertIn("tinyhat_slack_connect", ctx.tools)
+        self.assertIn("tinyhat_slack_disconnect", ctx.tools)
         self.assertIn("tinyhat_credentials", ctx.tools)
         self.assertIn("tinyhat_codex_auth", ctx.tools)
         self.assertIn("tinyhat_plugin_update", ctx.tools)
@@ -174,6 +177,10 @@ class HermesAdapterTests(unittest.TestCase):
         self.assertEqual(slack_schema["properties"], {})
         self.assertEqual(slack_schema["required"], [])
         self.assertFalse(slack_schema["additionalProperties"])
+        slack_disconnect_schema = schemas.TINYHAT_SLACK_DISCONNECT_SCHEMA
+        self.assertEqual(slack_disconnect_schema["properties"], {})
+        self.assertEqual(slack_disconnect_schema["required"], [])
+        self.assertFalse(slack_disconnect_schema["additionalProperties"])
 
         credentials_schema = schemas.TINYHAT_CREDENTIALS_SCHEMA
         self.assertEqual(credentials_schema["required"], ["action"])
@@ -195,7 +202,7 @@ class HermesAdapterTests(unittest.TestCase):
 
         self.assertEqual(payload["schema"], "tinyhat_plugin_version_v1")
         self.assertEqual(payload["name"], "tinyhat")
-        self.assertEqual(payload["version"], "0.21.19")
+        self.assertEqual(payload["version"], "0.21.20")
 
     def test_platform_status_uses_attested_computer_endpoint(self) -> None:
         original_build = tools.build_platform_client
@@ -208,7 +215,7 @@ class HermesAdapterTests(unittest.TestCase):
                     "computer_id": 5359,
                     "state": "active",
                     "assigned": True,
-                    "package_inventory": {"plugin": {"version": "0.21.19"}},
+                    "package_inventory": {"plugin": {"version": "0.21.20"}},
                 }
 
         try:
@@ -221,7 +228,7 @@ class HermesAdapterTests(unittest.TestCase):
         self.assertEqual(payload["computer_id"], 5359)
         self.assertEqual(payload["state"], "active")
         self.assertTrue(payload["assigned"])
-        self.assertEqual(payload["package_inventory"]["plugin"]["version"], "0.21.19")
+        self.assertEqual(payload["package_inventory"]["plugin"]["version"], "0.21.20")
 
     def test_platform_status_returns_structured_platform_error(self) -> None:
         original_build = tools.build_platform_client
@@ -244,7 +251,7 @@ class HermesAdapterTests(unittest.TestCase):
 
         self.assertEqual(payload["schema"], "tinyhat_skill_catalog_v1")
         self.assertEqual(payload["plugin"]["name"], "tinyhat")
-        self.assertEqual(payload["plugin"]["version"], "0.21.19")
+        self.assertEqual(payload["plugin"]["version"], "0.21.20")
         by_name = {skill["name"]: skill for skill in payload["skills"]}
         self.assertEqual(
             by_name["tinyhat-codex-auth"]["qualified_name"],
@@ -1517,6 +1524,194 @@ class HermesAdapterTests(unittest.TestCase):
         self.assertEqual(worker_calls[0][1], "PRIVATE")
         self.assertIn("Hermes Agent-view manifest", reply)
         self.assertIn("never sees the tokens or Slack messages", reply)
+
+    def test_slack_disconnect_starts_platform_owned_confirmation(self) -> None:
+        calls: list[tuple[str, dict]] = []
+        worker_calls: list[dict] = []
+
+        class FakeClient:
+            def post_json(self, path: str, payload: dict) -> dict:
+                calls.append((path, payload))
+                return {
+                    "schema": "tinyhat_private_credential_removal_v1",
+                    "removal_id": "scr_slack",
+                    "handoff_id": "sh_slack",
+                    "credential_name": "SLACK_CONNECTION",
+                    "status": "offered",
+                    "expires_at": "2026-07-31T20:00:00Z",
+                    "telegram_message_sent": True,
+                    "detail": "Review the Telegram confirmation.",
+                }
+
+        with (
+            mock.patch.object(
+                slack_connection,
+                "build_platform_client",
+                return_value=(FakeClient(), "local_dev"),
+            ),
+            mock.patch.object(
+                slack_connection,
+                "start_slack_disconnect_worker",
+                side_effect=worker_calls.append,
+            ),
+        ):
+            payload = json.loads(tools.slack_disconnect({}))
+
+        self.assertEqual(
+            calls,
+            [("/hapi/v1/computers/local-dev/slack/disconnect/v1", {})],
+        )
+        self.assertEqual(payload["status"], "offered")
+        self.assertTrue(payload["telegram_message_sent"])
+        self.assertFalse(payload["chat_response_required"])
+        self.assertIn("two-stage Slack disconnect", payload["agent_instruction"])
+        self.assertEqual(worker_calls[0]["removal_id"], "scr_slack")
+
+    def test_slack_disconnect_revokes_then_removes_complete_bundle(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            env_path = Path(tmp) / ".env"
+            env_path.write_text(
+                "SLACK_BOT_TOKEN=bot-under-test\n"
+                "SLACK_APP_TOKEN=app-under-test\n"
+                "SLACK_ALLOWED_USERS=U012ABCDEF\n"
+                "SLACK_HOME_CHANNEL=D012ABCDEF\n"
+                "SLACK_HOME_CHANNEL_NAME='Owner DM'\n"
+                "_HERMES_FORCE_SLACK_BOT_TOKEN=bot-under-test\n"
+                "KEEP_ME=yes\n",
+                encoding="utf-8",
+            )
+            synced: list[tuple[list[str], list[str]]] = []
+
+            def read_values(paths, *, names):
+                values: dict[str, str] = {}
+                for path in paths:
+                    for line in path.read_text(encoding="utf-8").splitlines():
+                        if "=" not in line:
+                            continue
+                        key, value = line.split("=", 1)
+                        if key in names:
+                            values[key] = value
+                return values
+
+            def sync(names, *, remove_names):
+                synced.append((list(names), list(remove_names)))
+                return {"removed_names": list(remove_names)}
+
+            with (
+                mock.patch.object(
+                    slack_disconnect,
+                    "_runtime_helpers",
+                    return_value=(
+                        lambda: [env_path],
+                        read_values,
+                        sync,
+                        lambda name: f"_HERMES_FORCE_{name}",
+                    ),
+                ),
+                mock.patch.object(
+                    slack_disconnect,
+                    "_revoke_slack_bot_access",
+                    return_value={"status": "revoked", "confirmed": True},
+                ),
+            ):
+                result = slack_disconnect.disconnect_slack_locally()
+
+            self.assertTrue(result["local_bundle_absent"])
+            self.assertEqual(result["slack_access"]["status"], "revoked")
+            self.assertEqual(env_path.read_text(encoding="utf-8"), "KEEP_ME=yes\n")
+            self.assertEqual(synced[0][1], list(slack_disconnect.SLACK_ENV_NAMES))
+            self.assertNotIn("bot-under-test", json.dumps(result))
+            self.assertNotIn("app-under-test", json.dumps(result))
+
+    def test_slack_disconnect_keeps_bundle_when_revoke_is_unconfirmed(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            env_path = Path(tmp) / ".env"
+            original = "SLACK_BOT_TOKEN=bot-under-test\nKEEP_ME=yes\n"
+            env_path.write_text(original, encoding="utf-8")
+
+            with (
+                mock.patch.object(
+                    slack_disconnect,
+                    "_runtime_helpers",
+                    return_value=(
+                        lambda: [env_path],
+                        lambda _paths, *, names: {"SLACK_BOT_TOKEN": "bot-under-test"},
+                        mock.Mock(),
+                        lambda name: f"_HERMES_FORCE_{name}",
+                    ),
+                ),
+                mock.patch.object(
+                    slack_disconnect,
+                    "_revoke_slack_bot_access",
+                    return_value={"status": "unconfirmed", "confirmed": False},
+                ),
+            ):
+                result = slack_disconnect.disconnect_slack_locally()
+
+            self.assertFalse(result["local_bundle_absent"])
+            self.assertEqual(result["failure_code"], "slack_revoke_unconfirmed")
+            self.assertEqual(env_path.read_text(encoding="utf-8"), original)
+
+    def test_slack_disconnect_worker_waits_for_owner_confirmation(self) -> None:
+        class FakeClient:
+            def __init__(self) -> None:
+                self.states = iter(
+                    [
+                        {"status": "offered", "poll_after_ms": 1},
+                        {"status": "confirmed", "poll_after_ms": 1},
+                    ]
+                )
+                self.posts: list[tuple[str, dict]] = []
+                self.post_attempts = 0
+
+            def get_json(self, _path: str) -> dict:
+                return next(self.states)
+
+            def post_json(self, path: str, payload: dict) -> dict:
+                self.post_attempts += 1
+                self.posts.append((path, payload))
+                if self.post_attempts == 1:
+                    raise platform.PlatformError("temporary outage")
+                return {"status": "queued"}
+
+        fake_client = FakeClient()
+        with (
+            tempfile.TemporaryDirectory() as tmp,
+            mock.patch.object(
+                slack_disconnect_worker,
+                "STATE_DIR",
+                Path(tmp),
+            ),
+            mock.patch.object(
+                slack_disconnect_worker,
+                "build_platform_client",
+                return_value=(fake_client, "local_dev"),
+            ),
+            mock.patch.object(
+                slack_disconnect_worker,
+                "disconnect_slack_locally",
+                return_value={
+                    "schema": "tinyhat_plugin_slack_disconnect_v1",
+                    "local_bundle_absent": True,
+                    "slack_access": {"status": "revoked", "confirmed": True},
+                },
+            ),
+            mock.patch.object(slack_disconnect_worker.time, "sleep"),
+        ):
+            slack_disconnect_worker.run_worker(
+                handoff_id="sh_slack",
+                removal_id="scr_abcdefghijklmnopqrstuvwx",
+                expires_at="2099-07-31T20:00:00Z",
+            )
+
+        self.assertEqual(len(fake_client.posts), 2)
+        path, payload = fake_client.posts[-1]
+        self.assertEqual(
+            path,
+            "/hapi/v1/computers/local-dev/slack/disconnect/v1/sh_slack/result",
+        )
+        self.assertEqual(payload["removal_id"], "scr_abcdefghijklmnopqrstuvwx")
+        self.assertTrue(payload["local_bundle_absent"])
 
     def test_slack_bundle_installs_connection_and_private_home_channel(self) -> None:
         bot_token = "xoxb-" + "placeholder"

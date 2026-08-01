@@ -10,6 +10,7 @@ The current capability list is intentionally small.
 | `tinyhat_skill_catalog` | Available now | Lists Tinyhat plugin skills with `tinyhat:<skill>` qualified names and unqualified aliases. |
 | `tinyhat_private_secret_handoff` | Available now | Lets a user enter a secret in a Telegram Mini App while Tinyhat stores only short-lived ciphertext. |
 | `tinyhat_slack_connect` | Available now | Sends Hermes' current Agent-view manifest and transfers the Slack bot token, Socket Mode app token, and allowed member IDs as one browser-encrypted Computer-local bundle. |
+| `tinyhat_slack_disconnect` | Available now | Sends an owner-confirmed Telegram ceremony, revokes active Slack bot access when possible, removes the complete Computer-local Slack bundle, and restarts Hermes. |
 | `tinyhat_google_workspace` | Available now | Connects Google identity, composes implemented access presets and requestable Custom scopes, lets Google handle its pending-verification warning, blocks unimplemented requests before OAuth, and starts an account-targeted local disconnect ceremony. |
 | `tinyhat_google_workspace_app` | Available now | Lends one selected account's assignment-verified Google access to one bounded `gws` invocation. |
 | `tinyhat_google_workspace_app_manager` | Available now | After approval, installs or removes the pinned integrity-verified `gws` app; Hermes supplies the operation skill. |
@@ -59,10 +60,13 @@ Hermes agent is connected to the same workspace.
 
 Slack is a bundled provider connection. Its metadata row and the names
 `SLACK_CONNECTION`, `SLACK_BOT_TOKEN`, `SLACK_APP_TOKEN`, and
-`SLACK_ALLOWED_USERS` are excluded from generic secret entry/removal. A managed
-Slack disconnect ceremony is not part of this release; the agent must not use
-`tinyhat_credentials` or claim that removing one env value disconnected the
-app.
+`SLACK_ALLOWED_USERS` are excluded from generic secret entry/removal. For a
+disconnect, `tinyhat_slack_disconnect` sends a two-stage Telegram confirmation.
+After final confirmation, a detached plugin worker calls Slack's token-
+revocation API, removes every local Slack value together, and reports safe
+proof to the platform. A transient revocation failure preserves the local
+bundle for retry. The platform uses the existing generic restart command and
+marks the connection disconnected only after Hermes is healthy without Slack.
 
 To find or remove a generic value-blind credential, load
 `tinyhat:tinyhat-credentials` and call `tinyhat_credentials`. Search returns

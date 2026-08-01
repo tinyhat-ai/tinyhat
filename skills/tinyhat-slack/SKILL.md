@@ -1,6 +1,6 @@
 ---
 name: tinyhat-slack
-description: Connect the current Tinyhat-managed Hermes agent to a user's Slack workspace without SSH, public ingress, or sharing Slack messages or token plaintext with Tinyhat.
+description: Connect or disconnect the current Tinyhat-managed Hermes agent from a user's Slack workspace without SSH, public ingress, or sharing Slack messages or token plaintext with Tinyhat.
 ---
 
 # Tinyhat Slack
@@ -36,7 +36,13 @@ after the tool returns.
 
 Slack is a bundled provider connection, not a generic removable credential.
 `tinyhat_credentials` must not be used for `SLACK_CONNECTION`,
-`SLACK_BOT_TOKEN`, `SLACK_APP_TOKEN`, or `SLACK_ALLOWED_USERS`. Until Tinyhat
-ships a connection-specific disconnect ceremony, tell a user asking to
-disconnect Slack that the managed disconnect flow is not available yet; never
-claim that removing one env value disconnected the app.
+`SLACK_BOT_TOKEN`, `SLACK_APP_TOKEN`, or `SLACK_ALLOWED_USERS`.
+When the user asks to disconnect, remove, or revoke Slack, call
+`tinyhat_slack_disconnect` once with no arguments. The platform sends an
+expiring two-stage Telegram confirmation. After final confirmation, the
+detached plugin worker asks Slack to revoke the bot token and removes the
+complete local Slack bundle together. The platform then uses its existing
+generic Hermes restart path. Do not ask for text confirmation, expose a URL,
+call `tinyhat_credentials`, or send an extra reply after the tool returns. A
+transient revocation failure preserves the local bundle for retry; never claim
+provider access was revoked from local deletion alone.

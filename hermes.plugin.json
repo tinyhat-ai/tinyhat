@@ -1,6 +1,6 @@
 {
   "schema": "tinyhat.framework-adapter.v1",
-  "version": "0.21.19",
+  "version": "0.21.20",
   "framework": {
     "name": "hermes",
     "minimum": "0.0.0"
@@ -125,6 +125,11 @@
     {
       "name": "tinyhat_slack_connect",
       "handler": "tools.slack_connect",
+      "skill": "tinyhat-slack"
+    },
+    {
+      "name": "tinyhat_slack_disconnect",
+      "handler": "tools.slack_disconnect",
       "skill": "tinyhat-slack"
     },
     {

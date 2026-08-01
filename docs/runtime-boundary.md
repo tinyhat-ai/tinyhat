@@ -73,6 +73,12 @@ Consumer skills and scripts can evolve across the same plugin/platform
 boundary while the runtime continues to supply only the existing Computer
 identity and plugin lifecycle.
 
+Slack disconnect follows the same rule. The platform owns the two-stage owner
+confirmation. A detached plugin worker polls that safe state, calls Slack's
+revocation API, removes the complete local bundle, and reports value-blind
+proof. The platform then uses the runtime's existing generic restart command;
+there is no Slack-specific runtime callback or command.
+
 Deployment preserves that boundary: merge and tag the plugin first without
 promoting a channel, deploy the compatible platform enforcement, and only then
 advance `channels/latest` or `channels/lts` to the new plugin commit.

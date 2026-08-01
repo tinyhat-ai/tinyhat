@@ -1,5 +1,5 @@
 name: tinyhat
-version: 0.21.19
+version: 0.21.20
 description: Framework-neutral Tinyhat platform skills and tools.
 kind: standalone
 author: Tinyloop
@@ -10,6 +10,7 @@ provides_tools:
   - tinyhat_skill_catalog
   - tinyhat_private_secret_handoff
   - tinyhat_slack_connect
+  - tinyhat_slack_disconnect
   - tinyhat_credentials
   - tinyhat_google_workspace
   - tinyhat_google_workspace_app
