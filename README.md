@@ -43,7 +43,7 @@ workspace.
 | `tools.py` / `schemas.py` | Tinyhat tools: plugin version, safe platform status, joke proof, skill catalog, private secret handoff and removal, Slack connection, Google identity connection, Codex auth setup/status helpers, and plugin update helper. |
 | `slack_connection.py` | Hermes manifest generation plus Computer-local Slack token validation and installation. |
 | `credentials.py` | Value-blind credential name/description discovery and platform-owned, expiring Telegram removal confirmation. |
-| `google_workspace.py` / `google_workspace_worker.py` | Platform-authored Google OAuth handoff, multi-account local custody, manifest-governed access selection, assignment-safe status, and targeted disconnect. |
+| `google_workspace.py` / `google_workspace_worker.py` | Platform-authored Google OAuth handoff, multi-account local custody, manifest-governed access selection, runtime-only reviewer delivery, assignment-safe status, and targeted disconnect. |
 | `google_workspace_scope_manifest.json` / `google_workspace_scope_manifest.py` | Versioned public Google scope contract and dependency-free loader. |
 | `google_workspace_app.py` | Account-selected credential bridge to the manifest-verified, root-owned managed `gws` app. |
 | `google_workspace_app_manager.py` | Confirmed install/status/uninstall for pinned official `gws` Linux artifacts. |
@@ -93,6 +93,22 @@ application-encrypted at rest: it is protected by a `0700` owner directory and
 call private platform APIs directly from random shell snippets. Its job is
 to teach the agent how to use named Tinyhat capabilities that the runtime
 and platform make available.
+
+For a time-bounded security review, the platform can bind one opaque reviewer
+request to one Computer and its server-selected Google capability set. The
+runtime invokes the documented
+`start_google_workspace_reviewer_oauth(reviewer_request_id)` function; the
+plugin validates and claims that request, creates the one-time Computer key,
+starts the same detached install/claim worker, and only then tells the platform
+that browser delivery may proceed. The platform, not the plugin or runtime,
+delivers the short-lived launch to the authenticated reviewer browser. The
+runtime receives only the opaque request id as command input. Its result is a
+fixed schema/action/status receipt with no request or handoff id, owner token,
+authorization URL, key, code, credential, or scope-bearing payload. This
+opaque correlation id may remain in the runtime's normal command ledger; it is
+not a bearer credential and is still absent from the function result. This
+adapter does not create a general web account, accept a username or password on
+the Computer, or simulate Telegram identity.
 
 That separation matters:
 

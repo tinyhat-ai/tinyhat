@@ -73,6 +73,19 @@ Consumer skills and scripts can evolve across the same plugin/platform
 boundary while the runtime continues to supply only the existing Computer
 identity and plugin lifecycle.
 
+The temporary security-review path adds one narrow runtime command, not a
+generic plugin invocation surface. That command passes one opaque reviewer
+request id to the plugin's public reviewer-start function and accepts only its
+fixed value-blind success receipt. The plugin still owns one-time key
+generation, lifecycle serialization, detached worker startup, encrypted
+credential installation, and handoff claim. The platform owns reviewer login,
+request-to-Computer binding, exact capability selection, and browser delivery
+of the short-lived launch. Neither the runtime nor its command result carries
+the authorization URL, request owner token, key, code, or credential. The
+runtime's normal command ledger may retain the opaque request id supplied as
+input; that correlation id is not a bearer credential and is absent from the
+function result.
+
 Slack disconnect follows the same rule. The platform owns the two-stage owner
 confirmation. A detached plugin worker polls that safe state, calls Slack's
 revocation API, removes the complete local bundle, and reports value-blind

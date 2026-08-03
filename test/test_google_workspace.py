@@ -139,6 +139,8 @@ LEGACY_FEED_SCOPES = [
 LEGACY_FEED_SERVICES = ["identity", "calendar", "people"]
 PLATFORM_BASE_URL = "https://api.example.test"
 PREPARE_PATH = "/hapi/v1/public/tinyhat/google-workspace/oauth/prepare/v1"
+REVIEWER_REQUEST_ID = f"gwrq_{'r' * 43}"
+REVIEWER_OWNER_TOKEN = "o" * 43
 
 
 def prepare_authorization_url() -> str:
@@ -215,6 +217,28 @@ def start_response(
         "expires_at": "2030-01-01T00:00:00+00:00",
         "poll_after_ms": 2500,
     }
+
+
+def reviewer_claim_response(*, expires_at: str) -> dict[str, object]:
+    return {
+        "request_id": REVIEWER_REQUEST_ID,
+        "status": "claimed",
+        "owner_token": REVIEWER_OWNER_TOKEN,
+        "capability_bundle": IDENTITY_BUNDLE,
+        "services": IDENTITY_SERVICES,
+        "scopes": IDENTITY_SCOPES,
+        "connection_action": "add",
+        "expires_at": expires_at,
+    }
+
+
+def reviewer_start_response(*, expires_at: str) -> dict[str, object]:
+    response = start_response()
+    response.pop("authorization_url")
+    response["request_id"] = REVIEWER_REQUEST_ID
+    response["connection_action"] = "add"
+    response["expires_at"] = expires_at
+    return response
 
 
 def disconnect_create_response() -> dict[str, object]:
@@ -343,6 +367,72 @@ class PollingClient:
                 "status": "claimed" if payload.get("installed") is True else "failed",
             }
         return {}
+
+
+class ReviewerClient:
+    base_url = PLATFORM_BASE_URL
+
+    def __init__(
+        self,
+        *,
+        claim: dict[str, object],
+        start: dict[str, object],
+        publish_error: Exception | None = None,
+        publish_response: dict[str, object] | None = None,
+    ) -> None:
+        self.claim = claim
+        self.start = start
+        self.publish_error = publish_error
+        self.publish_response = publish_response
+        self.posts: list[tuple[str, dict[str, object]]] = []
+        self.events: list[str] = []
+
+    def post_json(self, path: str, payload: dict[str, object]) -> dict[str, object]:
+        self.posts.append((path, payload))
+        if "/reviewer-requests/" in path and path.endswith("/claim"):
+            self.events.append("claim_request")
+            return dict(self.claim)
+        if path.endswith("/start"):
+            self.events.append("start_handoff")
+            return dict(self.start)
+        if path.endswith("/publish"):
+            self.events.append("publish_request")
+            if self.publish_error is not None:
+                raise self.publish_error
+            return dict(
+                self.publish_response
+                if self.publish_response is not None
+                else {
+                    "request_id": REVIEWER_REQUEST_ID,
+                    "handoff_id": "gwo_test123",
+                    "status": "launch_ready",
+                    "expires_at": self.start["expires_at"],
+                    "poll_after_ms": self.start["poll_after_ms"],
+                }
+            )
+        if path.endswith("/fail"):
+            self.events.append("fail_request")
+            return {"status": "failed"}
+        if path.endswith("/claim"):
+            self.events.append("fail_handoff")
+            return {
+                "handoff_id": "gwo_test123",
+                "connection_id": "gwo_connection123",
+                "status": "failed",
+            }
+        raise AssertionError(f"Unexpected POST {path}")
+
+
+def reviewer_worker_start(
+    client: ReviewerClient,
+    error: Exception | None = None,
+):
+    def start_worker(**_kwargs: object) -> None:
+        client.events.append("start_worker")
+        if error is not None:
+            raise error
+
+    return start_worker
 
 
 class GoogleWorkspaceTests(unittest.TestCase):
@@ -2701,6 +2791,320 @@ class GoogleWorkspaceTests(unittest.TestCase):
         send_button.assert_not_called()
         self.assertEqual(missing_reason["error"], "invalid_parameter")
         self.assertEqual(unknown["error"], "invalid_parameter")
+
+    def test_reviewer_request_id_is_strict_and_stops_before_platform_io(self) -> None:
+        invalid_values: tuple[object, ...] = (
+            "",
+            f"gwrq_{'a' * 42}",
+            f"gwrq_{'a' * 44}",
+            f"gwrq_{'a' * 20}/{'b' * 22}",
+            f"gwrq_{'a' * 42} ",
+            f"other_{'a' * 43}",
+            None,
+        )
+        with mock.patch.object(workspace, "build_platform_client") as build_client:
+            for value in invalid_values:
+                with self.subTest(value=value), self.assertRaises(workspace.GoogleWorkspaceError):
+                    workspace.start_google_workspace_reviewer_oauth(value)  # type: ignore[arg-type]
+        build_client.assert_not_called()
+
+    def test_reviewer_claim_for_another_request_stops_before_key_generation(self) -> None:
+        expires_at = (datetime.now(timezone.utc) + timedelta(minutes=5)).isoformat()
+        claim = reviewer_claim_response(expires_at=expires_at)
+        claim["request_id"] = f"gwrq_{'x' * 43}"
+        client = ReviewerClient(
+            claim=claim,
+            start=reviewer_start_response(expires_at=expires_at),
+        )
+        with (
+            mock.patch.object(
+                workspace,
+                "build_platform_client",
+                return_value=(client, "local_dev"),
+            ),
+            mock.patch.object(workspace, "_generate_key_pair") as generate_key_pair,
+            mock.patch.object(workspace, "_start_worker_process") as start_worker,
+            self.assertRaisesRegex(
+                workspace.GoogleWorkspaceError,
+                "Could not start reviewer Google sign-in",
+            ),
+        ):
+            workspace.start_google_workspace_reviewer_oauth(REVIEWER_REQUEST_ID)
+
+        self.assertEqual(client.events, ["claim_request"])
+        generate_key_pair.assert_not_called()
+        start_worker.assert_not_called()
+
+    def test_reviewer_start_uses_existing_computer_custody_without_returning_values(
+        self,
+    ) -> None:
+        expires_at = (datetime.now(timezone.utc) + timedelta(minutes=5)).isoformat()
+        client = ReviewerClient(
+            claim=reviewer_claim_response(expires_at=expires_at),
+            start=reviewer_start_response(expires_at=expires_at),
+        )
+        worker_calls: list[dict[str, object]] = []
+
+        def start_worker(**kwargs: object) -> None:
+            client.events.append("start_worker")
+            worker_calls.append(kwargs)
+
+        with (
+            tempfile.TemporaryDirectory() as tmp,
+            self._patched_state(Path(tmp)),
+            mock.patch.object(
+                workspace,
+                "build_platform_client",
+                return_value=(client, "local_dev"),
+            ),
+            mock.patch.object(
+                workspace,
+                "_generate_key_pair",
+                return_value=("one-time-private-key", "one-time-public-key"),
+            ),
+            mock.patch.object(
+                workspace,
+                "_start_worker_process",
+                side_effect=start_worker,
+            ),
+            mock.patch.object(workspace, "_preflight_connection_request") as preflight,
+            mock.patch.object(workspace, "_send_google_connect_button") as send_button,
+        ):
+            result = workspace.start_google_workspace_reviewer_oauth(REVIEWER_REQUEST_ID)
+
+        self.assertEqual(result, workspace.GOOGLE_REVIEWER_START_RESULT)
+        self.assertEqual(
+            client.events,
+            ["claim_request", "start_handoff", "start_worker", "publish_request"],
+        )
+        self.assertEqual(
+            [path for path, _payload in client.posts],
+            [
+                "/hapi/v1/computers/local-dev/google-workspace-oauth/v1/"
+                f"reviewer-requests/{REVIEWER_REQUEST_ID}/claim",
+                "/hapi/v1/computers/local-dev/google-workspace-oauth/v1/"
+                f"reviewer-requests/{REVIEWER_REQUEST_ID}/start",
+                "/hapi/v1/computers/local-dev/google-workspace-oauth/v1/"
+                f"reviewer-requests/{REVIEWER_REQUEST_ID}/publish",
+            ],
+        )
+        self.assertEqual(client.posts[0][1], {})
+        self.assertEqual(
+            client.posts[1][1],
+            {
+                "owner_token": REVIEWER_OWNER_TOKEN,
+                "public_key_pem": "one-time-public-key",
+                "key_algorithm": workspace.KEY_ALGORITHM,
+            },
+        )
+        self.assertEqual(
+            client.posts[2][1],
+            {
+                "owner_token": REVIEWER_OWNER_TOKEN,
+                "handoff_id": "gwo_test123",
+            },
+        )
+        self.assertEqual(len(worker_calls), 1)
+        self.assertEqual(worker_calls[0]["private_key_pem"], "one-time-private-key")
+        self.assertEqual(
+            worker_calls[0]["handoff_metadata"],
+            {
+                "capability_bundle": IDENTITY_BUNDLE,
+                "services": IDENTITY_SERVICES,
+                "scopes": IDENTITY_SCOPES,
+                "connection_action": "add",
+                "target_connection_id": "gwo_connection123",
+            },
+        )
+        serialized_result = json.dumps(result, sort_keys=True)
+        for forbidden in (
+            REVIEWER_REQUEST_ID,
+            REVIEWER_OWNER_TOKEN,
+            "gwo_test123",
+            "gwo_connection123",
+            "one-time-private-key",
+            "one-time-public-key",
+            "authorization_url",
+            "accounts.google.com",
+        ):
+            self.assertNotIn(forbidden, serialized_result)
+        preflight.assert_not_called()
+        send_button.assert_not_called()
+
+    def test_reviewer_start_rejects_url_or_permission_drift_before_worker(self) -> None:
+        expires_at = (datetime.now(timezone.utc) + timedelta(minutes=5)).isoformat()
+        unsafe_url = reviewer_start_response(expires_at=expires_at)
+        unsafe_url["authorization_url"] = prepare_authorization_url()
+        changed_scope = reviewer_start_response(expires_at=expires_at)
+        changed_scope["scopes"] = MAIL_READER_SCOPES
+
+        for response in (unsafe_url, changed_scope):
+            client = ReviewerClient(
+                claim=reviewer_claim_response(expires_at=expires_at),
+                start=response,
+            )
+            with (
+                self.subTest(response=response),
+                tempfile.TemporaryDirectory() as tmp,
+                self._patched_state(Path(tmp)),
+                mock.patch.object(
+                    workspace,
+                    "build_platform_client",
+                    return_value=(client, "local_dev"),
+                ),
+                mock.patch.object(
+                    workspace,
+                    "_generate_key_pair",
+                    return_value=("one-time-private-key", "one-time-public-key"),
+                ),
+                mock.patch.object(workspace, "_start_worker_process") as start_worker,
+                self.assertRaisesRegex(
+                    workspace.GoogleWorkspaceError,
+                    "Could not start reviewer Google sign-in",
+                ),
+            ):
+                workspace.start_google_workspace_reviewer_oauth(REVIEWER_REQUEST_ID)
+
+            start_worker.assert_not_called()
+            self.assertEqual(
+                client.events,
+                ["claim_request", "start_handoff", "fail_request", "fail_handoff"],
+            )
+            self.assertEqual(
+                client.posts[-2][1],
+                {
+                    "owner_token": REVIEWER_OWNER_TOKEN,
+                    "error_code": "computer_start_failed",
+                },
+            )
+            self.assertEqual(
+                client.posts[-1][1],
+                {
+                    "installed": False,
+                    "message": "Reviewer Google sign-in could not start.",
+                },
+            )
+
+    def test_reviewer_worker_or_publish_failure_fails_request_and_handoff(self) -> None:
+        expires_at = (datetime.now(timezone.utc) + timedelta(minutes=5)).isoformat()
+        cases = (
+            (workspace.GoogleWorkspaceError("worker failed"), None),
+            (None, RuntimeError("publish failed")),
+        )
+        for worker_error, publish_error in cases:
+            client = ReviewerClient(
+                claim=reviewer_claim_response(expires_at=expires_at),
+                start=reviewer_start_response(expires_at=expires_at),
+                publish_error=publish_error,
+            )
+
+            with (
+                self.subTest(
+                    worker_error=type(worker_error).__name__,
+                    publish_error=type(publish_error).__name__,
+                ),
+                tempfile.TemporaryDirectory() as tmp,
+                self._patched_state(Path(tmp)),
+                mock.patch.object(
+                    workspace,
+                    "build_platform_client",
+                    return_value=(client, "local_dev"),
+                ),
+                mock.patch.object(
+                    workspace,
+                    "_generate_key_pair",
+                    return_value=("one-time-private-key", "one-time-public-key"),
+                ),
+                mock.patch.object(
+                    workspace,
+                    "_start_worker_process",
+                    side_effect=reviewer_worker_start(client, worker_error),
+                ),
+                self.assertRaisesRegex(
+                    workspace.GoogleWorkspaceError,
+                    "Could not start reviewer Google sign-in",
+                ),
+            ):
+                workspace.start_google_workspace_reviewer_oauth(REVIEWER_REQUEST_ID)
+
+            self.assertIn("fail_request", client.events)
+            self.assertIn("fail_handoff", client.events)
+            self.assertEqual(client.events[-2:], ["fail_request", "fail_handoff"])
+            if worker_error is not None:
+                self.assertNotIn("publish_request", client.events)
+            else:
+                self.assertIn("publish_request", client.events)
+            self.assertEqual(
+                client.posts[-2][1],
+                {
+                    "owner_token": REVIEWER_OWNER_TOKEN,
+                    "error_code": "computer_start_failed",
+                },
+            )
+
+    def test_reviewer_malformed_publish_receipt_fails_request_and_handoff(self) -> None:
+        expires_at = (datetime.now(timezone.utc) + timedelta(minutes=5)).isoformat()
+        malformed_receipts = (
+            {},
+            {
+                "request_id": f"gwrq_{'x' * 43}",
+                "handoff_id": "gwo_test123",
+                "status": "launch_ready",
+                "expires_at": expires_at,
+                "poll_after_ms": 2500,
+            },
+            {
+                "request_id": REVIEWER_REQUEST_ID,
+                "handoff_id": "gwo_test123",
+                "status": "pending",
+                "expires_at": expires_at,
+                "poll_after_ms": 2500,
+            },
+        )
+        for receipt in malformed_receipts:
+            client = ReviewerClient(
+                claim=reviewer_claim_response(expires_at=expires_at),
+                start=reviewer_start_response(expires_at=expires_at),
+                publish_response=receipt,
+            )
+
+            with (
+                self.subTest(receipt=receipt),
+                tempfile.TemporaryDirectory() as tmp,
+                self._patched_state(Path(tmp)),
+                mock.patch.object(
+                    workspace,
+                    "build_platform_client",
+                    return_value=(client, "local_dev"),
+                ),
+                mock.patch.object(
+                    workspace,
+                    "_generate_key_pair",
+                    return_value=("one-time-private-key", "one-time-public-key"),
+                ),
+                mock.patch.object(
+                    workspace,
+                    "_start_worker_process",
+                    side_effect=reviewer_worker_start(client),
+                ),
+                self.assertRaisesRegex(
+                    workspace.GoogleWorkspaceError,
+                    "Could not start reviewer Google sign-in",
+                ),
+            ):
+                workspace.start_google_workspace_reviewer_oauth(REVIEWER_REQUEST_ID)
+
+            self.assertEqual(
+                client.events,
+                [
+                    "claim_request",
+                    "start_handoff",
+                    "start_worker",
+                    "publish_request",
+                    "fail_request",
+                    "fail_handoff",
+                ],
+            )
 
     def test_connect_sends_native_button_without_returning_authorization_url(self) -> None:
         class FakeClient:

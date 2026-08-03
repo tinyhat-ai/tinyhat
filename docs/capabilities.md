@@ -133,6 +133,21 @@ The user signs into an existing Google account; they do not create or provide a
 Google Cloud project, OAuth client, secret, or server access. Bare connect asks
 for the identity baseline only: `openid`, `email`, and `profile`.
 
+An assessment-only delivery adapter reuses this custody path without requiring
+a Telegram button. The runtime calls
+`start_google_workspace_reviewer_oauth(reviewer_request_id)` with one
+platform-issued opaque request id. The Computer claims the request and its
+fixed capability metadata, generates the one-time RSA key, starts the existing
+detached install/claim worker, and publishes readiness back to that same
+request. Only then may the platform reveal the short-lived launch to the
+authenticated reviewer browser. The function returns exactly a fixed
+schema/action/status receipt. It returns no request or handoff id, owner token,
+authorization URL, key, code, credential, or capability payload. After a
+malformed publish receipt or startup failure, the plugin makes a best-effort
+attempt to mark the reviewer request and any created OAuth handoff failed. If
+the platform is unavailable, their bounded leases expire naturally. The
+ordinary Telegram `connect` behavior is unchanged.
+
 The Computer creates a fresh RSA keypair for every attempt. The packaged
 `google_workspace_scope_manifest.json` and its dependency-free loader are the
 public source of truth for scopes, presets, normalization, user copy, and the

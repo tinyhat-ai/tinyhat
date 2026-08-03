@@ -91,6 +91,7 @@ GOOGLE_WORKSPACE_DISCONNECT_INTENTS_SUFFIX = f"{GOOGLE_WORKSPACE_API_SUFFIX}/dis
 GOOGLE_WORKSPACE_PERMISSION_CHOOSERS_SUFFIX = (
     f"{GOOGLE_WORKSPACE_API_SUFFIX}/permission-choosers"
 )
+GOOGLE_WORKSPACE_REVIEWER_REQUESTS_SUFFIX = f"{GOOGLE_WORKSPACE_API_SUFFIX}/reviewer-requests"
 GOOGLE_TOKEN_URI = "https://oauth2.googleapis.com/token"
 GOOGLE_WORKSPACE_PROFILE_RECOMMENDED = "workspace_recommended"
 GOOGLE_WORKSPACE_PROFILE_CUSTOM = "workspace_custom"
@@ -274,6 +275,7 @@ HANDOFF_ID_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_.-]{0,127}$")
 GOOGLE_CONNECTION_ID_RE = re.compile(r"^gwo_[A-Za-z0-9_-]{1,60}$")
 GOOGLE_REFRESH_CORRELATION_ID_RE = re.compile(r"^gwr_[A-Za-z0-9_-]{8,60}$")
 GOOGLE_PERMISSION_CHOOSER_ID_RE = re.compile(r"^gwp_[A-Za-z0-9_-]{20,80}$")
+GOOGLE_REVIEWER_REQUEST_ID_RE = re.compile(r"^gwrq_[A-Za-z0-9_-]{43}$")
 GOOGLE_LAUNCH_TICKET_MAX_LENGTH = 32 * 1024
 GOOGLE_LAUNCH_TICKET_RE = re.compile(
     rf"^gwol1\.[1-9][0-9]{{0,9}}\."
@@ -281,6 +283,14 @@ GOOGLE_LAUNCH_TICKET_RE = re.compile(
 )
 DISCONNECT_OWNER_TOKEN_RE = re.compile(r"^[A-Za-z0-9_-]{32,256}$")
 DISCONNECT_GENERATION_RE = re.compile(r"^[0-9a-f]{64}$")
+GOOGLE_REVIEWER_START_FAILURE_CODE = "computer_start_failed"
+GOOGLE_REVIEWER_START_RESULT = {
+    "schema": "tinyhat_google_workspace_reviewer_oauth_start_v1",
+    "action": "reviewer_oauth_start",
+    "status": "started",
+}
+GOOGLE_REVIEWER_POLL_MIN_MS = 1000
+GOOGLE_REVIEWER_POLL_MAX_MS = 10_000
 STATE_DIR = Path.home() / ".tinyhat" / "google-workspace"
 CREDENTIALS_PATH = STATE_DIR / "accounts.json"
 LEGACY_CREDENTIALS_PATH = STATE_DIR / "credentials.json"
@@ -524,6 +534,27 @@ class GoogleWorkspaceWorkerHandoff:
     expected_scopes: list[str]
     connection_action: str
     target_connection_id: str | None
+
+
+@dataclass(frozen=True)
+class GoogleWorkspaceReviewerClaim:
+    """One server-bound reviewer request claimed by this Computer."""
+
+    request_id: str
+    owner_token: str
+    capability_bundle: str
+    services: list[str]
+    scopes: list[str]
+    expires_at: str
+    connection_action: str = "add"
+
+
+@dataclass
+class GoogleWorkspaceReviewerAttempt:
+    """Safe correlation retained when a partially started request must fail."""
+
+    handoff_id: str | None = None
+    connection_id: str | None = None
 
 
 @dataclass(frozen=True)
@@ -1497,6 +1528,297 @@ def _preflight_connection_request(
         client,
         platform_auth,
     )
+
+
+def _validated_reviewer_request_id(value: Any) -> str:
+    if not isinstance(value, str) or GOOGLE_REVIEWER_REQUEST_ID_RE.fullmatch(value) is None:
+        raise GoogleWorkspaceError("Google reviewer request id is invalid.")
+    return value
+
+
+def _validated_reviewer_owner_token(value: Any) -> str:
+    if not isinstance(value, str) or DISCONNECT_OWNER_TOKEN_RE.fullmatch(value) is None:
+        raise GoogleWorkspaceError("Platform returned an invalid Google reviewer owner token.")
+    return value
+
+
+def _validated_reviewer_expires_at(value: Any) -> str:
+    if not isinstance(value, str) or value != value.strip():
+        raise GoogleWorkspaceError("Platform returned an invalid Google reviewer expiry.")
+    try:
+        parsed = datetime.fromisoformat(value.replace("Z", "+00:00"))
+    except ValueError as exc:
+        raise GoogleWorkspaceError("Platform returned an invalid Google reviewer expiry.") from exc
+    now = datetime.now(timezone.utc)
+    if parsed.tzinfo is None or parsed.utcoffset() is None or parsed <= now:
+        raise GoogleWorkspaceError("Platform returned an invalid Google reviewer expiry.")
+    if parsed.timestamp() > now.timestamp() + DEFAULT_EXPIRES_IN_SECONDS + 60:
+        raise GoogleWorkspaceError("Platform returned an excessive Google reviewer expiry.")
+    return value
+
+
+def _validated_reviewer_poll_after_ms(value: Any) -> int:
+    if (
+        isinstance(value, bool)
+        or not isinstance(value, int)
+        or not GOOGLE_REVIEWER_POLL_MIN_MS <= value <= GOOGLE_REVIEWER_POLL_MAX_MS
+    ):
+        raise GoogleWorkspaceError("Platform returned an invalid Google reviewer poll interval.")
+    return value
+
+
+def _reviewer_request_api_path(
+    *,
+    platform_auth: str,
+    reviewer_request_id: str,
+    action: str,
+) -> str:
+    clean_request_id = _validated_reviewer_request_id(reviewer_request_id)
+    if action not in {"claim", "start", "publish", "fail"}:
+        raise GoogleWorkspaceError("Google reviewer request action is invalid.")
+    return computer_api_path(
+        platform_auth,
+        f"{GOOGLE_WORKSPACE_REVIEWER_REQUESTS_SUFFIX}/{clean_request_id}/{action}",
+    )
+
+
+def _validated_reviewer_capability_metadata(
+    payload: dict[str, Any],
+) -> tuple[str, list[str], list[str]]:
+    capability_bundle = _validated_capability_bundle(payload.get("capability_bundle"))
+    profile = _profile_for_capability_bundle(
+        capability_bundle,
+        scopes=payload.get("scopes"),
+        services=payload.get("services"),
+    )
+    services = list(profile.services)
+    if payload.get("services") != services:
+        raise GoogleWorkspaceError("Platform returned unexpected Google services.")
+    scopes = _normalize_workspace_scopes(
+        payload.get("scopes"),
+        expected=profile.scopes,
+    )
+    return capability_bundle, services, scopes
+
+
+def _claim_reviewer_request(
+    *,
+    client: PlatformClient,
+    platform_auth: str,
+    reviewer_request_id: str,
+) -> GoogleWorkspaceReviewerClaim:
+    claim = client.post_json(
+        _reviewer_request_api_path(
+            platform_auth=platform_auth,
+            reviewer_request_id=reviewer_request_id,
+            action="claim",
+        ),
+        {},
+    )
+    returned_request_id = _validated_reviewer_request_id(claim.get("request_id"))
+    if not hmac.compare_digest(returned_request_id, reviewer_request_id):
+        raise GoogleWorkspaceError("Platform claimed another Google reviewer request.")
+    if str(claim.get("status") or "").strip().lower() != "claimed":
+        raise GoogleWorkspaceError("Platform did not claim the Google reviewer request.")
+    connection_action = str(claim.get("connection_action") or "").strip()
+    if connection_action != "add":
+        raise GoogleWorkspaceError("Google reviewer request action is invalid.")
+    capability_bundle, services, scopes = _validated_reviewer_capability_metadata(claim)
+    return GoogleWorkspaceReviewerClaim(
+        request_id=returned_request_id,
+        owner_token=_validated_reviewer_owner_token(claim.get("owner_token")),
+        capability_bundle=capability_bundle,
+        services=services,
+        scopes=scopes,
+        expires_at=_validated_reviewer_expires_at(claim.get("expires_at")),
+        connection_action=connection_action,
+    )
+
+
+def _start_reviewer_handoff_locked(
+    *,
+    client: PlatformClient,
+    platform_auth: str,
+    claim: GoogleWorkspaceReviewerClaim,
+    attempt: GoogleWorkspaceReviewerAttempt,
+) -> None:
+    """Create the handoff and existing worker while holding the lifecycle lock."""
+    private_key_pem = ""
+    generation = ""
+    try:
+        if _has_unresolved_install_receipts():
+            raise GoogleWorkspacePlatformSyncPending(
+                "Google connection metadata acknowledgement is still pending."
+            )
+        _wipe_invalid_credentials_and_pending_handoffs_locked()
+        _migrate_legacy_credentials_locked(
+            client=client,
+            platform_auth=platform_auth,
+        )
+        private_key_pem, public_key_pem = _generate_key_pair()
+        generation = secrets.token_urlsafe(32)
+        handoff = client.post_json(
+            _reviewer_request_api_path(
+                platform_auth=platform_auth,
+                reviewer_request_id=claim.request_id,
+                action="start",
+            ),
+            {
+                "owner_token": claim.owner_token,
+                "public_key_pem": public_key_pem,
+                "key_algorithm": KEY_ALGORITHM,
+            },
+        )
+        attempt.handoff_id = _validated_handoff_id(handoff.get("handoff_id"))
+        attempt.connection_id = _validated_connection_id(handoff.get("connection_id"))
+        returned_request_id = _validated_reviewer_request_id(handoff.get("request_id"))
+        if not hmac.compare_digest(returned_request_id, claim.request_id):
+            raise GoogleWorkspaceError("Platform started another Google reviewer request.")
+        if "authorization_url" in handoff:
+            raise GoogleWorkspaceError(
+                "Platform returned a Google authorization URL to the Computer."
+            )
+        if str(handoff.get("status") or "").strip().lower() != "pending":
+            raise GoogleWorkspaceError("Platform returned invalid Google handoff state.")
+        if handoff.get("connection_action") != claim.connection_action:
+            raise GoogleWorkspaceError("Platform returned another Google connection action.")
+        start_expires_at = _validated_reviewer_expires_at(handoff.get("expires_at"))
+        if not hmac.compare_digest(start_expires_at, claim.expires_at):
+            raise GoogleWorkspaceError("Google reviewer request expiry changed during start.")
+        _validated_reviewer_poll_after_ms(handoff.get("poll_after_ms"))
+        capability_bundle, services, scopes = _validated_reviewer_capability_metadata(handoff)
+        if (
+            capability_bundle != claim.capability_bundle
+            or services != claim.services
+            or scopes != claim.scopes
+        ):
+            raise GoogleWorkspaceError("Google reviewer permissions changed during start.")
+        ACTIVE_DISCONNECT_PATH.unlink(missing_ok=True)
+        _start_worker_process(
+            handoff=handoff,
+            private_key_pem=private_key_pem,
+            generation=generation,
+            handoff_metadata={
+                "capability_bundle": claim.capability_bundle,
+                "services": claim.services,
+                "scopes": claim.scopes,
+                "connection_action": claim.connection_action,
+                "target_connection_id": attempt.connection_id,
+            },
+        )
+    finally:
+        private_key_pem = ""
+        generation = ""
+
+
+def _publish_reviewer_handoff(
+    *,
+    client: PlatformClient,
+    platform_auth: str,
+    claim: GoogleWorkspaceReviewerClaim,
+    attempt: GoogleWorkspaceReviewerAttempt,
+) -> None:
+    handoff_id = _validated_handoff_id(attempt.handoff_id)
+    published = client.post_json(
+        _reviewer_request_api_path(
+            platform_auth=platform_auth,
+            reviewer_request_id=claim.request_id,
+            action="publish",
+        ),
+        {
+            "owner_token": claim.owner_token,
+            "handoff_id": handoff_id,
+        },
+    )
+    published_request_id = _validated_reviewer_request_id(published.get("request_id"))
+    published_handoff_id = _validated_handoff_id(published.get("handoff_id"))
+    if not hmac.compare_digest(published_request_id, claim.request_id) or not hmac.compare_digest(
+        published_handoff_id,
+        handoff_id,
+    ):
+        raise GoogleWorkspaceError("Platform published another Google reviewer request.")
+    if str(published.get("status") or "").strip().lower() != "launch_ready":
+        raise GoogleWorkspaceError("Platform did not publish the Google reviewer launch.")
+    published_expires_at = _validated_reviewer_expires_at(published.get("expires_at"))
+    if not hmac.compare_digest(published_expires_at, claim.expires_at):
+        raise GoogleWorkspaceError("Google reviewer request expiry changed during publish.")
+    _validated_reviewer_poll_after_ms(published.get("poll_after_ms"))
+
+
+def _best_effort_fail_reviewer_start(
+    *,
+    client: PlatformClient,
+    platform_auth: str,
+    claim: GoogleWorkspaceReviewerClaim,
+    attempt: GoogleWorkspaceReviewerAttempt,
+) -> None:
+    with contextlib.suppress(Exception):
+        client.post_json(
+            _reviewer_request_api_path(
+                platform_auth=platform_auth,
+                reviewer_request_id=claim.request_id,
+                action="fail",
+            ),
+            {
+                "owner_token": claim.owner_token,
+                "error_code": GOOGLE_REVIEWER_START_FAILURE_CODE,
+            },
+        )
+    if attempt.handoff_id is not None:
+        with contextlib.suppress(Exception):
+            _claim_handoff(
+                client=client,
+                platform_auth=platform_auth,
+                handoff_id=attempt.handoff_id,
+                installed=False,
+                message="Reviewer Google sign-in could not start.",
+                expected_connection_id=attempt.connection_id,
+            )
+
+
+def start_google_workspace_reviewer_oauth(reviewer_request_id: str) -> dict[str, Any]:
+    """Start one browser-delivered OAuth handoff without returning delivery values."""
+    clean_request_id = _validated_reviewer_request_id(reviewer_request_id)
+    client: PlatformClient | None = None
+    platform_auth: str | None = None
+    claim: GoogleWorkspaceReviewerClaim | None = None
+    attempt = GoogleWorkspaceReviewerAttempt()
+    try:
+        client, platform_auth = build_platform_client()
+        claim = _claim_reviewer_request(
+            client=client,
+            platform_auth=platform_auth,
+            reviewer_request_id=clean_request_id,
+        )
+        with contextlib.suppress(Exception):
+            _resume_retained_install_receipts()
+        with contextlib.suppress(Exception):
+            _resume_retained_disconnect_workers()
+        with _lifecycle_lock():
+            _start_reviewer_handoff_locked(
+                client=client,
+                platform_auth=platform_auth,
+                claim=claim,
+                attempt=attempt,
+            )
+            _publish_reviewer_handoff(
+                client=client,
+                platform_auth=platform_auth,
+                claim=claim,
+                attempt=attempt,
+            )
+    except Exception:
+        if client is not None and platform_auth is not None and claim is not None:
+            _best_effort_fail_reviewer_start(
+                client=client,
+                platform_auth=platform_auth,
+                claim=claim,
+                attempt=attempt,
+            )
+        raise GoogleWorkspaceError("Could not start reviewer Google sign-in.") from None
+    finally:
+        claim = None
+    return dict(GOOGLE_REVIEWER_START_RESULT)
 
 
 def _start_connection(  # noqa: PLR0912, PLR0915

@@ -6,6 +6,14 @@ All notable changes to the Tinyhat plugin are documented here.
 
 ### Changed
 
+- Add a runtime-only Google Workspace reviewer start adapter. A platform-bound,
+  short-lived reviewer request can now start the same Computer-owned RSA key,
+  detached install worker, encrypted credential handoff, and final platform
+  claim as the Telegram flow while the platform delivers the launch to the
+  authenticated reviewer browser. The runtime receives only the opaque request
+  id as command input, and its result is a fixed schema/action/status receipt
+  with no request id, owner token, handoff id, authorization URL, key, code,
+  credential, or scope payload.
 - Bump the Hermes plugin package to `0.21.20`; add an owner-confirmed Slack
   disconnect tool. The platform sends the two-stage Telegram ceremony, and
   a detached plugin worker revokes an active Slack bot token, removes the
