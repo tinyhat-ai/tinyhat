@@ -31,6 +31,9 @@ in the encrypted Mini App and decrypted only on the Computer; Tinyhat never
 receives Slack message content. Tinyhat removes slash commands from each
 per-agent manifest so command names cannot collide across apps in one
 workspace.
+It can also create the first shareable-hat shell: one customer, one private
+repository, a canonical handle, and a share URL. Populating, installing, and
+wearing that hat are deliberately reserved for later milestones.
 
 ## What This Plugin Does
 
@@ -40,7 +43,8 @@ workspace.
 | `__init__.py` | Hermes registration entrypoint. |
 | `hermes.plugin.json` | Tinyhat metadata for the Hermes adapter, skill, command, and release channels. |
 | `context.py` | Small Hermes `pre_llm_call` context hook for Tinyhat-sensitive turns. |
-| `tools.py` / `schemas.py` | Tinyhat tools: plugin version, safe platform status, joke proof, skill catalog, private secret handoff and removal, Slack connection, Google identity connection, Codex auth setup/status helpers, and plugin update helper. |
+| `tools.py` / `schemas.py` | Tinyhat tools: plugin version, safe platform status, shareable hats, joke proof, skill catalog, private secret handoff and removal, Slack connection, Google identity connection, Codex auth setup/status helpers, and plugin update helper. |
+| `hats.py` | Owner-scoped create, list, and inspect calls for M1 shareable hat shells. |
 | `slack_connection.py` | Hermes manifest generation plus Computer-local Slack token validation and installation. |
 | `credentials.py` | Value-blind credential name/description discovery and platform-owned, expiring Telegram removal confirmation. |
 | `google_workspace.py` / `google_workspace_worker.py` | Platform-authored Google OAuth handoff, multi-account local custody, manifest-governed access selection, assignment-safe status, and targeted disconnect. |
@@ -59,6 +63,7 @@ workspace.
 | `skills/tinyhat-plugin-update/SKILL.md` | Channel update guidance for stale installed plugin checkouts. |
 | `skills/tinyhat-platform/SKILL.md` | Platform context for Tinyhat-managed Hermes agents. |
 | `skills/tinyhat-privacy/SKILL.md` | Privacy and trust model guidance: who can see user data, and when. |
+| `skills/hat-authoring/SKILL.md` | Create, list, and inspect one-customer shareable hat shells. |
 | `docs/skill-authoring.md` | The standard for future Tinyhat skills. |
 | `.agents/skills/tinyhat-plugin-skill-authoring/SKILL.md` | Maintainer workflow for adding or changing plugin skills. |
 | `RELEASING.md` | How releases and `channels/lts` / `channels/latest` work. |
@@ -117,6 +122,14 @@ Hermes, not from admin metadata or a GitHub branch name.
 platform status endpoint. It returns only safe Computer state, assignment,
 configuration revision, and package inventory metadata; it never returns
 tokens, credentials, or private platform URLs.
+
+`hat-authoring` creates and discovers shareable hat shells. For creation, the
+agent collects a name and one customer's work email, then `tinyhat_hats`
+derives the owner and account from the authenticated Computer. The platform
+creates a private repository and returns the canonical handle and share URL.
+The same tool lists up to 100 owner-scoped hats or retrieves one by key or
+handle. M1 does not populate the repository, collect credentials, install,
+share access to, or wear the hat.
 
 `tinyhat-skill-catalog` is the discovery repair path. When `skills_list`,
 `available_skills`, or an unqualified `skill_view(name="tinyhat-codex-auth")`
@@ -474,6 +487,10 @@ TINYHAT_PLUGIN_REF=vX.Y.Z
 | `channels/lts` | Conservative default for managed Computers. |
 | `channels/latest` | Newest promoted final version, used when we want faster adoption. |
 | exact tag, for example `vX.Y.Z` | Immutable version for tests, rollbacks, and audits. |
+
+For v0.23.0, deploy the matching platform Hats API and Mini App section before
+promoting `channels/latest` and `channels/lts`. The plugin calls only that
+versioned platform API; the runtime is unchanged.
 
 For v0.21.20, deploy the matching Tinyloop platform before promoting
 `channels/latest` and `channels/lts`. The plugin owns Slack revocation and

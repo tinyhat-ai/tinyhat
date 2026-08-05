@@ -96,6 +96,7 @@ class HermesAdapterTests(unittest.TestCase):
 
         self.assertIn("tinyhat_plugin_version", ctx.tools)
         self.assertIn("tinyhat_get_platform_status", ctx.tools)
+        self.assertIn("tinyhat_hats", ctx.tools)
         self.assertIn("tinyhat_tell_joke", ctx.tools)
         self.assertIn("tinyhat_skill_catalog", ctx.tools)
         self.assertIn("tinyhat_private_secret_handoff", ctx.tools)
@@ -118,6 +119,7 @@ class HermesAdapterTests(unittest.TestCase):
         self.assertIn("tinyhat-plugin-update", ctx.skills)
         self.assertIn("tinyhat-platform", ctx.skills)
         self.assertIn("tinyhat-privacy", ctx.skills)
+        self.assertIn("hat-authoring", ctx.skills)
         self.assertTrue(ctx.skills["tinyhat-plugin-version"].is_file())
         self.assertTrue(ctx.skills["tinyhat-tell-joke"].is_file())
         self.assertTrue(ctx.skills["tinyhat-skill-catalog"].is_file())
@@ -128,6 +130,7 @@ class HermesAdapterTests(unittest.TestCase):
         self.assertTrue(ctx.skills["tinyhat-plugin-update"].is_file())
         self.assertTrue(ctx.skills["tinyhat-platform"].is_file())
         self.assertTrue(ctx.skills["tinyhat-privacy"].is_file())
+        self.assertTrue(ctx.skills["hat-authoring"].is_file())
 
     def test_registered_commands_match_telegram_dispatch_names(self) -> None:
         ctx = FakeHermesContext()
@@ -148,6 +151,13 @@ class HermesAdapterTests(unittest.TestCase):
         self.assertEqual(schemas.TINYHAT_GET_PLATFORM_STATUS_SCHEMA["properties"], {})
         self.assertEqual(schemas.TINYHAT_GET_PLATFORM_STATUS_SCHEMA["required"], [])
         self.assertFalse(schemas.TINYHAT_GET_PLATFORM_STATUS_SCHEMA["additionalProperties"])
+        hats_schema = schemas.TINYHAT_HATS_SCHEMA
+        self.assertEqual(hats_schema["required"], ["action"])
+        self.assertEqual(
+            hats_schema["properties"]["action"]["enum"],
+            ["create", "list", "get"],
+        )
+        self.assertFalse(hats_schema["additionalProperties"])
         self.assertEqual(schemas.TINYHAT_TELL_JOKE_SCHEMA["properties"], {})
         self.assertEqual(schemas.TINYHAT_TELL_JOKE_SCHEMA["required"], [])
         self.assertEqual(schemas.TINYHAT_SKILL_CATALOG_SCHEMA["properties"], {})
@@ -202,7 +212,7 @@ class HermesAdapterTests(unittest.TestCase):
 
         self.assertEqual(payload["schema"], "tinyhat_plugin_version_v1")
         self.assertEqual(payload["name"], "tinyhat")
-        self.assertEqual(payload["version"], "0.21.20")
+        self.assertEqual(payload["version"], "0.23.0")
 
     def test_platform_status_uses_attested_computer_endpoint(self) -> None:
         original_build = tools.build_platform_client
@@ -215,7 +225,7 @@ class HermesAdapterTests(unittest.TestCase):
                     "computer_id": 5359,
                     "state": "active",
                     "assigned": True,
-                    "package_inventory": {"plugin": {"version": "0.21.20"}},
+                    "package_inventory": {"plugin": {"version": "0.23.0"}},
                 }
 
         try:
@@ -228,7 +238,7 @@ class HermesAdapterTests(unittest.TestCase):
         self.assertEqual(payload["computer_id"], 5359)
         self.assertEqual(payload["state"], "active")
         self.assertTrue(payload["assigned"])
-        self.assertEqual(payload["package_inventory"]["plugin"]["version"], "0.21.20")
+        self.assertEqual(payload["package_inventory"]["plugin"]["version"], "0.23.0")
 
     def test_platform_status_returns_structured_platform_error(self) -> None:
         original_build = tools.build_platform_client
@@ -251,7 +261,7 @@ class HermesAdapterTests(unittest.TestCase):
 
         self.assertEqual(payload["schema"], "tinyhat_skill_catalog_v1")
         self.assertEqual(payload["plugin"]["name"], "tinyhat")
-        self.assertEqual(payload["plugin"]["version"], "0.21.20")
+        self.assertEqual(payload["plugin"]["version"], "0.23.0")
         by_name = {skill["name"]: skill for skill in payload["skills"]}
         self.assertEqual(
             by_name["tinyhat-codex-auth"]["qualified_name"],

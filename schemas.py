@@ -19,6 +19,50 @@ TINYHAT_GET_PLATFORM_STATUS_SCHEMA = {
     "additionalProperties": False,
 }
 
+TINYHAT_HATS_SCHEMA = {
+    "type": "object",
+    "description": (
+        "Creates an owner-scoped shareable Tinyhat hat shell with a private "
+        "repository, lists up to 100 hats, or retrieves one hat's canonical "
+        "handle and share URL. Milestone 1 does not populate, install, or wear hats."
+    ),
+    "properties": {
+        "action": {
+            "type": "string",
+            "enum": ["create", "list", "get"],
+        },
+        "name": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 127,
+            "description": "Required human-readable hat name for create.",
+        },
+        "customer_email": {
+            "type": "string",
+            "minLength": 3,
+            "maxLength": 320,
+            "description": "Required work email for the one customer this hat serves.",
+        },
+        "key": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 47,
+            "pattern": "^[a-z0-9][a-z0-9_-]*$",
+            "description": (
+                "Optional stable lowercase key. Omit it to derive one from the name."
+            ),
+        },
+        "identifier": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 255,
+            "description": "Required key or canonical handle for action=get.",
+        },
+    },
+    "required": ["action"],
+    "additionalProperties": False,
+}
+
 TINYHAT_TELL_JOKE_SCHEMA = {
     "type": "object",
     "properties": {},

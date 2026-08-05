@@ -93,6 +93,12 @@ inside skills so the plugin stays readable and token efficient.
 
 ## Current Skills
 
+`hat-authoring` is the M1 create/list/inspect path for shareable hats. It gets
+the human name and one customer's work email before create, never asks the
+model for owner or account ids, calls `tinyhat_hats`, and reports the
+platform-returned handle and share URL. It must not imply that repository content, credentials,
+installation, access sharing, or wearing are implemented.
+
 `tinyhat-tell-joke` is intentionally small. It proves the plugin is
 installed before we add real Tinyhat platform capabilities.
 

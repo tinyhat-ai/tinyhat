@@ -16,6 +16,7 @@ CODEX_SCREENSHOT_MIN_BYTES = 10_000
 REQUIRED_TOOLS = [
     "tinyhat_plugin_version",
     "tinyhat_get_platform_status",
+    "tinyhat_hats",
     "tinyhat_tell_joke",
     "tinyhat_skill_catalog",
     "tinyhat_private_secret_handoff",
@@ -34,6 +35,7 @@ REQUIRED_COMMANDS = [
     "tinyhat-secret",
 ]
 REQUIRED_SKILLS = [
+    "hat-authoring",
     "tinyhat-plugin-version",
     "tinyhat-tell-joke",
     "tinyhat-skill-catalog",
@@ -798,6 +800,7 @@ def validate_hermes_adapter(root: Path) -> None:
     skill_names = [skill.get("name") for skill in skills if isinstance(skill, dict)]
     require(skill_names == REQUIRED_SKILLS, "skill declaration drift")
     expected_skill_paths = {
+        "hat-authoring": "skills/hat-authoring/SKILL.md",
         "tinyhat-plugin-version": "skills/tinyhat-plugin-version/SKILL.md",
         "tinyhat-tell-joke": "skills/tinyhat-tell-joke/SKILL.md",
         "tinyhat-skill-catalog": "skills/tinyhat-skill-catalog/SKILL.md",
@@ -874,6 +877,7 @@ def validate_fresh_surface(root: Path) -> None:
         root / "google_workspace_app_manager.py",
         root / "google_workspace_disconnect_worker.py",
         root / "google_workspace_worker.py",
+        root / "hats.py",
         root / "secret_handoff.py",
         root / "secret_handoff_worker.py",
         root / "schemas.py",
@@ -910,6 +914,8 @@ def validate_docs(root: Path) -> None:
             "tinyhat-plugin-update",
             "tinyhat-platform",
             "tinyhat-privacy",
+            "hat-authoring",
+            "tinyhat_hats",
             "pre_llm_call",
             "channels/lts",
             "channels/latest",
@@ -929,6 +935,8 @@ def validate_docs(root: Path) -> None:
             "tinyhat-plugin-update",
             "tinyhat-privacy",
             "tinyhat_get_platform_status",
+            "hat-authoring",
+            "tinyhat_hats",
         ),
         "skills/tinyhat-platform/SKILL.md": (
             "tinyhat_get_platform_status",
@@ -951,6 +959,12 @@ def validate_docs(root: Path) -> None:
             "Plugin Update And Skill Discovery",
             "tinyhat-privacy",
             "Privacy And Trust",
+            "tinyhat_hats",
+        ),
+        "skills/hat-authoring/SKILL.md": (
+            "tinyhat_hats",
+            "customer's work email",
+            "using hats is under construction",
         ),
         "skills/tinyhat-privacy/SKILL.md": (
             "dedicated Computer created for this user alone",
