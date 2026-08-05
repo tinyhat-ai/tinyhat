@@ -24,7 +24,8 @@ TINYHAT_HATS_SCHEMA = {
     "description": (
         "Creates an owner-scoped shareable Tinyhat hat shell with a private "
         "repository, lists up to 100 hats, or retrieves one hat's canonical "
-        "handle and share URL. Milestone 1 does not populate, install, or wear hats."
+        "handle and share URL. The intended customer can create a Telegram agent "
+        "that wears the hat from its public page."
     ),
     "properties": {
         "action": {
@@ -50,6 +51,24 @@ TINYHAT_HATS_SCHEMA = {
             "pattern": "^[a-z0-9][a-z0-9_-]*$",
             "description": (
                 "Optional stable lowercase key. Omit it to derive one from the name."
+            ),
+        },
+        "default_bot_username": {
+            "type": "string",
+            "minLength": 5,
+            "maxLength": 32,
+            "pattern": "^@?[A-Za-z][A-Za-z0-9_]{1,28}bot$",
+            "description": (
+                "Optional Telegram bot username to prefill for the customer. It "
+                "must start with a letter and end in bot."
+            ),
+        },
+        "default_bot_display_name": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 64,
+            "description": (
+                "Optional Telegram bot display name to prefill for the customer."
             ),
         },
         "identifier": {

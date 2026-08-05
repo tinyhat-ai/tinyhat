@@ -124,12 +124,15 @@ configuration revision, and package inventory metadata; it never returns
 tokens, credentials, or private platform URLs.
 
 `hat-authoring` creates and discovers shareable hat shells. For creation, the
-agent collects a name and one customer's work email, then `tinyhat_hats`
+agent collects a name and one customer's work email, plus optional Telegram
+bot username and display-name defaults, then `tinyhat_hats`
 derives the owner and account from the authenticated Computer. The platform
 creates a private repository and returns the canonical handle and share URL.
 The same tool lists up to 100 owner-scoped hats or retrieves one by key or
-handle. M1 does not populate the repository, collect credentials, install,
-share access to, or wear the hat.
+handle. The intended customer can verify that email on the public page and
+create a Telegram agent that wears the hat; its Computer is prepared through
+the normal approval flow. M1 does not yet populate the repository or collect
+hat credentials.
 
 `tinyhat-skill-catalog` is the discovery repair path. When `skills_list`,
 `available_skills`, or an unqualified `skill_view(name="tinyhat-codex-auth")`

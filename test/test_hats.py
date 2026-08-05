@@ -50,6 +50,8 @@ class HatToolTests(unittest.TestCase):
                         "action": "create",
                         "name": "Trade Show Sales",
                         "customer_email": "buyer@example.com",
+                        "default_bot_username": "AdaForecastBot",
+                        "default_bot_display_name": "Ada Forecasting Agent",
                     }
                 )
             )
@@ -62,13 +64,15 @@ class HatToolTests(unittest.TestCase):
                     {
                         "name": "Trade Show Sales",
                         "customer_email": "buyer@example.com",
+                        "default_bot_username": "AdaForecastBot",
+                        "default_bot_display_name": "Ada Forecasting Agent",
                     },
                 )
             ],
         )
         self.assertEqual(result["handle"], "acme/hats/trade-show-sales")
         self.assertNotIn("owner_user_id", client.post_calls[0][1])
-        self.assertIn("under construction", result["agent_instruction"])
+        self.assertIn("wears this hat", result["agent_instruction"])
 
     def test_list_and_get_use_gcloud_computer_endpoints(self) -> None:
         client = FakePlatformClient()

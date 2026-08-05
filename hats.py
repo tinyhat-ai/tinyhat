@@ -53,6 +53,18 @@ def hats(args: dict[str, Any] | None = None, **_: Any) -> str:
             key = str(payload.get("key") or "").strip()
             if key:
                 request_payload["key"] = key
+            default_bot_username = str(
+                payload.get("default_bot_username") or ""
+            ).strip()
+            if default_bot_username:
+                request_payload["default_bot_username"] = default_bot_username
+            default_bot_display_name = str(
+                payload.get("default_bot_display_name") or ""
+            ).strip()
+            if default_bot_display_name:
+                request_payload["default_bot_display_name"] = (
+                    default_bot_display_name
+                )
             result = client.post_json(path, request_payload)
     except ValueError as exc:
         missing = str(exc)
@@ -79,9 +91,10 @@ def hats(args: dict[str, Any] | None = None, **_: Any) -> str:
         )
 
     result["agent_instruction"] = (
-        "Report the canonical handle and share URL exactly as returned. A created "
-        "hat has a private repository shell only; adding skills or credentials, "
-        "installing, sharing access, and wearing the hat are under construction."
+        "Report the canonical handle and share URL exactly as returned. Tell the "
+        "user that the intended customer can verify their email on the public page "
+        "and create a Telegram agent that wears this hat. The Computer is prepared "
+        "only after that agent is approved."
     )
     return json.dumps(result, sort_keys=True)
 

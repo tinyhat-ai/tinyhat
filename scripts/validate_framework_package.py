@@ -964,7 +964,7 @@ def validate_docs(root: Path) -> None:
         "skills/hat-authoring/SKILL.md": (
             "tinyhat_hats",
             "customer's work email",
-            "using hats is under construction",
+            "create a Telegram agent that wears the hat",
         ),
         "skills/tinyhat-privacy/SKILL.md": (
             "dedicated Computer created for this user alone",

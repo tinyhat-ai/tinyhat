@@ -11,16 +11,19 @@ information about one of their hats.
 ## Create
 
 1. Get the hat's human-readable name and the one customer's work email. Ask
-   for whichever value is missing. A short key is optional.
+   for whichever value is missing. A short key, default Telegram bot username,
+   and default Telegram bot display name are optional.
 2. Call `tinyhat_hats` with `action="create"`, `name`, `customer_email`, and
-   optional `key`.
+   any supplied `key`, `default_bot_username`, and `default_bot_display_name`.
 3. Report the returned canonical handle and share URL. Say that the private
-   repository was created only when `repository_created` is true.
+   repository was created only when `repository_created` is true. Explain that
+   the intended customer can verify their email on that page and create the
+   Telegram agent.
 
 Do not ask for account or owner ids; Tinyhat derives them from this Computer.
-Do not create repository files, collect credentials, install, share access to,
-or wear the hat in this milestone. If asked for those later steps, say that
-using hats is under construction.
+Do not create repository files or collect credentials in this milestone. The
+public page can create a Telegram agent that wears the hat; its Computer is
+prepared later through the normal approval flow.
 
 ## List or inspect
 

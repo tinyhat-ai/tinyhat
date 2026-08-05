@@ -6,7 +6,7 @@ The current capability list is intentionally small.
 | --- | --- | --- |
 | `tinyhat_plugin_version` | Available now | Proves which Tinyhat plugin version Hermes has loaded for the live agent. |
 | `tinyhat_get_platform_status` | Available now | Reads this authenticated Computer's safe platform state, assignment, configuration revisions, and package inventory. |
-| `tinyhat_hats` | Available now | Creates an owner-scoped one-customer hat shell with a private repository, lists up to 100 hats, or retrieves a canonical handle and share URL. |
+| `tinyhat_hats` | Available now | Creates an owner-scoped one-customer hat shell with a private repository and optional Telegram bot defaults, lists up to 100 hats, or retrieves a canonical handle and share URL. |
 | `tinyhat_tell_joke` | Available now | Proves Hermes loaded the Tinyhat plugin and can call a plugin tool. |
 | `tinyhat_skill_catalog` | Available now | Lists Tinyhat plugin skills with `tinyhat:<skill>` qualified names and unqualified aliases. |
 | `tinyhat_private_secret_handoff` | Available now | Lets a user enter a secret in a Telegram Mini App while Tinyhat stores only short-lived ciphertext. |
@@ -28,13 +28,15 @@ tool or skill, and covered by validation.
 `tinyhat_hats` uses the authenticated Computer identity to derive the owner and
 account; the model never supplies either id. `action=create` requires a name
 and the one customer's work email, creates a private platform-managed repo,
-and returns the canonical handle plus an opaque share URL. `action=list`
+and returns the canonical handle plus an opaque share URL. Creation also
+accepts optional Telegram bot username and display-name defaults. `action=list`
 returns no more than 100 hats owned by that user in that account, while
 `action=get` accepts a returned key or handle.
 
-This milestone creates the shell only. Repository content, credentials,
-installing, sharing access to, and wearing the hat remain under construction.
-No runtime change is required.
+The intended customer verifies their email on the public page, then opens a
+prefilled Telegram managed-bot dialog to create an agent that wears the hat.
+Its Computer still follows the normal approval flow. Repository content and
+hat credentials remain future work. No runtime change is required.
 
 ## Private Secret Handoff
 
