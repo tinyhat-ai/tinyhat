@@ -31,7 +31,7 @@ class FakePlatformClient:
             "handle": "acme/hats/trade-show-sales",
             "display_name": "Trade Show Sales",
             "customer_email": "buyer@example.com",
-            "share_url": "https://tinyhat.ai/tinyhat/hats/opaque",
+            "share_url": "https://tinyhat.ai/hats/opaque",
             "repository_created": True,
         }
 
