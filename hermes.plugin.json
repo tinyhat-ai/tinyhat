@@ -1,6 +1,6 @@
 {
   "schema": "tinyhat.framework-adapter.v1",
-  "version": "0.21.20",
+  "version": "0.23.0",
   "framework": {
     "name": "hermes",
     "minimum": "0.0.0"
@@ -11,6 +11,13 @@
     "register": "register"
   },
   "skills": [
+    {
+      "name": "hat-authoring",
+      "qualified_name": "tinyhat:hat-authoring",
+      "aliases": ["hat-authoring"],
+      "path": "skills/hat-authoring/SKILL.md",
+      "purpose": "Creates one-customer shareable hat shells and lists or inspects hats owned by this Computer's user."
+    },
     {
       "name": "tinyhat-plugin-version",
       "qualified_name": "tinyhat:tinyhat-plugin-version",
@@ -106,6 +113,11 @@
       "name": "tinyhat_get_platform_status",
       "handler": "tools.get_platform_status",
       "skill": "tinyhat-platform"
+    },
+    {
+      "name": "tinyhat_hats",
+      "handler": "tools.hats",
+      "skill": "hat-authoring"
     },
     {
       "name": "tinyhat_tell_joke",

@@ -93,6 +93,14 @@ inside skills so the plugin stays readable and token efficient.
 
 ## Current Skills
 
+`hat-authoring` is the M1 create/list/inspect path for shareable hats. It gets
+the human name and one customer's work email before create, accepts optional
+Telegram bot username and display-name defaults, never asks the
+model for owner or account ids, calls `tinyhat_hats`, and reports the
+platform-returned handle and share URL. The public page owns email verification
+and Telegram agent creation; the skill must not imply that repository content
+or hat credentials are already populated.
+
 `tinyhat-tell-joke` is intentionally small. It proves the plugin is
 installed before we add real Tinyhat platform capabilities.
 

@@ -31,6 +31,9 @@ in the encrypted Mini App and decrypted only on the Computer; Tinyhat never
 receives Slack message content. Tinyhat removes slash commands from each
 per-agent manifest so command names cannot collide across apps in one
 workspace.
+It can also create the first shareable-hat shell: one customer, one private
+repository, a canonical handle, and a share URL. Populating, installing, and
+wearing that hat are deliberately reserved for later milestones.
 
 ## What This Plugin Does
 
@@ -40,7 +43,8 @@ workspace.
 | `__init__.py` | Hermes registration entrypoint. |
 | `hermes.plugin.json` | Tinyhat metadata for the Hermes adapter, skill, command, and release channels. |
 | `context.py` | Small Hermes `pre_llm_call` context hook for Tinyhat-sensitive turns. |
-| `tools.py` / `schemas.py` | Tinyhat tools: plugin version, safe platform status, joke proof, skill catalog, private secret handoff and removal, Slack connection, Google identity connection, Codex auth setup/status helpers, and plugin update helper. |
+| `tools.py` / `schemas.py` | Tinyhat tools: plugin version, safe platform status, shareable hats, joke proof, skill catalog, private secret handoff and removal, Slack connection, Google identity connection, Codex auth setup/status helpers, and plugin update helper. |
+| `hats.py` | Owner-scoped create, list, and inspect calls for M1 shareable hat shells. |
 | `slack_connection.py` | Hermes manifest generation plus Computer-local Slack token validation and installation. |
 | `credentials.py` | Value-blind credential name/description discovery and platform-owned, expiring Telegram removal confirmation. |
 | `google_workspace.py` / `google_workspace_worker.py` | Platform-authored Google OAuth handoff, multi-account local custody, manifest-governed access selection, assignment-safe status, and targeted disconnect. |
@@ -59,6 +63,7 @@ workspace.
 | `skills/tinyhat-plugin-update/SKILL.md` | Channel update guidance for stale installed plugin checkouts. |
 | `skills/tinyhat-platform/SKILL.md` | Platform context for Tinyhat-managed Hermes agents. |
 | `skills/tinyhat-privacy/SKILL.md` | Privacy and trust model guidance: who can see user data, and when. |
+| `skills/hat-authoring/SKILL.md` | Create, list, and inspect one-customer shareable hat shells. |
 | `docs/skill-authoring.md` | The standard for future Tinyhat skills. |
 | `.agents/skills/tinyhat-plugin-skill-authoring/SKILL.md` | Maintainer workflow for adding or changing plugin skills. |
 | `RELEASING.md` | How releases and `channels/lts` / `channels/latest` work. |
@@ -118,6 +123,18 @@ platform status endpoint. It returns only safe Computer state, assignment,
 configuration revision, and package inventory metadata; it never returns
 tokens, credentials, or private platform URLs.
 
+`hat-authoring` creates and evolves shareable Hats. For creation, the
+agent collects a name and one customer's work email, plus optional Telegram
+bot username and display-name defaults, then `tinyhat_hats`
+derives the owner and account from the authenticated Computer. The platform
+creates a private repository and returns the canonical handle and share URL.
+The same tool lists up to 100 owner-scoped Hats, retrieves one by key or
+handle, updates its public title, and creates or updates guarded non-secret
+repo files. Hat credentials use the encrypted Mini App handoff, but terminate
+in a per-Hat local store on the creator Computer. The private repo records only
+the credential name, purpose, and saved time. The intended customer can verify
+their email on the public page and create a Telegram agent that wears the Hat.
+
 `tinyhat-skill-catalog` is the discovery repair path. When `skills_list`,
 `available_skills`, or an unqualified `skill_view(name="tinyhat-codex-auth")`
 does not show Tinyhat plugin skills clearly, the agent calls
@@ -131,10 +148,12 @@ to save an API key, token, password, or credential, the agent calls
 pair, the user enters the value in a Telegram Mini App, the browser
 encrypts the value with the public key, and the Computer decrypts it with
 the temporary private key. Tinyhat stores only short-lived ciphertext for
-the handoff and wipes it after completion, expiration, or failure. After
-the Computer saves the secret locally, the saver worker registers the name
-for terminal env passthrough, sends one short Telegram notice, and claims
-the handoff with `outcome="installed_restart_pending"`. The Tinyhat
+the handoff and wipes it after completion, expiration, or failure. When the
+call includes `hat_identifier`, the Computer writes the plaintext to
+`~/.tinyhat/hats/<owner>/<hat>/secrets.json` instead of Hermes global config.
+For a global Computer secret, the saver worker registers the name for terminal
+env passthrough, sends one short Telegram notice, and claims the handoff with
+`outcome="installed_restart_pending"`. The Tinyhat
 platform then queues the runtime's one-shot gateway restart and sends the
 final ready-or-failed confirmation after that restart command settles —
 the worker never stops, starts, or restarts the gateway itself. The worker
@@ -474,6 +493,10 @@ TINYHAT_PLUGIN_REF=vX.Y.Z
 | `channels/lts` | Conservative default for managed Computers. |
 | `channels/latest` | Newest promoted final version, used when we want faster adoption. |
 | exact tag, for example `vX.Y.Z` | Immutable version for tests, rollbacks, and audits. |
+
+For v0.23.0, deploy the matching platform Hats API and Mini App section before
+promoting `channels/latest` and `channels/lts`. The plugin calls only that
+versioned platform API; the runtime is unchanged.
 
 For v0.21.20, deploy the matching Tinyloop platform before promoting
 `channels/latest` and `channels/lts`. The plugin owns Slack revocation and

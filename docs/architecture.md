@@ -59,3 +59,29 @@ This pattern keeps responsibilities narrow:
 - the platform owns authorization and stores short-lived ciphertext;
 - the plugin owns the agent-facing instruction and tool;
 - the runtime stays focused on identity, heartbeat, and installation.
+
+This diagram shows how Hat secret plaintext reaches only the local Computer
+store while the platform and private repo remain value-blind.
+
+```mermaid
+sequenceDiagram
+    participant U as User
+    participant B as Mini App browser
+    participant P as Tinyhat platform
+    participant C as Creator Computer
+    participant R as Private Hat repo
+    C->>P: Start Hat handoff with public key and metadata
+    P->>U: Send Enter secret button
+    U->>B: Enter secret value
+    B->>P: Submit ciphertext
+    C->>P: Poll ciphertext
+    C->>C: Decrypt and save in local Hat store
+    C->>R: Commit name purpose and saved time
+    C->>P: Claim handoff with no plaintext
+    P->>P: Delete ciphertext
+```
+
+Hat repo editing follows the same boundary. The model supplies a relative path
+and non-secret text to `tinyhat_hats`; the authenticated platform resolves the
+owner and repo, validates the path, and creates a normal commit. The tool has
+no branch deletion, force-push, history rewrite, or whole-repo deletion action.

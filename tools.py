@@ -15,6 +15,7 @@ from .google_workspace_app import google_workspace_app as handle_google_workspac
 from .google_workspace_app_manager import (
     google_workspace_app_manager as handle_google_workspace_app_manager,
 )
+from .hats import hats as handle_hats
 from .platform import PlatformError, build_platform_client, computer_api_path
 from .secret_handoff import start_private_secret_handoff
 from .slack_connection import start_slack_connection, start_slack_disconnect
@@ -81,6 +82,11 @@ def get_platform_status(args: dict[str, Any] | None = None, **_: Any) -> str:
             message=str(exc),
         )
     return json.dumps(payload, sort_keys=True)
+
+
+def hats(args: dict[str, Any] | None = None, **kwargs: Any) -> str:
+    """Create, list, or inspect owner-scoped shareable hats."""
+    return handle_hats(args, **kwargs)
 
 
 def skill_catalog_payload() -> dict[str, Any]:

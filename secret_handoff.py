@@ -14,8 +14,15 @@ import time
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
+from urllib.parse import urlencode
 
-from .platform import PlatformClient, build_platform_client, computer_api_path
+from .hat_secrets import HatSecretStoreError, normalize_hat_handle, set_hat_secret
+from .platform import (
+    PlatformClient,
+    PlatformError,
+    build_platform_client,
+    computer_api_path,
+)
 from .tool_errors import tool_error_json
 
 KEY_ALGORITHM = "RSA-OAEP-256"
@@ -128,20 +135,20 @@ def start_private_secret_handoff(
         )
     expires_in_seconds = DEFAULT_EXPIRES_IN_SECONDS
 
-    private_key_pem, public_key_pem = _generate_key_pair()
-    client, platform_auth = build_platform_client()
-    handoff = client.post_json(
-        computer_api_path(platform_auth, "private-secret-handoffs/v1"),
-        {
-            "name": secret_name,
-            "description": description,
-            "public_key_pem": public_key_pem,
-            "key_algorithm": KEY_ALGORITHM,
-            "expires_in_seconds": expires_in_seconds,
-        },
+    prepared = _request_private_secret_handoff(
+        payload=payload,
+        secret_name=secret_name,
+        description=description,
+        expires_in_seconds=expires_in_seconds,
     )
+    if isinstance(prepared, str):
+        return prepared
+    handoff, private_key_pem, hat_handle = prepared
     if not handoff.get("existing_handoff"):
-        _start_worker_process(handoff, private_key_pem)
+        if hat_handle:
+            _start_worker_process(handoff, private_key_pem, hat_handle=hat_handle)
+        else:
+            _start_worker_process(handoff, private_key_pem)
     shown_name = str(handoff.get("secret_name") or secret_name)
     return (
         f"I sent the secure Enter secret button for `{shown_name}`. Tap it "
@@ -149,7 +156,88 @@ def start_private_secret_handoff(
         "the plaintext."
     )
 
-def _start_worker_process(handoff: dict[str, Any], private_key_pem: str) -> None:
+
+def _request_private_secret_handoff(
+    *,
+    payload: dict[str, Any],
+    secret_name: str,
+    description: str,
+    expires_in_seconds: int,
+) -> tuple[dict[str, Any], str, str | None] | str:
+    """Resolve the value-blind target and create one bound handoff."""
+    private_key_pem, public_key_pem = _generate_key_pair()
+    client, platform_auth = build_platform_client()
+    hat_identifier = str(payload.get("hat_identifier") or "").strip()
+    hat_handle: str | None = None
+    if hat_identifier:
+        try:
+            hat = client.get_json(
+                f"{computer_api_path(platform_auth, 'hats/v1/detail')}?"
+                f"{urlencode({'identifier': hat_identifier})}"
+            )
+            hat_handle = normalize_hat_handle(str(hat.get("handle") or ""))
+        except (PlatformError, HatSecretStoreError):
+            return tool_error_json(
+                tool="tinyhat_private_secret_handoff",
+                error_name="hat_not_found",
+                message=(
+                    f"I could not find the Hat `{hat_identifier}` for this owner. "
+                    "Call tinyhat_hats with action=list and retry with its canonical "
+                    "handle."
+                ),
+                expected={"hat_identifier": "owner/hats/hat-key"},
+            )
+    try:
+        handoff = client.post_json(
+            computer_api_path(platform_auth, "private-secret-handoffs/v1"),
+            {
+                "name": secret_name,
+                "description": description,
+                "public_key_pem": public_key_pem,
+                "key_algorithm": KEY_ALGORITHM,
+                "expires_in_seconds": expires_in_seconds,
+                **({"hat_identifier": hat_handle} if hat_handle else {}),
+            },
+        )
+    except PlatformError as exc:
+        return tool_error_json(
+            tool="tinyhat_private_secret_handoff",
+            error_name="handoff_request_failed",
+            message=(
+                "Could not start this secure entry. If another entry for this "
+                "credential is pending, finish it or let it expire before retrying. "
+                f"Platform response: {exc}"
+            ),
+        )
+
+    effective_hat_handle: str | None = None
+    try:
+        if str(handoff.get("hat_handle") or "").strip():
+            effective_hat_handle = normalize_hat_handle(str(handoff["hat_handle"]))
+    except HatSecretStoreError:
+        effective_hat_handle = None
+    # The platform deduplicates pending handoffs only when connection metadata
+    # matches. Verify its value-blind echo as a second boundary before reusing
+    # the first call's already-running worker.
+    if effective_hat_handle != hat_handle:
+        return tool_error_json(
+            tool="tinyhat_private_secret_handoff",
+            error_name="handoff_binding_mismatch",
+            message=(
+                "The pending secure entry targets a different destination. "
+                "Finish it or let it expire, then retry for this Hat."
+            ),
+            expected={"hat_identifier": hat_handle or "computer"},
+        )
+    return handoff, private_key_pem, hat_handle
+
+
+def _start_worker_process(
+    handoff: dict[str, Any],
+    private_key_pem: str,
+    *,
+    hat_handle: str | None = None,
+) -> None:
     handoff_id = str(handoff.get("handoff_id") or "").strip()
     if not handoff_id:
         raise SecretHandoffError("Platform did not return a handoff id.")
@@ -168,6 +256,7 @@ def _start_worker_process(handoff: dict[str, Any], private_key_pem: str) -> None
             package_dir=package_dir,
             env=env,
             expires_in_seconds=expires_in_seconds,
+            hat_handle=hat_handle,
         ):
             return
         _start_worker_with_popen(
@@ -176,6 +265,7 @@ def _start_worker_process(handoff: dict[str, Any], private_key_pem: str) -> None
             package_dir=package_dir,
             env=env,
             expires_in_seconds=expires_in_seconds,
+            hat_handle=hat_handle,
         )
     except Exception as exc:
         try:
@@ -199,13 +289,14 @@ def _worker_expires_in_seconds(handoff: dict[str, Any]) -> int:
     return min(max(1, value), MAX_EXPIRES_IN_SECONDS)
 
 
-def _start_worker_with_systemd(
+def _start_worker_with_systemd(  # noqa: PLR0913 - explicit worker boundary inputs
     *,
     handoff_id: str,
     key_path: Path,
     package_dir: Path,
     env: dict[str, str],
     expires_in_seconds: int,
+    hat_handle: str | None = None,
 ) -> bool:
     systemd_run = shutil.which("systemd-run")
     if not systemd_run:
@@ -233,6 +324,8 @@ def _start_worker_with_systemd(
             str(expires_in_seconds),
         ]
     )
+    if hat_handle:
+        command.extend(["--hat-handle", hat_handle])
     try:
         completed = subprocess.run(
             command,
@@ -260,28 +353,32 @@ def _log_worker_spawn_fallback(detail: str) -> None:
     )
 
 
-def _start_worker_with_popen(
+def _start_worker_with_popen(  # noqa: PLR0913 - mirrors the systemd worker inputs
     *,
     handoff_id: str,
     key_path: Path,
     package_dir: Path,
     env: dict[str, str],
     expires_in_seconds: int,
+    hat_handle: str | None = None,
 ) -> None:
     # Fallback when systemd-run is unavailable or fails. The worker never
     # stops or starts the gateway, so escaping the gateway control group via
     # systemd-run above is defense in depth, not load-bearing.
+    command = [
+        sys.executable,
+        str(package_dir / "secret_handoff_worker.py"),
+        "--handoff-id",
+        handoff_id,
+        "--key-path",
+        str(key_path),
+        "--expires-in-seconds",
+        str(expires_in_seconds),
+    ]
+    if hat_handle:
+        command.extend(["--hat-handle", hat_handle])
     subprocess.Popen(
-        [
-            sys.executable,
-            str(package_dir / "secret_handoff_worker.py"),
-            "--handoff-id",
-            handoff_id,
-            "--key-path",
-            str(key_path),
-            "--expires-in-seconds",
-            str(expires_in_seconds),
-        ],
+        command,
         cwd=str(package_dir.parent),
         env=env,
         stdin=subprocess.DEVNULL,
@@ -364,13 +461,14 @@ def _poll_and_install_secret(
             pass
 
 
-def _install_submitted_secret(
+def _install_submitted_secret(  # noqa: PLR0913 - generic, Slack, and Hat installer
     *,
     client: PlatformClient,
     platform_auth: str,
     handoff_id: str,
     private_key_pem: str,
     state: dict[str, Any],
+    hat_handle: str | None = None,
 ) -> bool:
     if state.get("handoff_kind") == "slack_connection":
         from .slack_connection import install_submitted_slack_connection
@@ -394,11 +492,43 @@ def _install_submitted_secret(
                 "the complete Socket Mode connection."
             ),
         )
+    requested_hat_handle = normalize_hat_handle(hat_handle) if hat_handle else None
+    state_hat_handle = (
+        normalize_hat_handle(str(state.get("hat_handle") or ""))
+        if str(state.get("hat_handle") or "").strip()
+        else None
+    )
+    if requested_hat_handle and state_hat_handle not in {None, requested_hat_handle}:
+        raise SecretHandoffError(
+            "Platform returned a different Hat binding for this handoff.",
+            public_message="The secure entry no longer matches the requested Hat.",
+        )
+    effective_hat_handle = requested_hat_handle or state_hat_handle
     plaintext = _decrypt_ciphertext(private_key_pem, ciphertext_payload)
     try:
-        _set_hermes_secret(secret_name, plaintext)
+        if effective_hat_handle:
+            set_hat_secret(effective_hat_handle, secret_name, plaintext)
+        else:
+            _set_hermes_secret(secret_name, plaintext)
     finally:
         plaintext = ""
+    if effective_hat_handle:
+        client.post_json(
+            computer_api_path(platform_auth, "hats/v1/credentials"),
+            {
+                "identifier": effective_hat_handle,
+                "name": secret_name,
+                "description": str(state.get("description") or "").strip() or None,
+            },
+        )
+        _claim_handoff(
+            client,
+            platform_auth,
+            handoff_id,
+            installed=True,
+            message=None,
+        )
+        return True
     _register_terminal_env_secret(secret_name)
     _send_secret_available_notice(secret_name)
     # The platform owns the gateway restart: on this claim it queues the

@@ -59,6 +59,12 @@ def register(ctx: Any) -> None:
         handler=tools.get_platform_status,
     )
     ctx.register_tool(
+        name="tinyhat_hats",
+        toolset="tinyhat",
+        schema=schemas.TINYHAT_HATS_SCHEMA,
+        handler=tools.hats,
+    )
+    ctx.register_tool(
         name="tinyhat_tell_joke",
         toolset="tinyhat",
         schema=schemas.TINYHAT_TELL_JOKE_SCHEMA,

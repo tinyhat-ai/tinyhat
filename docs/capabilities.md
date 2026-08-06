@@ -6,6 +6,7 @@ The current capability list is intentionally small.
 | --- | --- | --- |
 | `tinyhat_plugin_version` | Available now | Proves which Tinyhat plugin version Hermes has loaded for the live agent. |
 | `tinyhat_get_platform_status` | Available now | Reads this authenticated Computer's safe platform state, assignment, configuration revisions, and package inventory. |
+| `tinyhat_hats` | Available now | Creates, lists, inspects, and renames one-customer Hats; commits guarded non-secret repo files; and lists or removes value-blind Hat credential metadata after local deletion. |
 | `tinyhat_tell_joke` | Available now | Proves Hermes loaded the Tinyhat plugin and can call a plugin tool. |
 | `tinyhat_skill_catalog` | Available now | Lists Tinyhat plugin skills with `tinyhat:<skill>` qualified names and unqualified aliases. |
 | `tinyhat_private_secret_handoff` | Available now | Lets a user enter a secret in a Telegram Mini App while Tinyhat stores only short-lived ciphertext. |
@@ -21,6 +22,30 @@ The current capability list is intentionally small.
 
 Each capability should be visible in this document, represented by a small
 tool or skill, and covered by validation.
+
+## Shareable Hat Authoring
+
+`tinyhat_hats` uses the authenticated Computer identity to derive the owner and
+account; the model never supplies either id. `action=create` requires a name
+and the one customer's work email, creates a private platform-managed repo,
+and returns the canonical handle plus an opaque share URL. Creation also
+accepts optional Telegram bot username and display-name defaults. `action=list`
+returns no more than 100 hats owned by that user in that account, while
+`action=get` accepts a returned key or handle. `action=update` changes the
+public title without changing the stable handle. `action=put_file` creates or
+updates one relative text path in a commit; secret-shaped paths, credential
+files, private keys, branch deletion, history rewrites, and repo deletion are
+not available to the agent.
+
+The intended customer verifies their email on the public page, then opens a
+prefilled Telegram managed-bot dialog to create an agent that wears the hat.
+Its Computer still follows the normal approval flow. To add or replace a Hat
+credential, the agent calls `tinyhat_private_secret_handoff` with the Hat
+identifier. The plaintext is browser-encrypted, decrypted by the creator
+Computer, and stored only in that Hat's local secret file. The private Hat repo
+stores name, purpose, and saved time only. `action=list_credentials` returns
+that metadata; `action=remove_credential` deletes the local value and then the
+metadata. No runtime change is required.
 
 ## Private Secret Handoff
 

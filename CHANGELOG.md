@@ -6,6 +6,19 @@ All notable changes to the Tinyhat plugin are documented here.
 
 ### Changed
 
+- Start `0.23.0` with the first shareable-hats milestone. The new
+  `tinyhat:hat-authoring` skill and `tinyhat_hats` tool create an owner-scoped,
+  one-customer hat shell with a private platform-managed repository and
+  optional Telegram bot defaults, list up to 100 hats, and retrieve each
+  canonical handle and share URL. The matching public page verifies the
+  customer email and opens Telegram to create an agent that wears the hat;
+  agent can also update the public title, create or update guarded non-secret
+  repo files, and manage Hat credential names through chat. Secret values use
+  the existing browser-encrypted handoff but terminate in a per-Hat local file
+  on the creator Computer; only value-blind metadata is committed to the
+  private Hat repo. This release
+  changes no runtime code and requires the matching platform API to be
+  deployed before plugin promotion.
 - Bump the Hermes plugin package to `0.21.20`; add an owner-confirmed Slack
   disconnect tool. The platform sends the two-stage Telegram ceremony, and
   a detached plugin worker revokes an active Slack bot token, removes the
