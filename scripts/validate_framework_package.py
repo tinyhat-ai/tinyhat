@@ -973,8 +973,10 @@ def validate_docs(root: Path) -> None:
             "Keep the public capability overview current",
             "An agent with this Hat can",
             "do not repeat the",
-            "value-blind credential metadata into the Tools list",
+            "publishes each purpose in the Tools list",
+            "derives a readable label from each env name",
             "Keep customer identity and private data out of credential names",
+            "purpose text appear in the public Tools list",
         ),
         "skills/tinyhat-skill-authoring/SKILL.md": (
             "1-64 lowercase letters",
