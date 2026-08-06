@@ -131,6 +131,38 @@ def set_hat_secret(handle: str, name: str, value: str) -> dict[str, Any]:
     }
 
 
+def set_hat_secrets(handle: str, values: dict[str, str]) -> dict[str, Any]:
+    """Create or replace a complete encrypted Hat bundle in one local write."""
+    clean_handle = normalize_hat_handle(handle)
+    if not isinstance(values, dict) or not values:
+        raise HatSecretStoreError("The Hat credential bundle is empty.")
+    clean_values: dict[str, str] = {}
+    for raw_name, raw_value in values.items():
+        clean_name = normalize_secret_name(raw_name)
+        value = str(raw_value)
+        if not value.strip():
+            raise HatSecretStoreError(f"{clean_name} is empty.")
+        clean_values[clean_name] = value
+
+    path = hat_secret_store_path(clean_handle)
+    with _locked_store(path):
+        payload = _read_store(path, handle=clean_handle)
+        existing = dict(payload["secrets"])
+        created = sorted(name for name in clean_values if name not in existing)
+        updated = sorted(name for name in clean_values if name in existing)
+        existing.update(clean_values)
+        payload["secrets"] = existing
+        _write_store(path, payload)
+    return {
+        "handle": clean_handle,
+        "names": sorted(clean_values),
+        "count": len(clean_values),
+        "created": created,
+        "updated": updated,
+        "value_available": False,
+    }
+
+
 def remove_hat_secret(handle: str, name: str) -> dict[str, Any]:
     """Delete one local value without ever returning or logging it."""
     clean_handle = normalize_hat_handle(handle)
@@ -173,4 +205,5 @@ __all__ = [
     "normalize_secret_name",
     "remove_hat_secret",
     "set_hat_secret",
+    "set_hat_secrets",
 ]

@@ -8,6 +8,7 @@ from urllib.parse import urlencode
 
 from .hat_secrets import HatSecretStoreError, remove_hat_secret
 from .platform import PlatformError, build_platform_client, computer_api_path
+from .secret_handoff import start_hat_credentials_handoff
 from .tool_errors import tool_error_json
 
 ACTIONS = (
@@ -16,6 +17,8 @@ ACTIONS = (
     "get",
     "update",
     "put_file",
+    "define_credential",
+    "configure_credentials",
     "list_credentials",
     "remove_credential",
 )
@@ -47,7 +50,8 @@ def hats(  # noqa: PLR0912, PLR0915 - one public tool dispatches bounded actions
             error_name="invalid_parameter",
             message=(
                 "Call tinyhat_hats with a supported create, list, get, update, "
-                "put_file, list_credentials, or remove_credential action."
+                "put_file, define_credential, configure_credentials, "
+                "list_credentials, or remove_credential action."
             ),
             expected={"action": list(ACTIONS)},
             example_call={"action": "list"},
@@ -61,15 +65,15 @@ def hats(  # noqa: PLR0912, PLR0915 - one public tool dispatches bounded actions
                 "get",
                 "update",
                 "put_file",
+                "define_credential",
+                "configure_credentials",
                 "list_credentials",
                 "remove_credential",
             }
             else ""
         )
         name = _required_text(payload, "name") if action == "create" else ""
-        customer_email = (
-            _required_text(payload, "customer_email") if action == "create" else ""
-        )
+        customer_email = _required_text(payload, "customer_email") if action == "create" else ""
         client, platform_auth = build_platform_client()
         path = computer_api_path(platform_auth, "hats/v1")
         if action == "list":
@@ -95,6 +99,17 @@ def hats(  # noqa: PLR0912, PLR0915 - one public tool dispatches bounded actions
                     "content": _required_content(payload, "content"),
                 },
             )
+        elif action == "define_credential":
+            result = client.post_json(
+                f"{path}/credentials/define",
+                {
+                    "identifier": identifier,
+                    "name": _required_text(payload, "credential_name").upper(),
+                    "description": _required_text(payload, "description"),
+                },
+            )
+        elif action == "configure_credentials":
+            return start_hat_credentials_handoff(identifier)
         elif action == "remove_credential":
             if payload.get("confirmed") is not True:
                 return tool_error_json(
@@ -175,6 +190,12 @@ def hats(  # noqa: PLR0912, PLR0915 - one public tool dispatches bounded actions
         result["agent_instruction"] = (
             "Report whether the file was created or updated and name its repo path. "
             "Never imply that a secret value belongs in a Hat repo file."
+        )
+    elif action == "define_credential":
+        result["agent_instruction"] = (
+            "The credential name and description are defined without a value. "
+            "After defining every requested credential, call configure_credentials "
+            "once so the user receives one encrypted form for all values."
         )
     elif action in {"list_credentials", "remove_credential"}:
         result["agent_instruction"] = (

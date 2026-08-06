@@ -49,19 +49,26 @@ Never put an API key, token, password, private key, `.env` file, secret file,
 or credential file in the repo. The platform rejects secret-shaped paths and
 private-key material, but the skill must avoid sending secret values at all.
 
-## Add or replace a Hat credential
+## Define and configure Hat credentials
 
-1. Get the Hat identifier, a meaningful env-style name such as
-   `EXA_API_KEY`, and a short purpose.
-2. Call `tinyhat_private_secret_handoff` with `name`, `description`, and
-   `hat_identifier`. Never ask the user to paste the value in chat.
-3. Tinyhat sends an expiring **Enter secret** Mini App button. The browser
-   encrypts the value for this Computer. The Computer decrypts it and writes it
-   under `~/.tinyhat/hats/<owner>/<hat>/secrets.json`; only the name,
-   description, and saved time are recorded in the private Hat repo.
+1. Get the Hat identifier plus every meaningful env-style name and short
+   purpose. Never ask for any value in chat.
+2. For each new or changed field, call `tinyhat_hats` with
+   `action="define_credential"`, `identifier`, `credential_name`, and
+   `description`. This writes value-blind metadata only.
+3. After every field is defined, call `tinyhat_hats` once with
+   `action="configure_credentials"` and the Hat `identifier`.
+4. Tinyhat sends one expiring **Enter credentials** button. The user fills all
+   fields on one page; the browser encrypts the complete bundle with the Hat's
+   Computer-local key. The Computer writes all values together to the Hat's
+   local package store under `~/.tinyhat/hats/<owner>/<hat>/secrets.json` for
+   its intended customer. It does not load them into this agent's Hermes
+   environment and does not restart Hermes.
 
-Calling the same flow again with the same name replaces the local value. Do not
-claim replacement succeeded until the final Telegram **Secret saved** message.
+Calling `configure_credentials` again replaces values entered for the same
+names. The Hat preview can reopen the same encrypted form after the first
+Computer-keyed flow. Do not claim the save succeeded until Telegram confirms
+**Hat credentials saved**.
 
 ## List or remove Hat credentials
 
@@ -71,4 +78,5 @@ claim replacement succeeded until the final Telegram **Secret saved** message.
   an exact Hat. Then call `tinyhat_hats` with `action="remove_credential"`,
   `credential_name`, and `confirmed=true`. This deletes the local value and its
   value-blind repo metadata. Report `local_value_removed` honestly.
-- To recreate a removed credential, run the secure Hat credential flow again.
+- To recreate a removed credential, define it again, then call
+  `configure_credentials` once after all requested names are ready.

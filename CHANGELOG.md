@@ -6,6 +6,10 @@ All notable changes to the Tinyhat plugin are documented here.
 
 ### Changed
 
+- Collect every credential defined by a Hat on one browser-encrypted Mini App
+  page. The Hat reuses one Computer-local key pair for the bundle, saves all
+  values atomically in its local store, supports reopening the form from the
+  Hat preview, and never restarts Hermes for these package-only credentials.
 - Start `0.23.0` with the first shareable-hats milestone. The new
   `tinyhat:hat-authoring` skill and `tinyhat_hats` tool create an owner-scoped,
   one-customer hat shell with a private platform-managed repository and

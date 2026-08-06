@@ -196,6 +196,52 @@ class HatToolTests(unittest.TestCase):
         )
         self.assertTrue(result["local_value_removed"])
 
+    def test_define_then_configure_uses_one_hat_bundle_flow(self) -> None:
+        client = FakePlatformClient()
+        with (
+            mock.patch.object(
+                hats_module,
+                "build_platform_client",
+                return_value=(client, "local_dev"),
+            ),
+            mock.patch.object(
+                hats_module,
+                "start_hat_credentials_handoff",
+                return_value="One encrypted form sent.",
+            ) as start_bundle,
+        ):
+            defined = json.loads(
+                hats_module.hats(
+                    {
+                        "action": "define_credential",
+                        "identifier": "acme/hats/forecasting",
+                        "credential_name": "EXA_API_KEY",
+                        "description": "Research provider access",
+                    }
+                )
+            )
+            configured = hats_module.hats(
+                {
+                    "action": "configure_credentials",
+                    "identifier": "acme/hats/forecasting",
+                }
+            )
+
+        self.assertEqual(
+            client.post_calls[-1],
+            (
+                "/hapi/v1/computers/local-dev/hats/v1/credentials/define",
+                {
+                    "identifier": "acme/hats/forecasting",
+                    "name": "EXA_API_KEY",
+                    "description": "Research provider access",
+                },
+            ),
+        )
+        self.assertIn("configure_credentials", defined["agent_instruction"])
+        start_bundle.assert_called_once_with("acme/hats/forecasting")
+        self.assertEqual(configured, "One encrypted form sent.")
+
 
 if __name__ == "__main__":
     unittest.main()

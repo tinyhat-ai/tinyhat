@@ -99,7 +99,11 @@ Telegram bot username and display-name defaults, never asks the
 model for owner or account ids, calls `tinyhat_hats`, and reports the
 platform-returned handle and share URL. The public page owns email verification
 and Telegram agent creation; the skill must not imply that repository content
-or hat credentials are already populated.
+or hat credentials are already populated. Credential authoring defines names
+and purposes without values, then opens one encrypted bundle form after all
+fields are ready. The bundle is staged in the Hat's Computer-local package
+store for its intended customer, not loaded into the authoring Hermes
+environment, and does not trigger a Hermes restart.
 
 `tinyhat-tell-joke` is intentionally small. It proves the plugin is
 installed before we add real Tinyhat platform capabilities.

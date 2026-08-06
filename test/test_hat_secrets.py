@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import os
+import stat
 import sys
 import tempfile
 import unittest
@@ -17,6 +18,103 @@ from tinyhat import hat_secrets, secret_handoff  # noqa: E402
 
 
 class HatSecretStoreTests(unittest.TestCase):
+    def test_hat_bundle_reuses_one_locked_local_key_pair(self) -> None:
+        with (
+            tempfile.TemporaryDirectory(prefix="tinyhat-hat-key-store-") as temp_dir,
+            mock.patch.dict(os.environ, {"TINYHAT_HAT_STORE_DIR": temp_dir}),
+            mock.patch.object(
+                secret_handoff,
+                "_generate_key_pair",
+                return_value=("PRIVATE", "PUBLIC"),
+            ) as generate,
+        ):
+            first_path, first_public = secret_handoff._hat_credentials_key_pair(
+                "acme/hats/forecasting"
+            )
+            second_path, second_public = secret_handoff._hat_credentials_key_pair(
+                "acme/hats/forecasting"
+            )
+
+            self.assertEqual(first_path, second_path)
+            self.assertEqual(first_public, "PUBLIC")
+            self.assertEqual(second_public, "PUBLIC")
+            self.assertEqual(first_path.read_text(encoding="utf-8"), "PRIVATE")
+            self.assertEqual(stat.S_IMODE(first_path.stat().st_mode), 0o600)
+            self.assertEqual(
+                stat.S_IMODE(first_path.with_name("credentials-public.pem").stat().st_mode),
+                0o600,
+            )
+            generate.assert_called_once_with()
+
+    def test_hat_bundle_handoff_sends_one_button_and_keeps_key_local(self) -> None:
+        class FakeClient:
+            def __init__(self) -> None:
+                self.posts: list[tuple[str, dict]] = []
+
+            def get_json(self, path: str) -> dict:
+                if "/detail?" in path:
+                    return {"handle": "acme/hats/forecasting"}
+                return {
+                    "credentials": [
+                        {"name": "EXA_API_KEY", "description": "Research"},
+                        {"name": "GITHUB_TOKEN", "description": "Repositories"},
+                    ]
+                }
+
+            def post_json(self, path: str, payload: dict) -> dict:
+                self.posts.append((path, payload))
+                return {
+                    "handoff_id": "sh_hat_bundle",
+                    "hat_handle": "acme/hats/forecasting",
+                    "credentials": [
+                        {"name": "EXA_API_KEY"},
+                        {"name": "GITHUB_TOKEN"},
+                    ],
+                }
+
+        fake_client = FakeClient()
+        with tempfile.TemporaryDirectory(prefix="tinyhat-hat-key-") as temp_dir:
+            private_key_path = Path(temp_dir) / "credentials-private.pem"
+            private_key_path.write_text("PRIVATE", encoding="utf-8")
+            with (
+                mock.patch.object(
+                    secret_handoff,
+                    "build_platform_client",
+                    return_value=(fake_client, "local_dev"),
+                ),
+                mock.patch.object(
+                    secret_handoff,
+                    "_hat_credentials_key_pair",
+                    return_value=(private_key_path, "PUBLIC"),
+                ),
+                mock.patch.object(
+                    secret_handoff,
+                    "_start_worker_process",
+                ) as start_worker,
+            ):
+                message = secret_handoff.start_hat_credentials_handoff("forecasting")
+
+        self.assertEqual(len(fake_client.posts), 1)
+        request = fake_client.posts[0][1]
+        self.assertEqual(request["handoff_kind"], "hat_credentials")
+        self.assertEqual(request["hat_identifier"], "acme/hats/forecasting")
+        self.assertNotIn("credentials", request)
+        start_worker.assert_called_once_with(
+            {
+                "handoff_id": "sh_hat_bundle",
+                "hat_handle": "acme/hats/forecasting",
+                "credentials": [
+                    {"name": "EXA_API_KEY"},
+                    {"name": "GITHUB_TOKEN"},
+                ],
+            },
+            "PRIVATE",
+            hat_handle="acme/hats/forecasting",
+            persistent=True,
+            key_path=private_key_path,
+        )
+        self.assertIn("one secure Enter credentials button", message)
+
     def test_hat_handoff_resolves_owner_handle_and_scopes_worker(self) -> None:
         class FakeClient:
             def __init__(self) -> None:
@@ -251,6 +349,71 @@ class HatSecretStoreTests(unittest.TestCase):
             ),
         )
         self.assertNotIn(secret_value, json.dumps(fake_client.posts))
+
+    def test_hat_credentials_are_installed_atomically_without_restart(self) -> None:
+        class FakeClient:
+            def __init__(self) -> None:
+                self.posts: list[tuple[str, dict]] = []
+
+            def post_json(self, path: str, payload: dict) -> dict:
+                self.posts.append((path, payload))
+                return {"status": "ok"}
+
+        fake_client = FakeClient()
+        encrypted_bundle = json.dumps(
+            {
+                "schema": "tinyhat_hat_credentials_bundle_v1",
+                "credentials": {
+                    "EXA_API_KEY": "test-value-one",
+                    "GITHUB_TOKEN": "test-value-two",
+                },
+            }
+        )
+        with (
+            tempfile.TemporaryDirectory(prefix="tinyhat-hat-store-") as temp_dir,
+            mock.patch.dict(os.environ, {"TINYHAT_HAT_STORE_DIR": temp_dir}),
+            mock.patch.object(
+                secret_handoff,
+                "_decrypt_ciphertext",
+                return_value=encrypted_bundle,
+            ),
+            mock.patch.object(secret_handoff, "_set_hermes_secret") as hermes_save,
+        ):
+            installed = secret_handoff._install_submitted_secret(
+                client=fake_client,
+                platform_auth="local_dev",
+                handoff_id="sh_hat_bundle",
+                private_key_pem="PRIVATE",
+                state={
+                    "handoff_kind": "hat_credentials",
+                    "hat_handle": "acme/hats/forecasting",
+                    "credentials": [
+                        {"name": "EXA_API_KEY"},
+                        {"name": "GITHUB_TOKEN"},
+                    ],
+                    "ciphertext_payload": {"algorithm": "RSA-OAEP-256"},
+                },
+                hat_handle="acme/hats/forecasting",
+            )
+            local = hat_secrets.list_hat_secret_names("acme/hats/forecasting")
+
+        self.assertTrue(installed)
+        self.assertEqual(local["names"], ["EXA_API_KEY", "GITHUB_TOKEN"])
+        hermes_save.assert_not_called()
+        self.assertEqual(
+            fake_client.posts,
+            [
+                (
+                    "/hapi/v1/computers/local-dev/private-secret-handoffs/v1/sh_hat_bundle/claim",
+                    {
+                        "installed": True,
+                        "message": None,
+                        "gateway_ready": True,
+                    },
+                )
+            ],
+        )
+        self.assertNotIn("test-value", json.dumps(fake_client.posts))
 
 
 if __name__ == "__main__":

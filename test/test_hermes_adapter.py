@@ -161,6 +161,8 @@ class HermesAdapterTests(unittest.TestCase):
                 "get",
                 "update",
                 "put_file",
+                "define_credential",
+                "configure_credentials",
                 "list_credentials",
                 "remove_credential",
             ],

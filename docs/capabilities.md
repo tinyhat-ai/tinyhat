@@ -6,7 +6,7 @@ The current capability list is intentionally small.
 | --- | --- | --- |
 | `tinyhat_plugin_version` | Available now | Proves which Tinyhat plugin version Hermes has loaded for the live agent. |
 | `tinyhat_get_platform_status` | Available now | Reads this authenticated Computer's safe platform state, assignment, configuration revisions, and package inventory. |
-| `tinyhat_hats` | Available now | Creates, lists, inspects, and renames one-customer Hats; commits guarded non-secret repo files; and lists or removes value-blind Hat credential metadata after local deletion. |
+| `tinyhat_hats` | Available now | Creates, lists, inspects, and renames one-customer Hats; commits guarded non-secret repo files; and defines, configures, lists, or removes value-blind Hat credentials. |
 | `tinyhat_tell_joke` | Available now | Proves Hermes loaded the Tinyhat plugin and can call a plugin tool. |
 | `tinyhat_skill_catalog` | Available now | Lists Tinyhat plugin skills with `tinyhat:<skill>` qualified names and unqualified aliases. |
 | `tinyhat_private_secret_handoff` | Available now | Lets a user enter a secret in a Telegram Mini App while Tinyhat stores only short-lived ciphertext. |
@@ -39,13 +39,18 @@ not available to the agent.
 
 The intended customer verifies their email on the public page, then opens a
 prefilled Telegram managed-bot dialog to create an agent that wears the hat.
-Its Computer still follows the normal approval flow. To add or replace a Hat
-credential, the agent calls `tinyhat_private_secret_handoff` with the Hat
-identifier. The plaintext is browser-encrypted, decrypted by the creator
-Computer, and stored only in that Hat's local secret file. The private Hat repo
-stores name, purpose, and saved time only. `action=list_credentials` returns
-that metadata; `action=remove_credential` deletes the local value and then the
-metadata. No runtime change is required.
+Its Computer still follows the normal approval flow. The agent uses
+`action=define_credential` for each value-blind name and purpose, then calls
+`action=configure_credentials` once. One Mini App page collects all values and
+encrypts the complete bundle with the Hat's Computer-local key pair. The
+creator Computer decrypts and atomically stages the values only in that Hat's
+local package store for its intended customer. It does not load them into the
+authoring agent's Hermes environment, so it does not restart Hermes. The
+private Hat repo stores names, purposes, and saved times only.
+`action=list_credentials` returns that
+metadata; `action=remove_credential` deletes the local value and then the
+metadata. The Hat preview can reopen the encrypted bundle form after its first
+Computer-keyed setup. No runtime change is required.
 
 ## Private Secret Handoff
 
