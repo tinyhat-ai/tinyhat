@@ -16,8 +16,13 @@ from pathlib import Path
 from typing import Any
 from urllib.parse import urlencode
 
-from .hat_secrets import normalize_hat_handle, set_hat_secret
-from .platform import PlatformClient, build_platform_client, computer_api_path
+from .hat_secrets import HatSecretStoreError, normalize_hat_handle, set_hat_secret
+from .platform import (
+    PlatformClient,
+    PlatformError,
+    build_platform_client,
+    computer_api_path,
+)
 from .tool_errors import tool_error_json
 
 KEY_ALGORITHM = "RSA-OAEP-256"
@@ -130,27 +135,15 @@ def start_private_secret_handoff(
         )
     expires_in_seconds = DEFAULT_EXPIRES_IN_SECONDS
 
-    private_key_pem, public_key_pem = _generate_key_pair()
-    client, platform_auth = build_platform_client()
-    hat_identifier = str(payload.get("hat_identifier") or "").strip()
-    hat_handle: str | None = None
-    if hat_identifier:
-        hat = client.get_json(
-            f"{computer_api_path(platform_auth, 'hats/v1/detail')}?"
-            f"{urlencode({'identifier': hat_identifier})}"
-        )
-        hat_handle = normalize_hat_handle(str(hat.get("handle") or ""))
-    handoff = client.post_json(
-        computer_api_path(platform_auth, "private-secret-handoffs/v1"),
-        {
-            "name": secret_name,
-            "description": description,
-            "public_key_pem": public_key_pem,
-            "key_algorithm": KEY_ALGORITHM,
-            "expires_in_seconds": expires_in_seconds,
-            **({"hat_identifier": hat_handle} if hat_handle else {}),
-        },
+    prepared = _request_private_secret_handoff(
+        payload=payload,
+        secret_name=secret_name,
+        description=description,
+        expires_in_seconds=expires_in_seconds,
     )
+    if isinstance(prepared, str):
+        return prepared
+    handoff, private_key_pem, hat_handle = prepared
     if not handoff.get("existing_handoff"):
         if hat_handle:
             _start_worker_process(handoff, private_key_pem, hat_handle=hat_handle)
@@ -162,6 +155,81 @@ def start_private_secret_handoff(
         "within about 5 minutes and paste the value there. Tinyhat never sees "
         "the plaintext."
     )
+
+
+def _request_private_secret_handoff(
+    *,
+    payload: dict[str, Any],
+    secret_name: str,
+    description: str,
+    expires_in_seconds: int,
+) -> tuple[dict[str, Any], str, str | None] | str:
+    """Resolve the value-blind target and create one bound handoff."""
+    private_key_pem, public_key_pem = _generate_key_pair()
+    client, platform_auth = build_platform_client()
+    hat_identifier = str(payload.get("hat_identifier") or "").strip()
+    hat_handle: str | None = None
+    if hat_identifier:
+        try:
+            hat = client.get_json(
+                f"{computer_api_path(platform_auth, 'hats/v1/detail')}?"
+                f"{urlencode({'identifier': hat_identifier})}"
+            )
+            hat_handle = normalize_hat_handle(str(hat.get("handle") or ""))
+        except (PlatformError, HatSecretStoreError):
+            return tool_error_json(
+                tool="tinyhat_private_secret_handoff",
+                error_name="hat_not_found",
+                message=(
+                    f"I could not find the Hat `{hat_identifier}` for this owner. "
+                    "Call tinyhat_hats with action=list and retry with its canonical "
+                    "handle."
+                ),
+                expected={"hat_identifier": "owner/hats/hat-key"},
+            )
+    try:
+        handoff = client.post_json(
+            computer_api_path(platform_auth, "private-secret-handoffs/v1"),
+            {
+                "name": secret_name,
+                "description": description,
+                "public_key_pem": public_key_pem,
+                "key_algorithm": KEY_ALGORITHM,
+                "expires_in_seconds": expires_in_seconds,
+                **({"hat_identifier": hat_handle} if hat_handle else {}),
+            },
+        )
+    except PlatformError as exc:
+        return tool_error_json(
+            tool="tinyhat_private_secret_handoff",
+            error_name="handoff_request_failed",
+            message=(
+                "Could not start this secure entry. If another entry for this "
+                "credential is pending, finish it or let it expire before retrying. "
+                f"Platform response: {exc}"
+            ),
+        )
+
+    effective_hat_handle: str | None = None
+    try:
+        if str(handoff.get("hat_handle") or "").strip():
+            effective_hat_handle = normalize_hat_handle(str(handoff["hat_handle"]))
+    except HatSecretStoreError:
+        effective_hat_handle = None
+    # The platform deduplicates pending handoffs only when connection metadata
+    # matches. Verify its value-blind echo as a second boundary before reusing
+    # the first call's already-running worker.
+    if effective_hat_handle != hat_handle:
+        return tool_error_json(
+            tool="tinyhat_private_secret_handoff",
+            error_name="handoff_binding_mismatch",
+            message=(
+                "The pending secure entry targets a different destination. "
+                "Finish it or let it expire, then retry for this Hat."
+            ),
+            expected={"hat_identifier": hat_handle or "computer"},
+        )
+    return handoff, private_key_pem, hat_handle
 
 
 def _start_worker_process(
@@ -424,19 +492,31 @@ def _install_submitted_secret(  # noqa: PLR0913 - generic, Slack, and Hat instal
                 "the complete Socket Mode connection."
             ),
         )
+    requested_hat_handle = normalize_hat_handle(hat_handle) if hat_handle else None
+    state_hat_handle = (
+        normalize_hat_handle(str(state.get("hat_handle") or ""))
+        if str(state.get("hat_handle") or "").strip()
+        else None
+    )
+    if requested_hat_handle and state_hat_handle not in {None, requested_hat_handle}:
+        raise SecretHandoffError(
+            "Platform returned a different Hat binding for this handoff.",
+            public_message="The secure entry no longer matches the requested Hat.",
+        )
+    effective_hat_handle = requested_hat_handle or state_hat_handle
     plaintext = _decrypt_ciphertext(private_key_pem, ciphertext_payload)
     try:
-        if hat_handle:
-            set_hat_secret(hat_handle, secret_name, plaintext)
+        if effective_hat_handle:
+            set_hat_secret(effective_hat_handle, secret_name, plaintext)
         else:
             _set_hermes_secret(secret_name, plaintext)
     finally:
         plaintext = ""
-    if hat_handle:
+    if effective_hat_handle:
         client.post_json(
             computer_api_path(platform_auth, "hats/v1/credentials"),
             {
-                "identifier": hat_handle,
+                "identifier": effective_hat_handle,
                 "name": secret_name,
                 "description": str(state.get("description") or "").strip() or None,
             },

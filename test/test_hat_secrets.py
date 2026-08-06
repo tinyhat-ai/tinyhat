@@ -32,6 +32,7 @@ class HatSecretStoreTests(unittest.TestCase):
                 return {
                     "handoff_id": "sh_hat",
                     "secret_name": "EXA_API_KEY",
+                    "hat_handle": "acme/hats/forecasting",
                 }
 
         fake_client = FakeClient()
@@ -73,11 +74,82 @@ class HatSecretStoreTests(unittest.TestCase):
             {
                 "handoff_id": "sh_hat",
                 "secret_name": "EXA_API_KEY",
+                "hat_handle": "acme/hats/forecasting",
             },
             "PRIVATE",
             hat_handle="acme/hats/forecasting",
         )
         self.assertIn("EXA_API_KEY", message)
+
+    def test_unknown_hat_returns_structured_self_correction(self) -> None:
+        class FakeClient:
+            def get_json(self, _path: str) -> dict:
+                raise secret_handoff.PlatformError("not found", status_code=404)
+
+        with (
+            mock.patch.object(
+                secret_handoff,
+                "_generate_key_pair",
+                return_value=("PRIVATE", "PUBLIC"),
+            ),
+            mock.patch.object(
+                secret_handoff,
+                "build_platform_client",
+                return_value=(FakeClient(), "local_dev"),
+            ),
+        ):
+            result = json.loads(
+                secret_handoff.start_private_secret_handoff(
+                    {
+                        "name": "EXA_API_KEY",
+                        "description": "Research API key",
+                        "hat_identifier": "missing-hat",
+                    }
+                )
+            )
+
+        self.assertEqual(result["status"], "error")
+        self.assertEqual(result["error"], "hat_not_found")
+        self.assertIn("action=list", result["message"])
+
+    def test_existing_handoff_rejects_different_effective_binding(self) -> None:
+        class FakeClient:
+            def get_json(self, _path: str) -> dict:
+                return {"handle": "acme/hats/forecasting"}
+
+            def post_json(self, _path: str, _payload: dict) -> dict:
+                return {
+                    "handoff_id": "sh_existing",
+                    "existing_handoff": True,
+                    "secret_name": "EXA_API_KEY",
+                    "hat_handle": "acme/hats/different",
+                }
+
+        with (
+            mock.patch.object(
+                secret_handoff,
+                "_generate_key_pair",
+                return_value=("PRIVATE", "PUBLIC"),
+            ),
+            mock.patch.object(
+                secret_handoff,
+                "build_platform_client",
+                return_value=(FakeClient(), "local_dev"),
+            ),
+            mock.patch.object(secret_handoff, "_start_worker_process") as start_worker,
+        ):
+            result = json.loads(
+                secret_handoff.start_private_secret_handoff(
+                    {
+                        "name": "EXA_API_KEY",
+                        "description": "Research API key",
+                        "hat_identifier": "forecasting",
+                    }
+                )
+            )
+
+        self.assertEqual(result["error"], "handoff_binding_mismatch")
+        start_worker.assert_not_called()
 
     def test_create_update_remove_stays_local_and_returns_no_values(self) -> None:
         first_value = "first-local-only-value"
