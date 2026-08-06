@@ -317,13 +317,46 @@ class HatSecretStoreTests(unittest.TestCase):
         self.assertEqual(created["operation"], "created")
         self.assertEqual(updated["operation"], "updated")
         self.assertEqual(listed["names"], ["EXA_API_KEY"])
-        self.assertEqual(stored["secrets"]["EXA_API_KEY"], second_value)
+        self.assertEqual(stored["schema"], "tinyhat_hat_secrets_v2")
+        self.assertEqual(stored["names"], ["EXA_API_KEY"])
+        self.assertNotIn(first_value, json.dumps(stored))
+        self.assertNotIn(second_value, json.dumps(stored))
         self.assertTrue(removed["removed"])
         self.assertEqual(after["names"], [])
         self.assertEqual(store_mode, 0o600)
         public_shapes = json.dumps([created, updated, listed, removed, after])
         self.assertNotIn(first_value, public_shapes)
         self.assertNotIn(second_value, public_shapes)
+
+    def test_legacy_plaintext_store_is_migrated_when_names_are_listed(
+        self,
+    ) -> None:
+        legacy_value = "legacy-plaintext-must-disappear"
+        with tempfile.TemporaryDirectory(
+            prefix="tinyhat-hat-store-"
+        ) as temp_dir, mock.patch.dict(
+            os.environ,
+            {"TINYHAT_HAT_STORE_DIR": temp_dir},
+        ):
+            store_path = hat_secrets.hat_secret_store_path("acme/hats/forecasting")
+            store_path.parent.mkdir(parents=True, exist_ok=True)
+            store_path.write_text(
+                json.dumps(
+                    {
+                        "schema": "tinyhat_hat_secrets_v1",
+                        "handle": "acme/hats/forecasting",
+                        "secrets": {"EXA_API_KEY": legacy_value},
+                    }
+                ),
+                encoding="utf-8",
+            )
+
+            listed = hat_secrets.list_hat_secret_names("acme/hats/forecasting")
+            migrated = store_path.read_text(encoding="utf-8")
+
+        self.assertEqual(listed["names"], ["EXA_API_KEY"])
+        self.assertIn("tinyhat_hat_secrets_v2", migrated)
+        self.assertNotIn(legacy_value, migrated)
 
     def test_hat_handoff_installs_locally_then_sends_metadata_only(self) -> None:
         secret_value = "plaintext-never-sent-to-platform"

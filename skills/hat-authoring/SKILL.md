@@ -69,10 +69,10 @@ private-key material, but the skill must avoid sending secret values at all.
    `action="configure_credentials"` and the Hat `identifier`.
 4. Tinyhat sends one expiring **Enter credentials** button. The user fills all
    fields on one page; the browser encrypts the complete bundle with the Hat's
-   Computer-local key. The Computer writes all values together to the Hat's
+   Computer-local key. The Computer writes the encrypted bundle to the Hat's
    local package store under `~/.tinyhat/hats/<owner>/<hat>/secrets.json` for
-   its intended customer. It does not load them into this agent's Hermes
-   environment and does not restart Hermes.
+   its intended customer; plaintext is not stored there. It does not load the
+   values into this agent's Hermes environment and does not restart Hermes.
 
 Calling `configure_credentials` again replaces values entered for the same
 names. The Hat preview can reopen the same encrypted form after the first

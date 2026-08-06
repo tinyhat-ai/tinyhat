@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import base64
-import fcntl
 import hashlib
 import json
 import os
@@ -22,7 +21,7 @@ from urllib.parse import urlencode
 
 from .hat_secrets import (
     HatSecretStoreError,
-    hat_secret_store_path,
+    ensure_hat_key_pair,
     normalize_hat_handle,
     normalize_secret_name,
     set_hat_secret,
@@ -481,44 +480,7 @@ def _write_private_key_file(handoff_id: str, private_key_pem: str) -> Path:
 
 def _hat_credentials_key_pair(hat_handle: str) -> tuple[Path, str]:
     """Return the stable Computer-local key pair for one Hat bundle."""
-    directory = hat_secret_store_path(hat_handle).parent
-    directory.mkdir(parents=True, exist_ok=True)
-    directory.chmod(0o700)
-    private_path = directory / "credentials-private.pem"
-    public_path = directory / "credentials-public.pem"
-    lock_path = directory / "credentials-key.lock"
-    descriptor = os.open(lock_path, os.O_CREAT | os.O_RDWR, 0o600)
-    with os.fdopen(descriptor, "r+", encoding="utf-8") as lock_file:
-        fcntl.flock(lock_file.fileno(), fcntl.LOCK_EX)
-        if private_path.exists() and public_path.exists():
-            private_path.chmod(0o600)
-            public_path.chmod(0o600)
-            return private_path, public_path.read_text(encoding="utf-8")
-
-        private_key_pem, public_key_pem = _generate_key_pair()
-        _write_key_material(private_path, private_key_pem)
-        _write_key_material(public_path, public_key_pem)
-        return private_path, public_key_pem
-
-
-def _write_key_material(path: Path, content: str) -> None:
-    descriptor, temporary_name = tempfile.mkstemp(
-        prefix=f".{path.stem}-",
-        suffix=".tmp",
-        dir=path.parent,
-    )
-    temporary_path = Path(temporary_name)
-    try:
-        os.fchmod(descriptor, 0o600)
-        with os.fdopen(descriptor, "w", encoding="utf-8") as output:
-            output.write(content)
-            output.flush()
-            os.fsync(output.fileno())
-        os.replace(temporary_path, path)
-        path.chmod(0o600)
-    finally:
-        with suppress(OSError):
-            temporary_path.unlink()
+    return ensure_hat_key_pair(hat_handle, key_pair_factory=_generate_key_pair)
 
 
 def _poll_and_install_secret(

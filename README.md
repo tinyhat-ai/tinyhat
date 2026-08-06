@@ -155,7 +155,8 @@ pair, the user enters the value in a Telegram Mini App, the browser
 encrypts the value with the public key, and the Computer decrypts it with
 the temporary private key. Tinyhat stores only short-lived ciphertext for
 the handoff and wipes it after completion, expiration, or failure. When the
-call includes `hat_identifier`, the Computer writes the plaintext to
+call includes `hat_identifier`, the Computer re-encrypts the value with that
+Hat's stable local key pair and writes only ciphertext to
 `~/.tinyhat/hats/<owner>/<hat>/secrets.json` instead of Hermes global config.
 For a global Computer secret, the saver worker registers the name for terminal
 env passthrough, sends one short Telegram notice, and claims the handoff with
