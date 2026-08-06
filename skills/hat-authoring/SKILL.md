@@ -61,9 +61,11 @@ removed Hat. Report the returned repository and local-store outcomes honestly.
 2. Call `tinyhat_hats` with `action="put_file"`.
 3. Report whether Tinyhat created or updated the file and name the path.
 
-For a skill, use `skills/<skill-name>/SKILL.md` and include valid skill
-frontmatter. A later call to the same path updates it in a new commit, so repo
-history remains the undo trail.
+Before creating, reviewing, or updating any skill, load
+`tinyhat:tinyhat-skill-authoring` and follow its naming, trigger-boundary,
+length, progressive-disclosure, and validation guidance. Use
+`skills/<skill-name>/SKILL.md`; a later call to the same path updates it in a
+new commit, so repo history remains the undo trail.
 
 Never put an API key, token, password, private key, `.env` file, secret file,
 or credential file in the repo. The platform rejects secret-shaped paths and

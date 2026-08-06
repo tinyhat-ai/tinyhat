@@ -28,6 +28,9 @@ a fresh Hermes-only start.
 - `skills/tinyhat-tell-joke/SKILL.md`: deterministic joke proof.
 - `skills/tinyhat-plugin-version/SKILL.md`: live plugin version proof.
 - `skills/tinyhat-skill-catalog/SKILL.md`: plugin-qualified skill discovery.
+- `skills/tinyhat-skill-authoring/SKILL.md`: customer-facing best practices for
+  creating and revising portable Agent Skills, including trigger boundaries and
+  context limits.
 - `skills/tinyhat-private-secret/SKILL.md`: private Mini App secret handoff.
 - `skills/tinyhat-credentials/SKILL.md`: value-blind credential discovery and confirmed Computer-side removal.
 - `skills/tinyhat-google-workspace/SKILL.md`: multiple Google Workspace accounts, recommended/legacy/custom permissions, and account-targeted disconnect.

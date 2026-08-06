@@ -6,6 +6,10 @@ All notable changes to the Tinyhat plugin are documented here.
 
 ### Changed
 
+- Add the public `tinyhat:tinyhat-skill-authoring` playbook and require Hat
+  authoring to load it before writing a `SKILL.md`. Customer skills now follow
+  portable name and folder rules, explicit trigger and non-trigger boundaries,
+  progressive disclosure, and bounded context guidance.
 - Collect every credential defined by a Hat on one browser-encrypted Mini App
   page. The Hat reuses one Computer-local key pair for the bundle, saves all
   values atomically in its local store, supports reopening the form from the

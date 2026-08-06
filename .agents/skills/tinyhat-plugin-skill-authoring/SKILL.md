@@ -15,7 +15,11 @@ schema, or any Hermes adapter registration.
 - Make one skill do one clear user-visible job.
 - Put the exact trigger in frontmatter `description`; keep the body for
   operational instructions.
-- Keep `SKILL.md` short. Move long references into `docs/` and link them.
+- Include concrete should-trigger wording and nearby non-trigger boundaries in
+  the description when another skill could plausibly match.
+- Keep a typical `SKILL.md` under about 200 lines and 2,000 tokens. Treat 500
+  lines or about 5,000 tokens as the maximum recommended size; move long
+  references into `references/` or public `docs/` and link them conditionally.
 - Register framework-specific details in `plugin.yaml`, `hermes.plugin.json`,
   and `__init__.py`; do not make skill text depend on Hermes-only internals.
 - Keep examples concrete and safe to copy.
@@ -23,6 +27,9 @@ schema, or any Hermes adapter registration.
 ## Skill Change Checklist
 
 1. Add or update `skills/<skill-name>/SKILL.md`.
+   For general user-authored skills, keep
+   `skills/tinyhat-skill-authoring/SKILL.md` aligned with the open Agent Skills
+   naming, description, and progressive-disclosure rules.
 2. Update tool schemas in `schemas.py` when the skill calls a tool.
 3. Update tool implementation in `tools.py` or a small focused module.
 4. Update `hermes.plugin.json`, `plugin.yaml`, and `__init__.py` when a

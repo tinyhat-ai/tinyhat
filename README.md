@@ -54,6 +54,7 @@ wearing that hat are deliberately reserved for later milestones.
 | `skills/tinyhat-tell-joke/SKILL.md` | Deterministic joke proof. |
 | `skills/tinyhat-plugin-version/SKILL.md` | Live plugin version proof. |
 | `skills/tinyhat-skill-catalog/SKILL.md` | Skill discovery guidance for plugin-qualified Tinyhat skill names. |
+| `skills/tinyhat-skill-authoring/SKILL.md` | Portable skill-writing guidance for names, trigger boundaries, progressive disclosure, and context limits. |
 | `skills/tinyhat-private-secret/SKILL.md` | Browser-encrypted secret handoff guidance. |
 | `skills/tinyhat-slack/SKILL.md` | Hermes-native Slack Agent-view and Socket Mode onboarding. |
 | `skills/tinyhat-credentials/SKILL.md` | Value-blind credential discovery and confirmed Computer-side removal guidance. |
@@ -142,6 +143,12 @@ the creator Computer for the intended customer. It is not loaded into the
 authoring agent's Hermes environment, so Hermes is not restarted. The private
 repo records only credential names, purposes, and saved times. The intended customer can verify
 their email on the public page and create a Telegram agent that wears the Hat.
+
+Before writing or revising a Hat `SKILL.md`, the agent loads
+`tinyhat:tinyhat-skill-authoring`. This public playbook teaches the agent to
+choose a valid folder-matched name, describe both intended triggers and nearby
+non-triggers, keep routine skills well below the 500-line / roughly 5,000-token
+recommendation, and move optional detail into progressive-disclosure resources.
 
 `tinyhat-skill-catalog` is the discovery repair path. When `skills_list`,
 `available_skills`, or an unqualified `skill_view(name="tinyhat-codex-auth")`

@@ -23,11 +23,17 @@ description: Tell a short Tinyhat wiring-test joke when the user asks for proof 
 ## Rules
 
 - One skill should do one clear job.
-- Use names that describe the user intent and the capability outcome.
-- Keep the body short and operational. Put long examples or references in
-  linked docs instead of loading them into every agent run.
+- Use names that describe the user intent and the capability outcome. A name
+  must match its folder, use only lowercase letters, digits, and single
+  hyphens, and contain no more than 64 characters.
+- Keep a normal body under about 200 lines and 2,000 tokens. Do not exceed the
+  Agent Skills recommendation of 500 lines or about 5,000 tokens unless the
+  core workflow requires it. Put long examples or references in directly
+  linked resources instead of loading them into every agent run.
 - Make the frontmatter `description` specific enough to trigger only for
-  the intended user request.
+  the intended user request. Keep it under 1,024 characters, state what the
+  skill does and when to use it, and name nearby non-trigger cases when the
+  boundary could be confused with another skill.
 - Define any tool inputs with strict schemas and examples that match real
   user wording.
 - Put framework-specific loading in adapter files, not in skill text.
@@ -92,6 +98,13 @@ before a specific Tinyhat skill is loaded. Keep the detailed instructions
 inside skills so the plugin stays readable and token efficient.
 
 ## Current Skills
+
+`tinyhat-skill-authoring` is the general playbook an agent loads before it
+creates, reviews, or revises a user skill. It gives customer-authored Hat skills
+the same portable name and folder rules, explicit trigger and non-trigger
+boundaries, progressive-disclosure structure, length discipline, safety checks,
+and validation checklist used for the plugin itself. `hat-authoring` requires
+this skill before it writes any `SKILL.md` into a Hat repository.
 
 `hat-authoring` is the M1 create/list/inspect path for shareable hats. It gets
 the human name and one customer's work email before create, accepts optional
