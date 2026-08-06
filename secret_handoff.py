@@ -22,6 +22,7 @@ from urllib.parse import urlencode
 from .hat_secrets import (
     HatSecretStoreError,
     ensure_hat_key_pair,
+    list_hat_secret_names,
     normalize_hat_handle,
     normalize_secret_name,
     set_hat_secret,
@@ -187,6 +188,12 @@ def start_hat_credentials_handoff(hat_identifier: str) -> str:
                 ),
             )
         private_key_path, public_key_pem = _hat_credentials_key_pair(hat_handle)
+        defined_names = {
+            normalize_secret_name(str(item.get("name") or ""))
+            for item in credentials
+            if isinstance(item, dict) and str(item.get("name") or "").strip()
+        }
+        local_names = set(list_hat_secret_names(hat_handle)["names"])
         bundle_name = (
             "HAT_CREDENTIALS_" + hashlib.sha256(hat_handle.encode("utf-8")).hexdigest()[:12].upper()
         )
@@ -200,6 +207,7 @@ def start_hat_credentials_handoff(hat_identifier: str) -> str:
                 "expires_in_seconds": DEFAULT_EXPIRES_IN_SECONDS,
                 "handoff_kind": "hat_credentials",
                 "hat_identifier": hat_handle,
+                "existing_credential_names": sorted(defined_names & local_names),
             },
         )
     except (PlatformError, HatSecretStoreError, OSError) as exc:
@@ -219,7 +227,8 @@ def start_hat_credentials_handoff(hat_identifier: str) -> str:
     count = len(handoff.get("credentials") or credentials)
     return (
         f"I sent one secure Enter credentials button for {count} Hat "
-        f"credential{'s' if count != 1 else ''}. Fill every value on that page. "
+        f"credential{'s' if count != 1 else ''}. Edit the values together on that page; "
+        "saved values can stay blank when they should be kept. "
         "They are encrypted together and staged only in the Hat's local package "
         "store for its intended customer. They are not loaded into this agent's "
         "Hermes environment, so Hermes is not restarted."
@@ -679,8 +688,19 @@ def _install_hat_credentials_bundle(  # noqa: PLR0913 - explicit trust boundary
             normalize_secret_name(str(name)): str(value)
             for name, value in bundle["credentials"].items()
         }
-        if set(values) != expected_names:
+        submitted_names = set(values)
+        if not submitted_names or not submitted_names.issubset(expected_names):
             raise SecretHandoffError("The Hat credential bundle does not match the expected names.")
+        saved_names = set(list_hat_secret_names(requested_handle)["names"])
+        missing_names = expected_names - submitted_names
+        if not missing_names.issubset(saved_names):
+            raise SecretHandoffError(
+                "The Hat credential bundle omitted a credential without a saved value.",
+                public_message=(
+                    "One or more blank credentials do not have a saved value. "
+                    "Open the form again and enter them."
+                ),
+            )
         set_hat_secrets(requested_handle, values)
     finally:
         plaintext = ""

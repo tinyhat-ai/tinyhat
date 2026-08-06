@@ -126,6 +126,11 @@ class HatSecretStoreTests(unittest.TestCase):
                     secret_handoff,
                     "_start_worker_process",
                 ) as start_worker,
+                mock.patch.object(
+                    secret_handoff,
+                    "list_hat_secret_names",
+                    return_value={"names": ["EXA_API_KEY"]},
+                ),
             ):
                 message = secret_handoff.start_hat_credentials_handoff("forecasting")
 
@@ -133,6 +138,7 @@ class HatSecretStoreTests(unittest.TestCase):
         request = fake_client.posts[0][1]
         self.assertEqual(request["handoff_kind"], "hat_credentials")
         self.assertEqual(request["hat_identifier"], "acme/hats/forecasting")
+        self.assertEqual(request["existing_credential_names"], ["EXA_API_KEY"])
         self.assertNotIn("credentials", request)
         start_worker.assert_called_once_with(
             {
@@ -482,6 +488,107 @@ class HatSecretStoreTests(unittest.TestCase):
             ],
         )
         self.assertNotIn("test-value", json.dumps(fake_client.posts))
+
+    def test_hat_credentials_partial_update_preserves_saved_values(self) -> None:
+        class FakeClient:
+            def __init__(self) -> None:
+                self.posts: list[tuple[str, dict]] = []
+
+            def post_json(self, path: str, payload: dict) -> dict:
+                self.posts.append((path, payload))
+                return {"status": "ok"}
+
+        fake_client = FakeClient()
+        encrypted_bundle = json.dumps(
+            {
+                "schema": "tinyhat_hat_credentials_bundle_v1",
+                "credentials": {"EXA_API_KEY": "replacement-value"},
+            }
+        )
+        with (
+            tempfile.TemporaryDirectory(prefix="tinyhat-hat-store-") as temp_dir,
+            mock.patch.dict(os.environ, {"TINYHAT_HAT_STORE_DIR": temp_dir}),
+            mock.patch.object(
+                secret_handoff,
+                "_decrypt_ciphertext",
+                return_value=encrypted_bundle,
+            ),
+        ):
+            hat_secrets.set_hat_secrets(
+                "acme/hats/forecasting",
+                {
+                    "EXA_API_KEY": "old-value",
+                    "GITHUB_TOKEN": "keep-value",
+                },
+            )
+            installed = secret_handoff._install_submitted_secret(
+                client=fake_client,
+                platform_auth="local_dev",
+                handoff_id="sh_hat_bundle",
+                private_key_pem="PRIVATE",
+                state={
+                    "handoff_kind": "hat_credentials",
+                    "hat_handle": "acme/hats/forecasting",
+                    "credentials": [
+                        {"name": "EXA_API_KEY", "has_existing_value": True},
+                        {"name": "GITHUB_TOKEN", "has_existing_value": True},
+                    ],
+                    "ciphertext_payload": {"algorithm": "RSA-OAEP-256"},
+                },
+                hat_handle="acme/hats/forecasting",
+            )
+            names = hat_secrets.list_hat_secret_names("acme/hats/forecasting")
+            payload = hat_secrets._read_store(  # type: ignore[attr-defined]
+                hat_secrets.hat_secret_store_path("acme/hats/forecasting"),
+                handle="acme/hats/forecasting",
+            )
+            values = hat_secrets._store_values(  # type: ignore[attr-defined]
+                hat_secrets.hat_secret_store_path("acme/hats/forecasting"),
+                payload,
+                handle="acme/hats/forecasting",
+            )
+
+        self.assertTrue(installed)
+        self.assertEqual(names["names"], ["EXA_API_KEY", "GITHUB_TOKEN"])
+        self.assertEqual(values["EXA_API_KEY"], "replacement-value")
+        self.assertEqual(values["GITHUB_TOKEN"], "keep-value")
+
+    def test_hat_credentials_partial_update_rejects_unsaved_blank(self) -> None:
+        encrypted_bundle = json.dumps(
+            {
+                "schema": "tinyhat_hat_credentials_bundle_v1",
+                "credentials": {"EXA_API_KEY": "replacement-value"},
+            }
+        )
+        with (
+            tempfile.TemporaryDirectory(prefix="tinyhat-hat-store-") as temp_dir,
+            mock.patch.dict(os.environ, {"TINYHAT_HAT_STORE_DIR": temp_dir}),
+            mock.patch.object(
+                secret_handoff,
+                "_decrypt_ciphertext",
+                return_value=encrypted_bundle,
+            ),
+            self.assertRaisesRegex(
+                secret_handoff.SecretHandoffError,
+                "omitted a credential without a saved value",
+            ),
+        ):
+            secret_handoff._install_submitted_secret(
+                client=mock.Mock(),
+                platform_auth="local_dev",
+                handoff_id="sh_hat_bundle",
+                private_key_pem="PRIVATE",
+                state={
+                    "handoff_kind": "hat_credentials",
+                    "hat_handle": "acme/hats/forecasting",
+                    "credentials": [
+                        {"name": "EXA_API_KEY"},
+                        {"name": "GITHUB_TOKEN"},
+                    ],
+                    "ciphertext_payload": {"algorithm": "RSA-OAEP-256"},
+                },
+                hat_handle="acme/hats/forecasting",
+            )
 
 
 if __name__ == "__main__":

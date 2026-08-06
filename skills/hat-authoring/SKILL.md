@@ -67,17 +67,21 @@ private-key material, but the skill must avoid sending secret values at all.
    `description`. This writes value-blind metadata only.
 3. After every field is defined, call `tinyhat_hats` once with
    `action="configure_credentials"` and the Hat `identifier`.
-4. Tinyhat sends one expiring **Enter credentials** button. The user fills all
-   fields on one page; the browser encrypts the complete bundle with the Hat's
-   Computer-local key. The Computer writes the encrypted bundle to the Hat's
+4. Tinyhat sends one expiring **Enter credentials** button. The user sees every
+   field on one page. Fields with a Computer-local value are marked as saved
+   without revealing that value; leaving one blank preserves it, while an
+   entered value replaces only that field. New fields are required. The browser
+   encrypts the submitted values with the Hat's Computer-local key. The Computer
+   merges them into the Hat's
    local package store under `~/.tinyhat/hats/<owner>/<hat>/secrets.json` for
    its intended customer; plaintext is not stored there. It does not load the
    values into this agent's Hermes environment and does not restart Hermes.
 
-Calling `configure_credentials` again replaces values entered for the same
-names. The Hat preview can reopen the same encrypted form after the first
-Computer-keyed flow. Do not claim the save succeeded until Telegram confirms
-**Hat credentials saved**.
+Calling `configure_credentials` again replaces only the values entered in that
+submission and preserves saved blank fields. The Hat preview always asks the
+assigned Computer to open a fresh encrypted form so its saved-value indicators
+are current. Do not claim the save succeeded until Telegram confirms **Hat
+credentials saved**.
 
 ## List or remove Hat credentials
 

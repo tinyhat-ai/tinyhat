@@ -134,8 +134,9 @@ repo files. It also permanently deletes one exact Hat, its private repository,
 and its Computer-local package state only after the user explicitly confirms
 the canonical handle. For Hat credentials, the agent first defines every
 value-blind name and purpose, then sends one encrypted Mini App form for all
-values. One
-Hat key pair encrypts the bundle, which is staged in a per-Hat package store on
+fields. Existing values are marked without being disclosed; blank saved fields
+are preserved, and only entered replacements change. One Hat key pair encrypts
+the submitted bundle, which is staged in a per-Hat package store on
 the creator Computer for the intended customer. It is not loaded into the
 authoring agent's Hermes environment, so Hermes is not restarted. The private
 repo records only credential names, purposes, and saved times. The intended customer can verify
