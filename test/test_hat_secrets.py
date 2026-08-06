@@ -14,10 +14,45 @@ from unittest import mock
 REPO_ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(REPO_ROOT.parent))
 
-from tinyhat import hat_secrets, secret_handoff  # noqa: E402
+from tinyhat import hat_secrets, secret_handoff, secret_handoff_worker  # noqa: E402
 
 
 class HatSecretStoreTests(unittest.TestCase):
+    def test_hat_worker_exits_after_one_bundle_and_keeps_stable_key(self) -> None:
+        class FakeClient:
+            def get_json(self, _path: str) -> dict:
+                return {
+                    "status": "submitted",
+                    "handoff_kind": "hat_credentials",
+                }
+
+        with (
+            tempfile.TemporaryDirectory(prefix="tinyhat-hat-worker-") as temp_dir,
+            mock.patch.object(
+                secret_handoff_worker,
+                "build_platform_client",
+                return_value=(FakeClient(), "local_dev"),
+            ),
+            mock.patch.object(
+                secret_handoff_worker,
+                "_install_submitted_secret",
+                return_value=True,
+            ) as install,
+        ):
+            key_path = Path(temp_dir) / "credentials-private.pem"
+            key_path.write_text("PRIVATE", encoding="utf-8")
+
+            secret_handoff_worker.run_worker(
+                handoff_id="sh_hat_bundle",
+                key_path=key_path,
+                hat_handle="acme/hats/forecasting",
+                persistent=True,
+            )
+
+            self.assertTrue(key_path.exists())
+
+        install.assert_called_once()
+
     def test_delete_hat_store_removes_values_and_key_pair_only_for_that_hat(
         self,
     ) -> None:

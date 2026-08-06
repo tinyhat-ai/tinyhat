@@ -129,7 +129,12 @@ def _run_persistent_hat_worker(
     key_path: Path,
     hat_handle: str | None,
 ) -> None:
-    """Keep the Hat key local so its preview can reopen the same bundle form."""
+    """Keep the Hat key local while one fresh bundle handoff is active.
+
+    The key pair is persistent, not the worker process. Ending the worker after
+    one claimed, failed, or expired handoff ensures a later plugin update does
+    not leave an old in-memory installer handling future credential edits.
+    """
     lock_path = key_path.with_suffix(".worker.lock")
     descriptor = os.open(lock_path, os.O_CREAT | os.O_RDWR, 0o600)
     with os.fdopen(descriptor, "r+", encoding="utf-8") as lock_file:
@@ -146,8 +151,9 @@ def _run_persistent_hat_worker(
                         f"private-secret-handoffs/v1/{handoff_id}",
                     )
                 )
-                if str(state.get("status") or "").strip() == "submitted":
-                    _install_submitted_secret(
+                status = str(state.get("status") or "").strip()
+                if status == "submitted":
+                    installed = _install_submitted_secret(
                         client=client,
                         platform_auth=platform_auth,
                         handoff_id=handoff_id,
@@ -155,6 +161,10 @@ def _run_persistent_hat_worker(
                         state=state,
                         hat_handle=hat_handle,
                     )
+                    if installed:
+                        return
+                if status in {"claimed", "failed", "expired"}:
+                    return
                 poll_after = max(
                     1.0,
                     float(state.get("poll_after_ms") or 2000) / 1000,
@@ -168,7 +178,7 @@ def _run_persistent_hat_worker(
                         installed=False,
                         message=_public_failure_message(exc),
                     )
-                poll_after = 3.0
+                return
             time.sleep(poll_after)
 
 
