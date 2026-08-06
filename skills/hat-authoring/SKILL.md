@@ -78,7 +78,9 @@ and tools. Keep that overview accurate whenever the repo changes:
 
 1. Write a root `HAT.md` with frontmatter `name` equal to the Hat key and a
    short `description` that completes the sentence "An agent with this Hat can
-   ...". Describe the work itself; do not explain what a Hat is.
+   ...". Write only the grammatical completion after `can`; do not repeat the
+   `An agent with this Hat can` prefix. Describe the work itself; do not explain
+   what a Hat is.
 2. Keep each skill in `skills/<name>/SKILL.md` with a clear frontmatter `name`
    and `description`. The public page lists these descriptions without exposing
    the private file body.

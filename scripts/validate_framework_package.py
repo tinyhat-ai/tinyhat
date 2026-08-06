@@ -972,6 +972,7 @@ def validate_docs(root: Path) -> None:
             "tinyhat:tinyhat-skill-authoring",
             "Keep the public capability overview current",
             "An agent with this Hat can",
+            "do not repeat the",
             "value-blind credential metadata into the Tools list",
         ),
         "skills/tinyhat-skill-authoring/SKILL.md": (
