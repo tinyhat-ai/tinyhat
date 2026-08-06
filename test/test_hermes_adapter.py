@@ -160,12 +160,22 @@ class HermesAdapterTests(unittest.TestCase):
                 "list",
                 "get",
                 "update",
+                "delete",
                 "put_file",
                 "define_credential",
                 "configure_credentials",
                 "list_credentials",
                 "remove_credential",
             ],
+        )
+        self.assertIn("permanently deletes", hats_schema["description"])
+        self.assertIn(
+            "delete",
+            hats_schema["properties"]["identifier"]["description"],
+        )
+        self.assertIn(
+            "permanently delete this exact Hat",
+            hats_schema["properties"]["confirmed"]["description"],
         )
         self.assertFalse(hats_schema["additionalProperties"])
         self.assertEqual(schemas.TINYHAT_TELL_JOKE_SCHEMA["properties"], {})

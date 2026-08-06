@@ -22,9 +22,10 @@ TINYHAT_GET_PLATFORM_STATUS_SCHEMA = {
 TINYHAT_HATS_SCHEMA = {
     "type": "object",
     "description": (
-        "Creates, lists, inspects, and updates owner-scoped Tinyhat Hats; commits "
-        "guarded non-secret files to their private repos; and defines, configures, "
-        "lists, or removes Computer-local Hat credentials without returning values."
+        "Creates, lists, inspects, updates, and permanently deletes owner-scoped "
+        "Tinyhat Hats; commits guarded non-secret files to their private repos; "
+        "and defines, configures, lists, or removes Computer-local Hat credentials "
+        "without returning values."
     ),
     "properties": {
         "action": {
@@ -34,6 +35,7 @@ TINYHAT_HATS_SCHEMA = {
                 "list",
                 "get",
                 "update",
+                "delete",
                 "put_file",
                 "define_credential",
                 "configure_credentials",
@@ -85,9 +87,9 @@ TINYHAT_HATS_SCHEMA = {
             "minLength": 1,
             "maxLength": 255,
             "description": (
-                "Required key or canonical handle for get, update, put_file, "
-                "define_credential, configure_credentials, list_credentials, and "
-                "remove_credential."
+                "Required key or canonical handle for get, update, delete, "
+                "put_file, define_credential, configure_credentials, "
+                "list_credentials, and remove_credential."
             ),
         },
         "public_title": {
@@ -131,7 +133,8 @@ TINYHAT_HATS_SCHEMA = {
             "type": "boolean",
             "description": (
                 "True only after the user explicitly asks to remove this exact "
-                "credential from this exact Hat."
+                "credential from this exact Hat, or to permanently delete this "
+                "exact Hat and its private repository."
             ),
         },
     },
