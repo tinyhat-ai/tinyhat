@@ -18,6 +18,7 @@ class FakePlatformClient:
     def __init__(self) -> None:
         self.get_paths: list[str] = []
         self.post_calls: list[tuple[str, dict[str, str]]] = []
+        self.delete_paths: list[str] = []
 
     def get_json(self, path: str) -> dict[str, object]:
         self.get_paths.append(path)
@@ -33,6 +34,14 @@ class FakePlatformClient:
             "customer_email": "buyer@example.com",
             "share_url": "https://tinyhat.ai/hats/opaque",
             "repository_created": True,
+        }
+
+    def delete_json(self, path: str) -> dict[str, object]:
+        self.delete_paths.append(path)
+        return {
+            "handle": "acme/hats/trade-show-sales",
+            "deleted": True,
+            "repository_deleted": True,
         }
 
 
@@ -195,6 +204,65 @@ class HatToolTests(unittest.TestCase):
             ),
         )
         self.assertTrue(result["local_value_removed"])
+
+    def test_delete_requires_confirmation_then_removes_platform_and_local_store(
+        self,
+    ) -> None:
+        client = FakePlatformClient()
+
+        def fake_get(path: str) -> dict[str, object]:
+            client.get_paths.append(path)
+            return {"handle": "acme/hats/forecasting"}
+
+        client.get_json = fake_get  # type: ignore[method-assign]
+        with (
+            mock.patch.object(
+                hats_module,
+                "build_platform_client",
+                return_value=(client, "local_dev"),
+            ),
+            mock.patch.object(
+                hats_module,
+                "delete_hat_secret_store",
+                return_value={"removed": True},
+            ) as delete_local,
+        ):
+            refused = json.loads(
+                hats_module.hats(
+                    {
+                        "action": "delete",
+                        "identifier": "acme/hats/forecasting",
+                    }
+                )
+            )
+            deleted = json.loads(
+                hats_module.hats(
+                    {
+                        "action": "delete",
+                        "identifier": "acme/hats/forecasting",
+                        "confirmed": True,
+                    }
+                )
+            )
+
+        self.assertEqual(refused["error"], "confirmation_required")
+        self.assertEqual(
+            client.get_paths,
+            [
+                "/hapi/v1/computers/local-dev/hats/v1/detail?"
+                "identifier=acme%2Fhats%2Fforecasting"
+            ],
+        )
+        self.assertEqual(
+            client.delete_paths,
+            [
+                "/hapi/v1/computers/local-dev/hats/v1?"
+                "identifier=acme%2Fhats%2Fforecasting"
+            ],
+        )
+        delete_local.assert_called_once_with("acme/hats/forecasting")
+        self.assertTrue(deleted["deleted"])
+        self.assertTrue(deleted["local_store_removed"])
 
     def test_define_then_configure_uses_one_hat_bundle_flow(self) -> None:
         client = FakePlatformClient()

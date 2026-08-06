@@ -18,6 +18,41 @@ from tinyhat import hat_secrets, secret_handoff  # noqa: E402
 
 
 class HatSecretStoreTests(unittest.TestCase):
+    def test_delete_hat_store_removes_values_and_key_pair_only_for_that_hat(
+        self,
+    ) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir, mock.patch.dict(
+            os.environ,
+            {"TINYHAT_HAT_STORE_DIR": temp_dir},
+        ):
+            hat_secrets.set_hat_secret(
+                "acme/hats/forecasting",
+                "EXA_API_KEY",
+                "dummy-value",
+            )
+            hat_directory = hat_secrets.hat_secret_store_path(
+                "acme/hats/forecasting"
+            ).parent
+            (hat_directory / "credentials-private.pem").write_text(
+                "dummy-private-key",
+                encoding="utf-8",
+            )
+            hat_secrets.set_hat_secret(
+                "acme/hats/neighbor",
+                "EXA_API_KEY",
+                "neighbor-value",
+            )
+
+            result = hat_secrets.delete_hat_secret_store(
+                "acme/hats/forecasting"
+            )
+
+            self.assertTrue(result["removed"])
+            self.assertFalse(hat_directory.exists())
+            self.assertTrue(
+                hat_secrets.hat_secret_store_path("acme/hats/neighbor").exists()
+            )
+
     def test_hat_bundle_reuses_one_locked_local_key_pair(self) -> None:
         with (
             tempfile.TemporaryDirectory(prefix="tinyhat-hat-key-store-") as temp_dir,

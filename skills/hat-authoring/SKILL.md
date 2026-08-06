@@ -35,6 +35,15 @@ metadata they supplied.
 Call `tinyhat_hats` with `action="update"`, the Hat `identifier`, and the new
 `public_title`. Report the new title and the unchanged canonical handle.
 
+## Delete a Hat
+
+Delete only after the user explicitly asks to permanently remove an exact Hat.
+Call `tinyhat_hats` with `action="delete"`, its canonical `identifier`, and
+`confirmed=true`. This permanently deletes the private repository and removes
+that Hat's Computer-local secret bundle and encryption key without returning a
+secret value. Existing agents are not deleted; they simply stop referencing the
+removed Hat. Report the returned repository and local-store outcomes honestly.
+
 ## Add or update repo content
 
 1. Get the Hat identifier, relative path, and desired non-secret text.

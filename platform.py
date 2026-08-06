@@ -92,6 +92,9 @@ class PlatformClient:
     def post_json(self, path: str, payload: dict[str, Any]) -> dict[str, Any]:
         return self._request_json("POST", path, payload)
 
+    def delete_json(self, path: str) -> dict[str, Any]:
+        return self._request_json("DELETE", path, None)
+
     def _request_json(
         self,
         method: str,

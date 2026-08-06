@@ -6,7 +6,11 @@ import json
 from typing import Any
 from urllib.parse import urlencode
 
-from .hat_secrets import HatSecretStoreError, remove_hat_secret
+from .hat_secrets import (
+    HatSecretStoreError,
+    delete_hat_secret_store,
+    remove_hat_secret,
+)
 from .platform import PlatformError, build_platform_client, computer_api_path
 from .secret_handoff import start_hat_credentials_handoff
 from .tool_errors import tool_error_json
@@ -16,6 +20,7 @@ ACTIONS = (
     "list",
     "get",
     "update",
+    "delete",
     "put_file",
     "define_credential",
     "configure_credentials",
@@ -50,7 +55,7 @@ def hats(  # noqa: PLR0912, PLR0915 - one public tool dispatches bounded actions
             error_name="invalid_parameter",
             message=(
                 "Call tinyhat_hats with a supported create, list, get, update, "
-                "put_file, define_credential, configure_credentials, "
+                "delete, put_file, define_credential, configure_credentials, "
                 "list_credentials, or remove_credential action."
             ),
             expected={"action": list(ACTIONS)},
@@ -64,6 +69,7 @@ def hats(  # noqa: PLR0912, PLR0915 - one public tool dispatches bounded actions
             in {
                 "get",
                 "update",
+                "delete",
                 "put_file",
                 "define_credential",
                 "configure_credentials",
@@ -90,6 +96,34 @@ def hats(  # noqa: PLR0912, PLR0915 - one public tool dispatches bounded actions
                     "public_title": _required_text(payload, "public_title"),
                 },
             )
+        elif action == "delete":
+            if payload.get("confirmed") is not True:
+                return tool_error_json(
+                    tool="tinyhat_hats",
+                    error_name="confirmation_required",
+                    message=(
+                        "Only call delete after the user explicitly asks to permanently "
+                        "remove this exact Hat and its private repository."
+                    ),
+                    example_call={
+                        "action": "delete",
+                        "identifier": identifier,
+                        "confirmed": True,
+                    },
+                )
+            query = urlencode({"identifier": identifier})
+            hat = client.get_json(f"{path}/detail?{query}")
+            handle = str(hat.get("handle") or identifier)
+            result = client.delete_json(
+                f"{path}?{urlencode({'identifier': handle})}"
+            )
+            try:
+                local_result = delete_hat_secret_store(handle)
+            except HatSecretStoreError as exc:
+                result["local_store_removed"] = False
+                result["local_cleanup_error"] = str(exc)
+            else:
+                result["local_store_removed"] = bool(local_result["removed"])
         elif action == "put_file":
             result = client.post_json(
                 f"{path}/files",
@@ -205,6 +239,12 @@ def hats(  # noqa: PLR0912, PLR0915 - one public tool dispatches bounded actions
     elif action == "update":
         result["agent_instruction"] = (
             "Report the updated public title and unchanged canonical handle."
+        )
+    elif action == "delete":
+        result["agent_instruction"] = (
+            "Report that the Hat and private repository were permanently deleted. "
+            "Report local_store_removed honestly; if it is false because no local "
+            "store existed, no plaintext value was returned or exposed."
         )
     else:
         result["agent_instruction"] = (

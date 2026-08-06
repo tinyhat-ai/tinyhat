@@ -10,6 +10,7 @@ import fcntl
 import json
 import os
 import re
+import shutil
 import tempfile
 from collections.abc import Iterator
 from contextlib import contextmanager, suppress
@@ -197,8 +198,40 @@ def list_hat_secret_names(handle: str) -> dict[str, Any]:
     }
 
 
+def delete_hat_secret_store(handle: str) -> dict[str, Any]:
+    """Remove every local value and key belonging to one deleted Hat."""
+    clean_handle = normalize_hat_handle(handle)
+    root = _store_root().resolve()
+    directory = hat_secret_store_path(clean_handle).parent
+    if not directory.exists():
+        return {
+            "handle": clean_handle,
+            "removed": False,
+            "value_available": False,
+        }
+    try:
+        directory.resolve().relative_to(root)
+    except ValueError as exc:
+        raise HatSecretStoreError("The local Hat store path is unsafe.") from exc
+    if directory.is_symlink():
+        raise HatSecretStoreError("The local Hat store path is unsafe.")
+    try:
+        shutil.rmtree(directory)
+        account_directory = directory.parent
+        if account_directory != root and not any(account_directory.iterdir()):
+            account_directory.rmdir()
+    except OSError as exc:
+        raise HatSecretStoreError("The local Hat secret store could not be removed.") from exc
+    return {
+        "handle": clean_handle,
+        "removed": True,
+        "value_available": False,
+    }
+
+
 __all__ = [
     "HatSecretStoreError",
+    "delete_hat_secret_store",
     "hat_secret_store_path",
     "list_hat_secret_names",
     "normalize_hat_handle",
