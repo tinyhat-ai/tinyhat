@@ -149,6 +149,10 @@ Before writing or revising a Hat `SKILL.md`, the agent loads
 choose a valid folder-matched name, describe both intended triggers and nearby
 non-triggers, keep routine skills well below the 500-line / roughly 5,000-token
 recommendation, and move optional detail into progressive-disclosure resources.
+The authoring workflow also keeps a root `HAT.md` capability description
+current. The marketplace page combines that description with public skill
+frontmatter and value-blind credential metadata to explain what the Hat enables
+without exposing private file bodies or credential names and values.
 
 `tinyhat-skill-catalog` is the discovery repair path. When `skills_list`,
 `available_skills`, or an unqualified `skill_view(name="tinyhat-codex-auth")`

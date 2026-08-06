@@ -970,6 +970,9 @@ def validate_docs(root: Path) -> None:
             "customer's work email",
             "create a Telegram agent that wears the hat",
             "tinyhat:tinyhat-skill-authoring",
+            "Keep the public capability overview current",
+            "An agent with this Hat can",
+            "value-blind credential metadata into the Tools list",
         ),
         "skills/tinyhat-skill-authoring/SKILL.md": (
             "1-64 lowercase letters",

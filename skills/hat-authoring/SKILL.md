@@ -71,6 +71,26 @@ Never put an API key, token, password, private key, `.env` file, secret file,
 or credential file in the repo. The platform rejects secret-shaped paths and
 private-key material, but the skill must avoid sending secret values at all.
 
+## Keep the public capability overview current
+
+The Hat's public page leads with what an agent can do, then lists its skills
+and tools. Keep that overview accurate whenever the repo changes:
+
+1. Write a root `HAT.md` with frontmatter `name` equal to the Hat key and a
+   short `description` that completes the sentence "An agent with this Hat can
+   ...". Describe the work itself; do not explain what a Hat is.
+2. Keep each skill in `skills/<name>/SKILL.md` with a clear frontmatter `name`
+   and `description`. The public page lists these descriptions without exposing
+   the private file body.
+3. Define required credentials with precise purposes. The public page converts
+   value-blind credential metadata into the Tools list; it never shows the env
+   name or value.
+4. After adding, removing, or materially changing skills, update `HAT.md` so
+   its one-sentence description still summarizes the combined capability.
+
+Do not put customer identity, private data, repository URLs, credential names,
+or secret values in the public description.
+
 ## Define and configure Hat credentials
 
 1. Get the Hat identifier plus every meaningful env-style name and short

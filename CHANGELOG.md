@@ -6,6 +6,8 @@ All notable changes to the Tinyhat plugin are documented here.
 
 ### Changed
 
+- Keep each Hat's marketplace overview current through a root `HAT.md`
+  capability description, skill frontmatter, and value-blind tool metadata.
 - Add the public `tinyhat:tinyhat-skill-authoring` playbook and require Hat
   authoring to load it before writing a `SKILL.md`. Customer skills now follow
   portable name and folder rules, explicit trigger and non-trigger boundaries,
