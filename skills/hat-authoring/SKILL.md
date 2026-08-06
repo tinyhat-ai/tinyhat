@@ -30,10 +30,21 @@ Do not ask for account or owner ids; Tinyhat derives them from this Computer.
 Keep customer emails private unless the user explicitly asks to see the
 metadata they supplied.
 
-## Update the public title
+## Update Hat metadata
 
-Call `tinyhat_hats` with `action="update"`, the Hat `identifier`, and the new
-`public_title`. Report the new title and the unchanged canonical handle.
+Call `tinyhat_hats` with `action="update"`, the current Hat `identifier`, and
+one or more of:
+
+- `public_title` for the marketplace title;
+- `customer_email` for the intended customer's work email; or
+- `new_key` for the final segment of the namespaced canonical handle.
+
+The account namespace is derived from the Computer and cannot be changed by
+the model. A handle change renames the existing private repository, preserves
+the Hat and its files, keeps former public links resolving to the Hat, and
+moves the encrypted Computer-local credential store to the new handle. Report
+the new canonical handle and share URL when they change. Keep customer emails
+private unless the user explicitly asked to inspect or change that email.
 
 ## Delete a Hat
 

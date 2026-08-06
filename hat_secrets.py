@@ -82,9 +82,7 @@ def ensure_hat_key_pair(
     with os.fdopen(descriptor, "r+", encoding="utf-8") as lock_file:
         fcntl.flock(lock_file.fileno(), fcntl.LOCK_EX)
         if private_path.exists() != public_path.exists():
-            raise HatSecretStoreError(
-                "The local Hat credential key pair is incomplete."
-            )
+            raise HatSecretStoreError("The local Hat credential key pair is incomplete.")
         if private_path.exists():
             private_path.chmod(0o600)
             public_path.chmod(0o600)
@@ -127,9 +125,7 @@ def _read_store(path: Path, *, handle: str) -> dict[str, Any]:
         raise HatSecretStoreError("The local Hat secret store is unreadable.") from exc
     if not isinstance(payload, dict) or payload.get("handle") != handle:
         raise HatSecretStoreError("The local Hat secret store has an invalid format.")
-    if payload.get("schema") == LEGACY_STORE_SCHEMA and isinstance(
-        payload.get("secrets"), dict
-    ):
+    if payload.get("schema") == LEGACY_STORE_SCHEMA and isinstance(payload.get("secrets"), dict):
         return payload
     if (
         payload.get("schema") == STORE_SCHEMA
@@ -167,18 +163,14 @@ def _store_values(
         or bundle.get("schema") != BUNDLE_SCHEMA
         or not isinstance(bundle.get("credentials"), dict)
     ):
-        raise HatSecretStoreError(
-            "The encrypted Hat secret store has an invalid format."
-        )
+        raise HatSecretStoreError("The encrypted Hat secret store has an invalid format.")
     values = {
         normalize_secret_name(str(name)): str(value)
         for name, value in bundle["credentials"].items()
     }
     stored_names = sorted(str(name) for name in payload["names"])
     if sorted(values) != stored_names or payload.get("handle") != handle:
-        raise HatSecretStoreError(
-            "The encrypted Hat secret names do not match the store."
-        )
+        raise HatSecretStoreError("The encrypted Hat secret names do not match the store.")
     return values
 
 
@@ -429,19 +421,19 @@ def _decrypt_bytes(private_key_pem: str, payload: dict[str, Any]) -> bytes:
                 ) from exc
             plaintext_chunks.append(
                 _run_openssl_bytes(
-                [
-                    openssl,
-                    "pkeyutl",
-                    "-decrypt",
-                    "-inkey",
-                    str(private_key),
-                    "-pkeyopt",
-                    "rsa_padding_mode:oaep",
-                    "-pkeyopt",
-                    "rsa_oaep_md:sha256",
-                ],
-                ciphertext,
-            )
+                    [
+                        openssl,
+                        "pkeyutl",
+                        "-decrypt",
+                        "-inkey",
+                        str(private_key),
+                        "-pkeyopt",
+                        "rsa_padding_mode:oaep",
+                        "-pkeyopt",
+                        "rsa_oaep_md:sha256",
+                    ],
+                    ciphertext,
+                )
             )
     return b"".join(plaintext_chunks)
 
@@ -508,6 +500,90 @@ def delete_hat_secret_store(handle: str) -> dict[str, Any]:
     }
 
 
+def rename_hat_secret_store(old_handle: str, new_handle: str) -> dict[str, Any]:
+    """Move one encrypted Hat store without exposing or replacing its values."""
+    clean_old = normalize_hat_handle(old_handle)
+    clean_new = normalize_hat_handle(new_handle)
+    if clean_old == clean_new:
+        return {
+            "old_handle": clean_old,
+            "handle": clean_new,
+            "renamed": False,
+            "already_current": True,
+            "value_available": False,
+        }
+
+    root = _store_root()
+    root.mkdir(parents=True, exist_ok=True)
+    root.chmod(0o700)
+    resolved_root = root.resolve()
+    old_directory = hat_secret_store_path(clean_old).parent
+    new_directory = hat_secret_store_path(clean_new).parent
+    for directory in (old_directory, new_directory):
+        try:
+            directory.resolve(strict=False).relative_to(resolved_root)
+        except ValueError as exc:
+            raise HatSecretStoreError("The local Hat store path is unsafe.") from exc
+        if directory.is_symlink():
+            raise HatSecretStoreError("The local Hat store path is unsafe.")
+
+    rename_lock_path = root / ".handle-rename.lock"
+    descriptor = os.open(rename_lock_path, os.O_CREAT | os.O_RDWR, 0o600)
+    os.chmod(rename_lock_path, 0o600)
+    with os.fdopen(descriptor, "r+", encoding="utf-8") as rename_lock:
+        fcntl.flock(rename_lock.fileno(), fcntl.LOCK_EX)
+        if not old_directory.exists():
+            return {
+                "old_handle": clean_old,
+                "handle": clean_new,
+                "renamed": False,
+                "already_current": new_directory.exists(),
+                "value_available": False,
+            }
+        if new_directory.exists():
+            raise HatSecretStoreError("The new Hat handle already has a local credential store.")
+
+        old_path = old_directory / "secrets.json"
+        with _locked_store(old_path):
+            payload = _read_store(old_path, handle=clean_old)
+            values = _store_values(old_path, payload, handle=clean_old)
+            new_directory.parent.mkdir(parents=True, exist_ok=True)
+            moved = False
+            try:
+                os.replace(old_directory, new_directory)
+                moved = True
+                new_path = new_directory / "secrets.json"
+                _write_store(
+                    new_path,
+                    _encrypted_store_payload(clean_new, values),
+                )
+            except Exception as exc:
+                if moved and new_directory.exists() and not old_directory.exists():
+                    try:
+                        os.replace(new_directory, old_directory)
+                        _write_store(
+                            old_path,
+                            _encrypted_store_payload(clean_old, values),
+                        )
+                    except Exception as rollback_exc:
+                        raise HatSecretStoreError(
+                            "The local Hat credential store rename could not be rolled back safely."
+                        ) from rollback_exc
+                if isinstance(exc, HatSecretStoreError):
+                    raise
+                raise HatSecretStoreError(
+                    "The local Hat credential store could not be renamed."
+                ) from exc
+
+    return {
+        "old_handle": clean_old,
+        "handle": clean_new,
+        "renamed": True,
+        "already_current": False,
+        "value_available": False,
+    }
+
+
 __all__ = [
     "HatSecretStoreError",
     "delete_hat_secret_store",
@@ -517,6 +593,7 @@ __all__ = [
     "normalize_hat_handle",
     "normalize_secret_name",
     "remove_hat_secret",
+    "rename_hat_secret_store",
     "set_hat_secret",
     "set_hat_secrets",
 ]

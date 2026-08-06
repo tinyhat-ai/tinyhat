@@ -177,6 +177,14 @@ class HermesAdapterTests(unittest.TestCase):
             "permanently delete this exact Hat",
             hats_schema["properties"]["confirmed"]["description"],
         )
+        self.assertIn(
+            "optional replacement audience",
+            hats_schema["properties"]["customer_email"]["description"],
+        )
+        self.assertIn(
+            "owner namespace stays server-controlled",
+            hats_schema["properties"]["new_key"]["description"],
+        )
         self.assertFalse(hats_schema["additionalProperties"])
         self.assertEqual(schemas.TINYHAT_TELL_JOKE_SCHEMA["properties"], {})
         self.assertEqual(schemas.TINYHAT_TELL_JOKE_SCHEMA["required"], [])

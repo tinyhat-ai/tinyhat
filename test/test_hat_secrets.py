@@ -56,18 +56,19 @@ class HatSecretStoreTests(unittest.TestCase):
     def test_delete_hat_store_removes_values_and_key_pair_only_for_that_hat(
         self,
     ) -> None:
-        with tempfile.TemporaryDirectory() as temp_dir, mock.patch.dict(
-            os.environ,
-            {"TINYHAT_HAT_STORE_DIR": temp_dir},
+        with (
+            tempfile.TemporaryDirectory() as temp_dir,
+            mock.patch.dict(
+                os.environ,
+                {"TINYHAT_HAT_STORE_DIR": temp_dir},
+            ),
         ):
             hat_secrets.set_hat_secret(
                 "acme/hats/forecasting",
                 "EXA_API_KEY",
                 "dummy-value",
             )
-            hat_directory = hat_secrets.hat_secret_store_path(
-                "acme/hats/forecasting"
-            ).parent
+            hat_directory = hat_secrets.hat_secret_store_path("acme/hats/forecasting").parent
             (hat_directory / "credentials-private.pem").write_text(
                 "dummy-private-key",
                 encoding="utf-8",
@@ -78,15 +79,11 @@ class HatSecretStoreTests(unittest.TestCase):
                 "neighbor-value",
             )
 
-            result = hat_secrets.delete_hat_secret_store(
-                "acme/hats/forecasting"
-            )
+            result = hat_secrets.delete_hat_secret_store("acme/hats/forecasting")
 
             self.assertTrue(result["removed"])
             self.assertFalse(hat_directory.exists())
-            self.assertTrue(
-                hat_secrets.hat_secret_store_path("acme/hats/neighbor").exists()
-            )
+            self.assertTrue(hat_secrets.hat_secret_store_path("acme/hats/neighbor").exists())
 
     def test_hat_bundle_reuses_one_locked_local_key_pair(self) -> None:
         with (
@@ -233,7 +230,7 @@ class HatSecretStoreTests(unittest.TestCase):
 
         self.assertEqual(
             fake_client.get_paths,
-            ["/hapi/v1/computers/local-dev/hats/v1/detail?" "identifier=forecasting"],
+            ["/hapi/v1/computers/local-dev/hats/v1/detail?identifier=forecasting"],
         )
         self.assertEqual(
             fake_client.posts[0][0],
@@ -369,15 +366,56 @@ class HatSecretStoreTests(unittest.TestCase):
         self.assertNotIn(first_value, public_shapes)
         self.assertNotIn(second_value, public_shapes)
 
+    def test_handle_rename_preserves_encrypted_local_values_and_key(self) -> None:
+        secret_value = "value-that-must-stay-local"
+        with (
+            tempfile.TemporaryDirectory(prefix="tinyhat-hat-store-") as temp_dir,
+            mock.patch.dict(
+                os.environ,
+                {"TINYHAT_HAT_STORE_DIR": temp_dir},
+            ),
+        ):
+            hat_secrets.set_hat_secret(
+                "acme/hats/forecasting",
+                "EXA_API_KEY",
+                secret_value,
+            )
+            old_path = hat_secrets.hat_secret_store_path("acme/hats/forecasting")
+            old_private_key = old_path.with_name("credentials-private.pem").read_text(
+                encoding="utf-8"
+            )
+
+            result = hat_secrets.rename_hat_secret_store(
+                "acme/hats/forecasting",
+                "acme/hats/executive-forecasting",
+            )
+
+            new_path = hat_secrets.hat_secret_store_path("acme/hats/executive-forecasting")
+            listed = hat_secrets.list_hat_secret_names("acme/hats/executive-forecasting")
+            stored = json.loads(new_path.read_text(encoding="utf-8"))
+            new_private_key = new_path.with_name("credentials-private.pem").read_text(
+                encoding="utf-8"
+            )
+            old_exists_after = old_path.exists()
+
+        self.assertTrue(result["renamed"])
+        self.assertFalse(old_exists_after)
+        self.assertEqual(listed["names"], ["EXA_API_KEY"])
+        self.assertEqual(stored["handle"], "acme/hats/executive-forecasting")
+        self.assertEqual(old_private_key, new_private_key)
+        self.assertNotIn(secret_value, json.dumps(stored))
+        self.assertNotIn(secret_value, json.dumps(result))
+
     def test_legacy_plaintext_store_is_migrated_when_names_are_listed(
         self,
     ) -> None:
         legacy_value = "legacy-plaintext-must-disappear"
-        with tempfile.TemporaryDirectory(
-            prefix="tinyhat-hat-store-"
-        ) as temp_dir, mock.patch.dict(
-            os.environ,
-            {"TINYHAT_HAT_STORE_DIR": temp_dir},
+        with (
+            tempfile.TemporaryDirectory(prefix="tinyhat-hat-store-") as temp_dir,
+            mock.patch.dict(
+                os.environ,
+                {"TINYHAT_HAT_STORE_DIR": temp_dir},
+            ),
         ):
             store_path = hat_secrets.hat_secret_store_path("acme/hats/forecasting")
             store_path.parent.mkdir(parents=True, exist_ok=True)

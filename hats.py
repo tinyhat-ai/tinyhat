@@ -10,6 +10,7 @@ from .hat_secrets import (
     HatSecretStoreError,
     delete_hat_secret_store,
     remove_hat_secret,
+    rename_hat_secret_store,
 )
 from .platform import PlatformError, build_platform_client, computer_api_path
 from .secret_handoff import start_hat_credentials_handoff
@@ -43,7 +44,7 @@ def _required_content(payload: dict[str, Any], key: str) -> str:
     return value
 
 
-def hats(  # noqa: PLR0912, PLR0915 - one public tool dispatches bounded actions
+def hats(  # noqa: PLR0911, PLR0912, PLR0915 - one public tool dispatches bounded actions
     args: dict[str, Any] | None = None, **_: Any
 ) -> str:
     """Create, inspect, or modify one owner-scoped shareable Hat."""
@@ -80,6 +81,28 @@ def hats(  # noqa: PLR0912, PLR0915 - one public tool dispatches bounded actions
         )
         name = _required_text(payload, "name") if action == "create" else ""
         customer_email = _required_text(payload, "customer_email") if action == "create" else ""
+        update_payload: dict[str, str] | None = None
+        if action == "update":
+            update_payload = {"identifier": identifier}
+            for field in ("public_title", "customer_email", "new_key"):
+                value = str(payload.get(field) or "").strip()
+                if value:
+                    update_payload[field] = value
+            if len(update_payload) == 1:
+                return tool_error_json(
+                    tool="tinyhat_hats",
+                    error_name="missing_required_parameter",
+                    message=(
+                        "Ask the user which Hat metadata to change before calling "
+                        "tinyhat_hats update."
+                    ),
+                    missing=["public_title, customer_email, or new_key"],
+                    example_call={
+                        "action": "update",
+                        "identifier": "trade-show-sales",
+                        "customer_email": "new-buyer@example.com",
+                    },
+                )
         client, platform_auth = build_platform_client()
         path = computer_api_path(platform_auth, "hats/v1")
         if action == "list":
@@ -89,13 +112,32 @@ def hats(  # noqa: PLR0912, PLR0915 - one public tool dispatches bounded actions
             suffix = "credentials" if action == "list_credentials" else "detail"
             result = client.get_json(f"{path}/{suffix}?{query}")
         elif action == "update":
+            assert update_payload is not None
+            current_hat: dict[str, Any] | None = None
+            if "new_key" in update_payload:
+                query = urlencode({"identifier": identifier})
+                current_hat = client.get_json(f"{path}/detail?{query}")
             result = client.post_json(
                 f"{path}/update",
-                {
-                    "identifier": identifier,
-                    "public_title": _required_text(payload, "public_title"),
-                },
+                update_payload,
             )
+            if current_hat is not None:
+                old_handle = str(current_hat.get("handle") or "").strip()
+                new_handle = str(result.get("handle") or "").strip()
+                if old_handle and new_handle and old_handle != new_handle:
+                    try:
+                        local_result = rename_hat_secret_store(
+                            old_handle,
+                            new_handle,
+                        )
+                    except HatSecretStoreError as exc:
+                        result["local_store_renamed"] = False
+                        result["local_store_rename_error"] = str(exc)
+                    else:
+                        result["local_store_renamed"] = bool(local_result["renamed"])
+                        result["local_store_already_current"] = bool(
+                            local_result["already_current"]
+                        )
         elif action == "delete":
             if payload.get("confirmed") is not True:
                 return tool_error_json(
@@ -114,9 +156,7 @@ def hats(  # noqa: PLR0912, PLR0915 - one public tool dispatches bounded actions
             query = urlencode({"identifier": identifier})
             hat = client.get_json(f"{path}/detail?{query}")
             handle = str(hat.get("handle") or identifier)
-            result = client.delete_json(
-                f"{path}?{urlencode({'identifier': handle})}"
-            )
+            result = client.delete_json(f"{path}?{urlencode({'identifier': handle})}")
             try:
                 local_result = delete_hat_secret_store(handle)
             except HatSecretStoreError as exc:
@@ -183,18 +223,12 @@ def hats(  # noqa: PLR0912, PLR0915 - one public tool dispatches bounded actions
             key = str(payload.get("key") or "").strip()
             if key:
                 request_payload["key"] = key
-            default_bot_username = str(
-                payload.get("default_bot_username") or ""
-            ).strip()
+            default_bot_username = str(payload.get("default_bot_username") or "").strip()
             if default_bot_username:
                 request_payload["default_bot_username"] = default_bot_username
-            default_bot_display_name = str(
-                payload.get("default_bot_display_name") or ""
-            ).strip()
+            default_bot_display_name = str(payload.get("default_bot_display_name") or "").strip()
             if default_bot_display_name:
-                request_payload["default_bot_display_name"] = (
-                    default_bot_display_name
-                )
+                request_payload["default_bot_display_name"] = default_bot_display_name
             result = client.post_json(path, request_payload)
     except ValueError as exc:
         missing = str(exc)
@@ -238,7 +272,11 @@ def hats(  # noqa: PLR0912, PLR0915 - one public tool dispatches bounded actions
         )
     elif action == "update":
         result["agent_instruction"] = (
-            "Report the updated public title and unchanged canonical handle."
+            "Report only the metadata the user asked to change. If the handle "
+            "changed, report the new canonical handle and share URL; never expose "
+            "customer email unless the user explicitly asked for it. If "
+            "local_store_rename_error is present, explain that the platform rename "
+            "succeeded but Computer-local credentials need recovery."
         )
     elif action == "delete":
         result["agent_instruction"] = (

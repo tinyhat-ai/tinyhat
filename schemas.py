@@ -53,16 +53,17 @@ TINYHAT_HATS_SCHEMA = {
             "type": "string",
             "minLength": 3,
             "maxLength": 320,
-            "description": "Required work email for the one customer this hat serves.",
+            "description": (
+                "Work email for the one customer this Hat serves. Required for "
+                "create; optional replacement audience for update."
+            ),
         },
         "key": {
             "type": "string",
             "minLength": 1,
             "maxLength": 47,
             "pattern": "^[a-z0-9][a-z0-9_-]*$",
-            "description": (
-                "Optional stable lowercase key. Omit it to derive one from the name."
-            ),
+            "description": ("Optional stable lowercase key. Omit it to derive one from the name."),
         },
         "default_bot_username": {
             "type": "string",
@@ -78,9 +79,7 @@ TINYHAT_HATS_SCHEMA = {
             "type": "string",
             "minLength": 1,
             "maxLength": 64,
-            "description": (
-                "Optional Telegram bot display name to prefill for the customer."
-            ),
+            "description": ("Optional Telegram bot display name to prefill for the customer."),
         },
         "identifier": {
             "type": "string",
@@ -96,7 +95,20 @@ TINYHAT_HATS_SCHEMA = {
             "type": "string",
             "minLength": 1,
             "maxLength": 127,
-            "description": "Required new marketplace title for action=update.",
+            "description": (
+                "Optional new marketplace title for action=update. Supply at least "
+                "one update field."
+            ),
+        },
+        "new_key": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 47,
+            "pattern": "^[a-z0-9][a-z0-9_-]*$",
+            "description": (
+                "Optional new final segment for the namespaced Hat handle during "
+                "action=update. The owner namespace stays server-controlled."
+            ),
         },
         "path": {
             "type": "string",
