@@ -85,13 +85,17 @@ and tools. Keep that overview accurate whenever the repo changes:
    and `description`. The public page lists these descriptions without exposing
    the private file body.
 3. Define required credentials with precise purposes. The public page converts
-   value-blind credential metadata into the Tools list; it never shows the env
-   name or value.
+   value-blind credential metadata into the Tools list by deriving a readable
+   label from each env name; it never shows the value. Use provider- or
+   capability-shaped names, and keep customer identity and private data out of
+   credential names and purposes.
 4. After adding, removing, or materially changing skills, update `HAT.md` so
    its one-sentence description still summarizes the combined capability.
 
 Do not put customer identity, private data, repository URLs, credential names,
-or secret values in the public description.
+or secret values in the public description. Keep customer identity and private
+data out of credential names and purposes too, because their value-blind labels
+appear in the public Tools list.
 
 ## Define and configure Hat credentials
 

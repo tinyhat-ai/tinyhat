@@ -974,6 +974,7 @@ def validate_docs(root: Path) -> None:
             "An agent with this Hat can",
             "do not repeat the",
             "value-blind credential metadata into the Tools list",
+            "Keep customer identity and private data out of credential names",
         ),
         "skills/tinyhat-skill-authoring/SKILL.md": (
             "1-64 lowercase letters",
