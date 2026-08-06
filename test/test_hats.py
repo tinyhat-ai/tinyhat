@@ -105,6 +105,97 @@ class HatToolTests(unittest.TestCase):
         self.assertEqual(result["error"], "missing_required_parameter")
         self.assertEqual(result["missing"], ["customer_email"])
 
+    def test_update_and_repo_file_use_owner_scoped_platform_routes(self) -> None:
+        client = FakePlatformClient()
+        with mock.patch.object(
+            hats_module,
+            "build_platform_client",
+            return_value=(client, "local_dev"),
+        ):
+            hats_module.hats(
+                {
+                    "action": "update",
+                    "identifier": "acme/hats/forecasting",
+                    "public_title": "Executive Forecasting",
+                }
+            )
+            hats_module.hats(
+                {
+                    "action": "put_file",
+                    "identifier": "acme/hats/forecasting",
+                    "path": "skills/forecasting/SKILL.md",
+                    "content": "---\nname: forecasting\n---\n\n# Forecasting\n",
+                }
+            )
+
+        self.assertEqual(
+            client.post_calls[-2:],
+            [
+                (
+                    "/hapi/v1/computers/local-dev/hats/v1/update",
+                    {
+                        "identifier": "acme/hats/forecasting",
+                        "public_title": "Executive Forecasting",
+                    },
+                ),
+                (
+                    "/hapi/v1/computers/local-dev/hats/v1/files",
+                    {
+                        "identifier": "acme/hats/forecasting",
+                        "path": "skills/forecasting/SKILL.md",
+                        "content": "---\nname: forecasting\n---\n\n# Forecasting\n",
+                    },
+                ),
+            ],
+        )
+
+    def test_remove_credential_deletes_local_value_before_metadata(self) -> None:
+        client = FakePlatformClient()
+
+        def fake_get(path: str) -> dict[str, object]:
+            client.get_paths.append(path)
+            return {"handle": "acme/hats/forecasting"}
+
+        client.get_json = fake_get  # type: ignore[method-assign]
+        with (
+            mock.patch.object(
+                hats_module,
+                "build_platform_client",
+                return_value=(client, "local_dev"),
+            ),
+            mock.patch.object(
+                hats_module,
+                "remove_hat_secret",
+                return_value={"removed": True},
+            ) as remove_local,
+        ):
+            result = json.loads(
+                hats_module.hats(
+                    {
+                        "action": "remove_credential",
+                        "identifier": "forecasting",
+                        "credential_name": "EXA_API_KEY",
+                        "confirmed": True,
+                    }
+                )
+            )
+
+        remove_local.assert_called_once_with(
+            "acme/hats/forecasting",
+            "EXA_API_KEY",
+        )
+        self.assertEqual(
+            client.post_calls[-1],
+            (
+                "/hapi/v1/computers/local-dev/hats/v1/credentials/remove",
+                {
+                    "identifier": "acme/hats/forecasting",
+                    "name": "EXA_API_KEY",
+                },
+            ),
+        )
+        self.assertTrue(result["local_value_removed"])
+
 
 if __name__ == "__main__":
     unittest.main()

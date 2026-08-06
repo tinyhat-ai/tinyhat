@@ -6,10 +6,19 @@ import json
 from typing import Any
 from urllib.parse import urlencode
 
+from .hat_secrets import HatSecretStoreError, remove_hat_secret
 from .platform import PlatformError, build_platform_client, computer_api_path
 from .tool_errors import tool_error_json
 
-ACTIONS = ("create", "list", "get")
+ACTIONS = (
+    "create",
+    "list",
+    "get",
+    "update",
+    "put_file",
+    "list_credentials",
+    "remove_credential",
+)
 
 
 def _required_text(payload: dict[str, Any], key: str) -> str:
@@ -19,21 +28,44 @@ def _required_text(payload: dict[str, Any], key: str) -> str:
     return value
 
 
-def hats(args: dict[str, Any] | None = None, **_: Any) -> str:
-    """Create a shareable hat shell, list hats, or inspect one hat."""
+def _required_content(payload: dict[str, Any], key: str) -> str:
+    value = str(payload.get(key) or "")
+    if not value.strip():
+        raise ValueError(key)
+    return value
+
+
+def hats(  # noqa: PLR0912, PLR0915 - one public tool dispatches bounded actions
+    args: dict[str, Any] | None = None, **_: Any
+) -> str:
+    """Create, inspect, or modify one owner-scoped shareable Hat."""
     payload = args if isinstance(args, dict) else {}
     action = str(payload.get("action") or "").strip().lower()
     if action not in ACTIONS:
         return tool_error_json(
             tool="tinyhat_hats",
             error_name="invalid_parameter",
-            message="Call tinyhat_hats with action='create', 'list', or 'get'.",
+            message=(
+                "Call tinyhat_hats with a supported create, list, get, update, "
+                "put_file, list_credentials, or remove_credential action."
+            ),
             expected={"action": list(ACTIONS)},
             example_call={"action": "list"},
         )
 
     try:
-        identifier = _required_text(payload, "identifier") if action == "get" else ""
+        identifier = (
+            _required_text(payload, "identifier")
+            if action
+            in {
+                "get",
+                "update",
+                "put_file",
+                "list_credentials",
+                "remove_credential",
+            }
+            else ""
+        )
         name = _required_text(payload, "name") if action == "create" else ""
         customer_email = (
             _required_text(payload, "customer_email") if action == "create" else ""
@@ -42,10 +74,59 @@ def hats(args: dict[str, Any] | None = None, **_: Any) -> str:
         path = computer_api_path(platform_auth, "hats/v1")
         if action == "list":
             result = client.get_json(path)
-        elif action == "get":
+        elif action in {"get", "list_credentials"}:
             query = urlencode({"identifier": identifier})
-            result = client.get_json(f"{path}/detail?{query}")
-        else:
+            suffix = "credentials" if action == "list_credentials" else "detail"
+            result = client.get_json(f"{path}/{suffix}?{query}")
+        elif action == "update":
+            result = client.post_json(
+                f"{path}/update",
+                {
+                    "identifier": identifier,
+                    "public_title": _required_text(payload, "public_title"),
+                },
+            )
+        elif action == "put_file":
+            result = client.post_json(
+                f"{path}/files",
+                {
+                    "identifier": identifier,
+                    "path": _required_text(payload, "path"),
+                    "content": _required_content(payload, "content"),
+                },
+            )
+        elif action == "remove_credential":
+            if payload.get("confirmed") is not True:
+                return tool_error_json(
+                    tool="tinyhat_hats",
+                    error_name="confirmation_required",
+                    message=(
+                        "Only call remove_credential after the user explicitly asks "
+                        "to remove this exact credential from this exact Hat."
+                    ),
+                    example_call={
+                        "action": "remove_credential",
+                        "identifier": identifier,
+                        "credential_name": "EXA_API_KEY",
+                        "confirmed": True,
+                    },
+                )
+            credential_name = _required_text(payload, "credential_name").upper()
+            query = urlencode({"identifier": identifier})
+            hat = client.get_json(f"{path}/detail?{query}")
+            local_result = remove_hat_secret(
+                str(hat.get("handle") or ""),
+                credential_name,
+            )
+            result = client.post_json(
+                f"{path}/credentials/remove",
+                {
+                    "identifier": str(hat.get("handle") or identifier),
+                    "name": credential_name,
+                },
+            )
+            result["local_value_removed"] = bool(local_result["removed"])
+        else:  # create
             request_payload = {
                 "name": name,
                 "customer_email": customer_email,
@@ -83,19 +164,33 @@ def hats(args: dict[str, Any] | None = None, **_: Any) -> str:
                 else {"action": "get", "identifier": "trade-show-sales"}
             ),
         )
-    except PlatformError as exc:
+    except (PlatformError, HatSecretStoreError) as exc:
         return tool_error_json(
             tool="tinyhat_hats",
             error_name="platform_request_failed",
             message=str(exc),
         )
 
-    result["agent_instruction"] = (
-        "Report the canonical handle and share URL exactly as returned. Tell the "
-        "user that the intended customer can verify their email on the public page "
-        "and create a Telegram agent that wears this hat. The Computer is prepared "
-        "only after that agent is approved."
-    )
+    if action == "put_file":
+        result["agent_instruction"] = (
+            "Report whether the file was created or updated and name its repo path. "
+            "Never imply that a secret value belongs in a Hat repo file."
+        )
+    elif action in {"list_credentials", "remove_credential"}:
+        result["agent_instruction"] = (
+            "Report credential names and safe metadata only. Secret values remain in "
+            "the Computer-local Hat store and are never returned by Tinyhat."
+        )
+    elif action == "update":
+        result["agent_instruction"] = (
+            "Report the updated public title and unchanged canonical handle."
+        )
+    else:
+        result["agent_instruction"] = (
+            "Report the canonical handle and share URL exactly as returned. Tell the "
+            "user that the intended customer can verify their email on the public "
+            "page and create a Telegram agent that wears this hat."
+        )
     return json.dumps(result, sort_keys=True)
 
 

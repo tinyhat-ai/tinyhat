@@ -123,16 +123,17 @@ platform status endpoint. It returns only safe Computer state, assignment,
 configuration revision, and package inventory metadata; it never returns
 tokens, credentials, or private platform URLs.
 
-`hat-authoring` creates and discovers shareable hat shells. For creation, the
+`hat-authoring` creates and evolves shareable Hats. For creation, the
 agent collects a name and one customer's work email, plus optional Telegram
 bot username and display-name defaults, then `tinyhat_hats`
 derives the owner and account from the authenticated Computer. The platform
 creates a private repository and returns the canonical handle and share URL.
-The same tool lists up to 100 owner-scoped hats or retrieves one by key or
-handle. The intended customer can verify that email on the public page and
-create a Telegram agent that wears the hat; its Computer is prepared through
-the normal approval flow. M1 does not yet populate the repository or collect
-hat credentials.
+The same tool lists up to 100 owner-scoped Hats, retrieves one by key or
+handle, updates its public title, and creates or updates guarded non-secret
+repo files. Hat credentials use the encrypted Mini App handoff, but terminate
+in a per-Hat local store on the creator Computer. The private repo records only
+the credential name, purpose, and saved time. The intended customer can verify
+their email on the public page and create a Telegram agent that wears the Hat.
 
 `tinyhat-skill-catalog` is the discovery repair path. When `skills_list`,
 `available_skills`, or an unqualified `skill_view(name="tinyhat-codex-auth")`
@@ -147,10 +148,12 @@ to save an API key, token, password, or credential, the agent calls
 pair, the user enters the value in a Telegram Mini App, the browser
 encrypts the value with the public key, and the Computer decrypts it with
 the temporary private key. Tinyhat stores only short-lived ciphertext for
-the handoff and wipes it after completion, expiration, or failure. After
-the Computer saves the secret locally, the saver worker registers the name
-for terminal env passthrough, sends one short Telegram notice, and claims
-the handoff with `outcome="installed_restart_pending"`. The Tinyhat
+the handoff and wipes it after completion, expiration, or failure. When the
+call includes `hat_identifier`, the Computer writes the plaintext to
+`~/.tinyhat/hats/<owner>/<hat>/secrets.json` instead of Hermes global config.
+For a global Computer secret, the saver worker registers the name for terminal
+env passthrough, sends one short Telegram notice, and claims the handoff with
+`outcome="installed_restart_pending"`. The Tinyhat
 platform then queues the runtime's one-shot gateway restart and sends the
 final ready-or-failed confirmation after that restart command settles —
 the worker never stops, starts, or restarts the gateway itself. The worker

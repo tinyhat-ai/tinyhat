@@ -27,8 +27,7 @@ if __package__ in {None, ""}:
         sys.modules["tinyhat"] = package
     __package__ = "tinyhat"
 
-from .platform import build_platform_client
-from .platform import computer_api_path
+from .platform import build_platform_client, computer_api_path
 from .secret_handoff import (
     DEFAULT_EXPIRES_IN_SECONDS,
     SecretHandoffError,
@@ -44,6 +43,7 @@ def run_worker(
     handoff_id: str,
     key_path: Path,
     expires_in_seconds: int = DEFAULT_EXPIRES_IN_SECONDS,
+    hat_handle: str | None = None,
 ) -> None:
     client, platform_auth = build_platform_client()
     try:
@@ -71,6 +71,7 @@ def run_worker(
                     handoff_id=handoff_id,
                     private_key_pem=private_key_pem,
                     state=state,
+                    hat_handle=hat_handle,
                 )
                 if installed:
                     return
@@ -127,6 +128,7 @@ def parse_args() -> argparse.Namespace:
         type=int,
         default=DEFAULT_EXPIRES_IN_SECONDS,
     )
+    parser.add_argument("--hat-handle")
     return parser.parse_args()
 
 
@@ -136,6 +138,7 @@ def main() -> int:
         handoff_id=args.handoff_id,
         key_path=Path(args.key_path),
         expires_in_seconds=args.expires_in_seconds,
+        hat_handle=args.hat_handle,
     )
     return 0
 

@@ -22,15 +22,22 @@ TINYHAT_GET_PLATFORM_STATUS_SCHEMA = {
 TINYHAT_HATS_SCHEMA = {
     "type": "object",
     "description": (
-        "Creates an owner-scoped shareable Tinyhat hat shell with a private "
-        "repository, lists up to 100 hats, or retrieves one hat's canonical "
-        "handle and share URL. The intended customer can create a Telegram agent "
-        "that wears the hat from its public page."
+        "Creates, lists, inspects, and updates owner-scoped Tinyhat Hats; commits "
+        "guarded non-secret files to their private repos; and lists or removes "
+        "Computer-local Hat credentials without returning their values."
     ),
     "properties": {
         "action": {
             "type": "string",
-            "enum": ["create", "list", "get"],
+            "enum": [
+                "create",
+                "list",
+                "get",
+                "update",
+                "put_file",
+                "list_credentials",
+                "remove_credential",
+            ],
         },
         "name": {
             "type": "string",
@@ -75,7 +82,46 @@ TINYHAT_HATS_SCHEMA = {
             "type": "string",
             "minLength": 1,
             "maxLength": 255,
-            "description": "Required key or canonical handle for action=get.",
+            "description": (
+                "Required key or canonical handle for get, update, put_file, "
+                "list_credentials, and remove_credential."
+            ),
+        },
+        "public_title": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 127,
+            "description": "Required new marketplace title for action=update.",
+        },
+        "path": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 240,
+            "description": (
+                "Required relative repo path for put_file, for example "
+                "skills/forecasting/SKILL.md. Secret and credential paths are blocked."
+            ),
+        },
+        "content": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 100000,
+            "description": (
+                "Required UTF-8 text for put_file. Never include API keys, tokens, "
+                "passwords, private keys, or other secret values."
+            ),
+        },
+        "credential_name": {
+            "type": "string",
+            "pattern": "^[A-Z_][A-Z0-9_]{0,126}$",
+            "description": "Exact local Hat credential name for remove_credential.",
+        },
+        "confirmed": {
+            "type": "boolean",
+            "description": (
+                "True only after the user explicitly asks to remove this exact "
+                "credential from this exact Hat."
+            ),
         },
     },
     "required": ["action"],
@@ -122,6 +168,16 @@ TINYHAT_PRIVATE_SECRET_HANDOFF_SCHEMA = {
             "type": "string",
             "description": (
                 "Required short human-readable description of what this secret is used for."
+            ),
+        },
+        "hat_identifier": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 255,
+            "description": (
+                "Optional Hat key or canonical handle. When set, the browser-encrypted "
+                "plaintext is written only to that Hat's Computer-local secret store, "
+                "not Hermes global configuration."
             ),
         },
     },

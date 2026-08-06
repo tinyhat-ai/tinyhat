@@ -155,7 +155,15 @@ class HermesAdapterTests(unittest.TestCase):
         self.assertEqual(hats_schema["required"], ["action"])
         self.assertEqual(
             hats_schema["properties"]["action"]["enum"],
-            ["create", "list", "get"],
+            [
+                "create",
+                "list",
+                "get",
+                "update",
+                "put_file",
+                "list_credentials",
+                "remove_credential",
+            ],
         )
         self.assertFalse(hats_schema["additionalProperties"])
         self.assertEqual(schemas.TINYHAT_TELL_JOKE_SCHEMA["properties"], {})
