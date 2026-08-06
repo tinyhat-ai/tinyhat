@@ -6,7 +6,7 @@ The current capability list is intentionally small.
 | --- | --- | --- |
 | `tinyhat_plugin_version` | Available now | Proves which Tinyhat plugin version Hermes has loaded for the live agent. |
 | `tinyhat_get_platform_status` | Available now | Reads this authenticated Computer's safe platform state, assignment, configuration revisions, and package inventory. |
-| `tinyhat_hats` | Available now | Creates, lists, inspects, and renames one-customer Hats; commits guarded non-secret repo files; and defines, configures, lists, or removes value-blind Hat credentials. |
+| `tinyhat_hats` | Available now | Creates, lists, inspects, renames, and permanently deletes one-customer Hats; commits guarded non-secret repo files; and defines, configures, lists, or removes value-blind Hat credentials. |
 | `tinyhat_tell_joke` | Available now | Proves Hermes loaded the Tinyhat plugin and can call a plugin tool. |
 | `tinyhat_skill_catalog` | Available now | Lists Tinyhat plugin skills with `tinyhat:<skill>` qualified names and unqualified aliases. |
 | `tinyhat_private_secret_handoff` | Available now | Lets a user enter a secret in a Telegram Mini App while Tinyhat stores only short-lived ciphertext. |
@@ -35,7 +35,9 @@ returns no more than 100 hats owned by that user in that account, while
 public title without changing the stable handle. `action=put_file` creates or
 updates one relative text path in a commit; secret-shaped paths, credential
 files, private keys, branch deletion, history rewrites, and repo deletion are
-not available to the agent.
+not available through the file-writing action. `action=delete` permanently
+deletes one exact Hat, its private repository, and its Computer-local package
+state only after the user explicitly confirms the canonical Hat handle.
 
 The intended customer verifies their email on the public page, then opens a
 prefilled Telegram managed-bot dialog to create an agent that wears the hat.

@@ -10,6 +10,9 @@ All notable changes to the Tinyhat plugin are documented here.
   page. The Hat reuses one Computer-local key pair for the bundle, saves all
   values atomically in its local store, supports reopening the form from the
   Hat preview, and never restarts Hermes for these package-only credentials.
+- Permanently delete one exact Hat, its private repository, and its
+  Computer-local package state only after the user explicitly confirms the
+  canonical Hat handle.
 - Start `0.23.0` with the first shareable-hats milestone. The new
   `tinyhat:hat-authoring` skill and `tinyhat_hats` tool create an owner-scoped,
   one-customer hat shell with a private platform-managed repository and
