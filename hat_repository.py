@@ -66,7 +66,10 @@ def _is_credential_field_name(key: object) -> bool:
     )
     if not segments:
         return False
-    if segments == ("credential", "persisted"):
+    if segments in {
+        ("credential", "helper", "removed"),
+        ("credential", "persisted"),
+    }:
         return False
     if _CREDENTIAL_SEGMENTS.intersection(segments):
         return True

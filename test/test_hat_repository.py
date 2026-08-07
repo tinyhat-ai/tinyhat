@@ -30,6 +30,47 @@ class HatRepositoryBridgeTests(unittest.TestCase):
             "credential_persisted": False,
         }
 
+    @staticmethod
+    def _status_result() -> dict[str, object]:
+        return {
+            "schema": "tinyhat_hat_repository_v1",
+            "action": "status",
+            "hat_handle": "acme/hats/demo",
+            "repository": {"owner": "tinyhat-ai", "name": "demo"},
+            "path": "/home/agent/.hermes/hat-repositories/acme/demo",
+            "head_sha": "a" * 40,
+            "clean": True,
+            "changed_paths": [],
+        }
+
+    @staticmethod
+    def _sync_result() -> dict[str, object]:
+        return {
+            "schema": "tinyhat_hat_repository_v1",
+            "action": "sync",
+            "hat_handle": "acme/hats/demo",
+            "repository": {"owner": "tinyhat-ai", "name": "demo"},
+            "path": "/home/agent/.hermes/hat-repositories/acme/demo",
+            "head_sha": "a" * 40,
+            "changed": False,
+            "pushed": False,
+            "synced_paths": [],
+        }
+
+    @staticmethod
+    def _reset_result(residual_expiry: str | None = None) -> dict[str, object]:
+        return {
+            "schema": "tinyhat_hat_repository_v1",
+            "action": "reset",
+            "hat_handle": "acme/hats/demo",
+            "repository": {"owner": "tinyhat-ai", "name": "demo"},
+            "path": "/home/agent/.hermes/hat-repositories/acme/demo",
+            "renewal_stopped": True,
+            "residual_access_expires_at": residual_expiry,
+            "local_clone_retained": True,
+            "credential_helper_removed": True,
+        }
+
     def test_passes_payload_on_stdin_and_returns_safe_runtime_result(self) -> None:
         runtime_result = self._checkout_result()
         completed = subprocess.CompletedProcess(
@@ -56,6 +97,36 @@ class HatRepositoryBridgeTests(unittest.TestCase):
             run.call_args.args[0],
             [sys.executable, "-m", "hermes_runtime.hat_repository_cli"],
         )
+
+    def test_accepts_contract_valid_result_for_every_action(self) -> None:
+        results = (
+            self._checkout_result(),
+            self._status_result(),
+            self._sync_result(),
+            self._reset_result(),
+            self._reset_result("2026-08-07T23:30:00Z"),
+        )
+        for runtime_result in results:
+            action = str(runtime_result["action"])
+            residual_expiry = runtime_result.get("residual_access_expires_at")
+            with self.subTest(action=action, residual_expiry=residual_expiry):
+                completed = subprocess.CompletedProcess(
+                    args=[],
+                    returncode=0,
+                    stdout=json.dumps(runtime_result),
+                    stderr="",
+                )
+                with mock.patch.object(
+                    hat_repository.subprocess,
+                    "run",
+                    return_value=completed,
+                ):
+                    self.assertEqual(
+                        hat_repository.run_hat_repository(
+                            {"action": action, "identifier": "acme/hats/demo"}
+                        ),
+                        runtime_result,
+                    )
 
     def test_rejects_credential_shaped_runtime_output(self) -> None:
         unsafe_keys = (
