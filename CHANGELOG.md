@@ -6,17 +6,31 @@ All notable changes to the Tinyhat plugin are documented here.
 
 ### Changed
 
+- Keep each Hat's marketplace overview current through a root `HAT.md`
+  capability description, skill frontmatter, and value-blind tool metadata.
+- Add the public `tinyhat:tinyhat-skill-authoring` playbook and require Hat
+  authoring to load it before writing a `SKILL.md`. Customer skills now follow
+  portable name and folder rules, explicit trigger and non-trigger boundaries,
+  progressive disclosure, and bounded context guidance.
+- Collect every credential defined by a Hat on one browser-encrypted Mini App
+  page. The Hat reuses one Computer-local key pair for the bundle, saves all
+  values atomically in its local store, supports reopening the form from the
+  Hat preview, and never restarts Hermes for these package-only credentials.
+- Permanently delete one exact Hat, its private repository, and its
+  Computer-local package state only after the user explicitly confirms the
+  canonical Hat handle.
 - Start `0.23.0` with the first shareable-hats milestone. The new
   `tinyhat:hat-authoring` skill and `tinyhat_hats` tool create an owner-scoped,
   one-customer hat shell with a private platform-managed repository and
   optional Telegram bot defaults, list up to 100 hats, and retrieve each
   canonical handle and share URL. The matching public page verifies the
   customer email and opens Telegram to create an agent that wears the hat;
-  agent can also update the public title, create or update guarded non-secret
-  repo files, and manage Hat credential names through chat. Secret values use
-  the existing browser-encrypted handoff but terminate in a per-Hat local file
-  on the creator Computer; only value-blind metadata is committed to the
-  private Hat repo. This release
+  agent can also update the public title, intended customer email, or
+  namespaced handle without recreating the Hat, create or update guarded
+  non-secret repo files, and manage Hat credential names through chat. Secret
+  values use the existing browser-encrypted handoff but terminate in a per-Hat
+  local file on the creator Computer; only value-blind metadata is committed
+  to the private Hat repo. This release
   changes no runtime code and requires the matching platform API to be
   deployed before plugin promotion.
 - Bump the Hermes plugin package to `0.21.20`; add an owner-confirmed Slack

@@ -112,6 +112,7 @@ class HermesAdapterTests(unittest.TestCase):
         self.assertIn("tinyhat-plugin-version", ctx.skills)
         self.assertIn("tinyhat-tell-joke", ctx.skills)
         self.assertIn("tinyhat-skill-catalog", ctx.skills)
+        self.assertIn("tinyhat-skill-authoring", ctx.skills)
         self.assertIn("tinyhat-private-secret", ctx.skills)
         self.assertIn("tinyhat-slack", ctx.skills)
         self.assertIn("tinyhat-credentials", ctx.skills)
@@ -123,6 +124,7 @@ class HermesAdapterTests(unittest.TestCase):
         self.assertTrue(ctx.skills["tinyhat-plugin-version"].is_file())
         self.assertTrue(ctx.skills["tinyhat-tell-joke"].is_file())
         self.assertTrue(ctx.skills["tinyhat-skill-catalog"].is_file())
+        self.assertTrue(ctx.skills["tinyhat-skill-authoring"].is_file())
         self.assertTrue(ctx.skills["tinyhat-private-secret"].is_file())
         self.assertTrue(ctx.skills["tinyhat-slack"].is_file())
         self.assertTrue(ctx.skills["tinyhat-credentials"].is_file())
@@ -160,10 +162,30 @@ class HermesAdapterTests(unittest.TestCase):
                 "list",
                 "get",
                 "update",
+                "delete",
                 "put_file",
+                "define_credential",
+                "configure_credentials",
                 "list_credentials",
                 "remove_credential",
             ],
+        )
+        self.assertIn("permanently deletes", hats_schema["description"])
+        self.assertIn(
+            "delete",
+            hats_schema["properties"]["identifier"]["description"],
+        )
+        self.assertIn(
+            "permanently delete this exact Hat",
+            hats_schema["properties"]["confirmed"]["description"],
+        )
+        self.assertIn(
+            "optional replacement audience",
+            hats_schema["properties"]["customer_email"]["description"],
+        )
+        self.assertIn(
+            "owner namespace stays server-controlled",
+            hats_schema["properties"]["new_key"]["description"],
         )
         self.assertFalse(hats_schema["additionalProperties"])
         self.assertEqual(schemas.TINYHAT_TELL_JOKE_SCHEMA["properties"], {})
@@ -285,11 +307,31 @@ class HermesAdapterTests(unittest.TestCase):
             "tinyhat:tinyhat-privacy",
         )
         self.assertIn("tinyhat-privacy", by_name["tinyhat-privacy"]["aliases"])
+        self.assertEqual(
+            by_name["tinyhat-skill-authoring"]["qualified_name"],
+            "tinyhat:tinyhat-skill-authoring",
+        )
+        self.assertIn(
+            "trigger boundaries",
+            by_name["tinyhat-skill-authoring"]["purpose"],
+        )
         manager_purpose = by_name["tinyhat-google-workspace-app-manager"]["purpose"]
         self.assertIn("only the pinned Google Workspace CLI app", manager_purpose)
         self.assertIn("Hermes supplies the native operation skill", manager_purpose)
         self.assertNotIn("operation skills", manager_purpose)
         self.assertIn("qualified names", payload["lookup_rule"])
+
+    def test_skill_authoring_playbook_enforces_portable_bounds(self) -> None:
+        skill_md = REPO_ROOT / "skills" / "tinyhat-skill-authoring" / "SKILL.md"
+        text = skill_md.read_text(encoding="utf-8")
+
+        self.assertIn("1-64 lowercase letters", text)
+        self.assertIn("at most 1,024 characters", text)
+        self.assertIn("should not trigger", text)
+        self.assertIn("about 200 lines and 2,000 tokens", text)
+        self.assertIn("500 lines or about 5,000 tokens", text)
+        self.assertIn("progressive-disclosure", text)
+        self.assertLessEqual(len(text.splitlines()), 200)
 
     def test_credentials_list_returns_only_safe_metadata(self) -> None:
         paths: list[str] = []

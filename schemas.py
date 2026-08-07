@@ -22,9 +22,10 @@ TINYHAT_GET_PLATFORM_STATUS_SCHEMA = {
 TINYHAT_HATS_SCHEMA = {
     "type": "object",
     "description": (
-        "Creates, lists, inspects, and updates owner-scoped Tinyhat Hats; commits "
-        "guarded non-secret files to their private repos; and lists or removes "
-        "Computer-local Hat credentials without returning their values."
+        "Creates, lists, inspects, updates, and permanently deletes owner-scoped "
+        "Tinyhat Hats; commits guarded non-secret files to their private repos; "
+        "and defines, configures, lists, or removes Computer-local Hat credentials "
+        "without returning values."
     ),
     "properties": {
         "action": {
@@ -34,7 +35,10 @@ TINYHAT_HATS_SCHEMA = {
                 "list",
                 "get",
                 "update",
+                "delete",
                 "put_file",
+                "define_credential",
+                "configure_credentials",
                 "list_credentials",
                 "remove_credential",
             ],
@@ -49,16 +53,17 @@ TINYHAT_HATS_SCHEMA = {
             "type": "string",
             "minLength": 3,
             "maxLength": 320,
-            "description": "Required work email for the one customer this hat serves.",
+            "description": (
+                "Work email for the one customer this Hat serves. Required for "
+                "create; optional replacement audience for update."
+            ),
         },
         "key": {
             "type": "string",
             "minLength": 1,
             "maxLength": 47,
             "pattern": "^[a-z0-9][a-z0-9_-]*$",
-            "description": (
-                "Optional stable lowercase key. Omit it to derive one from the name."
-            ),
+            "description": ("Optional stable lowercase key. Omit it to derive one from the name."),
         },
         "default_bot_username": {
             "type": "string",
@@ -74,16 +79,15 @@ TINYHAT_HATS_SCHEMA = {
             "type": "string",
             "minLength": 1,
             "maxLength": 64,
-            "description": (
-                "Optional Telegram bot display name to prefill for the customer."
-            ),
+            "description": ("Optional Telegram bot display name to prefill for the customer."),
         },
         "identifier": {
             "type": "string",
             "minLength": 1,
             "maxLength": 255,
             "description": (
-                "Required key or canonical handle for get, update, put_file, "
+                "Required key or canonical handle for get, update, delete, "
+                "put_file, define_credential, configure_credentials, "
                 "list_credentials, and remove_credential."
             ),
         },
@@ -91,7 +95,20 @@ TINYHAT_HATS_SCHEMA = {
             "type": "string",
             "minLength": 1,
             "maxLength": 127,
-            "description": "Required new marketplace title for action=update.",
+            "description": (
+                "Optional new marketplace title for action=update. Supply at least "
+                "one update field."
+            ),
+        },
+        "new_key": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 47,
+            "pattern": "^[a-z0-9][a-z0-9_-]*$",
+            "description": (
+                "Optional new final segment for the namespaced Hat handle during "
+                "action=update. The owner namespace stays server-controlled."
+            ),
         },
         "path": {
             "type": "string",
@@ -114,13 +131,22 @@ TINYHAT_HATS_SCHEMA = {
         "credential_name": {
             "type": "string",
             "pattern": "^[A-Z_][A-Z0-9_]{0,126}$",
-            "description": "Exact local Hat credential name for remove_credential.",
+            "description": (
+                "Exact env-style Hat credential name for define_credential or remove_credential."
+            ),
+        },
+        "description": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 500,
+            "description": ("Required safe purpose for define_credential. Never include a value."),
         },
         "confirmed": {
             "type": "boolean",
             "description": (
                 "True only after the user explicitly asks to remove this exact "
-                "credential from this exact Hat."
+                "credential from this exact Hat, or to permanently delete this "
+                "exact Hat and its private repository."
             ),
         },
     },

@@ -30,10 +30,30 @@ Do not ask for account or owner ids; Tinyhat derives them from this Computer.
 Keep customer emails private unless the user explicitly asks to see the
 metadata they supplied.
 
-## Update the public title
+## Update Hat metadata
 
-Call `tinyhat_hats` with `action="update"`, the Hat `identifier`, and the new
-`public_title`. Report the new title and the unchanged canonical handle.
+Call `tinyhat_hats` with `action="update"`, the current Hat `identifier`, and
+one or more of:
+
+- `public_title` for the marketplace title;
+- `customer_email` for the intended customer's work email; or
+- `new_key` for the final segment of the namespaced canonical handle.
+
+The account namespace is derived from the Computer and cannot be changed by
+the model. A handle change renames the existing private repository, preserves
+the Hat and its files, keeps former public links resolving to the Hat, and
+moves the encrypted Computer-local credential store to the new handle. Report
+the new canonical handle and share URL when they change. Keep customer emails
+private unless the user explicitly asked to inspect or change that email.
+
+## Delete a Hat
+
+Delete only after the user explicitly asks to permanently remove an exact Hat.
+Call `tinyhat_hats` with `action="delete"`, its canonical `identifier`, and
+`confirmed=true`. This permanently deletes the private repository and removes
+that Hat's Computer-local secret bundle and encryption key without returning a
+secret value. Existing agents are not deleted; they simply stop referencing the
+removed Hat. Report the returned repository and local-store outcomes honestly.
 
 ## Add or update repo content
 
@@ -41,27 +61,66 @@ Call `tinyhat_hats` with `action="update"`, the Hat `identifier`, and the new
 2. Call `tinyhat_hats` with `action="put_file"`.
 3. Report whether Tinyhat created or updated the file and name the path.
 
-For a skill, use `skills/<skill-name>/SKILL.md` and include valid skill
-frontmatter. A later call to the same path updates it in a new commit, so repo
-history remains the undo trail.
+Before creating, reviewing, or updating any skill, load
+`tinyhat:tinyhat-skill-authoring` and follow its naming, trigger-boundary,
+length, progressive-disclosure, and validation guidance. Use
+`skills/<skill-name>/SKILL.md`; a later call to the same path updates it in a
+new commit, so repo history remains the undo trail.
 
 Never put an API key, token, password, private key, `.env` file, secret file,
 or credential file in the repo. The platform rejects secret-shaped paths and
 private-key material, but the skill must avoid sending secret values at all.
 
-## Add or replace a Hat credential
+## Keep the public capability overview current
 
-1. Get the Hat identifier, a meaningful env-style name such as
-   `EXA_API_KEY`, and a short purpose.
-2. Call `tinyhat_private_secret_handoff` with `name`, `description`, and
-   `hat_identifier`. Never ask the user to paste the value in chat.
-3. Tinyhat sends an expiring **Enter secret** Mini App button. The browser
-   encrypts the value for this Computer. The Computer decrypts it and writes it
-   under `~/.tinyhat/hats/<owner>/<hat>/secrets.json`; only the name,
-   description, and saved time are recorded in the private Hat repo.
+The Hat's public page leads with what an agent can do, then lists its skills
+and tools. Keep that overview accurate whenever the repo changes:
 
-Calling the same flow again with the same name replaces the local value. Do not
-claim replacement succeeded until the final Telegram **Secret saved** message.
+1. Write a root `HAT.md` with frontmatter `name` equal to the Hat key and a
+   short `description` that completes the sentence "An agent with this Hat can
+   ...". Write only the grammatical completion after `can`; do not repeat the
+   `An agent with this Hat can` prefix. Describe the work itself; do not explain
+   what a Hat is.
+2. Keep each skill in `skills/<name>/SKILL.md` with a clear frontmatter `name`
+   and `description`. The public page lists these descriptions without exposing
+   the private file body.
+3. Define required credentials with precise purposes. The public page publishes
+   each purpose in the Tools list and derives a readable label from each env
+   name; it never shows the value. Use provider- or capability-shaped names,
+   and keep customer identity and private data out of credential names and
+   purposes.
+4. After adding, removing, or materially changing skills, update `HAT.md` so
+   its one-sentence description still summarizes the combined capability.
+
+Do not put customer identity, private data, repository URLs, credential names,
+or secret values in the public description. Keep customer identity and private
+data out of credential names and purposes too, because derived labels and the
+purpose text appear in the public Tools list.
+
+## Define and configure Hat credentials
+
+1. Get the Hat identifier plus every meaningful env-style name and short
+   purpose. Never ask for any value in chat.
+2. For each new or changed field, call `tinyhat_hats` with
+   `action="define_credential"`, `identifier`, `credential_name`, and
+   `description`. This writes value-blind metadata only.
+3. After every field is defined, call `tinyhat_hats` once with
+   `action="configure_credentials"` and the Hat `identifier`.
+4. Tinyhat sends one expiring **Enter credentials** button. The user sees every
+   field on one page. Fields with a Computer-local value are marked as saved
+   without revealing that value; leaving one blank preserves it, while an
+   entered value replaces only that field. New fields are required. The browser
+   encrypts the submitted values with the Hat's Computer-local key. The Computer
+   merges them into the Hat's
+   local package store under `~/.tinyhat/hats/<owner>/<hat>/secrets.json` for
+   its intended customer; plaintext is not stored there. It does not load the
+   values into this agent's Hermes environment and does not restart Hermes.
+
+Calling `configure_credentials` again replaces only the values entered in that
+submission and preserves saved blank fields. The Hat preview always asks the
+assigned Computer to open a fresh encrypted form so its saved-value indicators
+are current. Do not claim the save succeeded until Telegram confirms **Hat
+credentials saved**.
 
 ## List or remove Hat credentials
 
@@ -71,4 +130,5 @@ claim replacement succeeded until the final Telegram **Secret saved** message.
   an exact Hat. Then call `tinyhat_hats` with `action="remove_credential"`,
   `credential_name`, and `confirmed=true`. This deletes the local value and its
   value-blind repo metadata. Report `local_value_removed` honestly.
-- To recreate a removed credential, run the secure Hat credential flow again.
+- To recreate a removed credential, define it again, then call
+  `configure_credentials` once after all requested names are ready.

@@ -40,6 +40,13 @@
       "purpose": "Lists Tinyhat plugin skills with qualified names and unqualified aliases."
     },
     {
+      "name": "tinyhat-skill-authoring",
+      "qualified_name": "tinyhat:tinyhat-skill-authoring",
+      "aliases": ["tinyhat-skill-authoring"],
+      "path": "skills/tinyhat-skill-authoring/SKILL.md",
+      "purpose": "Teaches agents to write focused portable skills with explicit trigger boundaries, progressive disclosure, and bounded length."
+    },
+    {
       "name": "tinyhat-private-secret",
       "qualified_name": "tinyhat:tinyhat-private-secret",
       "aliases": ["tinyhat-private-secret"],

@@ -6,9 +6,10 @@ The current capability list is intentionally small.
 | --- | --- | --- |
 | `tinyhat_plugin_version` | Available now | Proves which Tinyhat plugin version Hermes has loaded for the live agent. |
 | `tinyhat_get_platform_status` | Available now | Reads this authenticated Computer's safe platform state, assignment, configuration revisions, and package inventory. |
-| `tinyhat_hats` | Available now | Creates, lists, inspects, and renames one-customer Hats; commits guarded non-secret repo files; and lists or removes value-blind Hat credential metadata after local deletion. |
+| `tinyhat_hats` | Available now | Creates, lists, inspects, renames, and permanently deletes one-customer Hats; commits guarded non-secret repo files; and defines, configures, lists, or removes value-blind Hat credentials. |
 | `tinyhat_tell_joke` | Available now | Proves Hermes loaded the Tinyhat plugin and can call a plugin tool. |
 | `tinyhat_skill_catalog` | Available now | Lists Tinyhat plugin skills with `tinyhat:<skill>` qualified names and unqualified aliases. |
+| `tinyhat-skill-authoring` skill | Available now | Teaches agents to write portable user skills with valid names, explicit trigger and non-trigger boundaries, progressive disclosure, and bounded context size. |
 | `tinyhat_private_secret_handoff` | Available now | Lets a user enter a secret in a Telegram Mini App while Tinyhat stores only short-lived ciphertext. |
 | `tinyhat_slack_connect` | Available now | Sends Hermes' current Agent-view manifest and transfers the Slack bot token, Socket Mode app token, and allowed member IDs as one browser-encrypted Computer-local bundle. |
 | `tinyhat_slack_disconnect` | Available now | Sends an owner-confirmed Telegram ceremony, revokes active Slack bot access when possible, removes the complete Computer-local Slack bundle, and restarts Hermes. |
@@ -31,21 +32,36 @@ and the one customer's work email, creates a private platform-managed repo,
 and returns the canonical handle plus an opaque share URL. Creation also
 accepts optional Telegram bot username and display-name defaults. `action=list`
 returns no more than 100 hats owned by that user in that account, while
-`action=get` accepts a returned key or handle. `action=update` changes the
-public title without changing the stable handle. `action=put_file` creates or
-updates one relative text path in a commit; secret-shaped paths, credential
-files, private keys, branch deletion, history rewrites, and repo deletion are
-not available to the agent.
+`action=get` accepts a returned key or handle. `action=update` changes one or
+more of the public title, intended customer email, or final namespaced handle
+segment. Handle updates preserve the Hat, private repository contents, old
+public-link aliases, and Computer-local credential bundle. `action=put_file`
+creates or updates one relative text path in a commit; secret-shaped paths,
+credential files, private keys, branch deletion, history rewrites, and repo
+deletion are not available through the file-writing action. `action=delete` permanently
+deletes one exact Hat, its private repository, and its Computer-local package
+state only after the user explicitly confirms the canonical Hat handle.
 
 The intended customer verifies their email on the public page, then opens a
 prefilled Telegram managed-bot dialog to create an agent that wears the hat.
-Its Computer still follows the normal approval flow. To add or replace a Hat
-credential, the agent calls `tinyhat_private_secret_handoff` with the Hat
-identifier. The plaintext is browser-encrypted, decrypted by the creator
-Computer, and stored only in that Hat's local secret file. The private Hat repo
-stores name, purpose, and saved time only. `action=list_credentials` returns
-that metadata; `action=remove_credential` deletes the local value and then the
-metadata. No runtime change is required.
+Its Computer still follows the normal approval flow. The agent uses
+`action=define_credential` for each value-blind name and purpose, then calls
+`action=configure_credentials` once. One Mini App page collects all values and
+encrypts the complete bundle with the Hat's Computer-local key pair. The
+creator Computer decrypts and atomically stages the values only in that Hat's
+local package store for its intended customer. It does not load them into the
+authoring agent's Hermes environment, so it does not restart Hermes. The
+private Hat repo stores names, purposes, and saved times only.
+`action=list_credentials` returns that metadata; `action=remove_credential`
+deletes the local value and then the metadata. The Hat preview can reopen the
+encrypted bundle form after its first Computer-keyed setup. No runtime change
+is required.
+
+Before `action=put_file` creates or changes a `SKILL.md`, the agent loads
+`tinyhat:tinyhat-skill-authoring`. The playbook keeps a typical skill under
+about 200 lines and 2,000 tokens, treats 500 lines or about 5,000 tokens as the
+recommended ceiling, and requires the frontmatter description to cover both
+positive trigger wording and nearby non-trigger boundaries.
 
 ## Private Secret Handoff
 

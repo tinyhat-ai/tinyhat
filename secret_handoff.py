@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 import base64
+import hashlib
+import json
 import os
 import re
 import shlex
@@ -11,12 +13,21 @@ import subprocess
 import sys
 import tempfile
 import time
+from contextlib import suppress
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 from urllib.parse import urlencode
 
-from .hat_secrets import HatSecretStoreError, normalize_hat_handle, set_hat_secret
+from .hat_secrets import (
+    HatSecretStoreError,
+    ensure_hat_key_pair,
+    list_hat_secret_names,
+    normalize_hat_handle,
+    normalize_secret_name,
+    set_hat_secret,
+    set_hat_secrets,
+)
 from .platform import (
     PlatformClient,
     PlatformError,
@@ -157,6 +168,73 @@ def start_private_secret_handoff(
     )
 
 
+def start_hat_credentials_handoff(hat_identifier: str) -> str:
+    """Open one encrypted browser form for every credential defined by a Hat."""
+    client, platform_auth = build_platform_client()
+    try:
+        detail_path = computer_api_path(platform_auth, "hats/v1/detail")
+        hat = client.get_json(f"{detail_path}?{urlencode({'identifier': hat_identifier})}")
+        hat_handle = normalize_hat_handle(str(hat.get("handle") or ""))
+        credentials_path = computer_api_path(platform_auth, "hats/v1/credentials")
+        listed = client.get_json(f"{credentials_path}?{urlencode({'identifier': hat_handle})}")
+        credentials = listed.get("credentials")
+        if not isinstance(credentials, list) or not credentials:
+            return tool_error_json(
+                tool="tinyhat_hats",
+                error_name="hat_credentials_empty",
+                message=(
+                    "Define at least one credential name and description for this "
+                    "Hat before opening secure entry."
+                ),
+            )
+        private_key_path, public_key_pem = _hat_credentials_key_pair(hat_handle)
+        defined_names = {
+            normalize_secret_name(str(item.get("name") or ""))
+            for item in credentials
+            if isinstance(item, dict) and str(item.get("name") or "").strip()
+        }
+        local_names = set(list_hat_secret_names(hat_handle)["names"])
+        bundle_name = (
+            "HAT_CREDENTIALS_" + hashlib.sha256(hat_handle.encode("utf-8")).hexdigest()[:12].upper()
+        )
+        handoff = client.post_json(
+            computer_api_path(platform_auth, "private-secret-handoffs/v1"),
+            {
+                "name": bundle_name,
+                "description": f"Credentials for {hat_handle}",
+                "public_key_pem": public_key_pem,
+                "key_algorithm": KEY_ALGORITHM,
+                "expires_in_seconds": DEFAULT_EXPIRES_IN_SECONDS,
+                "handoff_kind": "hat_credentials",
+                "hat_identifier": hat_handle,
+                "existing_credential_names": sorted(defined_names & local_names),
+            },
+        )
+    except (PlatformError, HatSecretStoreError, OSError) as exc:
+        return tool_error_json(
+            tool="tinyhat_hats",
+            error_name="hat_credentials_handoff_failed",
+            message=f"Could not open the encrypted Hat credentials page: {exc}",
+        )
+
+    _start_worker_process(
+        handoff,
+        private_key_path.read_text(encoding="utf-8"),
+        hat_handle=hat_handle,
+        persistent=True,
+        key_path=private_key_path,
+    )
+    count = len(handoff.get("credentials") or credentials)
+    return (
+        f"I sent one secure Enter credentials button for {count} Hat "
+        f"credential{'s' if count != 1 else ''}. Edit the values together on that page; "
+        "saved values can stay blank when they should be kept. "
+        "They are encrypted together and staged only in the Hat's local package "
+        "store for its intended customer. They are not loaded into this agent's "
+        "Hermes environment, so Hermes is not restarted."
+    )
+
+
 def _request_private_secret_handoff(
     *,
     payload: dict[str, Any],
@@ -237,12 +315,14 @@ def _start_worker_process(
     private_key_pem: str,
     *,
     hat_handle: str | None = None,
+    persistent: bool = False,
+    key_path: Path | None = None,
 ) -> None:
     handoff_id = str(handoff.get("handoff_id") or "").strip()
     if not handoff_id:
         raise SecretHandoffError("Platform did not return a handoff id.")
     expires_in_seconds = _worker_expires_in_seconds(handoff)
-    key_path = _write_private_key_file(handoff_id, private_key_pem)
+    worker_key_path = key_path or _write_private_key_file(handoff_id, private_key_pem)
     package_dir = Path(__file__).resolve().parent
     env = os.environ.copy()
     pythonpath = str(package_dir.parent)
@@ -252,26 +332,27 @@ def _start_worker_process(
     try:
         if _start_worker_with_systemd(
             handoff_id=handoff_id,
-            key_path=key_path,
+            key_path=worker_key_path,
             package_dir=package_dir,
             env=env,
             expires_in_seconds=expires_in_seconds,
             hat_handle=hat_handle,
+            persistent=persistent,
         ):
             return
         _start_worker_with_popen(
             handoff_id=handoff_id,
-            key_path=key_path,
+            key_path=worker_key_path,
             package_dir=package_dir,
             env=env,
             expires_in_seconds=expires_in_seconds,
             hat_handle=hat_handle,
+            persistent=persistent,
         )
     except Exception as exc:
-        try:
-            key_path.unlink()
-        except OSError:
-            pass
+        if not persistent:
+            with suppress(OSError):
+                worker_key_path.unlink()
         raise SecretHandoffError(
             "Could not start the local secret handoff worker.",
             public_message="I could not start the secure secret saver on this Computer.",
@@ -297,6 +378,7 @@ def _start_worker_with_systemd(  # noqa: PLR0913 - explicit worker boundary inpu
     env: dict[str, str],
     expires_in_seconds: int,
     hat_handle: str | None = None,
+    persistent: bool = False,
 ) -> bool:
     systemd_run = shutil.which("systemd-run")
     if not systemd_run:
@@ -326,6 +408,8 @@ def _start_worker_with_systemd(  # noqa: PLR0913 - explicit worker boundary inpu
     )
     if hat_handle:
         command.extend(["--hat-handle", hat_handle])
+    if persistent:
+        command.append("--persistent")
     try:
         completed = subprocess.run(
             command,
@@ -361,6 +445,7 @@ def _start_worker_with_popen(  # noqa: PLR0913 - mirrors the systemd worker inpu
     env: dict[str, str],
     expires_in_seconds: int,
     hat_handle: str | None = None,
+    persistent: bool = False,
 ) -> None:
     # Fallback when systemd-run is unavailable or fails. The worker never
     # stops or starts the gateway, so escaping the gateway control group via
@@ -377,6 +462,8 @@ def _start_worker_with_popen(  # noqa: PLR0913 - mirrors the systemd worker inpu
     ]
     if hat_handle:
         command.extend(["--hat-handle", hat_handle])
+    if persistent:
+        command.append("--persistent")
     subprocess.Popen(
         command,
         cwd=str(package_dir.parent),
@@ -398,6 +485,11 @@ def _write_private_key_file(handoff_id: str, private_key_pem: str) -> Path:
     key_path.write_text(private_key_pem, encoding="utf-8")
     key_path.chmod(0o600)
     return key_path
+
+
+def _hat_credentials_key_pair(hat_handle: str) -> tuple[Path, str]:
+    """Return the stable Computer-local key pair for one Hat bundle."""
+    return ensure_hat_key_pair(hat_handle, key_pair_factory=_generate_key_pair)
 
 
 def _poll_and_install_secret(
@@ -480,6 +572,15 @@ def _install_submitted_secret(  # noqa: PLR0913 - generic, Slack, and Hat instal
             private_key_pem=private_key_pem,
             state=state,
         )
+    if state.get("handoff_kind") == "hat_credentials":
+        return _install_hat_credentials_bundle(
+            client=client,
+            platform_auth=platform_auth,
+            handoff_id=handoff_id,
+            private_key_pem=private_key_pem,
+            state=state,
+            hat_handle=hat_handle,
+        )
     ciphertext_payload = state.get("ciphertext_payload")
     if not isinstance(ciphertext_payload, dict):
         raise SecretHandoffError("Platform did not return ciphertext.")
@@ -542,6 +643,75 @@ def _install_submitted_secret(  # noqa: PLR0913 - generic, Slack, and Hat instal
         installed=True,
         message=None,
         outcome=HANDOFF_OUTCOME_RESTART_PENDING,
+    )
+    return True
+
+
+def _install_hat_credentials_bundle(  # noqa: PLR0913 - explicit trust boundary
+    *,
+    client: PlatformClient,
+    platform_auth: str,
+    handoff_id: str,
+    private_key_pem: str,
+    state: dict[str, Any],
+    hat_handle: str | None,
+) -> bool:
+    ciphertext_payload = state.get("ciphertext_payload")
+    if not isinstance(ciphertext_payload, dict):
+        raise SecretHandoffError("Platform did not return ciphertext.")
+    requested_handle = normalize_hat_handle(str(hat_handle or ""))
+    state_handle = normalize_hat_handle(str(state.get("hat_handle") or ""))
+    if requested_handle != state_handle:
+        raise SecretHandoffError(
+            "Platform returned a different Hat binding for this bundle.",
+            public_message="The secure entry no longer matches the requested Hat.",
+        )
+    expected_credentials = state.get("credentials")
+    if not isinstance(expected_credentials, list) or not expected_credentials:
+        raise SecretHandoffError("Platform did not return Hat credential metadata.")
+    expected_names = {
+        normalize_secret_name(str(item.get("name") or ""))
+        for item in expected_credentials
+        if isinstance(item, dict)
+    }
+    plaintext = _decrypt_ciphertext(private_key_pem, ciphertext_payload)
+    values: dict[str, str] = {}
+    try:
+        bundle = json.loads(plaintext)
+        if (
+            not isinstance(bundle, dict)
+            or bundle.get("schema") != "tinyhat_hat_credentials_bundle_v1"
+            or not isinstance(bundle.get("credentials"), dict)
+        ):
+            raise SecretHandoffError("The Hat credential bundle is invalid.")
+        values = {
+            normalize_secret_name(str(name)): str(value)
+            for name, value in bundle["credentials"].items()
+        }
+        submitted_names = set(values)
+        if not submitted_names or not submitted_names.issubset(expected_names):
+            raise SecretHandoffError("The Hat credential bundle does not match the expected names.")
+        saved_names = set(list_hat_secret_names(requested_handle)["names"])
+        missing_names = expected_names - submitted_names
+        if not missing_names.issubset(saved_names):
+            raise SecretHandoffError(
+                "The Hat credential bundle omitted a credential without a saved value.",
+                public_message=(
+                    "One or more blank credentials do not have a saved value. "
+                    "Open the form again and enter them."
+                ),
+            )
+        set_hat_secrets(requested_handle, values)
+    finally:
+        plaintext = ""
+        values.clear()
+    _claim_handoff(
+        client,
+        platform_auth,
+        handoff_id,
+        installed=True,
+        message=None,
+        gateway_ready=True,
     )
     return True
 

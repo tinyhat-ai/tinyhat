@@ -54,6 +54,7 @@ wearing that hat are deliberately reserved for later milestones.
 | `skills/tinyhat-tell-joke/SKILL.md` | Deterministic joke proof. |
 | `skills/tinyhat-plugin-version/SKILL.md` | Live plugin version proof. |
 | `skills/tinyhat-skill-catalog/SKILL.md` | Skill discovery guidance for plugin-qualified Tinyhat skill names. |
+| `skills/tinyhat-skill-authoring/SKILL.md` | Portable skill-writing guidance for names, trigger boundaries, progressive disclosure, and context limits. |
 | `skills/tinyhat-private-secret/SKILL.md` | Browser-encrypted secret handoff guidance. |
 | `skills/tinyhat-slack/SKILL.md` | Hermes-native Slack Agent-view and Socket Mode onboarding. |
 | `skills/tinyhat-credentials/SKILL.md` | Value-blind credential discovery and confirmed Computer-side removal guidance. |
@@ -129,11 +130,29 @@ bot username and display-name defaults, then `tinyhat_hats`
 derives the owner and account from the authenticated Computer. The platform
 creates a private repository and returns the canonical handle and share URL.
 The same tool lists up to 100 owner-scoped Hats, retrieves one by key or
-handle, updates its public title, and creates or updates guarded non-secret
-repo files. Hat credentials use the encrypted Mini App handoff, but terminate
-in a per-Hat local store on the creator Computer. The private repo records only
-the credential name, purpose, and saved time. The intended customer can verify
+handle, updates its public title, intended customer email, or namespaced
+handle while preserving its files and local credential bundle, and creates or
+updates guarded non-secret repo files. It also permanently deletes one exact
+Hat, its private repository, and its Computer-local package state only after
+the user explicitly confirms the canonical handle. For Hat credentials, the agent first defines every
+value-blind name and purpose, then sends one encrypted Mini App form for all
+fields. Existing values are marked without being disclosed; blank saved fields
+are preserved, and only entered replacements change. One Hat key pair encrypts
+the submitted bundle, which is staged in a per-Hat package store on
+the creator Computer for the intended customer. It is not loaded into the
+authoring agent's Hermes environment, so Hermes is not restarted. The private
+repo records only credential names, purposes, and saved times. The intended customer can verify
 their email on the public page and create a Telegram agent that wears the Hat.
+
+Before writing or revising a Hat `SKILL.md`, the agent loads
+`tinyhat:tinyhat-skill-authoring`. This public playbook teaches the agent to
+choose a valid folder-matched name, describe both intended triggers and nearby
+non-triggers, keep routine skills well below the 500-line / roughly 5,000-token
+recommendation, and move optional detail into progressive-disclosure resources.
+The authoring workflow also keeps a root `HAT.md` capability description
+current. The marketplace page combines that description with public skill
+frontmatter and value-blind credential metadata to explain what the Hat enables
+without exposing private file bodies or credential names and values.
 
 `tinyhat-skill-catalog` is the discovery repair path. When `skills_list`,
 `available_skills`, or an unqualified `skill_view(name="tinyhat-codex-auth")`
@@ -149,7 +168,8 @@ pair, the user enters the value in a Telegram Mini App, the browser
 encrypts the value with the public key, and the Computer decrypts it with
 the temporary private key. Tinyhat stores only short-lived ciphertext for
 the handoff and wipes it after completion, expiration, or failure. When the
-call includes `hat_identifier`, the Computer writes the plaintext to
+call includes `hat_identifier`, the Computer re-encrypts the value with that
+Hat's stable local key pair and writes only ciphertext to
 `~/.tinyhat/hats/<owner>/<hat>/secrets.json` instead of Hermes global config.
 For a global Computer secret, the saver worker registers the name for terminal
 env passthrough, sends one short Telegram notice, and claims the handoff with
