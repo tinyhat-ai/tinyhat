@@ -46,6 +46,83 @@ class FakePlatformClient:
 
 
 class HatToolTests(unittest.TestCase):
+    def test_repository_checkout_uses_runtime_without_platform_proxy(self) -> None:
+        with (
+            mock.patch.object(
+                hats_module,
+                "run_hat_repository",
+                return_value={
+                    "action": "checkout",
+                    "hat_handle": "acme/hats/forecasting",
+                    "path": "/home/agent/.hermes/hat-repositories/acme/forecasting",
+                    "credential_persisted": False,
+                },
+            ) as repository,
+            mock.patch.object(hats_module, "build_platform_client") as platform,
+        ):
+            result = json.loads(
+                hats_module.hats(
+                    {
+                        "action": "repository_checkout",
+                        "identifier": "forecasting",
+                    }
+                )
+            )
+
+        repository.assert_called_once_with(
+            {"action": "checkout", "identifier": "forecasting"}
+        )
+        platform.assert_not_called()
+        self.assertFalse(result["credential_persisted"])
+        self.assertIn("clean Git remote", result["agent_instruction"])
+
+    def test_repository_sync_requires_paths_and_commit_message(self) -> None:
+        with mock.patch.object(
+            hats_module,
+            "run_hat_repository",
+            return_value={
+                "action": "sync",
+                "pushed": True,
+                "head_sha": "a" * 40,
+                "synced_paths": ["HAT.md", "skills/demo/SKILL.md"],
+            },
+        ) as repository:
+            result = json.loads(
+                hats_module.hats(
+                    {
+                        "action": "repository_sync",
+                        "identifier": "forecasting",
+                        "paths": ["HAT.md", "skills/demo/SKILL.md"],
+                        "message": "Add forecasting skill",
+                    }
+                )
+            )
+
+        repository.assert_called_once_with(
+            {
+                "action": "sync",
+                "identifier": "forecasting",
+                "paths": ["HAT.md", "skills/demo/SKILL.md"],
+                "message": "Add forecasting skill",
+            }
+        )
+        self.assertTrue(result["pushed"])
+        self.assertIn("verified head SHA", result["agent_instruction"])
+
+    def test_repository_reset_requires_explicit_confirmation(self) -> None:
+        with mock.patch.object(hats_module, "run_hat_repository") as repository:
+            result = json.loads(
+                hats_module.hats(
+                    {
+                        "action": "repository_reset",
+                        "identifier": "forecasting",
+                    }
+                )
+            )
+
+        repository.assert_not_called()
+        self.assertEqual(result["error"], "confirmation_required")
+
     def test_create_uses_local_computer_endpoint_without_owner_ids(self) -> None:
         client = FakePlatformClient()
         with mock.patch.object(

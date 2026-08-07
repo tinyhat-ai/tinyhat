@@ -12,6 +12,7 @@ from .hat_secrets import (
     remove_hat_secret,
     rename_hat_secret_store,
 )
+from .hat_repository import HatRepositoryRuntimeError, run_hat_repository
 from .platform import PlatformError, build_platform_client, computer_api_path
 from .secret_handoff import start_hat_credentials_handoff
 from .tool_errors import tool_error_json
@@ -27,6 +28,10 @@ ACTIONS = (
     "configure_credentials",
     "list_credentials",
     "remove_credential",
+    "repository_checkout",
+    "repository_status",
+    "repository_sync",
+    "repository_reset",
 )
 
 
@@ -55,9 +60,7 @@ def hats(  # noqa: PLR0911, PLR0912, PLR0915 - one public tool dispatches bounde
             tool="tinyhat_hats",
             error_name="invalid_parameter",
             message=(
-                "Call tinyhat_hats with a supported create, list, get, update, "
-                "delete, put_file, define_credential, configure_credentials, "
-                "list_credentials, or remove_credential action."
+                "Call tinyhat_hats with one of the supported actions in `expected`."
             ),
             expected={"action": list(ACTIONS)},
             example_call={"action": "list"},
@@ -76,6 +79,10 @@ def hats(  # noqa: PLR0911, PLR0912, PLR0915 - one public tool dispatches bounde
                 "configure_credentials",
                 "list_credentials",
                 "remove_credential",
+                "repository_checkout",
+                "repository_status",
+                "repository_sync",
+                "repository_reset",
             }
             else ""
         )
@@ -103,9 +110,38 @@ def hats(  # noqa: PLR0911, PLR0912, PLR0915 - one public tool dispatches bounde
                         "customer_email": "new-buyer@example.com",
                     },
                 )
-        client, platform_auth = build_platform_client()
-        path = computer_api_path(platform_auth, "hats/v1")
-        if action == "list":
+        repository_action = action.startswith("repository_")
+        if repository_action:
+            repository_payload: dict[str, Any] = {
+                "action": action.removeprefix("repository_"),
+                "identifier": identifier,
+            }
+            if action == "repository_sync":
+                repository_payload["paths"] = payload.get("paths")
+                repository_payload["message"] = _required_text(payload, "message")
+            if action == "repository_reset" and payload.get("confirmed") is not True:
+                return tool_error_json(
+                    tool="tinyhat_hats",
+                    error_name="confirmation_required",
+                    message=(
+                        "Only reset repository access after the user explicitly asks "
+                        "to stop this Computer from renewing access to this Hat."
+                    ),
+                    example_call={
+                        "action": "repository_reset",
+                        "identifier": identifier,
+                        "confirmed": True,
+                    },
+                )
+            result = run_hat_repository(repository_payload)
+        else:
+            client, platform_auth = build_platform_client()
+            path = computer_api_path(platform_auth, "hats/v1")
+        if repository_action:
+            # Repository actions are completed entirely by the public Computer
+            # runtime. They must not make a second plugin-owned platform call.
+            pass
+        elif action == "list":
             result = client.get_json(path)
         elif action in {"get", "list_credentials"}:
             query = urlencode({"identifier": identifier})
@@ -247,14 +283,34 @@ def hats(  # noqa: PLR0911, PLR0912, PLR0915 - one public tool dispatches bounde
                 else {"action": "get", "identifier": "trade-show-sales"}
             ),
         )
-    except (PlatformError, HatSecretStoreError) as exc:
+    except (PlatformError, HatSecretStoreError, HatRepositoryRuntimeError) as exc:
         return tool_error_json(
             tool="tinyhat_hats",
             error_name="platform_request_failed",
             message=str(exc),
         )
 
-    if action == "put_file":
+    if action == "repository_checkout":
+        result["agent_instruction"] = (
+            "Use the returned local path for repository file work. Inspect Git status "
+            "and current files before editing. The clean Git remote contains no token."
+        )
+    elif action == "repository_status":
+        result["agent_instruction"] = (
+            "Report the changed paths and whether the checkout is clean. Never claim "
+            "that local changes reached GitHub until repository_sync reports pushed=true."
+        )
+    elif action == "repository_sync":
+        result["agent_instruction"] = (
+            "Report the exact paths committed and the verified head SHA. The short-lived "
+            "GitHub credential was used only by the Computer and was not persisted."
+        )
+    elif action == "repository_reset":
+        result["agent_instruction"] = (
+            "Report that renewal stopped and state the residual access expiry when one "
+            "is returned. The existing local clone remains until the Computer is wiped."
+        )
+    elif action == "put_file":
         result["agent_instruction"] = (
             "Report whether the file was created or updated and name its repo path. "
             "Never imply that a secret value belongs in a Hat repo file."

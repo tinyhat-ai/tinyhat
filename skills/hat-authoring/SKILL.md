@@ -14,7 +14,10 @@ Use this skill when the user asks to create, inspect, or modify a Hat.
    and default Telegram bot display name are optional.
 2. Call `tinyhat_hats` with `action="create"`, `name`, `customer_email`, and
    any supplied `key`, `default_bot_username`, and `default_bot_display_name`.
-3. Report the returned canonical handle and share URL. Say that the private
+3. Call `tinyhat_hats` with `action="repository_checkout"` and the returned
+   canonical handle. This creates the normal local Git checkout without putting
+   a GitHub credential in its remote URL or config.
+4. Report the returned canonical handle and share URL. Say that the private
    repository was created only when `repository_created` is true. Explain that
    the intended customer can verify their email on that page and create a
    Telegram agent that wears the hat.
@@ -57,9 +60,23 @@ removed Hat. Report the returned repository and local-store outcomes honestly.
 
 ## Add or update repo content
 
-1. Get the Hat identifier, relative path, and desired non-secret text.
-2. Call `tinyhat_hats` with `action="put_file"`.
-3. Report whether Tinyhat created or updated the file and name the path.
+1. Call `tinyhat_hats` with `action="repository_checkout"` and the Hat
+   identifier. Use the returned local path as the working directory. Inspect
+   the current files and Git status before editing.
+2. Create, update, rename, or remove the requested files with the Computer's
+   normal file tools. Several related files may change together.
+3. Call `tinyhat_hats` with `action="repository_status"` and review every
+   changed path. Do not include unrelated work.
+4. Call `tinyhat_hats` with `action="repository_sync"`, the exact changed
+   `paths`, and one concise, atomic `message`. Tinyhat commits, pushes, and
+   verifies the new GitHub head without returning the short-lived credential.
+5. Report the synced paths and verified head SHA. Do not claim success unless
+   `pushed=true`.
+
+`put_file` remains the compatibility path for Hats whose error says they use
+the original repository integration. New `tinyhat-ai` Hats use the local Git
+workflow above so repository contents travel directly between the Computer and
+GitHub rather than through Tinyhat's file API.
 
 Before creating, reviewing, or updating any skill, load
 `tinyhat:tinyhat-skill-authoring` and follow its naming, trigger-boundary,
@@ -70,6 +87,12 @@ new commit, so repo history remains the undo trail.
 Never put an API key, token, password, private key, `.env` file, secret file,
 or credential file in the repo. The platform rejects secret-shaped paths and
 private-key material, but the skill must avoid sending secret values at all.
+
+Never put a lease token in a Git URL, `git config`, `gh auth`, a file, a shell
+command, or chat. The Computer's credential helper obtains an exact-repository
+lease for Git. If the user explicitly asks to stop renewal, call
+`repository_reset` with `confirmed=true`; report any residual expiry honestly
+and explain that the local clone remains until the Computer is wiped.
 
 ## Keep the public capability overview current
 

@@ -41,6 +41,10 @@ TINYHAT_HATS_SCHEMA = {
                 "configure_credentials",
                 "list_credentials",
                 "remove_credential",
+                "repository_checkout",
+                "repository_status",
+                "repository_sync",
+                "repository_reset",
             ],
         },
         "name": {
@@ -89,6 +93,7 @@ TINYHAT_HATS_SCHEMA = {
                 "Required key or canonical handle for get, update, delete, "
                 "put_file, define_credential, configure_credentials, "
                 "list_credentials, and remove_credential."
+                " Repository actions use the same owner-scoped identifier."
             ),
         },
         "public_title": {
@@ -146,7 +151,27 @@ TINYHAT_HATS_SCHEMA = {
             "description": (
                 "True only after the user explicitly asks to remove this exact "
                 "credential from this exact Hat, or to permanently delete this "
-                "exact Hat and its private repository."
+                "exact Hat and its private repository, or to stop this Computer "
+                "from renewing repository access with repository_reset."
+            ),
+        },
+        "paths": {
+            "type": "array",
+            "minItems": 1,
+            "maxItems": 100,
+            "uniqueItems": True,
+            "items": {"type": "string", "minLength": 1, "maxLength": 240},
+            "description": (
+                "Explicit repository-relative paths to commit for repository_sync. "
+                "Secret, credential, .git, key, and symlink paths are rejected."
+            ),
+        },
+        "message": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 200,
+            "description": (
+                "One-line atomic Git commit message for repository_sync."
             ),
         },
     },

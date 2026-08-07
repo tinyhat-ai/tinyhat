@@ -6,7 +6,7 @@ The current capability list is intentionally small.
 | --- | --- | --- |
 | `tinyhat_plugin_version` | Available now | Proves which Tinyhat plugin version Hermes has loaded for the live agent. |
 | `tinyhat_get_platform_status` | Available now | Reads this authenticated Computer's safe platform state, assignment, configuration revisions, and package inventory. |
-| `tinyhat_hats` | Available now | Creates, lists, inspects, renames, and permanently deletes one-customer Hats; commits guarded non-secret repo files; and defines, configures, lists, or removes value-blind Hat credentials. |
+| `tinyhat_hats` | Available now | Creates, lists, inspects, renames, and permanently deletes one-customer Hats; checks out and syncs private repositories through Computer-scoped GitHub leases; and manages value-blind Hat credentials. |
 | `tinyhat_tell_joke` | Available now | Proves Hermes loaded the Tinyhat plugin and can call a plugin tool. |
 | `tinyhat_skill_catalog` | Available now | Lists Tinyhat plugin skills with `tinyhat:<skill>` qualified names and unqualified aliases. |
 | `tinyhat-skill-authoring` skill | Available now | Teaches agents to write portable user skills with valid names, explicit trigger and non-trigger boundaries, progressive disclosure, and bounded context size. |
@@ -55,7 +55,17 @@ private Hat repo stores names, purposes, and saved times only.
 `action=list_credentials` returns that metadata; `action=remove_credential`
 deletes the local value and then the metadata. The Hat preview can reopen the
 encrypted bundle form after its first Computer-keyed setup. No runtime change
-is required.
+or gateway restart is required when credential values change.
+
+New Hat repositories live in `tinyhat-ai`. For authoring, the assigned
+Computer calls `repository_checkout`, edits a normal local clone, and calls
+`repository_sync` with explicit paths and one atomic commit message. The
+runtime obtains a one-hour GitHub App token restricted to that immutable
+repository and passes it only through Git's credential-helper pipe. The remote
+URL, Git config, tool result, and agent transcript contain no token. After a
+push, Tinyhat receives only the grant id and claimed head SHA, verifies the
+default-branch ref, and records the synchronized SHA. Existing Tinyloophub Hats
+keep their original mediated integration unchanged.
 
 Before `action=put_file` creates or changes a `SKILL.md`, the agent loads
 `tinyhat:tinyhat-skill-authoring`. The playbook keeps a typical skill under

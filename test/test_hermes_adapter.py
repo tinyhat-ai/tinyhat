@@ -168,6 +168,10 @@ class HermesAdapterTests(unittest.TestCase):
                 "configure_credentials",
                 "list_credentials",
                 "remove_credential",
+                "repository_checkout",
+                "repository_status",
+                "repository_sync",
+                "repository_reset",
             ],
         )
         self.assertIn("permanently deletes", hats_schema["description"])
@@ -242,7 +246,7 @@ class HermesAdapterTests(unittest.TestCase):
 
         self.assertEqual(payload["schema"], "tinyhat_plugin_version_v1")
         self.assertEqual(payload["name"], "tinyhat")
-        self.assertEqual(payload["version"], "0.23.0")
+        self.assertEqual(payload["version"], "0.24.0")
 
     def test_platform_status_uses_attested_computer_endpoint(self) -> None:
         original_build = tools.build_platform_client
@@ -255,7 +259,7 @@ class HermesAdapterTests(unittest.TestCase):
                     "computer_id": 5359,
                     "state": "active",
                     "assigned": True,
-                    "package_inventory": {"plugin": {"version": "0.23.0"}},
+                    "package_inventory": {"plugin": {"version": "0.24.0"}},
                 }
 
         try:
@@ -268,7 +272,7 @@ class HermesAdapterTests(unittest.TestCase):
         self.assertEqual(payload["computer_id"], 5359)
         self.assertEqual(payload["state"], "active")
         self.assertTrue(payload["assigned"])
-        self.assertEqual(payload["package_inventory"]["plugin"]["version"], "0.23.0")
+        self.assertEqual(payload["package_inventory"]["plugin"]["version"], "0.24.0")
 
     def test_platform_status_returns_structured_platform_error(self) -> None:
         original_build = tools.build_platform_client
@@ -291,7 +295,7 @@ class HermesAdapterTests(unittest.TestCase):
 
         self.assertEqual(payload["schema"], "tinyhat_skill_catalog_v1")
         self.assertEqual(payload["plugin"]["name"], "tinyhat")
-        self.assertEqual(payload["plugin"]["version"], "0.23.0")
+        self.assertEqual(payload["plugin"]["version"], "0.24.0")
         by_name = {skill["name"]: skill for skill in payload["skills"]}
         self.assertEqual(
             by_name["tinyhat-codex-auth"]["qualified_name"],
