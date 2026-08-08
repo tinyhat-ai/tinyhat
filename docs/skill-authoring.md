@@ -118,6 +118,11 @@ fields are ready. The bundle is staged in the Hat's Computer-local package
 store for its intended customer, not loaded into the authoring Hermes
 environment, and does not trigger a Hermes restart.
 
+For new `tinyhat-ai` Hat repositories, `hat-authoring` checks out a normal
+Computer-local clone, lets the agent use ordinary file tools, and syncs only an
+explicit path list through the runtime's non-persistent Git credential helper.
+The skill never asks for or handles the one-hour GitHub installation token.
+
 `tinyhat-tell-joke` is intentionally small. It proves the plugin is
 installed before we add real Tinyhat platform capabilities.
 

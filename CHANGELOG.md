@@ -6,6 +6,14 @@ All notable changes to the Tinyhat plugin are documented here.
 
 ### Changed
 
+- Start `0.24.0` with direct private Hat repository authoring. New Hats live in
+  `tinyhat-ai`; the agent checks out a normal Computer-local Git clone and can
+  inspect, edit, and atomically sync explicit non-secret paths. The plugin sees
+  only safe repository results while public Hermes runtime `0.0.51` obtains a
+  one-hour GitHub App token constrained to one immutable repository through
+  Git's credential-helper pipe. Existing Tinyloophub Hats retain their original
+  mediated integration unchanged. Deploy the matching platform broker and
+  runtime before channel promotion.
 - Keep each Hat's marketplace overview current through a root `HAT.md`
   capability description, skill frontmatter, and value-blind tool metadata.
 - Add the public `tinyhat:tinyhat-skill-authoring` playbook and require Hat
