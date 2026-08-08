@@ -52,8 +52,10 @@ creator Computer decrypts and atomically stages the values only in that Hat's
 local package store for its intended customer. It does not load them into the
 authoring agent's Hermes environment, so it does not restart Hermes. The
 private Hat repo stores names, purposes, and saved times only.
-`action=list_credentials` returns that metadata; `action=remove_credential`
-deletes the local value and then the metadata. The Hat preview can reopen the
+`action=list_credentials` returns that metadata plus value-blind local presence
+when the Computer-local store is available; it reports unavailable status
+instead of a false negative when that store cannot be checked.
+`action=remove_credential` deletes the local value and then the metadata. The Hat preview can reopen the
 encrypted bundle form after its first Computer-keyed setup. No runtime change
 or gateway restart is required when credential values change.
 

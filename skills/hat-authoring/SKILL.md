@@ -151,7 +151,10 @@ credentials saved**.
 ## List or remove Hat credentials
 
 - Call `tinyhat_hats` with `action="list_credentials"` and the Hat identifier.
-  Return names and descriptions only; never infer or claim a value.
+  Return names and descriptions only; never infer or claim a value. When
+  `local_value_status` is `available`, use each field's `has_local_value` as the
+  authoritative saved-state. When it is `unavailable`, say that saved-state
+  could not be checked; do not turn that into `No`.
 - Remove only after the user explicitly asks to remove an exact credential from
   an exact Hat. Then call `tinyhat_hats` with `action="remove_credential"`,
   `credential_name`, and `confirmed=true`. This deletes the local value and its

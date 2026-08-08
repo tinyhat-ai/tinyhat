@@ -116,7 +116,9 @@ or hat credentials are already populated. Credential authoring defines names
 and purposes without values, then opens one encrypted bundle form after all
 fields are ready. The bundle is staged in the Hat's Computer-local package
 store for its intended customer, not loaded into the authoring Hermes
-environment, and does not trigger a Hermes restart.
+environment, and does not trigger a Hermes restart. Credential inspection
+uses Computer-local name presence when available and never turns an unavailable
+local check into a false `No`.
 
 For new `tinyhat-ai` Hat repositories, `hat-authoring` checks out a normal
 Computer-local clone, lets the agent use ordinary file tools, and syncs only an

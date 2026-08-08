@@ -9,6 +9,7 @@ from urllib.parse import urlencode
 from .hat_secrets import (
     HatSecretStoreError,
     delete_hat_secret_store,
+    list_hat_secret_names,
     remove_hat_secret,
     rename_hat_secret_store,
 )
@@ -155,6 +156,26 @@ def hats(  # noqa: PLR0911, PLR0912, PLR0915 - one public tool dispatches bounde
             query = urlencode({"identifier": identifier})
             suffix = "credentials" if action == "list_credentials" else "detail"
             result = client.get_json(f"{path}/{suffix}?{query}")
+            if action == "list_credentials":
+                handle = str(result.get("handle") or identifier).strip()
+                try:
+                    local_names = set(list_hat_secret_names(handle)["names"])
+                except (HatSecretStoreError, OSError):
+                    credentials = result.get("credentials")
+                    if isinstance(credentials, list):
+                        for credential in credentials:
+                            if isinstance(credential, dict):
+                                credential.pop("has_local_value", None)
+                    result["local_value_status"] = "unavailable"
+                else:
+                    credentials = result.get("credentials")
+                    if isinstance(credentials, list):
+                        for credential in credentials:
+                            if not isinstance(credential, dict):
+                                continue
+                            name = str(credential.get("name") or "").strip().upper()
+                            credential["has_local_value"] = name in local_names
+                    result["local_value_status"] = "available"
         elif action == "update":
             assert update_payload is not None
             current_hat: dict[str, Any] | None = None
@@ -335,8 +356,9 @@ def hats(  # noqa: PLR0911, PLR0912, PLR0915 - one public tool dispatches bounde
         )
     elif action in {"list_credentials", "remove_credential"}:
         result["agent_instruction"] = (
-            "Report credential names and safe metadata only. Secret values remain in "
-            "the Computer-local Hat store and are never returned by Tinyhat."
+            "Report credential names and safe metadata only. When local_value_status "
+            "is available, has_local_value is the authoritative Computer-local saved "
+            "state. Secret values remain local and are never returned by Tinyhat."
         )
     elif action == "update":
         result["agent_instruction"] = (

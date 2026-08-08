@@ -343,6 +343,87 @@ class HatToolTests(unittest.TestCase):
             ["a Hat metadata field"],
         )
 
+    def test_list_credentials_uses_computer_local_saved_state(self) -> None:
+        client = FakePlatformClient()
+
+        def fake_get(path: str) -> dict[str, object]:
+            client.get_paths.append(path)
+            return {
+                "handle": "acme/hats/forecasting",
+                "credentials": [
+                    {"name": "EXA_API_KEY", "saved_at": None},
+                    {"name": "GITHUB_TOKEN", "saved_at": "stale-platform-value"},
+                ],
+            }
+
+        client.get_json = fake_get  # type: ignore[method-assign]
+        with (
+            mock.patch.object(
+                hats_module,
+                "build_platform_client",
+                return_value=(client, "local_dev"),
+            ),
+            mock.patch.object(
+                hats_module,
+                "list_hat_secret_names",
+                return_value={
+                    "handle": "acme/hats/forecasting",
+                    "names": ["EXA_API_KEY"],
+                    "count": 1,
+                    "value_available": False,
+                },
+            ),
+        ):
+            result = json.loads(
+                hats_module.hats(
+                    {
+                        "action": "list_credentials",
+                        "identifier": "acme/hats/forecasting",
+                    }
+                )
+            )
+
+        self.assertEqual(result["local_value_status"], "available")
+        self.assertTrue(result["credentials"][0]["has_local_value"])
+        self.assertFalse(result["credentials"][1]["has_local_value"])
+        self.assertNotIn("value", result["credentials"][0])
+
+    def test_list_credentials_removes_stale_state_when_local_check_fails(self) -> None:
+        client = FakePlatformClient()
+
+        def fake_get(_path: str) -> dict[str, object]:
+            return {
+                "handle": "acme/hats/forecasting",
+                "credentials": [
+                    {"name": "EXA_API_KEY", "has_local_value": False},
+                ],
+            }
+
+        client.get_json = fake_get  # type: ignore[method-assign]
+        with (
+            mock.patch.object(
+                hats_module,
+                "build_platform_client",
+                return_value=(client, "local_dev"),
+            ),
+            mock.patch.object(
+                hats_module,
+                "list_hat_secret_names",
+                side_effect=hats_module.HatSecretStoreError("store unavailable"),
+            ),
+        ):
+            result = json.loads(
+                hats_module.hats(
+                    {
+                        "action": "list_credentials",
+                        "identifier": "acme/hats/forecasting",
+                    }
+                )
+            )
+
+        self.assertEqual(result["local_value_status"], "unavailable")
+        self.assertNotIn("has_local_value", result["credentials"][0])
+
     def test_remove_credential_deletes_local_value_before_metadata(self) -> None:
         client = FakePlatformClient()
 
