@@ -87,11 +87,19 @@ def hats(  # noqa: PLR0911, PLR0912, PLR0915 - one public tool dispatches bounde
             else ""
         )
         name = _required_text(payload, "name") if action == "create" else ""
-        customer_email = _required_text(payload, "customer_email") if action == "create" else ""
+        customer_email = (
+            _required_text(payload, "customer_email") if action == "create" else ""
+        )
         update_payload: dict[str, str] | None = None
         if action == "update":
             update_payload = {"identifier": identifier}
-            for field in ("public_title", "customer_email", "new_key"):
+            for field in (
+                "public_title",
+                "customer_email",
+                "default_bot_username",
+                "default_bot_display_name",
+                "new_key",
+            ):
                 value = str(payload.get(field) or "").strip()
                 if value:
                     update_payload[field] = value
@@ -103,7 +111,7 @@ def hats(  # noqa: PLR0911, PLR0912, PLR0915 - one public tool dispatches bounde
                         "Ask the user which Hat metadata to change before calling "
                         "tinyhat_hats update."
                     ),
-                    missing=["public_title, customer_email, or new_key"],
+                    missing=["a Hat metadata field"],
                     example_call={
                         "action": "update",
                         "identifier": "trade-show-sales",
@@ -259,10 +267,14 @@ def hats(  # noqa: PLR0911, PLR0912, PLR0915 - one public tool dispatches bounde
             key = str(payload.get("key") or "").strip()
             if key:
                 request_payload["key"] = key
-            default_bot_username = str(payload.get("default_bot_username") or "").strip()
+            default_bot_username = str(
+                payload.get("default_bot_username") or ""
+            ).strip()
             if default_bot_username:
                 request_payload["default_bot_username"] = default_bot_username
-            default_bot_display_name = str(payload.get("default_bot_display_name") or "").strip()
+            default_bot_display_name = str(
+                payload.get("default_bot_display_name") or ""
+            ).strip()
             if default_bot_display_name:
                 request_payload["default_bot_display_name"] = default_bot_display_name
             result = client.post_json(path, request_payload)

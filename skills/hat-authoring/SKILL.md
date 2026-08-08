@@ -39,7 +39,10 @@ Call `tinyhat_hats` with `action="update"`, the current Hat `identifier`, and
 one or more of:
 
 - `public_title` for the marketplace title;
-- `customer_email` for the intended customer's work email; or
+- `customer_email` for the intended customer's work email;
+- `default_bot_username` for the Telegram bot username proposed during agent
+  creation;
+- `default_bot_display_name` for the proposed Telegram bot display name; or
 - `new_key` for the final segment of the namespaced canonical handle.
 
 The account namespace is derived from the Computer and cannot be changed by

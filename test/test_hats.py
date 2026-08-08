@@ -299,6 +299,34 @@ class HatToolTests(unittest.TestCase):
         self.assertEqual(result["handle"], "acme/hats/executive-forecasting")
         self.assertTrue(result["local_store_renamed"])
 
+    def test_update_can_replace_managed_bot_defaults(self) -> None:
+        client = FakePlatformClient()
+        with mock.patch.object(
+            hats_module,
+            "build_platform_client",
+            return_value=(client, "local_dev"),
+        ):
+            hats_module.hats(
+                {
+                    "action": "update",
+                    "identifier": "acme/hats/forecasting",
+                    "default_bot_username": "@UpdatedForecastBot",
+                    "default_bot_display_name": "Updated Forecaster",
+                }
+            )
+
+        self.assertEqual(
+            client.post_calls[-1],
+            (
+                "/hapi/v1/computers/local-dev/hats/v1/update",
+                {
+                    "identifier": "acme/hats/forecasting",
+                    "default_bot_username": "@UpdatedForecastBot",
+                    "default_bot_display_name": "Updated Forecaster",
+                },
+            ),
+        )
+
     def test_update_without_mutable_fields_is_self_correcting(self) -> None:
         result = json.loads(
             hats_module.hats(
@@ -312,7 +340,7 @@ class HatToolTests(unittest.TestCase):
         self.assertEqual(result["error"], "missing_required_parameter")
         self.assertEqual(
             result["missing"],
-            ["public_title, customer_email, or new_key"],
+            ["a Hat metadata field"],
         )
 
     def test_remove_credential_deletes_local_value_before_metadata(self) -> None:
