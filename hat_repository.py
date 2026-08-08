@@ -163,6 +163,22 @@ def run_hat_repository(
 ) -> dict[str, Any]:
     """Run the token-safe local Git workflow without returning a credential."""
 
+    requested_action = str(payload.get("action") or "").strip().casefold()
+    if requested_action == "delete_local":
+        repository = payload.get("repository")
+        if (
+            not isinstance(repository, dict)
+            or set(repository) != {"owner", "name", "url"}
+            or any(
+                not isinstance(repository.get(field), str)
+                or not repository[field].strip()
+                for field in ("owner", "name", "url")
+            )
+        ):
+            raise HatRepositoryRuntimeError(
+                "Trusted repository metadata is required for local deletion."
+            )
+
     runtime_prefix = (
         os.getenv("TINYHAT_RUNTIME_PREFIX") or "/opt/tinyhat-hermes-runtime"
     ).strip()
@@ -202,7 +218,6 @@ def run_hat_repository(
         raise HatRepositoryRuntimeError(
             message or "The Hat repository operation failed."
         )
-    requested_action = str(payload.get("action") or "").strip().casefold()
     if result.get("action") != requested_action:
         raise HatRepositoryRuntimeError(
             "The runtime returned a mismatched repository action."

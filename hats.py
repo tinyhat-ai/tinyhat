@@ -233,25 +233,54 @@ def hats(  # noqa: PLR0911, PLR0912, PLR0915 - one public tool dispatches bounde
                 )
             )
             checkout_cleanup: list[dict[str, Any]] = []
-            for checkout_handle in checkout_handles:
-                try:
-                    checkout_cleanup.append(
-                        run_hat_repository(
+            local_checkouts = result.get("local_checkouts")
+            if not isinstance(local_checkouts, list) or not local_checkouts:
+                checkout_cleanup.append(
+                    {
+                        "action": "delete_local",
+                        "removed": False,
+                        "error": (
+                            "Trusted repository metadata was not returned; local "
+                            "checkout deletion was skipped."
+                        ),
+                    }
+                )
+            else:
+                for checkout in local_checkouts:
+                    if not isinstance(checkout, dict):
+                        checkout_cleanup.append(
                             {
                                 "action": "delete_local",
-                                "identifier": checkout_handle,
+                                "removed": False,
+                                "error": "Trusted repository metadata was invalid.",
                             }
                         )
-                    )
-                except HatRepositoryRuntimeError as exc:
-                    checkout_cleanup.append(
-                        {
-                            "action": "delete_local",
-                            "hat_handle": checkout_handle,
-                            "removed": False,
-                            "error": str(exc),
-                        }
-                    )
+                        continue
+                    checkout_handle = str(checkout.get("handle") or "").strip()
+                    repository = {
+                        "owner": str(checkout.get("repository_owner") or "").strip(),
+                        "name": str(checkout.get("repository_name") or "").strip(),
+                        "url": str(checkout.get("repository_url") or "").strip(),
+                    }
+                    try:
+                        checkout_cleanup.append(
+                            run_hat_repository(
+                                {
+                                    "action": "delete_local",
+                                    "identifier": checkout_handle,
+                                    "repository": repository,
+                                }
+                            )
+                        )
+                    except HatRepositoryRuntimeError as exc:
+                        checkout_cleanup.append(
+                            {
+                                "action": "delete_local",
+                                "hat_handle": checkout_handle,
+                                "removed": False,
+                                "error": str(exc),
+                            }
+                        )
             result["local_checkout_cleanup"] = checkout_cleanup
             result["local_checkout_cleanup_complete"] = all(
                 "error" not in item for item in checkout_cleanup

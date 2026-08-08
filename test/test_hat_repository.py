@@ -81,6 +81,18 @@ class HatRepositoryBridgeTests(unittest.TestCase):
             "removed": True,
         }
 
+    @staticmethod
+    def _delete_local_payload() -> dict[str, object]:
+        return {
+            "action": "delete_local",
+            "identifier": "acme/hats/demo",
+            "repository": {
+                "owner": "tinyhat-ai",
+                "name": "demo",
+                "url": "https://github.com/tinyhat-ai/demo.git",
+            },
+        }
+
     def test_passes_payload_on_stdin_and_returns_safe_runtime_result(self) -> None:
         runtime_result = self._checkout_result()
         completed = subprocess.CompletedProcess(
@@ -132,12 +144,22 @@ class HatRepositoryBridgeTests(unittest.TestCase):
                     "run",
                     return_value=completed,
                 ):
+                    payload = {"action": action, "identifier": "acme/hats/demo"}
+                    if action == "delete_local":
+                        payload = self._delete_local_payload()
                     self.assertEqual(
-                        hat_repository.run_hat_repository(
-                            {"action": action, "identifier": "acme/hats/demo"}
-                        ),
+                        hat_repository.run_hat_repository(payload),
                         runtime_result,
                     )
+
+    def test_delete_local_requires_trusted_repository_metadata(self) -> None:
+        with self.assertRaisesRegex(
+            hat_repository.HatRepositoryRuntimeError,
+            "Trusted repository metadata",
+        ):
+            hat_repository.run_hat_repository(
+                {"action": "delete_local", "identifier": "acme/hats/demo"}
+            )
 
     def test_rejects_credential_shaped_runtime_output(self) -> None:
         unsafe_keys = (
@@ -243,10 +265,7 @@ class HatRepositoryBridgeTests(unittest.TestCase):
                 "mismatched Hat checkout",
             ):
                 hat_repository.run_hat_repository(
-                    {
-                        "action": "delete_local",
-                        "identifier": "acme/hats/demo",
-                    }
+                    self._delete_local_payload()
                 )
 
     def _assert_runtime_output_rejected(self, output: object) -> None:

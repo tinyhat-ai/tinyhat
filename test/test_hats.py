@@ -503,6 +503,20 @@ class HatToolTests(unittest.TestCase):
                     "acme/hats/forecasting",
                     "acme/hats/forecasting-before-rename",
                 ],
+                "local_checkouts": [
+                    {
+                        "handle": "acme/hats/forecasting",
+                        "repository_owner": "tinyhat-ai",
+                        "repository_name": "acme--hats--forecasting",
+                        "repository_url": "https://github.com/tinyhat-ai/acme--hats--forecasting.git",
+                    },
+                    {
+                        "handle": "acme/hats/forecasting-before-rename",
+                        "repository_owner": "tinyhat-ai",
+                        "repository_name": "acme--hats--forecasting-before-rename",
+                        "repository_url": "https://github.com/tinyhat-ai/acme--hats--forecasting-before-rename.git",
+                    },
+                ],
             }
 
         client.get_json = fake_get  # type: ignore[method-assign]
@@ -572,12 +586,25 @@ class HatToolTests(unittest.TestCase):
             delete_checkout.call_args_list,
             [
                 mock.call(
-                    {"action": "delete_local", "identifier": "acme/hats/forecasting"}
+                    {
+                        "action": "delete_local",
+                        "identifier": "acme/hats/forecasting",
+                        "repository": {
+                            "owner": "tinyhat-ai",
+                            "name": "acme--hats--forecasting",
+                            "url": "https://github.com/tinyhat-ai/acme--hats--forecasting.git",
+                        },
+                    }
                 ),
                 mock.call(
                     {
                         "action": "delete_local",
                         "identifier": "acme/hats/forecasting-before-rename",
+                        "repository": {
+                            "owner": "tinyhat-ai",
+                            "name": "acme--hats--forecasting-before-rename",
+                            "url": "https://github.com/tinyhat-ai/acme--hats--forecasting-before-rename.git",
+                        },
                     }
                 ),
             ],
