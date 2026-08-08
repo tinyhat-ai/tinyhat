@@ -6,6 +6,7 @@ import json
 from typing import Any
 from urllib.parse import urlencode
 
+from .hat_repository import HatRepositoryRuntimeError, run_hat_repository
 from .hat_secrets import (
     HatSecretStoreError,
     delete_hat_secret_store,
@@ -13,7 +14,6 @@ from .hat_secrets import (
     remove_hat_secret,
     rename_hat_secret_store,
 )
-from .hat_repository import HatRepositoryRuntimeError, run_hat_repository
 from .platform import PlatformError, build_platform_client, computer_api_path
 from .secret_handoff import start_hat_credentials_handoff
 from .tool_errors import tool_error_json
@@ -222,13 +222,52 @@ def hats(  # noqa: PLR0911, PLR0912, PLR0915 - one public tool dispatches bounde
             hat = client.get_json(f"{path}/detail?{query}")
             handle = str(hat.get("handle") or identifier)
             result = client.delete_json(f"{path}?{urlencode({'identifier': handle})}")
-            try:
-                local_result = delete_hat_secret_store(handle)
-            except HatSecretStoreError as exc:
-                result["local_store_removed"] = False
-                result["local_cleanup_error"] = str(exc)
-            else:
-                result["local_store_removed"] = bool(local_result["removed"])
+            checkout_handles = result.get("local_checkout_handles")
+            if not isinstance(checkout_handles, list):
+                checkout_handles = [handle]
+            checkout_handles = list(
+                dict.fromkeys(
+                    str(item).strip() for item in checkout_handles if str(item).strip()
+                )
+            )
+            checkout_cleanup: list[dict[str, Any]] = []
+            for checkout_handle in checkout_handles:
+                try:
+                    checkout_cleanup.append(
+                        run_hat_repository(
+                            {
+                                "action": "delete_local",
+                                "identifier": checkout_handle,
+                            }
+                        )
+                    )
+                except HatRepositoryRuntimeError as exc:
+                    checkout_cleanup.append(
+                        {
+                            "action": "delete_local",
+                            "hat_handle": checkout_handle,
+                            "removed": False,
+                            "error": str(exc),
+                        }
+                    )
+            result["local_checkout_cleanup"] = checkout_cleanup
+            result["local_checkout_cleanup_complete"] = all(
+                "error" not in item for item in checkout_cleanup
+            )
+            secret_store_removed = False
+            secret_cleanup_errors: list[str] = []
+            for checkout_handle in checkout_handles:
+                try:
+                    local_result = delete_hat_secret_store(checkout_handle)
+                except HatSecretStoreError as exc:
+                    secret_cleanup_errors.append(str(exc))
+                else:
+                    secret_store_removed = (
+                        bool(local_result["removed"]) or secret_store_removed
+                    )
+            result["local_store_removed"] = secret_store_removed
+            if secret_cleanup_errors:
+                result["local_cleanup_error"] = "; ".join(secret_cleanup_errors)
         elif action == "put_file":
             result = client.post_json(
                 f"{path}/files",
@@ -371,8 +410,8 @@ def hats(  # noqa: PLR0911, PLR0912, PLR0915 - one public tool dispatches bounde
     elif action == "delete":
         result["agent_instruction"] = (
             "Report that the Hat and private repository were permanently deleted. "
-            "Report local_store_removed honestly; if it is false because no local "
-            "store existed, no plaintext value was returned or exposed."
+            "Report local_store_removed and local_checkout_cleanup_complete honestly. "
+            "No plaintext value was returned or exposed."
         )
     else:
         result["agent_instruction"] = (

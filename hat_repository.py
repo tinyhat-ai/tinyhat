@@ -36,6 +36,7 @@ _COMMON_RESULT_FIELDS = {
     "schema",
 }
 _ACTION_REQUIRED_FIELDS = {
+    "delete_local": {"action", "hat_handle", "path", "removed", "schema"},
     "checkout": _COMMON_RESULT_FIELDS
     | {
         "branch",
@@ -90,7 +91,9 @@ def _contains_credential_field(value: Any) -> bool:
     return False
 
 
-def _matches_runtime_result_contract(result: dict[str, Any]) -> bool:
+def _matches_runtime_result_contract(  # noqa: PLR0911 - explicit fail-closed contract
+    result: dict[str, Any],
+) -> bool:
     action = result.get("action")
     if not isinstance(action, str) or action not in _ACTION_REQUIRED_FIELDS:
         return False
@@ -105,14 +108,15 @@ def _matches_runtime_result_contract(result: dict[str, Any]) -> bool:
         for field in ("hat_handle", "path")
     ):
         return False
-    repository = result.get("repository")
-    if not isinstance(repository, dict) or set(repository) != {"owner", "name"}:
-        return False
-    if not all(
-        isinstance(repository.get(field), str) and bool(repository[field])
-        for field in ("owner", "name")
-    ):
-        return False
+    if action != "delete_local":
+        repository = result.get("repository")
+        if not isinstance(repository, dict) or set(repository) != {"owner", "name"}:
+            return False
+        if not all(
+            isinstance(repository.get(field), str) and bool(repository[field])
+            for field in ("owner", "name")
+        ):
+            return False
     string_fields = {"branch", "head_sha"}
     boolean_fields = {
         "changed",
@@ -122,6 +126,7 @@ def _matches_runtime_result_contract(result: dict[str, Any]) -> bool:
         "local_clone_retained",
         "pushed",
         "renewal_stopped",
+        "removed",
     }
     list_fields = {"changed_paths", "synced_paths"}
     if any(
@@ -146,11 +151,11 @@ def _matches_runtime_result_contract(result: dict[str, Any]) -> bool:
     if "credential_persisted" in result and result["credential_persisted"] is not False:
         return False
     residual_expiry = result.get("residual_access_expires_at")
-    if action == "reset" and residual_expiry is not None and not isinstance(
-        residual_expiry, str
-    ):
-        return False
-    return True
+    return not (
+        action == "reset"
+        and residual_expiry is not None
+        and not isinstance(residual_expiry, str)
+    )
 
 
 def run_hat_repository(
@@ -201,6 +206,12 @@ def run_hat_repository(
     if result.get("action") != requested_action:
         raise HatRepositoryRuntimeError(
             "The runtime returned a mismatched repository action."
+        )
+    if requested_action == "delete_local" and result.get("hat_handle") != str(
+        payload.get("identifier") or ""
+    ).strip():
+        raise HatRepositoryRuntimeError(
+            "The runtime returned a mismatched Hat checkout."
         )
     # The runtime contract is value-blind. Fail closed if a future runtime
     # accidentally puts a credential-shaped field in plugin-visible output.

@@ -42,6 +42,7 @@ class FakePlatformClient:
             "handle": "acme/hats/trade-show-sales",
             "deleted": True,
             "repository_deleted": True,
+            "local_checkout_handles": ["acme/hats/trade-show-sales"],
         }
 
 
@@ -480,7 +481,20 @@ class HatToolTests(unittest.TestCase):
             client.get_paths.append(path)
             return {"handle": "acme/hats/forecasting"}
 
+        def fake_delete(path: str) -> dict[str, object]:
+            client.delete_paths.append(path)
+            return {
+                "handle": "acme/hats/forecasting",
+                "deleted": True,
+                "repository_deleted": True,
+                "local_checkout_handles": [
+                    "acme/hats/forecasting",
+                    "acme/hats/forecasting-before-rename",
+                ],
+            }
+
         client.get_json = fake_get  # type: ignore[method-assign]
+        client.delete_json = fake_delete  # type: ignore[method-assign]
         with (
             mock.patch.object(
                 hats_module,
@@ -492,6 +506,17 @@ class HatToolTests(unittest.TestCase):
                 "delete_hat_secret_store",
                 return_value={"removed": True},
             ) as delete_local,
+            mock.patch.object(
+                hats_module,
+                "run_hat_repository",
+                return_value={
+                    "schema": "tinyhat_hat_repository_v1",
+                    "action": "delete_local",
+                    "hat_handle": "acme/hats/forecasting",
+                    "path": "/home/agent/.hermes/hat-repositories/acme/forecasting",
+                    "removed": True,
+                },
+            ) as delete_checkout,
         ):
             refused = json.loads(
                 hats_module.hats(
@@ -514,15 +539,40 @@ class HatToolTests(unittest.TestCase):
         self.assertEqual(refused["error"], "confirmation_required")
         self.assertEqual(
             client.get_paths,
-            ["/hapi/v1/computers/local-dev/hats/v1/detail?identifier=acme%2Fhats%2Fforecasting"],
+            [
+                "/hapi/v1/computers/local-dev/hats/v1/detail?identifier=acme%2Fhats%2Fforecasting"
+            ],
         )
         self.assertEqual(
             client.delete_paths,
-            ["/hapi/v1/computers/local-dev/hats/v1?identifier=acme%2Fhats%2Fforecasting"],
+            [
+                "/hapi/v1/computers/local-dev/hats/v1?identifier=acme%2Fhats%2Fforecasting"
+            ],
         )
-        delete_local.assert_called_once_with("acme/hats/forecasting")
+        self.assertEqual(
+            delete_local.call_args_list,
+            [
+                mock.call("acme/hats/forecasting"),
+                mock.call("acme/hats/forecasting-before-rename"),
+            ],
+        )
+        self.assertEqual(
+            delete_checkout.call_args_list,
+            [
+                mock.call(
+                    {"action": "delete_local", "identifier": "acme/hats/forecasting"}
+                ),
+                mock.call(
+                    {
+                        "action": "delete_local",
+                        "identifier": "acme/hats/forecasting-before-rename",
+                    }
+                ),
+            ],
+        )
         self.assertTrue(deleted["deleted"])
         self.assertTrue(deleted["local_store_removed"])
+        self.assertTrue(deleted["local_checkout_cleanup_complete"])
 
     def test_define_then_configure_uses_one_hat_bundle_flow(self) -> None:
         client = FakePlatformClient()

@@ -60,6 +60,9 @@ Call `tinyhat_hats` with `action="delete"`, its canonical `identifier`, and
 that Hat's Computer-local secret bundle and encryption key without returning a
 secret value. Existing agents are not deleted; they simply stop referencing the
 removed Hat. Report the returned repository and local-store outcomes honestly.
+Also report `local_checkout_cleanup_complete` honestly: successful deletion
+removes verified checkouts for both the current handle and former handles while
+leaving unrelated Hat checkouts untouched.
 
 ## Add or update repo content
 
