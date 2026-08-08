@@ -160,6 +160,12 @@ class HatToolTests(unittest.TestCase):
         self.assertEqual(result["handle"], "acme/hats/trade-show-sales")
         self.assertNotIn("owner_user_id", client.post_calls[0][1])
         self.assertIn("wears this hat", result["agent_instruction"])
+        self.assertEqual(result["operation_telemetry"]["action"], "create")
+        self.assertIsInstance(result["operation_telemetry"]["elapsed_ms"], int)
+        self.assertGreater(
+            result["operation_telemetry"]["estimated_tool_output_tokens"],
+            0,
+        )
 
     def test_list_and_get_use_gcloud_computer_endpoints(self) -> None:
         client = FakePlatformClient()
@@ -169,7 +175,11 @@ class HatToolTests(unittest.TestCase):
             return_value=(client, "gcloud"),
         ):
             json.loads(hats_module.hats({"action": "list"}))
-            json.loads(hats_module.hats({"action": "get", "identifier": "acme/hats/field-sales"}))
+            json.loads(
+                hats_module.hats(
+                    {"action": "get", "identifier": "acme/hats/field-sales"}
+                )
+            )
 
         self.assertEqual(
             client.get_paths,
@@ -180,7 +190,9 @@ class HatToolTests(unittest.TestCase):
         )
 
     def test_create_missing_customer_email_is_self_correcting(self) -> None:
-        result = json.loads(hats_module.hats({"action": "create", "name": "Trade Show Sales"}))
+        result = json.loads(
+            hats_module.hats({"action": "create", "name": "Trade Show Sales"})
+        )
 
         self.assertEqual(result["schema"], "tinyhat_tool_error_v1")
         self.assertEqual(result["error"], "missing_required_parameter")

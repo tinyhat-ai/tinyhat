@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import time
 from typing import Any
 from urllib.parse import urlencode
 
@@ -55,6 +56,7 @@ def hats(  # noqa: PLR0911, PLR0912, PLR0915 - one public tool dispatches bounde
 ) -> str:
     """Create, inspect, or modify one owner-scoped shareable Hat."""
     payload = args if isinstance(args, dict) else {}
+    started_at = time.perf_counter()
     action = str(payload.get("action") or "").strip().lower()
     if action not in ACTIONS:
         return tool_error_json(
@@ -419,6 +421,17 @@ def hats(  # noqa: PLR0911, PLR0912, PLR0915 - one public tool dispatches bounde
             "user that the intended customer can verify their email on the public "
             "page and create a Telegram agent that wears this hat."
         )
+    result_without_telemetry = json.dumps(result, sort_keys=True, separators=(",", ":"))
+    input_shape = json.dumps(payload, sort_keys=True, separators=(",", ":"))
+    result["operation_telemetry"] = {
+        "action": action,
+        "elapsed_ms": round((time.perf_counter() - started_at) * 1000),
+        "estimated_tool_input_tokens": max(1, (len(input_shape) + 3) // 4),
+        "estimated_tool_output_tokens": max(
+            1, (len(result_without_telemetry) + 3) // 4
+        ),
+        "agent_run_token_usage_source": "Hermes agent run trace",
+    }
     return json.dumps(result, sort_keys=True)
 
 
