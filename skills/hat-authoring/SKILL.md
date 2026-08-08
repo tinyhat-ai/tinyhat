@@ -132,7 +132,12 @@ purpose text appear in the public Tools list.
    purpose. Never ask for any value in chat.
 2. For each new or changed field, call `tinyhat_hats` with
    `action="define_credential"`, `identifier`, `credential_name`, and
-   `description`. This writes value-blind metadata only.
+   `description`. This writes value-blind metadata only and advances the Hat
+   repository head. Finish every credential-definition call before starting a
+   repository checkout/edit/sync sequence. Never run credential-definition and
+   repository-mutation actions in parallel. If a credential definition changes
+   after checkout, call `repository_checkout` again before inspecting status or
+   syncing files so the local base matches the new remote head.
 3. After every field is defined, call `tinyhat_hats` once with
    `action="configure_credentials"` and the Hat `identifier`.
 4. Tinyhat sends one expiring **Enter credentials** button. The user sees every
