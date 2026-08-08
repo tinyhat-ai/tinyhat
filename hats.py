@@ -3,16 +3,18 @@
 from __future__ import annotations
 
 import json
+import time
 from typing import Any
 from urllib.parse import urlencode
 
+from .hat_repository import HatRepositoryRuntimeError, run_hat_repository
 from .hat_secrets import (
     HatSecretStoreError,
     delete_hat_secret_store,
+    list_hat_secret_names,
     remove_hat_secret,
     rename_hat_secret_store,
 )
-from .hat_repository import HatRepositoryRuntimeError, run_hat_repository
 from .platform import PlatformError, build_platform_client, computer_api_path
 from .secret_handoff import start_hat_credentials_handoff
 from .tool_errors import tool_error_json
@@ -54,6 +56,7 @@ def hats(  # noqa: PLR0911, PLR0912, PLR0915 - one public tool dispatches bounde
 ) -> str:
     """Create, inspect, or modify one owner-scoped shareable Hat."""
     payload = args if isinstance(args, dict) else {}
+    started_at = time.perf_counter()
     action = str(payload.get("action") or "").strip().lower()
     if action not in ACTIONS:
         return tool_error_json(
@@ -87,11 +90,19 @@ def hats(  # noqa: PLR0911, PLR0912, PLR0915 - one public tool dispatches bounde
             else ""
         )
         name = _required_text(payload, "name") if action == "create" else ""
-        customer_email = _required_text(payload, "customer_email") if action == "create" else ""
+        customer_email = (
+            _required_text(payload, "customer_email") if action == "create" else ""
+        )
         update_payload: dict[str, str] | None = None
         if action == "update":
             update_payload = {"identifier": identifier}
-            for field in ("public_title", "customer_email", "new_key"):
+            for field in (
+                "public_title",
+                "customer_email",
+                "default_bot_username",
+                "default_bot_display_name",
+                "new_key",
+            ):
                 value = str(payload.get(field) or "").strip()
                 if value:
                     update_payload[field] = value
@@ -103,7 +114,7 @@ def hats(  # noqa: PLR0911, PLR0912, PLR0915 - one public tool dispatches bounde
                         "Ask the user which Hat metadata to change before calling "
                         "tinyhat_hats update."
                     ),
-                    missing=["public_title, customer_email, or new_key"],
+                    missing=["a Hat metadata field"],
                     example_call={
                         "action": "update",
                         "identifier": "trade-show-sales",
@@ -147,6 +158,26 @@ def hats(  # noqa: PLR0911, PLR0912, PLR0915 - one public tool dispatches bounde
             query = urlencode({"identifier": identifier})
             suffix = "credentials" if action == "list_credentials" else "detail"
             result = client.get_json(f"{path}/{suffix}?{query}")
+            if action == "list_credentials":
+                handle = str(result.get("handle") or identifier).strip()
+                try:
+                    local_names = set(list_hat_secret_names(handle)["names"])
+                except (HatSecretStoreError, OSError):
+                    credentials = result.get("credentials")
+                    if isinstance(credentials, list):
+                        for credential in credentials:
+                            if isinstance(credential, dict):
+                                credential.pop("has_local_value", None)
+                    result["local_value_status"] = "unavailable"
+                else:
+                    credentials = result.get("credentials")
+                    if isinstance(credentials, list):
+                        for credential in credentials:
+                            if not isinstance(credential, dict):
+                                continue
+                            name = str(credential.get("name") or "").strip().upper()
+                            credential["has_local_value"] = name in local_names
+                    result["local_value_status"] = "available"
         elif action == "update":
             assert update_payload is not None
             current_hat: dict[str, Any] | None = None
@@ -193,13 +224,81 @@ def hats(  # noqa: PLR0911, PLR0912, PLR0915 - one public tool dispatches bounde
             hat = client.get_json(f"{path}/detail?{query}")
             handle = str(hat.get("handle") or identifier)
             result = client.delete_json(f"{path}?{urlencode({'identifier': handle})}")
-            try:
-                local_result = delete_hat_secret_store(handle)
-            except HatSecretStoreError as exc:
-                result["local_store_removed"] = False
-                result["local_cleanup_error"] = str(exc)
+            checkout_handles = result.get("local_checkout_handles")
+            if not isinstance(checkout_handles, list):
+                checkout_handles = [handle]
+            checkout_handles = list(
+                dict.fromkeys(
+                    str(item).strip() for item in checkout_handles if str(item).strip()
+                )
+            )
+            checkout_cleanup: list[dict[str, Any]] = []
+            local_checkouts = result.get("local_checkouts")
+            if not isinstance(local_checkouts, list) or not local_checkouts:
+                checkout_cleanup.append(
+                    {
+                        "action": "delete_local",
+                        "removed": False,
+                        "error": (
+                            "Trusted repository metadata was not returned; local "
+                            "checkout deletion was skipped."
+                        ),
+                    }
+                )
             else:
-                result["local_store_removed"] = bool(local_result["removed"])
+                for checkout in local_checkouts:
+                    if not isinstance(checkout, dict):
+                        checkout_cleanup.append(
+                            {
+                                "action": "delete_local",
+                                "removed": False,
+                                "error": "Trusted repository metadata was invalid.",
+                            }
+                        )
+                        continue
+                    checkout_handle = str(checkout.get("handle") or "").strip()
+                    repository = {
+                        "owner": str(checkout.get("repository_owner") or "").strip(),
+                        "name": str(checkout.get("repository_name") or "").strip(),
+                        "url": str(checkout.get("repository_url") or "").strip(),
+                    }
+                    try:
+                        checkout_cleanup.append(
+                            run_hat_repository(
+                                {
+                                    "action": "delete_local",
+                                    "identifier": checkout_handle,
+                                    "repository": repository,
+                                }
+                            )
+                        )
+                    except HatRepositoryRuntimeError as exc:
+                        checkout_cleanup.append(
+                            {
+                                "action": "delete_local",
+                                "hat_handle": checkout_handle,
+                                "removed": False,
+                                "error": str(exc),
+                            }
+                        )
+            result["local_checkout_cleanup"] = checkout_cleanup
+            result["local_checkout_cleanup_complete"] = all(
+                "error" not in item for item in checkout_cleanup
+            )
+            secret_store_removed = False
+            secret_cleanup_errors: list[str] = []
+            for checkout_handle in checkout_handles:
+                try:
+                    local_result = delete_hat_secret_store(checkout_handle)
+                except HatSecretStoreError as exc:
+                    secret_cleanup_errors.append(str(exc))
+                else:
+                    secret_store_removed = (
+                        bool(local_result["removed"]) or secret_store_removed
+                    )
+            result["local_store_removed"] = secret_store_removed
+            if secret_cleanup_errors:
+                result["local_cleanup_error"] = "; ".join(secret_cleanup_errors)
         elif action == "put_file":
             result = client.post_json(
                 f"{path}/files",
@@ -259,10 +358,14 @@ def hats(  # noqa: PLR0911, PLR0912, PLR0915 - one public tool dispatches bounde
             key = str(payload.get("key") or "").strip()
             if key:
                 request_payload["key"] = key
-            default_bot_username = str(payload.get("default_bot_username") or "").strip()
+            default_bot_username = str(
+                payload.get("default_bot_username") or ""
+            ).strip()
             if default_bot_username:
                 request_payload["default_bot_username"] = default_bot_username
-            default_bot_display_name = str(payload.get("default_bot_display_name") or "").strip()
+            default_bot_display_name = str(
+                payload.get("default_bot_display_name") or ""
+            ).strip()
             if default_bot_display_name:
                 request_payload["default_bot_display_name"] = default_bot_display_name
             result = client.post_json(path, request_payload)
@@ -323,8 +426,9 @@ def hats(  # noqa: PLR0911, PLR0912, PLR0915 - one public tool dispatches bounde
         )
     elif action in {"list_credentials", "remove_credential"}:
         result["agent_instruction"] = (
-            "Report credential names and safe metadata only. Secret values remain in "
-            "the Computer-local Hat store and are never returned by Tinyhat."
+            "Report credential names and safe metadata only. When local_value_status "
+            "is available, has_local_value is the authoritative Computer-local saved "
+            "state. Secret values remain local and are never returned by Tinyhat."
         )
     elif action == "update":
         result["agent_instruction"] = (
@@ -337,8 +441,8 @@ def hats(  # noqa: PLR0911, PLR0912, PLR0915 - one public tool dispatches bounde
     elif action == "delete":
         result["agent_instruction"] = (
             "Report that the Hat and private repository were permanently deleted. "
-            "Report local_store_removed honestly; if it is false because no local "
-            "store existed, no plaintext value was returned or exposed."
+            "Report local_store_removed and local_checkout_cleanup_complete honestly. "
+            "No plaintext value was returned or exposed."
         )
     else:
         result["agent_instruction"] = (
@@ -346,6 +450,17 @@ def hats(  # noqa: PLR0911, PLR0912, PLR0915 - one public tool dispatches bounde
             "user that the intended customer can verify their email on the public "
             "page and create a Telegram agent that wears this hat."
         )
+    result_without_telemetry = json.dumps(result, sort_keys=True, separators=(",", ":"))
+    input_shape = json.dumps(payload, sort_keys=True, separators=(",", ":"))
+    result["operation_telemetry"] = {
+        "action": action,
+        "elapsed_ms": round((time.perf_counter() - started_at) * 1000),
+        "estimated_tool_input_tokens": max(1, (len(input_shape) + 3) // 4),
+        "estimated_tool_output_tokens": max(
+            1, (len(result_without_telemetry) + 3) // 4
+        ),
+        "agent_run_token_usage_source": "Hermes agent run trace",
+    }
     return json.dumps(result, sort_keys=True)
 
 

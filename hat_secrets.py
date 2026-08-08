@@ -283,16 +283,19 @@ def remove_hat_secret(handle: str, name: str) -> dict[str, Any]:
 
 
 def list_hat_secret_names(handle: str) -> dict[str, Any]:
-    """Return only names from the local store for diagnostics and tests."""
+    """Return only names without initializing an absent credential store."""
     clean_handle = normalize_hat_handle(handle)
     path = hat_secret_store_path(clean_handle)
     with _locked_store(path):
         payload = _read_store(path, handle=clean_handle)
         if payload.get("schema") == LEGACY_STORE_SCHEMA:
             values = _store_values(path, payload, handle=clean_handle)
-            payload = _encrypted_store_payload(clean_handle, values)
-            _write_store(path, payload)
-        names = sorted(str(name) for name in payload["names"])
+            names = sorted(values)
+            if path.exists():
+                payload = _encrypted_store_payload(clean_handle, values)
+                _write_store(path, payload)
+        else:
+            names = sorted(normalize_secret_name(str(name)) for name in payload["names"])
     return {
         "handle": clean_handle,
         "names": names,

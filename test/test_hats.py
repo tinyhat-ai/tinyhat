@@ -42,6 +42,7 @@ class FakePlatformClient:
             "handle": "acme/hats/trade-show-sales",
             "deleted": True,
             "repository_deleted": True,
+            "local_checkout_handles": ["acme/hats/trade-show-sales"],
         }
 
 
@@ -159,6 +160,12 @@ class HatToolTests(unittest.TestCase):
         self.assertEqual(result["handle"], "acme/hats/trade-show-sales")
         self.assertNotIn("owner_user_id", client.post_calls[0][1])
         self.assertIn("wears this hat", result["agent_instruction"])
+        self.assertEqual(result["operation_telemetry"]["action"], "create")
+        self.assertIsInstance(result["operation_telemetry"]["elapsed_ms"], int)
+        self.assertGreater(
+            result["operation_telemetry"]["estimated_tool_output_tokens"],
+            0,
+        )
 
     def test_list_and_get_use_gcloud_computer_endpoints(self) -> None:
         client = FakePlatformClient()
@@ -168,7 +175,11 @@ class HatToolTests(unittest.TestCase):
             return_value=(client, "gcloud"),
         ):
             json.loads(hats_module.hats({"action": "list"}))
-            json.loads(hats_module.hats({"action": "get", "identifier": "acme/hats/field-sales"}))
+            json.loads(
+                hats_module.hats(
+                    {"action": "get", "identifier": "acme/hats/field-sales"}
+                )
+            )
 
         self.assertEqual(
             client.get_paths,
@@ -179,7 +190,9 @@ class HatToolTests(unittest.TestCase):
         )
 
     def test_create_missing_customer_email_is_self_correcting(self) -> None:
-        result = json.loads(hats_module.hats({"action": "create", "name": "Trade Show Sales"}))
+        result = json.loads(
+            hats_module.hats({"action": "create", "name": "Trade Show Sales"})
+        )
 
         self.assertEqual(result["schema"], "tinyhat_tool_error_v1")
         self.assertEqual(result["error"], "missing_required_parameter")
@@ -299,6 +312,34 @@ class HatToolTests(unittest.TestCase):
         self.assertEqual(result["handle"], "acme/hats/executive-forecasting")
         self.assertTrue(result["local_store_renamed"])
 
+    def test_update_can_replace_managed_bot_defaults(self) -> None:
+        client = FakePlatformClient()
+        with mock.patch.object(
+            hats_module,
+            "build_platform_client",
+            return_value=(client, "local_dev"),
+        ):
+            hats_module.hats(
+                {
+                    "action": "update",
+                    "identifier": "acme/hats/forecasting",
+                    "default_bot_username": "@UpdatedForecastBot",
+                    "default_bot_display_name": "Updated Forecaster",
+                }
+            )
+
+        self.assertEqual(
+            client.post_calls[-1],
+            (
+                "/hapi/v1/computers/local-dev/hats/v1/update",
+                {
+                    "identifier": "acme/hats/forecasting",
+                    "default_bot_username": "@UpdatedForecastBot",
+                    "default_bot_display_name": "Updated Forecaster",
+                },
+            ),
+        )
+
     def test_update_without_mutable_fields_is_self_correcting(self) -> None:
         result = json.loads(
             hats_module.hats(
@@ -312,8 +353,89 @@ class HatToolTests(unittest.TestCase):
         self.assertEqual(result["error"], "missing_required_parameter")
         self.assertEqual(
             result["missing"],
-            ["public_title, customer_email, or new_key"],
+            ["a Hat metadata field"],
         )
+
+    def test_list_credentials_uses_computer_local_saved_state(self) -> None:
+        client = FakePlatformClient()
+
+        def fake_get(path: str) -> dict[str, object]:
+            client.get_paths.append(path)
+            return {
+                "handle": "acme/hats/forecasting",
+                "credentials": [
+                    {"name": "EXA_API_KEY", "saved_at": None},
+                    {"name": "GITHUB_TOKEN", "saved_at": "stale-platform-value"},
+                ],
+            }
+
+        client.get_json = fake_get  # type: ignore[method-assign]
+        with (
+            mock.patch.object(
+                hats_module,
+                "build_platform_client",
+                return_value=(client, "local_dev"),
+            ),
+            mock.patch.object(
+                hats_module,
+                "list_hat_secret_names",
+                return_value={
+                    "handle": "acme/hats/forecasting",
+                    "names": ["EXA_API_KEY"],
+                    "count": 1,
+                    "value_available": False,
+                },
+            ),
+        ):
+            result = json.loads(
+                hats_module.hats(
+                    {
+                        "action": "list_credentials",
+                        "identifier": "acme/hats/forecasting",
+                    }
+                )
+            )
+
+        self.assertEqual(result["local_value_status"], "available")
+        self.assertTrue(result["credentials"][0]["has_local_value"])
+        self.assertFalse(result["credentials"][1]["has_local_value"])
+        self.assertNotIn("value", result["credentials"][0])
+
+    def test_list_credentials_removes_stale_state_when_local_check_fails(self) -> None:
+        client = FakePlatformClient()
+
+        def fake_get(_path: str) -> dict[str, object]:
+            return {
+                "handle": "acme/hats/forecasting",
+                "credentials": [
+                    {"name": "EXA_API_KEY", "has_local_value": False},
+                ],
+            }
+
+        client.get_json = fake_get  # type: ignore[method-assign]
+        with (
+            mock.patch.object(
+                hats_module,
+                "build_platform_client",
+                return_value=(client, "local_dev"),
+            ),
+            mock.patch.object(
+                hats_module,
+                "list_hat_secret_names",
+                side_effect=hats_module.HatSecretStoreError("store unavailable"),
+            ),
+        ):
+            result = json.loads(
+                hats_module.hats(
+                    {
+                        "action": "list_credentials",
+                        "identifier": "acme/hats/forecasting",
+                    }
+                )
+            )
+
+        self.assertEqual(result["local_value_status"], "unavailable")
+        self.assertNotIn("has_local_value", result["credentials"][0])
 
     def test_remove_credential_deletes_local_value_before_metadata(self) -> None:
         client = FakePlatformClient()
@@ -371,7 +493,34 @@ class HatToolTests(unittest.TestCase):
             client.get_paths.append(path)
             return {"handle": "acme/hats/forecasting"}
 
+        def fake_delete(path: str) -> dict[str, object]:
+            client.delete_paths.append(path)
+            return {
+                "handle": "acme/hats/forecasting",
+                "deleted": True,
+                "repository_deleted": True,
+                "local_checkout_handles": [
+                    "acme/hats/forecasting",
+                    "acme/hats/forecasting-before-rename",
+                ],
+                "local_checkouts": [
+                    {
+                        "handle": "acme/hats/forecasting",
+                        "repository_owner": "tinyhat-ai",
+                        "repository_name": "acme--hats--forecasting",
+                        "repository_url": "https://github.com/tinyhat-ai/acme--hats--forecasting.git",
+                    },
+                    {
+                        "handle": "acme/hats/forecasting-before-rename",
+                        "repository_owner": "tinyhat-ai",
+                        "repository_name": "acme--hats--forecasting-before-rename",
+                        "repository_url": "https://github.com/tinyhat-ai/acme--hats--forecasting-before-rename.git",
+                    },
+                ],
+            }
+
         client.get_json = fake_get  # type: ignore[method-assign]
+        client.delete_json = fake_delete  # type: ignore[method-assign]
         with (
             mock.patch.object(
                 hats_module,
@@ -383,6 +532,17 @@ class HatToolTests(unittest.TestCase):
                 "delete_hat_secret_store",
                 return_value={"removed": True},
             ) as delete_local,
+            mock.patch.object(
+                hats_module,
+                "run_hat_repository",
+                return_value={
+                    "schema": "tinyhat_hat_repository_v1",
+                    "action": "delete_local",
+                    "hat_handle": "acme/hats/forecasting",
+                    "path": "/home/agent/.hermes/hat-repositories/acme/forecasting",
+                    "removed": True,
+                },
+            ) as delete_checkout,
         ):
             refused = json.loads(
                 hats_module.hats(
@@ -405,15 +565,53 @@ class HatToolTests(unittest.TestCase):
         self.assertEqual(refused["error"], "confirmation_required")
         self.assertEqual(
             client.get_paths,
-            ["/hapi/v1/computers/local-dev/hats/v1/detail?identifier=acme%2Fhats%2Fforecasting"],
+            [
+                "/hapi/v1/computers/local-dev/hats/v1/detail?identifier=acme%2Fhats%2Fforecasting"
+            ],
         )
         self.assertEqual(
             client.delete_paths,
-            ["/hapi/v1/computers/local-dev/hats/v1?identifier=acme%2Fhats%2Fforecasting"],
+            [
+                "/hapi/v1/computers/local-dev/hats/v1?identifier=acme%2Fhats%2Fforecasting"
+            ],
         )
-        delete_local.assert_called_once_with("acme/hats/forecasting")
+        self.assertEqual(
+            delete_local.call_args_list,
+            [
+                mock.call("acme/hats/forecasting"),
+                mock.call("acme/hats/forecasting-before-rename"),
+            ],
+        )
+        self.assertEqual(
+            delete_checkout.call_args_list,
+            [
+                mock.call(
+                    {
+                        "action": "delete_local",
+                        "identifier": "acme/hats/forecasting",
+                        "repository": {
+                            "owner": "tinyhat-ai",
+                            "name": "acme--hats--forecasting",
+                            "url": "https://github.com/tinyhat-ai/acme--hats--forecasting.git",
+                        },
+                    }
+                ),
+                mock.call(
+                    {
+                        "action": "delete_local",
+                        "identifier": "acme/hats/forecasting-before-rename",
+                        "repository": {
+                            "owner": "tinyhat-ai",
+                            "name": "acme--hats--forecasting-before-rename",
+                            "url": "https://github.com/tinyhat-ai/acme--hats--forecasting-before-rename.git",
+                        },
+                    }
+                ),
+            ],
+        )
         self.assertTrue(deleted["deleted"])
         self.assertTrue(deleted["local_store_removed"])
+        self.assertTrue(deleted["local_checkout_cleanup_complete"])
 
     def test_define_then_configure_uses_one_hat_bundle_flow(self) -> None:
         client = FakePlatformClient()

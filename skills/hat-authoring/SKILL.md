@@ -39,7 +39,10 @@ Call `tinyhat_hats` with `action="update"`, the current Hat `identifier`, and
 one or more of:
 
 - `public_title` for the marketplace title;
-- `customer_email` for the intended customer's work email; or
+- `customer_email` for the intended customer's work email;
+- `default_bot_username` for the Telegram bot username proposed during agent
+  creation;
+- `default_bot_display_name` for the proposed Telegram bot display name; or
 - `new_key` for the final segment of the namespaced canonical handle.
 
 The account namespace is derived from the Computer and cannot be changed by
@@ -57,6 +60,9 @@ Call `tinyhat_hats` with `action="delete"`, its canonical `identifier`, and
 that Hat's Computer-local secret bundle and encryption key without returning a
 secret value. Existing agents are not deleted; they simply stop referencing the
 removed Hat. Report the returned repository and local-store outcomes honestly.
+Also report `local_checkout_cleanup_complete` honestly: successful deletion
+removes verified checkouts for both the current handle and former handles while
+leaving unrelated Hat checkouts untouched.
 
 ## Add or update repo content
 
@@ -126,7 +132,12 @@ purpose text appear in the public Tools list.
    purpose. Never ask for any value in chat.
 2. For each new or changed field, call `tinyhat_hats` with
    `action="define_credential"`, `identifier`, `credential_name`, and
-   `description`. This writes value-blind metadata only.
+   `description`. This writes value-blind metadata only and advances the Hat
+   repository head. Finish every credential-definition call before starting a
+   repository checkout/edit/sync sequence. Never run credential-definition and
+   repository-mutation actions in parallel. If a credential definition changes
+   after checkout, call `repository_checkout` again before inspecting status or
+   syncing files so the local base matches the new remote head.
 3. After every field is defined, call `tinyhat_hats` once with
    `action="configure_credentials"` and the Hat `identifier`.
 4. Tinyhat sends one expiring **Enter credentials** button. The user sees every
@@ -148,7 +159,10 @@ credentials saved**.
 ## List or remove Hat credentials
 
 - Call `tinyhat_hats` with `action="list_credentials"` and the Hat identifier.
-  Return names and descriptions only; never infer or claim a value.
+  Return names and descriptions only; never infer or claim a value. When
+  `local_value_status` is `available`, use each field's `has_local_value` as the
+  authoritative saved-state. When it is `unavailable`, say that saved-state
+  could not be checked; do not turn that into `No`.
 - Remove only after the user explicitly asks to remove an exact credential from
   an exact Hat. Then call `tinyhat_hats` with `action="remove_credential"`,
   `credential_name`, and `confirmed=true`. This deletes the local value and its

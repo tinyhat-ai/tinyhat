@@ -71,6 +71,28 @@ class HatRepositoryBridgeTests(unittest.TestCase):
             "credential_helper_removed": True,
         }
 
+    @staticmethod
+    def _delete_local_result() -> dict[str, object]:
+        return {
+            "schema": "tinyhat_hat_repository_v1",
+            "action": "delete_local",
+            "hat_handle": "acme/hats/demo",
+            "path": "/home/agent/.hermes/hat-repositories/acme/demo",
+            "removed": True,
+        }
+
+    @staticmethod
+    def _delete_local_payload() -> dict[str, object]:
+        return {
+            "action": "delete_local",
+            "identifier": "acme/hats/demo",
+            "repository": {
+                "owner": "tinyhat-ai",
+                "name": "demo",
+                "url": "https://github.com/tinyhat-ai/demo.git",
+            },
+        }
+
     def test_passes_payload_on_stdin_and_returns_safe_runtime_result(self) -> None:
         runtime_result = self._checkout_result()
         completed = subprocess.CompletedProcess(
@@ -105,6 +127,7 @@ class HatRepositoryBridgeTests(unittest.TestCase):
             self._sync_result(),
             self._reset_result(),
             self._reset_result("2026-08-07T23:30:00Z"),
+            self._delete_local_result(),
         )
         for runtime_result in results:
             action = str(runtime_result["action"])
@@ -121,12 +144,22 @@ class HatRepositoryBridgeTests(unittest.TestCase):
                     "run",
                     return_value=completed,
                 ):
+                    payload = {"action": action, "identifier": "acme/hats/demo"}
+                    if action == "delete_local":
+                        payload = self._delete_local_payload()
                     self.assertEqual(
-                        hat_repository.run_hat_repository(
-                            {"action": action, "identifier": "acme/hats/demo"}
-                        ),
+                        hat_repository.run_hat_repository(payload),
                         runtime_result,
                     )
+
+    def test_delete_local_requires_trusted_repository_metadata(self) -> None:
+        with self.assertRaisesRegex(
+            hat_repository.HatRepositoryRuntimeError,
+            "Trusted repository metadata",
+        ):
+            hat_repository.run_hat_repository(
+                {"action": "delete_local", "identifier": "acme/hats/demo"}
+            )
 
     def test_rejects_credential_shaped_runtime_output(self) -> None:
         unsafe_keys = (
@@ -211,6 +244,28 @@ class HatRepositoryBridgeTests(unittest.TestCase):
             with self.assertRaises(hat_repository.HatRepositoryRuntimeError):
                 hat_repository.run_hat_repository(
                     {"action": "reset", "identifier": "demo"}
+                )
+
+    def test_rejects_delete_result_for_a_different_hat(self) -> None:
+        runtime_result = self._delete_local_result()
+        runtime_result["hat_handle"] = "acme/hats/another"
+        completed = subprocess.CompletedProcess(
+            args=[],
+            returncode=0,
+            stdout=json.dumps(runtime_result),
+            stderr="",
+        )
+        with mock.patch.object(
+            hat_repository.subprocess,
+            "run",
+            return_value=completed,
+        ):
+            with self.assertRaisesRegex(
+                hat_repository.HatRepositoryRuntimeError,
+                "mismatched Hat checkout",
+            ):
+                hat_repository.run_hat_repository(
+                    self._delete_local_payload()
                 )
 
     def _assert_runtime_output_rejected(self, output: object) -> None:

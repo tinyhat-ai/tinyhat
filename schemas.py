@@ -75,15 +75,19 @@ TINYHAT_HATS_SCHEMA = {
             "maxLength": 32,
             "pattern": "^@?[A-Za-z][A-Za-z0-9_]{1,28}bot$",
             "description": (
-                "Optional Telegram bot username to prefill for the customer. It "
-                "must start with a letter and end in bot."
+                "Optional Telegram bot username to prefill for the customer during "
+                "create or replace during update. It must start with a letter and "
+                "end in bot."
             ),
         },
         "default_bot_display_name": {
             "type": "string",
             "minLength": 1,
             "maxLength": 64,
-            "description": ("Optional Telegram bot display name to prefill for the customer."),
+            "description": (
+                "Optional Telegram bot display name to prefill during create or "
+                "replace during update."
+            ),
         },
         "identifier": {
             "type": "string",

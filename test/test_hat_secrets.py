@@ -68,7 +68,9 @@ class HatSecretStoreTests(unittest.TestCase):
                 "EXA_API_KEY",
                 "dummy-value",
             )
-            hat_directory = hat_secrets.hat_secret_store_path("acme/hats/forecasting").parent
+            hat_directory = hat_secrets.hat_secret_store_path(
+                "acme/hats/forecasting"
+            ).parent
             (hat_directory / "credentials-private.pem").write_text(
                 "dummy-private-key",
                 encoding="utf-8",
@@ -83,7 +85,9 @@ class HatSecretStoreTests(unittest.TestCase):
 
             self.assertTrue(result["removed"])
             self.assertFalse(hat_directory.exists())
-            self.assertTrue(hat_secrets.hat_secret_store_path("acme/hats/neighbor").exists())
+            self.assertTrue(
+                hat_secrets.hat_secret_store_path("acme/hats/neighbor").exists()
+            )
 
     def test_hat_bundle_reuses_one_locked_local_key_pair(self) -> None:
         with (
@@ -108,7 +112,9 @@ class HatSecretStoreTests(unittest.TestCase):
             self.assertEqual(first_path.read_text(encoding="utf-8"), "PRIVATE")
             self.assertEqual(stat.S_IMODE(first_path.stat().st_mode), 0o600)
             self.assertEqual(
-                stat.S_IMODE(first_path.with_name("credentials-public.pem").stat().st_mode),
+                stat.S_IMODE(
+                    first_path.with_name("credentials-public.pem").stat().st_mode
+                ),
                 0o600,
             )
             generate.assert_called_once_with()
@@ -322,6 +328,19 @@ class HatSecretStoreTests(unittest.TestCase):
         self.assertEqual(result["error"], "handoff_binding_mismatch")
         start_worker.assert_not_called()
 
+    def test_listing_absent_store_does_not_create_credential_material(self) -> None:
+        with (
+            tempfile.TemporaryDirectory(prefix="tinyhat-hat-store-") as temp_dir,
+            mock.patch.dict(os.environ, {"TINYHAT_HAT_STORE_DIR": temp_dir}),
+        ):
+            store_path = hat_secrets.hat_secret_store_path("acme/hats/forecasting")
+            result = hat_secrets.list_hat_secret_names("acme/hats/forecasting")
+
+            self.assertEqual(result["names"], [])
+            self.assertFalse(store_path.exists())
+            self.assertFalse(store_path.with_name("credentials-private.pem").exists())
+            self.assertFalse(store_path.with_name("credentials-public.pem").exists())
+
     def test_create_update_remove_stays_local_and_returns_no_values(self) -> None:
         first_value = "first-local-only-value"
         second_value = "rotated-local-only-value"
@@ -366,6 +385,38 @@ class HatSecretStoreTests(unittest.TestCase):
         self.assertNotIn(first_value, public_shapes)
         self.assertNotIn(second_value, public_shapes)
 
+    def test_remove_and_recreate_one_value_preserves_the_other(self) -> None:
+        with (
+            tempfile.TemporaryDirectory(prefix="tinyhat-hat-store-") as temp_dir,
+            mock.patch.dict(os.environ, {"TINYHAT_HAT_STORE_DIR": temp_dir}),
+        ):
+            hat_secrets.set_hat_secrets(
+                "acme/hats/forecasting",
+                {
+                    "EXA_API_KEY": "exa-local-only",
+                    "GITHUB_TOKEN": "github-local-only",
+                },
+            )
+            removed = hat_secrets.remove_hat_secret(
+                "acme/hats/forecasting",
+                "GITHUB_TOKEN",
+            )
+            after_remove = hat_secrets.list_hat_secret_names("acme/hats/forecasting")
+            recreated = hat_secrets.set_hat_secret(
+                "acme/hats/forecasting",
+                "GITHUB_TOKEN",
+                "github-recreated-local-only",
+            )
+            after_recreate = hat_secrets.list_hat_secret_names("acme/hats/forecasting")
+
+        self.assertTrue(removed["removed"])
+        self.assertEqual(after_remove["names"], ["EXA_API_KEY"])
+        self.assertEqual(recreated["operation"], "created")
+        self.assertEqual(
+            after_recreate["names"],
+            ["EXA_API_KEY", "GITHUB_TOKEN"],
+        )
+
     def test_handle_rename_preserves_encrypted_local_values_and_key(self) -> None:
         secret_value = "value-that-must-stay-local"
         with (
@@ -390,8 +441,12 @@ class HatSecretStoreTests(unittest.TestCase):
                 "acme/hats/executive-forecasting",
             )
 
-            new_path = hat_secrets.hat_secret_store_path("acme/hats/executive-forecasting")
-            listed = hat_secrets.list_hat_secret_names("acme/hats/executive-forecasting")
+            new_path = hat_secrets.hat_secret_store_path(
+                "acme/hats/executive-forecasting"
+            )
+            listed = hat_secrets.list_hat_secret_names(
+                "acme/hats/executive-forecasting"
+            )
             stored = json.loads(new_path.read_text(encoding="utf-8"))
             new_private_key = new_path.with_name("credentials-private.pem").read_text(
                 encoding="utf-8"
