@@ -130,11 +130,12 @@ bot username and display-name defaults, then `tinyhat_hats`
 derives the owner and account from the authenticated Computer. The platform
 creates a private repository and returns the canonical handle and share URL.
 The same tool lists up to 100 owner-scoped Hats, retrieves one by key or
-handle, updates its public title, intended customer email, or namespaced
-handle while preserving its files and local credential bundle, and creates or
-updates guarded non-secret repo files. It also permanently deletes one exact
-Hat, its private repository, and its Computer-local package state only after
-the user explicitly confirms the canonical handle. For Hat credentials, the agent first defines every
+handle, updates its public title, intended customer email, proposed Telegram
+bot defaults, or namespaced handle while preserving its files and local
+credential bundle, and creates or updates guarded non-secret repo files. It
+also permanently deletes one exact Hat, its private repository, verified local
+checkouts for current and former handles, and its Computer-local package state
+only after the user explicitly confirms the canonical handle. For Hat credentials, the agent first defines every
 value-blind name and purpose, then sends one encrypted Mini App form for all
 fields. Computer-local presence is checked without returning a value; existing
 values are marked without being disclosed, blank saved fields are preserved,

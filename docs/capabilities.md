@@ -30,16 +30,20 @@ tool or skill, and covered by validation.
 account; the model never supplies either id. `action=create` requires a name
 and the one customer's work email, creates a private platform-managed repo,
 and returns the canonical handle plus an opaque share URL. Creation also
-accepts optional Telegram bot username and display-name defaults. `action=list`
+accepts optional Telegram bot username and display-name defaults. Every
+successful Hat tool result includes elapsed time and bounded tool-input/output
+token estimates; exact billed model usage remains in the surrounding Hermes
+agent-run trace. `action=list`
 returns no more than 100 hats owned by that user in that account, while
 `action=get` accepts a returned key or handle. `action=update` changes one or
-more of the public title, intended customer email, or final namespaced handle
-segment. Handle updates preserve the Hat, private repository contents, old
+more of the public title, intended customer email, proposed Telegram bot
+username/display name, or final namespaced handle segment. Handle updates preserve the Hat, private repository contents, old
 public-link aliases, and Computer-local credential bundle. `action=put_file`
 creates or updates one relative text path in a commit; secret-shaped paths,
 credential files, private keys, branch deletion, history rewrites, and repo
-deletion are not available through the file-writing action. `action=delete` permanently
-deletes one exact Hat, its private repository, and its Computer-local package
+deletion are not available through the file-writing action. `action=delete`
+permanently deletes one exact Hat, its private repository, verified local
+checkouts for the current and former handles, and its Computer-local package
 state only after the user explicitly confirms the canonical Hat handle.
 
 The intended customer verifies their email on the public page, then opens a
