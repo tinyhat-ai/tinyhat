@@ -948,11 +948,11 @@ def validate_docs(root: Path) -> None:
         ),
         "skills/tinyhat-hat-wearing/SKILL.md": (
             "tinyhat_hats",
-            "action\":\"wear",
+            'action":"wear',
             "resume_installation",
-            "list_pending_transfers",
-            "complete_transfer",
             "read-only GitHub credential",
+            "does not require an agent or creator-side chat turn",
+            "signs with the Hat's creator key",
             "Tinyhat relays ciphertext only",
         ),
         "skills/tinyhat-platform/SKILL.md": (

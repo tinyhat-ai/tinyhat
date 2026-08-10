@@ -11,7 +11,6 @@ from .hat_repository import HatRepositoryRuntimeError, run_hat_repository
 from .hat_secrets import (
     HatSecretStoreError,
     delete_hat_secret_store,
-    encrypt_hat_secret_bundle_for_public_key,
     list_hat_secret_names,
     normalize_hat_handle,
     remove_hat_secret,
@@ -43,8 +42,6 @@ ACTIONS = (
     "repository_reset",
     "wear",
     "resume_installation",
-    "list_pending_transfers",
-    "complete_transfer",
 )
 
 
@@ -73,9 +70,7 @@ def hats(  # noqa: PLR0911, PLR0912, PLR0915 - one public tool dispatches bounde
         return tool_error_json(
             tool="tinyhat_hats",
             error_name="invalid_parameter",
-            message=(
-                "Call tinyhat_hats with one of the supported actions in `expected`."
-            ),
+            message=("Call tinyhat_hats with one of the supported actions in `expected`."),
             expected={"action": list(ACTIONS)},
             example_call={"action": "list"},
         )
@@ -98,14 +93,11 @@ def hats(  # noqa: PLR0911, PLR0912, PLR0915 - one public tool dispatches bounde
                 "repository_sync",
                 "repository_reset",
                 "wear",
-                "complete_transfer",
             }
             else ""
         )
         name = _required_text(payload, "name") if action == "create" else ""
-        customer_email = (
-            _required_text(payload, "customer_email") if action == "create" else ""
-        )
+        customer_email = _required_text(payload, "customer_email") if action == "create" else ""
         update_payload: dict[str, Any] | None = None
         if action == "update":
             update_payload = {"identifier": identifier}
@@ -132,9 +124,7 @@ def hats(  # noqa: PLR0911, PLR0912, PLR0915 - one public tool dispatches bounde
             ):
                 if payload.get(field) is not None:
                     update_payload[field] = payload[field]
-            minimum_computer_type = str(
-                payload.get("minimum_computer_type_key") or ""
-            ).strip()
+            minimum_computer_type = str(payload.get("minimum_computer_type_key") or "").strip()
             if minimum_computer_type:
                 update_payload["computer_type_key"] = minimum_computer_type
             if len(update_payload) == 1:
@@ -259,9 +249,7 @@ def hats(  # noqa: PLR0911, PLR0912, PLR0915 - one public tool dispatches bounde
             if not isinstance(checkout_handles, list):
                 checkout_handles = [handle]
             checkout_handles = list(
-                dict.fromkeys(
-                    str(item).strip() for item in checkout_handles if str(item).strip()
-                )
+                dict.fromkeys(str(item).strip() for item in checkout_handles if str(item).strip())
             )
             checkout_cleanup: list[dict[str, Any]] = []
             local_checkouts = result.get("local_checkouts")
@@ -324,9 +312,7 @@ def hats(  # noqa: PLR0911, PLR0912, PLR0915 - one public tool dispatches bounde
                 except HatSecretStoreError as exc:
                     secret_cleanup_errors.append(str(exc))
                 else:
-                    secret_store_removed = (
-                        bool(local_result["removed"]) or secret_store_removed
-                    )
+                    secret_store_removed = bool(local_result["removed"]) or secret_store_removed
             result["local_store_removed"] = secret_store_removed
             if secret_cleanup_errors:
                 result["local_cleanup_error"] = "; ".join(secret_cleanup_errors)
@@ -387,15 +373,6 @@ def hats(  # noqa: PLR0911, PLR0912, PLR0915 - one public tool dispatches bounde
                 platform_auth=platform_auth,
                 identifier=identifier if action == "wear" else None,
             )
-        elif action == "list_pending_transfers":
-            result = client.get_json(f"{path}/credential-transfers")
-        elif action == "complete_transfer":
-            result = _complete_credential_transfer(
-                client=client,
-                path=path,
-                identifier=identifier,
-                handoff_id=str(payload.get("handoff_id") or "").strip(),
-            )
         else:  # create
             request_payload = {
                 "name": name,
@@ -404,14 +381,10 @@ def hats(  # noqa: PLR0911, PLR0912, PLR0915 - one public tool dispatches bounde
             key = str(payload.get("key") or "").strip()
             if key:
                 request_payload["key"] = key
-            default_bot_username = str(
-                payload.get("default_bot_username") or ""
-            ).strip()
+            default_bot_username = str(payload.get("default_bot_username") or "").strip()
             if default_bot_username:
                 request_payload["default_bot_username"] = default_bot_username
-            default_bot_display_name = str(
-                payload.get("default_bot_display_name") or ""
-            ).strip()
+            default_bot_display_name = str(payload.get("default_bot_display_name") or "").strip()
             if default_bot_display_name:
                 request_payload["default_bot_display_name"] = default_bot_display_name
             for field in (
@@ -427,9 +400,7 @@ def hats(  # noqa: PLR0911, PLR0912, PLR0915 - one public tool dispatches bounde
             ):
                 if payload.get(field) is not None and payload.get(field) != "":
                     request_payload[field] = payload[field]
-            minimum_computer_type = str(
-                payload.get("minimum_computer_type_key") or ""
-            ).strip()
+            minimum_computer_type = str(payload.get("minimum_computer_type_key") or "").strip()
             if minimum_computer_type:
                 request_payload["computer_type_key"] = minimum_computer_type
             result = client.post_json(path, request_payload)
@@ -525,16 +496,6 @@ def hats(  # noqa: PLR0911, PLR0912, PLR0915 - one public tool dispatches bounde
             "Never claim the Hat is fully ready until status=active or the final "
             "platform notice arrives."
         )
-    elif action == "list_pending_transfers":
-        result["agent_instruction"] = (
-            "These are value-blind requests for Hats created on this Computer. "
-            "Complete each requested transfer without asking for secret values."
-        )
-    elif action == "complete_transfer":
-        result["agent_instruction"] = (
-            "Report only the Hat handle and credential count. The plaintext stayed "
-            "on this Computer and only ciphertext was relayed to the consumer."
-        )
     else:
         result["agent_instruction"] = (
             "Report the canonical handle and share URL exactly as returned. Tell the "
@@ -547,9 +508,7 @@ def hats(  # noqa: PLR0911, PLR0912, PLR0915 - one public tool dispatches bounde
         "action": action,
         "elapsed_ms": round((time.perf_counter() - started_at) * 1000),
         "estimated_tool_input_tokens": max(1, (len(input_shape) + 3) // 4),
-        "estimated_tool_output_tokens": max(
-            1, (len(result_without_telemetry) + 3) // 4
-        ),
+        "estimated_tool_output_tokens": max(1, (len(result_without_telemetry) + 3) // 4),
         "agent_run_token_usage_source": "Hermes agent run trace",
     }
     return json.dumps(result, sort_keys=True)
@@ -615,55 +574,6 @@ def _wear_hat(
     if transfer.get("credential_count") == 0:
         installation["status"] = "active"
     return installation
-
-
-def _complete_credential_transfer(
-    *,
-    client: Any,
-    path: str,
-    identifier: str,
-    handoff_id: str,
-) -> dict[str, Any]:
-    listed = client.get_json(f"{path}/credential-transfers")
-    items = listed.get("items") if isinstance(listed, dict) else None
-    if not isinstance(items, list):
-        raise PlatformError("The platform returned invalid Hat transfer metadata.")
-    matches = [
-        item
-        for item in items
-        if isinstance(item, dict)
-        and (not handoff_id or str(item.get("handoff_id") or "") == handoff_id)
-        and (not identifier or str(item.get("hat_handle") or "") == identifier)
-    ]
-    if len(matches) != 1:
-        raise PlatformError(
-            "Select one exact pending Hat transfer by handoff id or Hat handle."
-        )
-    transfer = matches[0]
-    credentials = transfer.get("credentials")
-    if not isinstance(credentials, list):
-        raise PlatformError("The transfer credential metadata is invalid.")
-    names = [
-        str(item.get("name") or "")
-        for item in credentials
-        if isinstance(item, dict)
-    ]
-    encrypted = encrypt_hat_secret_bundle_for_public_key(
-        str(transfer.get("hat_handle") or ""),
-        public_key_pem=str(transfer.get("public_key_pem") or ""),
-        expected_names=names,
-    )
-    submitted = client.post_json(
-        f"{path}/credential-transfers/{transfer['handoff_id']}",
-        {"ciphertext_payload": encrypted["ciphertext_payload"]},
-    )
-    return {
-        "handoff_id": str(transfer["handoff_id"]),
-        "hat_handle": str(transfer["hat_handle"]),
-        "credential_count": len(names),
-        "submitted": str(submitted.get("status") or "") == "submitted",
-        "value_available": False,
-    }
 
 
 __all__ = ["ACTIONS", "hats"]

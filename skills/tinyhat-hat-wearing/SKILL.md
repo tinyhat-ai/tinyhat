@@ -1,6 +1,6 @@
 ---
 name: tinyhat-hat-wearing
-description: Install, wear, resume, or finish a private Tinyhat Hat on this agent from a full handle such as account/hats/hat-name. Use when a user pastes the public-page instruction, asks this existing agent to use a Hat, or when a newly assigned Hat-enabled Computer needs onboarding. Also use on a Hat creator's Computer when Tinyhat reports a pending Hat credential transfer. Do not use for creating or editing a Hat; use hat-authoring for that.
+description: Install, wear, resume, or finish a private Tinyhat Hat on this agent from a full handle such as account/hats/hat-name. Use when a user pastes the public-page instruction, asks this existing agent to use a Hat, or when a newly assigned Hat-enabled Computer needs onboarding. Do not use for creating or editing a Hat; use hat-authoring for that.
 ---
 
 # Wear a Tinyhat Hat
@@ -28,8 +28,9 @@ When the user provides a full Hat handle or asks to install it:
    > instructions. This usually takes less than a minute.
 
 4. If credentials are pending, explain only that their encrypted bundle is
-   moving directly from the creator's Computer. Never ask anyone to paste a
-   value into chat.
+   moving automatically from the creator's Computer. The creator already
+   authorized this when they selected the customer; never ask either person to
+   approve the transfer or paste a value into chat.
 5. Do not claim the Hat is ready until `status=active` or Tinyhat sends the
    final `Hat installed` confirmation after the gateway refresh.
 
@@ -47,22 +48,11 @@ newly assigned Hat-enabled Computer, call:
 
 Use the same progress and completion rules above. A resume is idempotent.
 
-## Complete a creator-side credential transfer
-
-When Tinyhat reports a pending transfer, or the Hat creator asks to finish
-pending transfers:
-
-1. Call `tinyhat_hats` with `action=list_pending_transfers`.
-2. If there is exactly one request, call `action=complete_transfer` using its
-   exact `identifier` (the full Hat handle) and `handoff_id`.
-3. If there is more than one, show Hat titles and handles and ask which one to
-   complete. Do not expose consumer identity or any credential value.
-4. Report only the Hat handle and number of values transferred.
-
-The creator Computer decrypts its local Hat bundle in memory and re-encrypts
-it to the consumer Computer's public key. Tinyhat relays ciphertext only. The
-consumer Computer decrypts and saves the values locally, then the platform
-refreshes its gateway once.
+Credential transfer does not require an agent or creator-side chat turn. The
+platform dispatches a bounded runtime command to the exact Computer registered
+for that Hat. Its plugin encrypts to the consumer key and signs with the Hat's
+creator key; the consumer verifies, decrypts, and saves locally. Tinyhat relays
+ciphertext only.
 
 ## Boundaries
 

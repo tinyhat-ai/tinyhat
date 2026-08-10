@@ -47,8 +47,6 @@ TINYHAT_HATS_SCHEMA = {
                 "repository_reset",
                 "wear",
                 "resume_installation",
-                "list_pending_transfers",
-                "complete_transfer",
             ],
         },
         "name": {
@@ -178,18 +176,7 @@ TINYHAT_HATS_SCHEMA = {
             "type": "string",
             "minLength": 1,
             "maxLength": 200,
-            "description": (
-                "One-line atomic Git commit message for repository_sync."
-            ),
-        },
-        "handoff_id": {
-            "type": "string",
-            "minLength": 8,
-            "maxLength": 96,
-            "description": (
-                "Optional exact pending transfer id for complete_transfer. Use the "
-                "value returned by list_pending_transfers."
-            ),
+            "description": ("One-line atomic Git commit message for repository_sync."),
         },
         "billing_mode": {
             "type": "string",

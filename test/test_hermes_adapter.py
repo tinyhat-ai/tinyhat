@@ -174,8 +174,6 @@ class HermesAdapterTests(unittest.TestCase):
                 "repository_reset",
                 "wear",
                 "resume_installation",
-                "list_pending_transfers",
-                "complete_transfer",
             ],
         )
         self.assertIn("permanently deletes", hats_schema["description"])
@@ -482,9 +480,7 @@ class HermesAdapterTests(unittest.TestCase):
                     def get_json(self, path: str) -> dict[str, object]:
                         return {"credentials": case["credentials"]}
 
-                    def post_json(
-                        self, path: str, payload: dict[str, object]
-                    ) -> dict[str, object]:
+                    def post_json(self, path: str, payload: dict[str, object]) -> dict[str, object]:
                         posts.append((path, payload))
                         return {"status": "offered"}
 
@@ -494,9 +490,7 @@ class HermesAdapterTests(unittest.TestCase):
                     return_value=(FakePlatformClient(), "local_dev"),
                 ):
                     payload = json.loads(
-                        credentials.credentials(
-                            {"action": "remove", "name": case["name"]}
-                        )
+                        credentials.credentials({"action": "remove", "name": case["name"]})
                     )
 
                 self.assertEqual(posts, [])
@@ -587,7 +581,7 @@ class HermesAdapterTests(unittest.TestCase):
         self.assertIn("tinyhat_skill_catalog", injected["context"])
         self.assertIn("tinyhat:tinyhat-codex-auth", injected["context"])
 
-    def test_context_routes_pending_hat_credential_transfers_to_wearing_skill(
+    def test_context_explains_pending_hat_credential_transfers_are_automatic(
         self,
     ) -> None:
         injected = tinyhat_context.inject_tinyhat_context(
@@ -597,9 +591,9 @@ class HermesAdapterTests(unittest.TestCase):
 
         self.assertIsNotNone(injected)
         assert injected is not None
-        self.assertIn("pending Hat credential transfer", injected["context"])
-        self.assertIn("action=list_pending_transfers", injected["context"])
-        self.assertIn("tinyhat:tinyhat-hat-wearing", injected["context"])
+        self.assertIn("automatic signed Computer-to-Computer", injected["context"])
+        self.assertNotIn("action=list_pending_transfers", injected["context"])
+        self.assertIn("never ask the creator", injected["context"])
 
     def test_context_hook_injects_for_tinyhat_qa_reports(self) -> None:
         injected = tinyhat_context.inject_tinyhat_context(
@@ -754,9 +748,7 @@ class HermesAdapterTests(unittest.TestCase):
             is_first_turn=True,
         )
         assert first is not None
-        self.assertLessEqual(
-            len(first["context"]), tinyhat_context._HOOK_SPILL_SAFE_CHARS
-        )
+        self.assertLessEqual(len(first["context"]), tinyhat_context._HOOK_SPILL_SAFE_CHARS)
         # Literal ceiling: Hermes spills at ~10,000 chars regardless of our
         # tunable safe margin, so producer and test cannot drift together.
         self.assertLess(len(first["context"]), 10_000)
@@ -771,19 +763,14 @@ class HermesAdapterTests(unittest.TestCase):
             tinyhat_context.FUNDING_REMINDER_DIRECTIVE + "\n" + small,
         )
 
-        bullets = "".join(
-            f"\n- bullet {i} " + "x" * 400 for i in range(40)
-        )
+        bullets = "".join(f"\n- bullet {i} " + "x" * 400 for i in range(40))
         oversized = "Tinyhat context: heading." + bullets
         composed = tinyhat_context._compose_onboarding_context(oversized, "hi")
-        self.assertLessEqual(
-            len(composed), tinyhat_context._HOOK_SPILL_SAFE_CHARS
-        )
+        self.assertLessEqual(len(composed), tinyhat_context._HOOK_SPILL_SAFE_CHARS)
         self.assertLess(len(composed), 10_000)
         self.assertTrue(
             composed.startswith(
-                tinyhat_context.FUNDING_REMINDER_DIRECTIVE
-                + "\nTinyhat context: heading."
+                tinyhat_context.FUNDING_REMINDER_DIRECTIVE + "\nTinyhat context: heading."
             )
         )
         # Whole bullets only, never a mid-bullet cut: every kept bullet is
@@ -798,10 +785,7 @@ class HermesAdapterTests(unittest.TestCase):
     def test_compose_onboarding_context_protects_matched_bullets(self) -> None:
         filler = "".join(f"\n- filler {i} " + "x" * 400 for i in range(40))
         privacy_bullet = (
-            "\n"
-            + tinyhat_context._PRIVACY_BULLET_MARKER
-            + " trust model facts "
-            + "y" * 400
+            "\n" + tinyhat_context._PRIVACY_BULLET_MARKER + " trust model facts " + "y" * 400
         )
         oversized = "Tinyhat context: heading." + filler + privacy_bullet
         # A neutral first message drops the tail privacy bullet.
@@ -823,9 +807,7 @@ class HermesAdapterTests(unittest.TestCase):
             is_first_turn=True,
         )
         assert first is not None
-        self.assertLessEqual(
-            len(first["context"]), tinyhat_context._HOOK_SPILL_SAFE_CHARS
-        )
+        self.assertLessEqual(len(first["context"]), tinyhat_context._HOOK_SPILL_SAFE_CHARS)
         self.assertLess(len(first["context"]), 10_000)
         self.assertTrue(first["context"].startswith("[System note:"))
         self.assertIn("tinyhat:tinyhat-privacy", first["context"])
@@ -946,30 +928,20 @@ class HermesAdapterTests(unittest.TestCase):
     def test_compose_onboarding_context_degenerate_inputs_stay_capped(
         self,
     ) -> None:
-        with mock.patch.object(
-            tinyhat_context, "FUNDING_REMINDER_DIRECTIVE", "X" * 12_000
-        ):
+        with mock.patch.object(tinyhat_context, "FUNDING_REMINDER_DIRECTIVE", "X" * 12_000):
             capped = tinyhat_context._compose_onboarding_context(
                 "Tinyhat context: heading.\n- a bullet.", "hi"
             )
-            self.assertLessEqual(
-                len(capped), tinyhat_context._HOOK_SPILL_SAFE_CHARS
-            )
-        heading_only = tinyhat_context._compose_onboarding_context(
-            "H" * 12_000, "hi"
-        )
-        self.assertLessEqual(
-            len(heading_only), tinyhat_context._HOOK_SPILL_SAFE_CHARS
-        )
+            self.assertLessEqual(len(capped), tinyhat_context._HOOK_SPILL_SAFE_CHARS)
+        heading_only = tinyhat_context._compose_onboarding_context("H" * 12_000, "hi")
+        self.assertLessEqual(len(heading_only), tinyhat_context._HOOK_SPILL_SAFE_CHARS)
         self.assertLess(len(heading_only), 10_000)
         # The oversized-heading branch with bullets present must also
         # stay hard-capped (a different code path than no-bullet input).
         heading_with_bullet = tinyhat_context._compose_onboarding_context(
             "H" * 12_000 + "\n- tail bullet after a giant heading.", "hi"
         )
-        self.assertLessEqual(
-            len(heading_with_bullet), tinyhat_context._HOOK_SPILL_SAFE_CHARS
-        )
+        self.assertLessEqual(len(heading_with_bullet), tinyhat_context._HOOK_SPILL_SAFE_CHARS)
         self.assertLess(len(heading_with_bullet), 10_000)
 
     def test_onboarding_turn_preserves_funding_context_for_funding_question(
@@ -980,9 +952,7 @@ class HermesAdapterTests(unittest.TestCase):
             is_first_turn=True,
         )
         assert first is not None
-        self.assertLessEqual(
-            len(first["context"]), tinyhat_context._HOOK_SPILL_SAFE_CHARS
-        )
+        self.assertLessEqual(len(first["context"]), tinyhat_context._HOOK_SPILL_SAFE_CHARS)
         self.assertLess(len(first["context"]), 10_000)
         self.assertIn("- Funding model:", first["context"])
         self.assertIn("Never state a remaining credit balance", first["context"])
@@ -1083,9 +1053,7 @@ class HermesAdapterTests(unittest.TestCase):
         self.assertIn("/codex_auth", text)
 
     def test_funding_reminder_claim_fails_closed_without_hermes_home(self) -> None:
-        os.environ["TINYHAT_HERMES_HOME"] = str(
-            Path(self._hermes_home.name) / "does-not-exist"
-        )
+        os.environ["TINYHAT_HERMES_HOME"] = str(Path(self._hermes_home.name) / "does-not-exist")
         for attempt in range(2):
             with self.subTest(attempt=attempt):
                 injected = tinyhat_context.inject_tinyhat_context(
@@ -1993,9 +1961,7 @@ class HermesAdapterTests(unittest.TestCase):
             "Slack rejected apps.connections.open: missing_scope.",
             stage="socket_mode",
             code="missing_scope",
-            public_message=(
-                "Slack needs updated permissions. Reinstall the app, then retry."
-            ),
+            public_message=("Slack needs updated permissions. Reinstall the app, then retry."),
         )
         with (
             mock.patch.object(
@@ -2057,9 +2023,7 @@ class HermesAdapterTests(unittest.TestCase):
             "Slack rejected chat.postMessage: missing_scope.",
             stage="greeting",
             code="missing_scope",
-            public_message=(
-                "Slack needs updated permissions. Reinstall the app, then retry."
-            ),
+            public_message=("Slack needs updated permissions. Reinstall the app, then retry."),
         )
         with (
             mock.patch.object(
@@ -2190,9 +2154,7 @@ class HermesAdapterTests(unittest.TestCase):
             "Slack rejected auth.test: invalid_auth.",
             stage="bot_auth",
             code="invalid_auth",
-            public_message=(
-                "Slack did not accept the bot token. Copy the xoxb token and retry."
-            ),
+            public_message=("Slack did not accept the bot token. Copy the xoxb token and retry."),
         )
         claims: list[dict] = []
 
@@ -2212,9 +2174,7 @@ class HermesAdapterTests(unittest.TestCase):
                 "_validate_slack_credentials",
                 side_effect=failure,
             ),
-            mock.patch.object(
-                slack_connection, "_send_secret_notice"
-            ) as send_notice,
+            mock.patch.object(slack_connection, "_send_secret_notice") as send_notice,
             mock.patch.object(
                 slack_connection,
                 "_claim_handoff",
@@ -2242,10 +2202,7 @@ class HermesAdapterTests(unittest.TestCase):
             claims[1],
             {
                 "installed": False,
-                "message": (
-                    "Slack did not accept the bot token. "
-                    "Copy the xoxb token and retry."
-                ),
+                "message": ("Slack did not accept the bot token. Copy the xoxb token and retry."),
             },
         )
 
@@ -2275,9 +2232,12 @@ class HermesAdapterTests(unittest.TestCase):
             ),
         )
         for payload, message in cases:
-            with self.subTest(message=message), self.assertRaisesRegex(
-                secret_handoff.SecretHandoffError,
-                message,
+            with (
+                self.subTest(message=message),
+                self.assertRaisesRegex(
+                    secret_handoff.SecretHandoffError,
+                    message,
+                ),
             ):
                 slack_connection._parse_connection_bundle(json.dumps(payload))
 
@@ -2291,9 +2251,12 @@ class HermesAdapterTests(unittest.TestCase):
             "not-a-member-id",
             ",".join(f"U{i:09d}" for i in range(101)),
         ):
-            with self.subTest(value=value[:40]), self.assertRaisesRegex(
-                secret_handoff.SecretHandoffError,
-                "member IDs",
+            with (
+                self.subTest(value=value[:40]),
+                self.assertRaisesRegex(
+                    secret_handoff.SecretHandoffError,
+                    "member IDs",
+                ),
             ):
                 slack_connection._normalize_allowed_users(value)
 
@@ -2455,9 +2418,7 @@ class HermesAdapterTests(unittest.TestCase):
         self,
     ) -> None:
         self.assertEqual(
-            slack_connection._app_id_from_app_token(
-                "xapp-1-a012abcdef-secret"
-            ),
+            slack_connection._app_id_from_app_token("xapp-1-a012abcdef-secret"),
             "A012ABCDEF",
         )
         for value in (
@@ -2467,9 +2428,7 @@ class HermesAdapterTests(unittest.TestCase):
             "",
         ):
             with self.subTest(value=value):
-                self.assertIsNone(
-                    slack_connection._app_id_from_app_token(value)
-                )
+                self.assertIsNone(slack_connection._app_id_from_app_token(value))
 
     def test_slack_api_call_maps_transport_and_slack_errors(self) -> None:
         with (
@@ -2509,9 +2468,7 @@ class HermesAdapterTests(unittest.TestCase):
                     "urlopen",
                     return_value=response,
                 ),
-                self.assertRaises(
-                    slack_connection.SlackConnectionError
-                ) as raised,
+                self.assertRaises(slack_connection.SlackConnectionError) as raised,
             ):
                 slack_connection._slack_api_call(
                     "auth.test",
@@ -3192,8 +3149,7 @@ class HermesAdapterTests(unittest.TestCase):
             runtime_python.touch()
             unrelated_python.touch()
             wrapper.write_text(
-                "#!/bin/sh\n"
-                f'exec "{runtime_python}" -m hermes_cli.main "$@"\n',
+                f'#!/bin/sh\nexec "{runtime_python}" -m hermes_cli.main "$@"\n',
                 encoding="utf-8",
             )
 
@@ -3248,9 +3204,7 @@ class HermesAdapterTests(unittest.TestCase):
             mock.patch.object(
                 secret_handoff,
                 "_run",
-                side_effect=lambda args, **kwargs: calls.append(
-                    {"args": args, **kwargs}
-                ),
+                side_effect=lambda args, **kwargs: calls.append({"args": args, **kwargs}),
             ),
         ):
             secret_handoff._save_hermes_env_value(
@@ -3456,9 +3410,7 @@ class HermesAdapterTests(unittest.TestCase):
             mock.patch.object(
                 secret_handoff_worker,
                 "_install_submitted_secret",
-                side_effect=lambda **kwargs: (
-                    install_calls.append(kwargs) or next(install_results)
-                ),
+                side_effect=lambda **kwargs: install_calls.append(kwargs) or next(install_results),
             ),
             mock.patch.object(secret_handoff_worker.time, "sleep"),
             tempfile.TemporaryDirectory(prefix="tinyhat-worker-retry-") as temp_dir,

@@ -11,7 +11,7 @@ from .google_workspace import remove_credentials_if_assignment_changed_for_conte
 
 TINYHAT_CONTEXT = """Tinyhat context: this Hermes agent runs on a Tinyhat-managed Computer.
 - First turn after assignment: call tinyhat_hats action=resume_installation. If started, send onboarding_message; never wait silently.
-- Hats: authoring -> tinyhat:hat-authoring; skill writing -> tinyhat:tinyhat-skill-authoring; owner/hats/name, install, or transfer -> tinyhat:tinyhat-hat-wearing. For a pending Hat credential transfer call tinyhat_hats action=list_pending_transfers before reporting none. Repo files have no secrets.
+- Hats: authoring -> tinyhat:hat-authoring; skill writing -> tinyhat:tinyhat-skill-authoring; owner/hats/name or installation -> tinyhat:tinyhat-hat-wearing. Credential delivery is an automatic signed Computer-to-Computer runtime flow; never ask the creator to approve or complete it. Repo files have no secrets.
 - For API keys, tokens, passwords, webhook secrets, or credentials, use tinyhat_private_secret_handoff by default. Do not ask the user to paste secrets in chat and do not lead with manual .env editing unless the user explicitly asks for manual server operations.
 - Choose meaningful env-style names such as EXA_API_KEY, OPENROUTER_API_KEY, GITHUB_TOKEN, or STRIPE_SECRET_KEY. Never use TINYHAT_SECRET for a known provider.
 - When the user asks to connect this agent to Slack, load tinyhat:tinyhat-slack and call tinyhat_slack_connect once. It sends the current Hermes Agent-view manifest after removing workspace-global slash commands, the Slack create-app screenshot and button, and one browser-encrypted form for the xoxb token, xapp Socket Mode token, and allowed Slack member IDs. Do not use the generic one-secret tool, do not ask for tokens in chat, and do not configure a separate Slack adapter. The tool owns the Telegram response; send no extra ordinary reply after it returns. Hermes remains the only process that receives Slack messages over Socket Mode.
@@ -122,11 +122,7 @@ def _route_signals(user_message: str) -> tuple[set[str], set[str]]:
     """
     raw = _normalize_message_raw(user_message)
     normalized = re.sub(r"[_-]+", " ", raw)
-    phrases = {
-        phrase
-        for phrase in _CONTEXT_PHRASES
-        if phrase in raw or phrase in normalized
-    }
+    phrases = {phrase for phrase in _CONTEXT_PHRASES if phrase in raw or phrase in normalized}
     tokens = set(re.findall(r"[a-z0-9]+", normalized))
     terms = {term for term in _CONTEXT_TERMS if term in tokens}
     return phrases, terms
@@ -383,8 +379,7 @@ _FUNDING_QUESTION_CORES = (
     r"(?:price|prices|pricing|rates?|fees?|costs?|plans?)",
 )
 _FUNDING_QUESTION_PATTERNS_PRECISE = tuple(
-    re.compile(_FUNDING_POLITE_PREFIX + core + r"\s*\??$")
-    for core in _FUNDING_QUESTION_CORES
+    re.compile(_FUNDING_POLITE_PREFIX + core + r"\s*\??$") for core in _FUNDING_QUESTION_CORES
 )
 
 # Broad, mid-string funding fragments. These match only after command
@@ -461,9 +456,7 @@ _FUNDING_SERVICE_ANCHORS = (
     "starter",
 )
 
-_FUNDING_STANDALONE_TERMS = (
-    "billing",
-)
+_FUNDING_STANDALONE_TERMS = ("billing",)
 
 # Privacy/data-access routing is separate from the generic short-circuits
 # above. It matches word-boundary phrases in either script, or a bounded
@@ -694,8 +687,7 @@ def _matches_funding_intent(normalized: str) -> bool:
     if _ENGLISH_COMMAND_FRAME.search(normalized):
         return False
     if any(
-        token in set(re.findall(r"\w+", normalized))
-        for token in _PRIVACY_IMPERATIVE_MARKERS_FA
+        token in set(re.findall(r"\w+", normalized)) for token in _PRIVACY_IMPERATIVE_MARKERS_FA
     ):
         return False
     if _ENGLISH_MODAL_REQUEST.search(normalized):
@@ -740,8 +732,7 @@ def _is_imperative_frame(normalized: str) -> bool:
     if _ENGLISH_COMMAND_FRAME.search(normalized):
         return True
     return any(
-        token in set(re.findall(r"\w+", normalized))
-        for token in _PRIVACY_IMPERATIVE_MARKERS_FA
+        token in set(re.findall(r"\w+", normalized)) for token in _PRIVACY_IMPERATIVE_MARKERS_FA
     )
 
 
@@ -782,9 +773,7 @@ def _matches_privacy_intent(normalized: str) -> bool:
         return True
     if any(token in tokens for token in _PRIVACY_IMPERATIVE_MARKERS_FA):
         return False
-    has_fa_signal = "؟" in normalized or any(
-        term in tokens for term in _PRIVACY_SIGNAL_TERMS_FA
-    )
+    has_fa_signal = "؟" in normalized or any(term in tokens for term in _PRIVACY_SIGNAL_TERMS_FA)
     if not has_fa_signal:
         return False
     has_fa_subject = any(

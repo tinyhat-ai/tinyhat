@@ -146,6 +146,13 @@ the creator Computer for the intended customer. It is not loaded into the
 authoring agent's Hermes environment, so Hermes is not restarted. The private
 repo records only credential names, purposes, and saved times. The intended customer can verify
 their email on the public page and create a Telegram agent that wears the Hat.
+When that authorized customer installs the Hat, the platform automatically
+dispatches a bounded runtime command to the registered creator Computer; no
+creator approval, chat, or LLM turn is required. The creator plugin encrypts
+the bundle to the consumer Computer's public key and signs the envelope with
+the Hat's local private key. The consumer verifies the registered creator
+public key before decrypting with its own private key. Tinyhat stores and
+relays only the short-lived authenticated ciphertext envelope.
 
 For repositories in `tinyhat-ai`, Hat authoring uses the public runtime's local
 Git helper. Tinyhat grants the assigned Computer one short-lived installation
