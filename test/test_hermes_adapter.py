@@ -587,6 +587,20 @@ class HermesAdapterTests(unittest.TestCase):
         self.assertIn("tinyhat_skill_catalog", injected["context"])
         self.assertIn("tinyhat:tinyhat-codex-auth", injected["context"])
 
+    def test_context_routes_pending_hat_credential_transfers_to_wearing_skill(
+        self,
+    ) -> None:
+        injected = tinyhat_context.inject_tinyhat_context(
+            user_message="Complete pending Hat credential transfers.",
+            is_first_turn=False,
+        )
+
+        self.assertIsNotNone(injected)
+        assert injected is not None
+        self.assertIn("pending Hat credential transfer", injected["context"])
+        self.assertIn("action=list_pending_transfers", injected["context"])
+        self.assertIn("tinyhat:tinyhat-hat-wearing", injected["context"])
+
     def test_context_hook_injects_for_tinyhat_qa_reports(self) -> None:
         injected = tinyhat_context.inject_tinyhat_context(
             user_message="Post this Slack report about a gateway restart bug",

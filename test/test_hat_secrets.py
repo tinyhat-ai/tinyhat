@@ -18,6 +18,61 @@ from tinyhat import hat_secrets, secret_handoff, secret_handoff_worker  # noqa: 
 
 
 class HatSecretStoreTests(unittest.TestCase):
+    def test_consumed_hat_resume_reuses_stable_key_and_worker(self) -> None:
+        class FakeClient:
+            def __init__(self) -> None:
+                self.posts: list[tuple[str, dict]] = []
+
+            def post_json(self, path: str, payload: dict) -> dict:
+                self.posts.append((path, payload))
+                return {
+                    "handoff_id": "sh_install",
+                    "existing_handoff": True,
+                    "hat_handle": "acme/hats/research",
+                    "credentials": [{"name": "EXA_API_KEY"}],
+                }
+
+        with tempfile.TemporaryDirectory(prefix="tinyhat-consumer-key-") as temp_dir:
+            key_path = Path(temp_dir) / "credentials-private.pem"
+            key_path.write_text("PRIVATE", encoding="utf-8")
+            client = FakeClient()
+            with (
+                mock.patch.object(
+                    secret_handoff,
+                    "_hat_credentials_key_pair",
+                    return_value=(key_path, "PUBLIC"),
+                ) as stable_pair,
+                mock.patch.object(
+                    secret_handoff,
+                    "build_platform_client",
+                    return_value=(client, "local_dev"),
+                ),
+                mock.patch.object(
+                    secret_handoff,
+                    "_start_worker_process",
+                ) as start_worker,
+            ):
+                result = secret_handoff.start_hat_installation_credentials(
+                    installation_id="hti_12345678",
+                    hat_handle="acme/hats/research",
+                )
+
+        stable_pair.assert_called_once_with("acme/hats/research")
+        self.assertEqual(client.posts[0][1]["public_key_pem"], "PUBLIC")
+        start_worker.assert_called_once_with(
+            {
+                "handoff_id": "sh_install",
+                "existing_handoff": True,
+                "hat_handle": "acme/hats/research",
+                "credentials": [{"name": "EXA_API_KEY"}],
+            },
+            "PRIVATE",
+            hat_handle="acme/hats/research",
+            persistent=True,
+            key_path=key_path,
+        )
+        self.assertTrue(result["existing_handoff"])
+
     def test_creator_to_consumer_hat_bundle_round_trip_is_ciphertext_only(
         self,
     ) -> None:

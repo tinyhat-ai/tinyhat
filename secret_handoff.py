@@ -245,7 +245,13 @@ def start_hat_installation_credentials(
     clean_handle = normalize_hat_handle(hat_handle)
     if not clean_installation_id:
         raise SecretHandoffError("The Hat installation id is missing.")
-    private_key_pem, public_key_pem = _generate_key_pair()
+    # Keep one Computer-local key pair for this consumed Hat.  Installation can
+    # legitimately outlive one chat turn (or one gateway process), so an
+    # ephemeral key would make a submitted creator bundle undecryptable after
+    # the worker exits and a retry would silently rotate to a different
+    # handoff.  The private key never leaves this Computer.
+    private_key_path, public_key_pem = _hat_credentials_key_pair(clean_handle)
+    private_key_pem = private_key_path.read_text(encoding="utf-8")
     client, platform_auth = build_platform_client()
     try:
         handoff = client.post_json(
@@ -273,12 +279,17 @@ def start_hat_installation_credentials(
             raise SecretHandoffError(
                 "The platform returned a different Hat for the credential transfer."
             )
-        if not handoff.get("existing_handoff"):
-            _start_worker_process(
-                handoff,
-                private_key_pem,
-                hat_handle=clean_handle,
-            )
+        # Starting is idempotent: persistent Hat workers coordinate on the
+        # stable key's worker lock.  A live worker keeps ownership; after a
+        # gateway/process interruption a later resume takes over the same
+        # server handoff and key instead of opening an incompatible request.
+        _start_worker_process(
+            handoff,
+            private_key_pem,
+            hat_handle=clean_handle,
+            persistent=True,
+            key_path=private_key_path,
+        )
     except (PlatformError, HatSecretStoreError, OSError) as exc:
         raise SecretHandoffError(
             "Could not start the Hat credential transfer.",
