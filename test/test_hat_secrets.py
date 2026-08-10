@@ -18,6 +18,71 @@ from tinyhat import hat_secrets, secret_handoff, secret_handoff_worker  # noqa: 
 
 
 class HatSecretStoreTests(unittest.TestCase):
+    def test_creator_to_consumer_hat_bundle_round_trip_is_ciphertext_only(
+        self,
+    ) -> None:
+        class FakeClient:
+            def __init__(self) -> None:
+                self.posts: list[tuple[str, dict]] = []
+
+            def post_json(self, path: str, payload: dict) -> dict:
+                self.posts.append((path, payload))
+                return {"status": "ok"}
+
+        creator_values = {
+            "EXA_API_KEY": "creator-exa-private-value",
+            "OPENROUTER_API_KEY": "creator-model-private-value",
+        }
+        consumer_private_key, consumer_public_key = secret_handoff._generate_key_pair()
+        with (
+            tempfile.TemporaryDirectory(prefix="tinyhat-creator-store-") as temp_dir,
+            mock.patch.dict(os.environ, {"TINYHAT_HAT_STORE_DIR": temp_dir}),
+        ):
+            hat_secrets.set_hat_secrets("acme/hats/research", creator_values)
+            encrypted = hat_secrets.encrypt_hat_secret_bundle_for_public_key(
+                "acme/hats/research",
+                public_key_pem=consumer_public_key,
+                expected_names=list(creator_values),
+            )
+
+        serialized_ciphertext = json.dumps(encrypted, sort_keys=True)
+        self.assertNotIn("creator-exa-private-value", serialized_ciphertext)
+        self.assertNotIn("creator-model-private-value", serialized_ciphertext)
+        self.assertFalse(encrypted["value_available"])
+
+        fake_client = FakeClient()
+        with (
+            tempfile.TemporaryDirectory(prefix="tinyhat-consumer-store-") as temp_dir,
+            mock.patch.dict(os.environ, {"TINYHAT_HAT_STORE_DIR": temp_dir}),
+            mock.patch.object(secret_handoff, "_set_hermes_secret") as hermes_save,
+            mock.patch.object(secret_handoff, "_register_terminal_env_secret"),
+        ):
+            installed = secret_handoff._install_hat_installation_credentials_bundle(
+                client=fake_client,
+                platform_auth="local_dev",
+                handoff_id="sh_install",
+                private_key_pem=consumer_private_key,
+                state={
+                    "hat_handle": "acme/hats/research",
+                    "credentials": [
+                        {"name": "EXA_API_KEY"},
+                        {"name": "OPENROUTER_API_KEY"},
+                    ],
+                    "ciphertext_payload": encrypted["ciphertext_payload"],
+                },
+                hat_handle="acme/hats/research",
+            )
+            local = hat_secrets.list_hat_secret_names("acme/hats/research")
+
+        self.assertTrue(installed)
+        self.assertEqual(local["names"], sorted(creator_values))
+        self.assertEqual(hermes_save.call_count, 2)
+        self.assertNotIn("creator-", json.dumps(fake_client.posts))
+        self.assertEqual(
+            fake_client.posts[0][1]["outcome"],
+            "installed_restart_pending",
+        )
+
     def test_hat_worker_exits_after_one_bundle_and_keeps_stable_key(self) -> None:
         class FakeClient:
             def get_json(self, _path: str) -> dict:

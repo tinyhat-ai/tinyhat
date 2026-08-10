@@ -304,6 +304,61 @@ def list_hat_secret_names(handle: str) -> dict[str, Any]:
     }
 
 
+def encrypt_hat_secret_bundle_for_public_key(
+    handle: str,
+    *,
+    public_key_pem: str,
+    expected_names: list[str],
+) -> dict[str, Any]:
+    """Re-encrypt one complete local Hat bundle for a consumer Computer.
+
+    The plaintext exists only inside this Computer process while the store is
+    locked. The return value contains ciphertext and value-blind metadata only.
+    """
+    clean_handle = normalize_hat_handle(handle)
+    clean_expected = {
+        normalize_secret_name(name)
+        for name in expected_names
+        if str(name or "").strip()
+    }
+    if not clean_expected:
+        raise HatSecretStoreError("The Hat credential transfer has no names.")
+    if "BEGIN PUBLIC KEY" not in str(public_key_pem or ""):
+        raise HatSecretStoreError("The consumer credential public key is invalid.")
+
+    path = hat_secret_store_path(clean_handle)
+    values: dict[str, str] = {}
+    plaintext = b""
+    try:
+        with _locked_store(path):
+            payload = _read_store(path, handle=clean_handle)
+            values = _store_values(path, payload, handle=clean_handle)
+            if set(values) != clean_expected:
+                raise HatSecretStoreError(
+                    "The local Hat credential names do not match the transfer."
+                )
+            plaintext = json.dumps(
+                {
+                    "schema": BUNDLE_SCHEMA,
+                    "credentials": values,
+                },
+                sort_keys=True,
+                separators=(",", ":"),
+            ).encode("utf-8")
+            ciphertext_payload = _encrypt_bytes(public_key_pem, plaintext)
+    finally:
+        plaintext = b""
+        values.clear()
+
+    return {
+        "handle": clean_handle,
+        "names": sorted(clean_expected),
+        "count": len(clean_expected),
+        "ciphertext_payload": ciphertext_payload,
+        "value_available": False,
+    }
+
+
 def _generate_key_pair() -> tuple[str, str]:
     openssl = shutil.which("openssl")
     if not openssl:
@@ -394,6 +449,7 @@ def _encrypt_bytes(public_key_pem: str, plaintext: bytes) -> dict[str, Any]:
     return {
         "schema": "tinyhat_hat_credentials_ciphertext_v1",
         "algorithm": KEY_ALGORITHM,
+        "encoding": "base64",
         "ciphertext_chunks_b64": encrypted_chunks,
     }
 

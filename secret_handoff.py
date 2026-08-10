@@ -235,6 +235,67 @@ def start_hat_credentials_handoff(hat_identifier: str) -> str:
     )
 
 
+def start_hat_installation_credentials(
+    *,
+    installation_id: str,
+    hat_handle: str,
+) -> dict[str, Any]:
+    """Request a creator-to-consumer encrypted Hat credential transfer."""
+    clean_installation_id = str(installation_id or "").strip()
+    clean_handle = normalize_hat_handle(hat_handle)
+    if not clean_installation_id:
+        raise SecretHandoffError("The Hat installation id is missing.")
+    private_key_pem, public_key_pem = _generate_key_pair()
+    client, platform_auth = build_platform_client()
+    try:
+        handoff = client.post_json(
+            computer_api_path(platform_auth, "private-secret-handoffs/v1"),
+            {
+                "name": "HAT_INSTALLATION_CREDENTIALS",
+                "description": f"Credentials for {clean_handle}",
+                "public_key_pem": public_key_pem,
+                "key_algorithm": KEY_ALGORITHM,
+                "expires_in_seconds": MAX_EXPIRES_IN_SECONDS,
+                "handoff_kind": "hat_installation_credentials",
+                "installation_id": clean_installation_id,
+            },
+        )
+        if handoff.get("handoff_required") is False:
+            return {
+                "handoff_id": None,
+                "credential_count": 0,
+                "existing_handoff": False,
+                "expires_at": None,
+                "value_available": False,
+            }
+        returned_handle = normalize_hat_handle(str(handoff.get("hat_handle") or ""))
+        if returned_handle != clean_handle:
+            raise SecretHandoffError(
+                "The platform returned a different Hat for the credential transfer."
+            )
+        if not handoff.get("existing_handoff"):
+            _start_worker_process(
+                handoff,
+                private_key_pem,
+                hat_handle=clean_handle,
+            )
+    except (PlatformError, HatSecretStoreError, OSError) as exc:
+        raise SecretHandoffError(
+            "Could not start the Hat credential transfer.",
+            public_message=(
+                "I loaded the Hat skills, but could not start its private "
+                "credential transfer."
+            ),
+        ) from exc
+    return {
+        "handoff_id": str(handoff.get("handoff_id") or ""),
+        "credential_count": len(handoff.get("credentials") or []),
+        "existing_handoff": bool(handoff.get("existing_handoff")),
+        "expires_at": handoff.get("expires_at"),
+        "value_available": False,
+    }
+
+
 def _request_private_secret_handoff(
     *,
     payload: dict[str, Any],
@@ -581,6 +642,15 @@ def _install_submitted_secret(  # noqa: PLR0913 - generic, Slack, and Hat instal
             state=state,
             hat_handle=hat_handle,
         )
+    if state.get("handoff_kind") == "hat_installation_credentials":
+        return _install_hat_installation_credentials_bundle(
+            client=client,
+            platform_auth=platform_auth,
+            handoff_id=handoff_id,
+            private_key_pem=private_key_pem,
+            state=state,
+            hat_handle=hat_handle,
+        )
     ciphertext_payload = state.get("ciphertext_payload")
     if not isinstance(ciphertext_payload, dict):
         raise SecretHandoffError("Platform did not return ciphertext.")
@@ -712,6 +782,69 @@ def _install_hat_credentials_bundle(  # noqa: PLR0913 - explicit trust boundary
         installed=True,
         message=None,
         gateway_ready=True,
+    )
+    return True
+
+
+def _install_hat_installation_credentials_bundle(  # noqa: PLR0913
+    *,
+    client: PlatformClient,
+    platform_auth: str,
+    handoff_id: str,
+    private_key_pem: str,
+    state: dict[str, Any],
+    hat_handle: str | None,
+) -> bool:
+    """Decrypt a creator-encrypted bundle only on its consumer Computer."""
+    ciphertext_payload = state.get("ciphertext_payload")
+    if not isinstance(ciphertext_payload, dict):
+        raise SecretHandoffError("Platform did not return ciphertext.")
+    requested_handle = normalize_hat_handle(str(hat_handle or ""))
+    state_handle = normalize_hat_handle(str(state.get("hat_handle") or ""))
+    if requested_handle != state_handle:
+        raise SecretHandoffError(
+            "Platform returned a different Hat binding for this installation."
+        )
+    expected_credentials = state.get("credentials")
+    if not isinstance(expected_credentials, list) or not expected_credentials:
+        raise SecretHandoffError("Platform did not return Hat credential metadata.")
+    expected_names = {
+        normalize_secret_name(str(item.get("name") or ""))
+        for item in expected_credentials
+        if isinstance(item, dict)
+    }
+    plaintext = _decrypt_ciphertext(private_key_pem, ciphertext_payload)
+    values: dict[str, str] = {}
+    try:
+        bundle = json.loads(plaintext)
+        if (
+            not isinstance(bundle, dict)
+            or bundle.get("schema") != "tinyhat_hat_credentials_bundle_v1"
+            or not isinstance(bundle.get("credentials"), dict)
+        ):
+            raise SecretHandoffError("The Hat credential bundle is invalid.")
+        values = {
+            normalize_secret_name(str(name)): str(value)
+            for name, value in bundle["credentials"].items()
+        }
+        if set(values) != expected_names or any(not value for value in values.values()):
+            raise SecretHandoffError(
+                "The Hat credential bundle does not match the expected names."
+            )
+        set_hat_secrets(requested_handle, values)
+        for name, value in values.items():
+            _set_hermes_secret(name, value)
+            _register_terminal_env_secret(name)
+    finally:
+        plaintext = ""
+        values.clear()
+    _claim_handoff(
+        client,
+        platform_auth,
+        handoff_id,
+        installed=True,
+        message=None,
+        outcome=HANDOFF_OUTCOME_RESTART_PENDING,
     )
     return True
 
