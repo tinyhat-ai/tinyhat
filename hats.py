@@ -562,11 +562,17 @@ def _wear_hat(
     identifier: str | None,
 ) -> dict[str, Any]:
     base = computer_api_path(platform_auth, "hats/v1")
-    installation = (
-        client.post_json(f"{base}/wear", {"identifier": identifier})
-        if identifier
-        else client.get_json(f"{base}/installation")
-    )
+    try:
+        installation = (
+            client.post_json(f"{base}/wear", {"identifier": identifier})
+            if identifier
+            else client.get_json(f"{base}/installation")
+        )
+    except PlatformError as exc:
+        if identifier is None and exc.status_code == 404:
+            installation = None
+        else:
+            raise
     if not installation:
         return {
             "status": "none",

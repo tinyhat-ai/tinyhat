@@ -49,9 +49,11 @@ class FakePlatformClient:
 class HatToolTests(unittest.TestCase):
     def test_resume_without_hat_is_a_quiet_noop(self) -> None:
         class NoHatClient(FakePlatformClient):
-            def get_json(self, path: str) -> dict[str, object] | None:
+            def get_json(self, path: str) -> dict[str, object]:
                 self.get_paths.append(path)
-                return None
+                raise hats_module.PlatformError(
+                    "No active Hat installation.", status_code=404
+                )
 
         client = NoHatClient()
         with mock.patch.object(
