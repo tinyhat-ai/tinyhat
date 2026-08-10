@@ -172,6 +172,10 @@ class HermesAdapterTests(unittest.TestCase):
                 "repository_status",
                 "repository_sync",
                 "repository_reset",
+                "wear",
+                "resume_installation",
+                "list_pending_transfers",
+                "complete_transfer",
             ],
         )
         self.assertIn("permanently deletes", hats_schema["description"])

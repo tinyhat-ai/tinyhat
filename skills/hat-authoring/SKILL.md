@@ -11,9 +11,15 @@ Use this skill when the user asks to create, inspect, or modify a Hat.
 
 1. Get the hat's human-readable name and the one customer's work email. Ask
    for whichever value is missing. A short key, default Telegram bot username,
-   and default Telegram bot display name are optional.
+   and default Telegram bot display name are optional. Also ask for the monthly
+   Hat price, trial days, and minimum Computer size when the user wants a paid
+   offer. Tinyhat admins may choose `free`; other creators default to the
+   current small-Computer catalog price, may charge more, and may offer at most
+   a three-day trial.
 2. Call `tinyhat_hats` with `action="create"`, `name`, `customer_email`, and
-   any supplied `key`, `default_bot_username`, and `default_bot_display_name`.
+   any supplied `key`, bot defaults, `billing_mode`, `monthly_price_cents`,
+   `trial_days`, and `minimum_computer_type_key`. Product and Price ids are
+   optional; Tinyhat resolves the active catalog offer for the selected size.
 3. Call `tinyhat_hats` with `action="repository_checkout"` and the returned
    canonical handle. This creates the normal local Git checkout without putting
    a GitHub credential in its remote URL or config.
@@ -44,6 +50,16 @@ one or more of:
   creation;
 - `default_bot_display_name` for the proposed Telegram bot display name; or
 - `new_key` for the final segment of the namespaced canonical handle.
+- `billing_mode`, `monthly_price_cents`, `trial_days`, `discount_percent`, and
+  `discount_duration_months` for the reusable offer; or
+- `minimum_computer_type_key`, `minimum_plugin_version`, and
+  `minimum_runtime_version` for compatibility requirements.
+
+The platform enforces the creator's pricing authority. Tinyhat admins may use
+free or discounted offers, including long trials. Other creators cannot price
+below the selected Computer catalog price, cannot publish a free offer or
+discount, and cannot exceed a three-day trial. Report the platform's policy
+error rather than trying to bypass it.
 
 The account namespace is derived from the Computer and cannot be changed by
 the model. A handle change renames the existing private repository, preserves

@@ -47,6 +47,94 @@ class FakePlatformClient:
 
 
 class HatToolTests(unittest.TestCase):
+    def test_resume_without_hat_is_a_quiet_noop(self) -> None:
+        class NoHatClient(FakePlatformClient):
+            def get_json(self, path: str) -> dict[str, object] | None:
+                self.get_paths.append(path)
+                return None
+
+        client = NoHatClient()
+        with mock.patch.object(
+            hats_module,
+            "build_platform_client",
+            return_value=(client, "local_dev"),
+        ):
+            result = json.loads(
+                hats_module.hats({"action": "resume_installation"})
+            )
+
+        self.assertEqual(result["status"], "none")
+        self.assertFalse(result["installation_started"])
+        self.assertIsNone(result["onboarding_message"])
+        self.assertIn("no user-facing warning", result["agent_instruction"])
+
+    def test_wear_checks_out_read_only_repo_installs_skills_and_starts_transfer(
+        self,
+    ) -> None:
+        class ConsumerClient(FakePlatformClient):
+            def post_json(self, path: str, payload: dict[str, str]) -> dict[str, object]:
+                self.post_calls.append((path, payload))
+                if path.endswith("/wear"):
+                    return {
+                        "installation_id": "hti_12345678",
+                        "hat_handle": "acme/hats/research",
+                        "hat_title": "Research",
+                        "status": "skills_pending",
+                        "source": "existing_agent",
+                    }
+                return {
+                    "installation_id": "hti_12345678",
+                    "hat_handle": "acme/hats/research",
+                    "hat_title": "Research",
+                    "status": "credentials_pending",
+                    "source": "existing_agent",
+                }
+
+        client = ConsumerClient()
+        with (
+            mock.patch.object(
+                hats_module,
+                "build_platform_client",
+                return_value=(client, "local_dev"),
+            ),
+            mock.patch.object(
+                hats_module,
+                "run_hat_repository",
+                return_value={
+                    "action": "checkout",
+                    "path": "/tmp/hat-checkout",
+                    "head_sha": "a" * 40,
+                },
+            ) as repository,
+            mock.patch.object(
+                hats_module,
+                "install_hat_skills",
+                return_value={"count": 1, "installed_names": ["hat-abc-research"]},
+            ) as install,
+            mock.patch.object(
+                hats_module,
+                "start_hat_installation_credentials",
+                return_value={"credential_count": 2, "status": "pending"},
+            ) as credentials,
+        ):
+            result = json.loads(
+                hats_module.hats(
+                    {"action": "wear", "identifier": "acme/hats/research"}
+                )
+            )
+
+        repository.assert_called_once_with(
+            {"action": "checkout", "identifier": "acme/hats/research"}
+        )
+        install.assert_called_once_with("acme/hats/research", "/tmp/hat-checkout")
+        credentials.assert_called_once_with(
+            installation_id="hti_12345678",
+            hat_handle="acme/hats/research",
+        )
+        self.assertEqual(result["status"], "credentials_pending")
+        self.assertTrue(result["installation_started"])
+        self.assertEqual(client.post_calls[1][1]["head_sha"], "a" * 40)
+
     def test_repository_checkout_uses_runtime_without_platform_proxy(self) -> None:
         with (
             mock.patch.object(

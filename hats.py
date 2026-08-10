@@ -11,12 +11,19 @@ from .hat_repository import HatRepositoryRuntimeError, run_hat_repository
 from .hat_secrets import (
     HatSecretStoreError,
     delete_hat_secret_store,
+    encrypt_hat_secret_bundle_for_public_key,
     list_hat_secret_names,
+    normalize_hat_handle,
     remove_hat_secret,
     rename_hat_secret_store,
 )
+from .hat_skill_installer import HatSkillInstallError, install_hat_skills
 from .platform import PlatformError, build_platform_client, computer_api_path
-from .secret_handoff import start_hat_credentials_handoff
+from .secret_handoff import (
+    SecretHandoffError,
+    start_hat_credentials_handoff,
+    start_hat_installation_credentials,
+)
 from .tool_errors import tool_error_json
 
 ACTIONS = (
@@ -34,6 +41,10 @@ ACTIONS = (
     "repository_status",
     "repository_sync",
     "repository_reset",
+    "wear",
+    "resume_installation",
+    "list_pending_transfers",
+    "complete_transfer",
 )
 
 
@@ -86,6 +97,8 @@ def hats(  # noqa: PLR0911, PLR0912, PLR0915 - one public tool dispatches bounde
                 "repository_status",
                 "repository_sync",
                 "repository_reset",
+                "wear",
+                "complete_transfer",
             }
             else ""
         )
@@ -93,7 +106,7 @@ def hats(  # noqa: PLR0911, PLR0912, PLR0915 - one public tool dispatches bounde
         customer_email = (
             _required_text(payload, "customer_email") if action == "create" else ""
         )
-        update_payload: dict[str, str] | None = None
+        update_payload: dict[str, Any] | None = None
         if action == "update":
             update_payload = {"identifier": identifier}
             for field in (
@@ -102,10 +115,28 @@ def hats(  # noqa: PLR0911, PLR0912, PLR0915 - one public tool dispatches bounde
                 "default_bot_username",
                 "default_bot_display_name",
                 "new_key",
+                "billing_mode",
+                "minimum_plugin_version",
+                "minimum_runtime_version",
             ):
                 value = str(payload.get(field) or "").strip()
                 if value:
                     update_payload[field] = value
+            for field in (
+                "subscription_product_id",
+                "subscription_price_id",
+                "monthly_price_cents",
+                "trial_days",
+                "discount_percent",
+                "discount_duration_months",
+            ):
+                if payload.get(field) is not None:
+                    update_payload[field] = payload[field]
+            minimum_computer_type = str(
+                payload.get("minimum_computer_type_key") or ""
+            ).strip()
+            if minimum_computer_type:
+                update_payload["computer_type_key"] = minimum_computer_type
             if len(update_payload) == 1:
                 return tool_error_json(
                     tool="tinyhat_hats",
@@ -350,6 +381,21 @@ def hats(  # noqa: PLR0911, PLR0912, PLR0915 - one public tool dispatches bounde
                 },
             )
             result["local_value_removed"] = bool(local_result["removed"])
+        elif action in {"wear", "resume_installation"}:
+            result = _wear_hat(
+                client=client,
+                platform_auth=platform_auth,
+                identifier=identifier if action == "wear" else None,
+            )
+        elif action == "list_pending_transfers":
+            result = client.get_json(f"{path}/credential-transfers")
+        elif action == "complete_transfer":
+            result = _complete_credential_transfer(
+                client=client,
+                path=path,
+                identifier=identifier,
+                handoff_id=str(payload.get("handoff_id") or "").strip(),
+            )
         else:  # create
             request_payload = {
                 "name": name,
@@ -368,6 +414,24 @@ def hats(  # noqa: PLR0911, PLR0912, PLR0915 - one public tool dispatches bounde
             ).strip()
             if default_bot_display_name:
                 request_payload["default_bot_display_name"] = default_bot_display_name
+            for field in (
+                "billing_mode",
+                "subscription_product_id",
+                "subscription_price_id",
+                "minimum_plugin_version",
+                "minimum_runtime_version",
+                "monthly_price_cents",
+                "trial_days",
+                "discount_percent",
+                "discount_duration_months",
+            ):
+                if payload.get(field) is not None and payload.get(field) != "":
+                    request_payload[field] = payload[field]
+            minimum_computer_type = str(
+                payload.get("minimum_computer_type_key") or ""
+            ).strip()
+            if minimum_computer_type:
+                request_payload["computer_type_key"] = minimum_computer_type
             result = client.post_json(path, request_payload)
     except ValueError as exc:
         missing = str(exc)
@@ -386,7 +450,13 @@ def hats(  # noqa: PLR0911, PLR0912, PLR0915 - one public tool dispatches bounde
                 else {"action": "get", "identifier": "trade-show-sales"}
             ),
         )
-    except (PlatformError, HatSecretStoreError, HatRepositoryRuntimeError) as exc:
+    except (
+        PlatformError,
+        HatSecretStoreError,
+        HatRepositoryRuntimeError,
+        HatSkillInstallError,
+        SecretHandoffError,
+    ) as exc:
         return tool_error_json(
             tool="tinyhat_hats",
             error_name="platform_request_failed",
@@ -444,6 +514,27 @@ def hats(  # noqa: PLR0911, PLR0912, PLR0915 - one public tool dispatches bounde
             "Report local_store_removed and local_checkout_cleanup_complete honestly. "
             "No plaintext value was returned or exposed."
         )
+    elif action in {"wear", "resume_installation"}:
+        result["agent_instruction"] = (
+            "Send onboarding_message as the immediate progress update when it is "
+            "present. If payment_required is true, send the checkout URL and wait for "
+            "the user to complete it before resuming. If installation_started is "
+            "true, explain that the skills are loaded and any private credentials are "
+            "moving directly between Computers as ciphertext. A status of none means "
+            "this Computer has no Hat to install and needs no user-facing warning. "
+            "Never claim the Hat is fully ready until status=active or the final "
+            "platform notice arrives."
+        )
+    elif action == "list_pending_transfers":
+        result["agent_instruction"] = (
+            "These are value-blind requests for Hats created on this Computer. "
+            "Complete each requested transfer without asking for secret values."
+        )
+    elif action == "complete_transfer":
+        result["agent_instruction"] = (
+            "Report only the Hat handle and credential count. The plaintext stayed "
+            "on this Computer and only ciphertext was relayed to the consumer."
+        )
     else:
         result["agent_instruction"] = (
             "Report the canonical handle and share URL exactly as returned. Tell the "
@@ -462,6 +553,111 @@ def hats(  # noqa: PLR0911, PLR0912, PLR0915 - one public tool dispatches bounde
         "agent_run_token_usage_source": "Hermes agent run trace",
     }
     return json.dumps(result, sort_keys=True)
+
+
+def _wear_hat(
+    *,
+    client: Any,
+    platform_auth: str,
+    identifier: str | None,
+) -> dict[str, Any]:
+    base = computer_api_path(platform_auth, "hats/v1")
+    installation = (
+        client.post_json(f"{base}/wear", {"identifier": identifier})
+        if identifier
+        else client.get_json(f"{base}/installation")
+    )
+    if not installation:
+        return {
+            "status": "none",
+            "installation_started": False,
+            "onboarding_message": None,
+        }
+    if installation.get("payment_required") or installation.get("status") in {
+        "payment_pending",
+        "assignment_pending",
+    }:
+        return installation
+    if installation.get("status") == "active":
+        installation["installation_started"] = False
+        return installation
+    handle = normalize_hat_handle(str(installation.get("hat_handle") or ""))
+    repository = run_hat_repository({"action": "checkout", "identifier": handle})
+    skills = install_hat_skills(handle, str(repository.get("path") or ""))
+    installation = client.post_json(
+        f"{base}/installation/skills",
+        {
+            "installation_id": str(installation.get("installation_id") or ""),
+            "head_sha": str(repository.get("head_sha") or ""),
+        },
+    )
+    transfer = start_hat_installation_credentials(
+        installation_id=str(installation.get("installation_id") or ""),
+        hat_handle=handle,
+    )
+    installation.update(
+        {
+            "installation_started": True,
+            "repository": {
+                "path": repository.get("path"),
+                "head_sha": repository.get("head_sha"),
+            },
+            "skills": skills,
+            "credential_transfer": transfer,
+        }
+    )
+    if transfer.get("credential_count") == 0:
+        installation["status"] = "active"
+    return installation
+
+
+def _complete_credential_transfer(
+    *,
+    client: Any,
+    path: str,
+    identifier: str,
+    handoff_id: str,
+) -> dict[str, Any]:
+    listed = client.get_json(f"{path}/credential-transfers")
+    items = listed.get("items") if isinstance(listed, dict) else None
+    if not isinstance(items, list):
+        raise PlatformError("The platform returned invalid Hat transfer metadata.")
+    matches = [
+        item
+        for item in items
+        if isinstance(item, dict)
+        and (not handoff_id or str(item.get("handoff_id") or "") == handoff_id)
+        and (not identifier or str(item.get("hat_handle") or "") == identifier)
+    ]
+    if len(matches) != 1:
+        raise PlatformError(
+            "Select one exact pending Hat transfer by handoff id or Hat handle."
+        )
+    transfer = matches[0]
+    credentials = transfer.get("credentials")
+    if not isinstance(credentials, list):
+        raise PlatformError("The transfer credential metadata is invalid.")
+    names = [
+        str(item.get("name") or "")
+        for item in credentials
+        if isinstance(item, dict)
+    ]
+    encrypted = encrypt_hat_secret_bundle_for_public_key(
+        str(transfer.get("hat_handle") or ""),
+        public_key_pem=str(transfer.get("public_key_pem") or ""),
+        expected_names=names,
+    )
+    submitted = client.post_json(
+        f"{path}/credential-transfers/{transfer['handoff_id']}",
+        {"ciphertext_payload": encrypted["ciphertext_payload"]},
+    )
+    return {
+        "handoff_id": str(transfer["handoff_id"]),
+        "hat_handle": str(transfer["hat_handle"]),
+        "credential_count": len(names),
+        "submitted": str(submitted.get("status") or "") == "submitted",
+        "value_available": False,
+    }
 
 
 __all__ = ["ACTIONS", "hats"]

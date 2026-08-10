@@ -45,6 +45,10 @@ TINYHAT_HATS_SCHEMA = {
                 "repository_status",
                 "repository_sync",
                 "repository_reset",
+                "wear",
+                "resume_installation",
+                "list_pending_transfers",
+                "complete_transfer",
             ],
         },
         "name": {
@@ -177,6 +181,57 @@ TINYHAT_HATS_SCHEMA = {
             "description": (
                 "One-line atomic Git commit message for repository_sync."
             ),
+        },
+        "handoff_id": {
+            "type": "string",
+            "minLength": 8,
+            "maxLength": 96,
+            "description": (
+                "Optional exact pending transfer id for complete_transfer. Use the "
+                "value returned by list_pending_transfers."
+            ),
+        },
+        "billing_mode": {
+            "type": "string",
+            "enum": ["free", "paid_subscription"],
+            "description": "Optional Hat billing mode for create or update.",
+        },
+        "subscription_product_id": {
+            "type": "integer",
+            "minimum": 1,
+        },
+        "subscription_price_id": {
+            "type": "integer",
+            "minimum": 1,
+        },
+        "monthly_price_cents": {
+            "type": "integer",
+            "minimum": 1,
+        },
+        "trial_days": {"type": "integer", "minimum": 0, "maximum": 730},
+        "discount_percent": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 100,
+        },
+        "discount_duration_months": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 60,
+        },
+        "minimum_computer_type_key": {
+            "type": "string",
+            "enum": ["small", "medium", "large"],
+        },
+        "minimum_plugin_version": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 64,
+        },
+        "minimum_runtime_version": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 64,
         },
     },
     "required": ["action"],

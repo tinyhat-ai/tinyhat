@@ -6,6 +6,12 @@ All notable changes to the Tinyhat plugin are documented here.
 
 ### Changed
 
+- Add private Hat consumption for new and existing agents. The consumer
+  Computer receives a one-repository read-only checkout, installs namespaced
+  skills, and requests an encrypted credential bundle that is re-encrypted on
+  the creator Computer and decrypted only on the consumer Computer. Pricing,
+  access, payment, and installation state stay platform-owned.
+
 - Start `0.24.0` with direct private Hat repository authoring. New Hats live in
   `tinyhat-ai`; the agent checks out a normal Computer-local Git clone and can
   inspect, edit, and atomically sync explicit non-secret paths. The plugin sees
