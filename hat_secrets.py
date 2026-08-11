@@ -10,6 +10,8 @@ from __future__ import annotations
 
 import base64
 import fcntl
+import hashlib
+import hmac
 import json
 import os
 import re
@@ -29,6 +31,8 @@ KEY_ALGORITHM = "RSA-OAEP-256"
 LEGACY_STORE_SCHEMA = "tinyhat_hat_secrets_v1"
 STORE_SCHEMA = "tinyhat_hat_secrets_v2"
 BUNDLE_SCHEMA = "tinyhat_hat_credentials_bundle_v1"
+AUTHENTICATED_ENVELOPE_SCHEMA = "tinyhat_hat_credentials_envelope_v1"
+CREATOR_SIGNATURE_ALGORITHM = "RSA-PSS-SHA256"
 # A 2048-bit RSA key with SHA-256 OAEP can encrypt at most 190 bytes. The
 # production key is 3072 bits, but this conservative size also keeps imported
 # or test key pairs interoperable.
@@ -304,6 +308,273 @@ def list_hat_secret_names(handle: str) -> dict[str, Any]:
     }
 
 
+def encrypt_hat_secret_bundle_for_public_key(
+    handle: str,
+    *,
+    public_key_pem: str,
+    expected_names: list[str],
+) -> dict[str, Any]:
+    """Re-encrypt one complete local Hat bundle for a consumer Computer.
+
+    The plaintext exists only inside this Computer process while the store is
+    locked. The return value contains ciphertext and value-blind metadata only.
+    """
+    clean_handle = normalize_hat_handle(handle)
+    clean_expected = {
+        normalize_secret_name(name) for name in expected_names if str(name or "").strip()
+    }
+    if not clean_expected:
+        raise HatSecretStoreError("The Hat credential transfer has no names.")
+    if "BEGIN PUBLIC KEY" not in str(public_key_pem or ""):
+        raise HatSecretStoreError("The consumer credential public key is invalid.")
+
+    path = hat_secret_store_path(clean_handle)
+    values: dict[str, str] = {}
+    plaintext = b""
+    try:
+        with _locked_store(path):
+            payload = _read_store(path, handle=clean_handle)
+            values = _store_values(path, payload, handle=clean_handle)
+            if set(values) != clean_expected:
+                raise HatSecretStoreError(
+                    "The local Hat credential names do not match the transfer."
+                )
+            plaintext = json.dumps(
+                {
+                    "schema": BUNDLE_SCHEMA,
+                    "credentials": values,
+                },
+                sort_keys=True,
+                separators=(",", ":"),
+            ).encode("utf-8")
+            ciphertext_payload = _encrypt_bytes(public_key_pem, plaintext)
+    finally:
+        plaintext = b""
+        values.clear()
+
+    return {
+        "handle": clean_handle,
+        "names": sorted(clean_expected),
+        "count": len(clean_expected),
+        "ciphertext_payload": ciphertext_payload,
+        "value_available": False,
+    }
+
+
+def public_key_fingerprint_sha256(public_key_pem: str) -> str:
+    """Return the stable public-key fingerprint shared with the platform."""
+
+    clean_key = str(public_key_pem or "").strip()
+    if "BEGIN PUBLIC KEY" not in clean_key or "END PUBLIC KEY" not in clean_key:
+        raise HatSecretStoreError("The credential public key is invalid.")
+    return hashlib.sha256(clean_key.encode("utf-8")).hexdigest()
+
+
+def credential_names_fingerprint_sha256(names: list[str]) -> str:
+    clean_names = sorted({normalize_secret_name(name) for name in names})
+    return hashlib.sha256("\n".join(clean_names).encode("utf-8")).hexdigest()
+
+
+def _authenticated_transfer_context(value: dict[str, Any]) -> dict[str, str]:
+    if not isinstance(value, dict):
+        raise HatSecretStoreError("The Hat credential transfer context is invalid.")
+    context = {
+        "handoff_id": str(value.get("handoff_id") or "").strip(),
+        "installation_id": str(value.get("installation_id") or "").strip(),
+        "hat_handle": normalize_hat_handle(str(value.get("hat_handle") or "")),
+        "credential_names_sha256": str(value.get("credential_names_sha256") or "").strip().lower(),
+        "consumer_public_key_fingerprint_sha256": str(
+            value.get("consumer_public_key_fingerprint_sha256") or ""
+        )
+        .strip()
+        .lower(),
+    }
+    if (
+        not context["handoff_id"]
+        or not context["installation_id"]
+        or any(
+            not re.fullmatch(r"[0-9a-f]{64}", context[field])
+            for field in (
+                "credential_names_sha256",
+                "consumer_public_key_fingerprint_sha256",
+            )
+        )
+    ):
+        raise HatSecretStoreError("The Hat credential transfer context is invalid.")
+    return context
+
+
+def _envelope_signing_bytes(payload: dict[str, Any]) -> bytes:
+    signed = {
+        "schema": payload.get("schema"),
+        "algorithm": payload.get("algorithm"),
+        "encoding": payload.get("encoding"),
+        "ciphertext_chunks_b64": payload.get("ciphertext_chunks_b64"),
+        "creator_signature_algorithm": payload.get("creator_signature_algorithm"),
+        "creator_public_key_fingerprint_sha256": payload.get(
+            "creator_public_key_fingerprint_sha256"
+        ),
+        "context": payload.get("context"),
+    }
+    return json.dumps(signed, sort_keys=True, separators=(",", ":")).encode("utf-8")
+
+
+def create_authenticated_hat_secret_envelope(
+    handle: str,
+    *,
+    consumer_public_key_pem: str,
+    expected_names: list[str],
+    context: dict[str, Any],
+    expected_creator_public_key_fingerprint_sha256: str,
+) -> dict[str, Any]:
+    """Encrypt for the consumer and sign with the Hat creator's local key."""
+
+    clean_handle = normalize_hat_handle(handle)
+    clean_context = _authenticated_transfer_context(context)
+    if clean_context["hat_handle"] != clean_handle:
+        raise HatSecretStoreError("The transfer context targets a different Hat.")
+    if clean_context["credential_names_sha256"] != credential_names_fingerprint_sha256(
+        expected_names
+    ):
+        raise HatSecretStoreError("The transfer credential names do not match.")
+    consumer_fingerprint = public_key_fingerprint_sha256(consumer_public_key_pem)
+    if clean_context["consumer_public_key_fingerprint_sha256"] != consumer_fingerprint:
+        raise HatSecretStoreError("The transfer targets a different consumer key.")
+
+    private_path, creator_public_key_pem = ensure_hat_key_pair(clean_handle)
+    creator_fingerprint = public_key_fingerprint_sha256(creator_public_key_pem)
+    if not hmac.compare_digest(
+        creator_fingerprint,
+        str(expected_creator_public_key_fingerprint_sha256 or "").strip().lower(),
+    ):
+        raise HatSecretStoreError("The platform creator identity does not match this Hat store.")
+    encrypted = encrypt_hat_secret_bundle_for_public_key(
+        clean_handle,
+        public_key_pem=consumer_public_key_pem,
+        expected_names=expected_names,
+    )["ciphertext_payload"]
+    envelope = {
+        "schema": AUTHENTICATED_ENVELOPE_SCHEMA,
+        "algorithm": encrypted["algorithm"],
+        "encoding": encrypted["encoding"],
+        "ciphertext_chunks_b64": encrypted["ciphertext_chunks_b64"],
+        "creator_signature_algorithm": CREATOR_SIGNATURE_ALGORITHM,
+        "creator_public_key_fingerprint_sha256": creator_fingerprint,
+        "context": clean_context,
+    }
+    signature = _sign_bytes(
+        private_path=private_path,
+        payload=_envelope_signing_bytes(envelope),
+    )
+    envelope["creator_signature_b64"] = base64.b64encode(signature).decode("ascii")
+    return envelope
+
+
+def verify_authenticated_hat_secret_envelope(
+    payload: dict[str, Any],
+    *,
+    creator_public_key_pem: str,
+    expected_context: dict[str, Any],
+) -> None:
+    """Verify origin and exact installation context before consumer decrypt."""
+
+    allowed_keys = {
+        "schema",
+        "algorithm",
+        "encoding",
+        "ciphertext_chunks_b64",
+        "creator_signature_algorithm",
+        "creator_public_key_fingerprint_sha256",
+        "creator_signature_b64",
+        "context",
+    }
+    if (
+        not isinstance(payload, dict)
+        or set(payload) != allowed_keys
+        or payload.get("schema") != AUTHENTICATED_ENVELOPE_SCHEMA
+        or payload.get("creator_signature_algorithm") != CREATOR_SIGNATURE_ALGORITHM
+    ):
+        raise HatSecretStoreError("The authenticated Hat credential envelope is invalid.")
+    clean_context = _authenticated_transfer_context(expected_context)
+    if payload.get("context") != clean_context:
+        raise HatSecretStoreError("The Hat credential envelope context does not match.")
+    expected_fingerprint = public_key_fingerprint_sha256(creator_public_key_pem)
+    observed_fingerprint = (
+        str(payload.get("creator_public_key_fingerprint_sha256") or "").strip().lower()
+    )
+    if not hmac.compare_digest(expected_fingerprint, observed_fingerprint):
+        raise HatSecretStoreError("The Hat credential creator identity does not match.")
+    try:
+        signature = base64.b64decode(str(payload.get("creator_signature_b64") or ""), validate=True)
+    except (TypeError, ValueError) as exc:
+        raise HatSecretStoreError("The Hat credential creator signature is invalid.") from exc
+    if not signature or not _verify_signature(
+        public_key_pem=creator_public_key_pem,
+        payload=_envelope_signing_bytes(payload),
+        signature=signature,
+    ):
+        raise HatSecretStoreError("The Hat credential creator signature is invalid.")
+
+
+def _sign_bytes(*, private_path: Path, payload: bytes) -> bytes:
+    openssl = shutil.which("openssl")
+    if not openssl:
+        raise HatSecretStoreError("openssl is required for encrypted Hat credentials.")
+    return _run_openssl_bytes(
+        [
+            openssl,
+            "dgst",
+            "-sha256",
+            "-sign",
+            str(private_path),
+            "-sigopt",
+            "rsa_padding_mode:pss",
+            "-sigopt",
+            "rsa_pss_saltlen:-1",
+        ],
+        payload,
+    )
+
+
+def _verify_signature(*, public_key_pem: str, payload: bytes, signature: bytes) -> bool:
+    openssl = shutil.which("openssl")
+    if not openssl:
+        raise HatSecretStoreError("openssl is required for encrypted Hat credentials.")
+    with tempfile.TemporaryDirectory(prefix="tinyhat-hat-verify-") as temp_dir:
+        directory = Path(temp_dir)
+        public_path = directory / "public.pem"
+        signature_path = directory / "signature.bin"
+        public_path.write_text(public_key_pem, encoding="utf-8")
+        public_path.chmod(0o600)
+        signature_path.write_bytes(signature)
+        signature_path.chmod(0o600)
+        try:
+            completed = subprocess.run(
+                [
+                    openssl,
+                    "dgst",
+                    "-sha256",
+                    "-verify",
+                    str(public_path),
+                    "-signature",
+                    str(signature_path),
+                    "-sigopt",
+                    "rsa_padding_mode:pss",
+                    "-sigopt",
+                    "rsa_pss_saltlen:-1",
+                ],
+                input=payload,
+                capture_output=True,
+                timeout=30,
+                check=False,
+            )
+        except (OSError, subprocess.TimeoutExpired) as exc:
+            raise HatSecretStoreError(
+                "Local Hat credential signature verification failed."
+            ) from exc
+    return completed.returncode == 0
+
+
 def _generate_key_pair() -> tuple[str, str]:
     openssl = shutil.which("openssl")
     if not openssl:
@@ -394,6 +665,7 @@ def _encrypt_bytes(public_key_pem: str, plaintext: bytes) -> dict[str, Any]:
     return {
         "schema": "tinyhat_hat_credentials_ciphertext_v1",
         "algorithm": KEY_ALGORITHM,
+        "encoding": "base64",
         "ciphertext_chunks_b64": encrypted_chunks,
     }
 
@@ -590,6 +862,8 @@ def rename_hat_secret_store(old_handle: str, new_handle: str) -> dict[str, Any]:
 __all__ = [
     "HatSecretStoreError",
     "delete_hat_secret_store",
+    "create_authenticated_hat_secret_envelope",
+    "credential_names_fingerprint_sha256",
     "ensure_hat_key_pair",
     "hat_secret_store_path",
     "list_hat_secret_names",
@@ -599,4 +873,6 @@ __all__ = [
     "rename_hat_secret_store",
     "set_hat_secret",
     "set_hat_secrets",
+    "public_key_fingerprint_sha256",
+    "verify_authenticated_hat_secret_envelope",
 ]

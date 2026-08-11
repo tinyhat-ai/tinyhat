@@ -6,10 +6,11 @@ The current capability list is intentionally small.
 | --- | --- | --- |
 | `tinyhat_plugin_version` | Available now | Proves which Tinyhat plugin version Hermes has loaded for the live agent. |
 | `tinyhat_get_platform_status` | Available now | Reads this authenticated Computer's safe platform state, assignment, configuration revisions, and package inventory. |
-| `tinyhat_hats` | Available now | Creates, lists, inspects, renames, and permanently deletes one-customer Hats; checks out and syncs private repositories through Computer-scoped GitHub leases; and manages value-blind Hat credentials. |
+| `tinyhat_hats` | Available now | Creates, lists, inspects, renames, and permanently deletes one-customer Hats; checks out and syncs private repositories through Computer-scoped GitHub leases; and manages value-blind Hat credentials. Authorized installation transfers are dispatched automatically to the registered creator Computer, signed there, and decrypted only by the consumer Computer. |
 | `tinyhat_tell_joke` | Available now | Proves Hermes loaded the Tinyhat plugin and can call a plugin tool. |
 | `tinyhat_skill_catalog` | Available now | Lists Tinyhat plugin skills with `tinyhat:<skill>` qualified names and unqualified aliases. |
 | `tinyhat-skill-authoring` skill | Available now | Teaches agents to write portable user skills with valid names, explicit trigger and non-trigger boundaries, progressive disclosure, and bounded context size. |
+| `tinyhat-hat-wearing` skill | Available now | Authorizes a full Hat handle, checks out its private repository read-only, installs namespaced skills, and coordinates ciphertext-only creator-to-consumer credential delivery. |
 | `tinyhat_private_secret_handoff` | Available now | Lets a user enter a secret in a Telegram Mini App while Tinyhat stores only short-lived ciphertext. |
 | `tinyhat_slack_connect` | Available now | Sends Hermes' current Agent-view manifest and transfers the Slack bot token, Socket Mode app token, and allowed member IDs as one browser-encrypted Computer-local bundle. |
 | `tinyhat_slack_disconnect` | Available now | Sends an owner-confirmed Telegram ceremony, revokes active Slack bot access when possible, removes the complete Computer-local Slack bundle, and restarts Hermes. |

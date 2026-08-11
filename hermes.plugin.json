@@ -19,6 +19,13 @@
       "purpose": "Creates one-customer shareable hat shells and lists or inspects hats owned by this Computer's user."
     },
     {
+      "name": "tinyhat-hat-wearing",
+      "qualified_name": "tinyhat:tinyhat-hat-wearing",
+      "aliases": ["tinyhat-hat-wearing"],
+      "path": "skills/tinyhat-hat-wearing/SKILL.md",
+      "purpose": "Authorizes, installs, and resumes one private Hat on this agent."
+    },
+    {
       "name": "tinyhat-plugin-version",
       "qualified_name": "tinyhat:tinyhat-plugin-version",
       "aliases": ["tinyhat-plugin-version"],

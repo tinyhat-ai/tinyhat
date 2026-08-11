@@ -18,6 +18,233 @@ from tinyhat import hat_secrets, secret_handoff, secret_handoff_worker  # noqa: 
 
 
 class HatSecretStoreTests(unittest.TestCase):
+    def test_consumed_hat_resume_reuses_stable_key_and_worker(self) -> None:
+        class FakeClient:
+            def __init__(self) -> None:
+                self.posts: list[tuple[str, dict]] = []
+
+            def post_json(self, path: str, payload: dict) -> dict:
+                self.posts.append((path, payload))
+                return {
+                    "handoff_id": "sh_install",
+                    "existing_handoff": True,
+                    "hat_handle": "acme/hats/research",
+                    "credentials": [{"name": "EXA_API_KEY"}],
+                }
+
+        with tempfile.TemporaryDirectory(prefix="tinyhat-consumer-key-") as temp_dir:
+            key_path = Path(temp_dir) / "credentials-private.pem"
+            key_path.write_text("PRIVATE", encoding="utf-8")
+            client = FakeClient()
+            with (
+                mock.patch.object(
+                    secret_handoff,
+                    "_hat_credentials_key_pair",
+                    return_value=(key_path, "PUBLIC"),
+                ) as stable_pair,
+                mock.patch.object(
+                    secret_handoff,
+                    "build_platform_client",
+                    return_value=(client, "local_dev"),
+                ),
+                mock.patch.object(
+                    secret_handoff,
+                    "_start_worker_process",
+                ) as start_worker,
+            ):
+                result = secret_handoff.start_hat_installation_credentials(
+                    installation_id="hti_12345678",
+                    hat_handle="acme/hats/research",
+                )
+
+        stable_pair.assert_called_once_with("acme/hats/research")
+        self.assertEqual(client.posts[0][1]["public_key_pem"], "PUBLIC")
+        start_worker.assert_called_once_with(
+            {
+                "handoff_id": "sh_install",
+                "existing_handoff": True,
+                "hat_handle": "acme/hats/research",
+                "credentials": [{"name": "EXA_API_KEY"}],
+            },
+            "PRIVATE",
+            hat_handle="acme/hats/research",
+            persistent=True,
+            key_path=key_path,
+        )
+        self.assertTrue(result["existing_handoff"])
+
+    def test_creator_to_consumer_hat_bundle_is_signed_and_ciphertext_only(
+        self,
+    ) -> None:
+        class FakeClient:
+            def __init__(self) -> None:
+                self.posts: list[tuple[str, dict]] = []
+
+            def post_json(self, path: str, payload: dict) -> dict:
+                self.posts.append((path, payload))
+                return {"status": "ok"}
+
+        creator_values = {
+            "EXA_API_KEY": "creator-exa-private-value",
+            "OPENROUTER_API_KEY": "creator-model-private-value",
+        }
+        consumer_private_key, consumer_public_key = secret_handoff._generate_key_pair()
+        credentials = list(creator_values)
+        context = {
+            "handoff_id": "sh_install_12345678",
+            "installation_id": "hti_12345678",
+            "hat_handle": "acme/hats/research",
+            "credential_names_sha256": (
+                hat_secrets.credential_names_fingerprint_sha256(credentials)
+            ),
+            "consumer_public_key_fingerprint_sha256": (
+                hat_secrets.public_key_fingerprint_sha256(consumer_public_key)
+            ),
+        }
+        with (
+            tempfile.TemporaryDirectory(prefix="tinyhat-creator-store-") as temp_dir,
+            mock.patch.dict(os.environ, {"TINYHAT_HAT_STORE_DIR": temp_dir}),
+        ):
+            hat_secrets.set_hat_secrets("acme/hats/research", creator_values)
+            _creator_private_path, creator_public_key = hat_secrets.ensure_hat_key_pair(
+                "acme/hats/research"
+            )
+            creator_fingerprint = hat_secrets.public_key_fingerprint_sha256(creator_public_key)
+            encrypted = hat_secrets.create_authenticated_hat_secret_envelope(
+                "acme/hats/research",
+                consumer_public_key_pem=consumer_public_key,
+                expected_names=credentials,
+                context=context,
+                expected_creator_public_key_fingerprint_sha256=creator_fingerprint,
+            )
+
+        serialized_ciphertext = json.dumps(encrypted, sort_keys=True)
+        self.assertNotIn("creator-exa-private-value", serialized_ciphertext)
+        self.assertNotIn("creator-model-private-value", serialized_ciphertext)
+        self.assertEqual(
+            encrypted["schema"],
+            "tinyhat_hat_credentials_envelope_v1",
+        )
+
+        fake_client = FakeClient()
+        with (
+            tempfile.TemporaryDirectory(prefix="tinyhat-consumer-store-") as temp_dir,
+            mock.patch.dict(os.environ, {"TINYHAT_HAT_STORE_DIR": temp_dir}),
+            mock.patch.object(secret_handoff, "_set_hermes_secret") as hermes_save,
+            mock.patch.object(secret_handoff, "_register_terminal_env_secret"),
+        ):
+            installed = secret_handoff._install_hat_installation_credentials_bundle(
+                client=fake_client,
+                platform_auth="local_dev",
+                handoff_id="sh_install_12345678",
+                private_key_pem=consumer_private_key,
+                state={
+                    "hat_handle": "acme/hats/research",
+                    "installation_id": "hti_12345678",
+                    "creator_public_key_pem": creator_public_key,
+                    "creator_public_key_fingerprint_sha256": creator_fingerprint,
+                    "consumer_public_key_fingerprint_sha256": context[
+                        "consumer_public_key_fingerprint_sha256"
+                    ],
+                    "credentials": [
+                        {"name": "EXA_API_KEY"},
+                        {"name": "OPENROUTER_API_KEY"},
+                    ],
+                    "ciphertext_payload": encrypted,
+                },
+                hat_handle="acme/hats/research",
+            )
+            local = hat_secrets.list_hat_secret_names("acme/hats/research")
+
+        self.assertTrue(installed)
+        self.assertEqual(local["names"], sorted(creator_values))
+        self.assertEqual(hermes_save.call_count, 2)
+        self.assertNotIn("creator-", json.dumps(fake_client.posts))
+        self.assertEqual(
+            fake_client.posts[0][1]["outcome"],
+            "installed_restart_pending",
+        )
+
+    def test_consumer_rejects_tampered_creator_envelope(self) -> None:
+        creator_values = {"EXA_API_KEY": "creator-private-value"}
+        consumer_private_key, consumer_public_key = secret_handoff._generate_key_pair()
+        context = {
+            "handoff_id": "sh_install_12345678",
+            "installation_id": "hti_12345678",
+            "hat_handle": "acme/hats/research",
+            "credential_names_sha256": (
+                hat_secrets.credential_names_fingerprint_sha256(["EXA_API_KEY"])
+            ),
+            "consumer_public_key_fingerprint_sha256": (
+                hat_secrets.public_key_fingerprint_sha256(consumer_public_key)
+            ),
+        }
+        with (
+            tempfile.TemporaryDirectory(prefix="tinyhat-creator-store-") as temp_dir,
+            mock.patch.dict(os.environ, {"TINYHAT_HAT_STORE_DIR": temp_dir}),
+        ):
+            hat_secrets.set_hat_secrets("acme/hats/research", creator_values)
+            _creator_private_path, creator_public_key = hat_secrets.ensure_hat_key_pair(
+                "acme/hats/research"
+            )
+            creator_fingerprint = hat_secrets.public_key_fingerprint_sha256(creator_public_key)
+            encrypted = hat_secrets.create_authenticated_hat_secret_envelope(
+                "acme/hats/research",
+                consumer_public_key_pem=consumer_public_key,
+                expected_names=["EXA_API_KEY"],
+                context=context,
+                expected_creator_public_key_fingerprint_sha256=creator_fingerprint,
+            )
+        encrypted["context"] = {**context, "installation_id": "hti_other"}
+
+        with self.assertRaisesRegex(
+            secret_handoff.SecretHandoffError,
+            "creator signature could not be verified",
+        ):
+            secret_handoff._install_hat_installation_credentials_bundle(
+                client=mock.Mock(),
+                platform_auth="local_dev",
+                handoff_id="sh_install_12345678",
+                private_key_pem=consumer_private_key,
+                state={
+                    "hat_handle": "acme/hats/research",
+                    "installation_id": "hti_12345678",
+                    "creator_public_key_pem": creator_public_key,
+                    "creator_public_key_fingerprint_sha256": creator_fingerprint,
+                    "consumer_public_key_fingerprint_sha256": context[
+                        "consumer_public_key_fingerprint_sha256"
+                    ],
+                    "credentials": [{"name": "EXA_API_KEY"}],
+                    "ciphertext_payload": encrypted,
+                },
+                hat_handle="acme/hats/research",
+            )
+
+        encrypted["context"] = context
+        encrypted["access_token"] = "must-not-be-accepted"
+        with self.assertRaisesRegex(
+            secret_handoff.SecretHandoffError,
+            "creator signature could not be verified",
+        ):
+            secret_handoff._install_hat_installation_credentials_bundle(
+                client=mock.Mock(),
+                platform_auth="local_dev",
+                handoff_id="sh_install_12345678",
+                private_key_pem=consumer_private_key,
+                state={
+                    "hat_handle": "acme/hats/research",
+                    "installation_id": "hti_12345678",
+                    "creator_public_key_pem": creator_public_key,
+                    "creator_public_key_fingerprint_sha256": creator_fingerprint,
+                    "consumer_public_key_fingerprint_sha256": context[
+                        "consumer_public_key_fingerprint_sha256"
+                    ],
+                    "credentials": [{"name": "EXA_API_KEY"}],
+                    "ciphertext_payload": encrypted,
+                },
+                hat_handle="acme/hats/research",
+            )
+
     def test_hat_worker_exits_after_one_bundle_and_keeps_stable_key(self) -> None:
         class FakeClient:
             def get_json(self, _path: str) -> dict:
@@ -68,9 +295,7 @@ class HatSecretStoreTests(unittest.TestCase):
                 "EXA_API_KEY",
                 "dummy-value",
             )
-            hat_directory = hat_secrets.hat_secret_store_path(
-                "acme/hats/forecasting"
-            ).parent
+            hat_directory = hat_secrets.hat_secret_store_path("acme/hats/forecasting").parent
             (hat_directory / "credentials-private.pem").write_text(
                 "dummy-private-key",
                 encoding="utf-8",
@@ -85,9 +310,7 @@ class HatSecretStoreTests(unittest.TestCase):
 
             self.assertTrue(result["removed"])
             self.assertFalse(hat_directory.exists())
-            self.assertTrue(
-                hat_secrets.hat_secret_store_path("acme/hats/neighbor").exists()
-            )
+            self.assertTrue(hat_secrets.hat_secret_store_path("acme/hats/neighbor").exists())
 
     def test_hat_bundle_reuses_one_locked_local_key_pair(self) -> None:
         with (
@@ -112,9 +335,7 @@ class HatSecretStoreTests(unittest.TestCase):
             self.assertEqual(first_path.read_text(encoding="utf-8"), "PRIVATE")
             self.assertEqual(stat.S_IMODE(first_path.stat().st_mode), 0o600)
             self.assertEqual(
-                stat.S_IMODE(
-                    first_path.with_name("credentials-public.pem").stat().st_mode
-                ),
+                stat.S_IMODE(first_path.with_name("credentials-public.pem").stat().st_mode),
                 0o600,
             )
             generate.assert_called_once_with()
@@ -441,12 +662,8 @@ class HatSecretStoreTests(unittest.TestCase):
                 "acme/hats/executive-forecasting",
             )
 
-            new_path = hat_secrets.hat_secret_store_path(
-                "acme/hats/executive-forecasting"
-            )
-            listed = hat_secrets.list_hat_secret_names(
-                "acme/hats/executive-forecasting"
-            )
+            new_path = hat_secrets.hat_secret_store_path("acme/hats/executive-forecasting")
+            listed = hat_secrets.list_hat_secret_names("acme/hats/executive-forecasting")
             stored = json.loads(new_path.read_text(encoding="utf-8"))
             new_private_key = new_path.with_name("credentials-private.pem").read_text(
                 encoding="utf-8"

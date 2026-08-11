@@ -21,12 +21,14 @@ from urllib.parse import urlencode
 
 from .hat_secrets import (
     HatSecretStoreError,
+    credential_names_fingerprint_sha256,
     ensure_hat_key_pair,
     list_hat_secret_names,
     normalize_hat_handle,
     normalize_secret_name,
     set_hat_secret,
     set_hat_secrets,
+    verify_authenticated_hat_secret_envelope,
 )
 from .platform import (
     PlatformClient,
@@ -233,6 +235,77 @@ def start_hat_credentials_handoff(hat_identifier: str) -> str:
         "store for its intended customer. They are not loaded into this agent's "
         "Hermes environment, so Hermes is not restarted."
     )
+
+
+def start_hat_installation_credentials(
+    *,
+    installation_id: str,
+    hat_handle: str,
+) -> dict[str, Any]:
+    """Request a creator-to-consumer encrypted Hat credential transfer."""
+    clean_installation_id = str(installation_id or "").strip()
+    clean_handle = normalize_hat_handle(hat_handle)
+    if not clean_installation_id:
+        raise SecretHandoffError("The Hat installation id is missing.")
+    # Keep one Computer-local key pair for this consumed Hat.  Installation can
+    # legitimately outlive one chat turn (or one gateway process), so an
+    # ephemeral key would make a submitted creator bundle undecryptable after
+    # the worker exits and a retry would silently rotate to a different
+    # handoff.  The private key never leaves this Computer.
+    private_key_path, public_key_pem = _hat_credentials_key_pair(clean_handle)
+    private_key_pem = private_key_path.read_text(encoding="utf-8")
+    client, platform_auth = build_platform_client()
+    try:
+        handoff = client.post_json(
+            computer_api_path(platform_auth, "private-secret-handoffs/v1"),
+            {
+                "name": "HAT_INSTALLATION_CREDENTIALS",
+                "description": f"Credentials for {clean_handle}",
+                "public_key_pem": public_key_pem,
+                "key_algorithm": KEY_ALGORITHM,
+                "expires_in_seconds": MAX_EXPIRES_IN_SECONDS,
+                "handoff_kind": "hat_installation_credentials",
+                "installation_id": clean_installation_id,
+            },
+        )
+        if handoff.get("handoff_required") is False:
+            return {
+                "handoff_id": None,
+                "credential_count": 0,
+                "existing_handoff": False,
+                "expires_at": None,
+                "value_available": False,
+            }
+        returned_handle = normalize_hat_handle(str(handoff.get("hat_handle") or ""))
+        if returned_handle != clean_handle:
+            raise SecretHandoffError(
+                "The platform returned a different Hat for the credential transfer."
+            )
+        # Starting is idempotent: persistent Hat workers coordinate on the
+        # stable key's worker lock.  A live worker keeps ownership; after a
+        # gateway/process interruption a later resume takes over the same
+        # server handoff and key instead of opening an incompatible request.
+        _start_worker_process(
+            handoff,
+            private_key_pem,
+            hat_handle=clean_handle,
+            persistent=True,
+            key_path=private_key_path,
+        )
+    except (PlatformError, HatSecretStoreError, OSError) as exc:
+        raise SecretHandoffError(
+            "Could not start the Hat credential transfer.",
+            public_message=(
+                "I loaded the Hat skills, but could not start its private credential transfer."
+            ),
+        ) from exc
+    return {
+        "handoff_id": str(handoff.get("handoff_id") or ""),
+        "credential_count": len(handoff.get("credentials") or []),
+        "existing_handoff": bool(handoff.get("existing_handoff")),
+        "expires_at": handoff.get("expires_at"),
+        "value_available": False,
+    }
 
 
 def _request_private_secret_handoff(
@@ -581,6 +654,15 @@ def _install_submitted_secret(  # noqa: PLR0913 - generic, Slack, and Hat instal
             state=state,
             hat_handle=hat_handle,
         )
+    if state.get("handoff_kind") == "hat_installation_credentials":
+        return _install_hat_installation_credentials_bundle(
+            client=client,
+            platform_auth=platform_auth,
+            handoff_id=handoff_id,
+            private_key_pem=private_key_pem,
+            state=state,
+            hat_handle=hat_handle,
+        )
     ciphertext_payload = state.get("ciphertext_payload")
     if not isinstance(ciphertext_payload, dict):
         raise SecretHandoffError("Platform did not return ciphertext.")
@@ -716,6 +798,94 @@ def _install_hat_credentials_bundle(  # noqa: PLR0913 - explicit trust boundary
     return True
 
 
+def _install_hat_installation_credentials_bundle(  # noqa: PLR0913
+    *,
+    client: PlatformClient,
+    platform_auth: str,
+    handoff_id: str,
+    private_key_pem: str,
+    state: dict[str, Any],
+    hat_handle: str | None,
+) -> bool:
+    """Decrypt a creator-encrypted bundle only on its consumer Computer."""
+    ciphertext_payload = state.get("ciphertext_payload")
+    if not isinstance(ciphertext_payload, dict):
+        raise SecretHandoffError("Platform did not return ciphertext.")
+    requested_handle = normalize_hat_handle(str(hat_handle or ""))
+    state_handle = normalize_hat_handle(str(state.get("hat_handle") or ""))
+    if requested_handle != state_handle:
+        raise SecretHandoffError("Platform returned a different Hat binding for this installation.")
+    expected_credentials = state.get("credentials")
+    if not isinstance(expected_credentials, list) or not expected_credentials:
+        raise SecretHandoffError("Platform did not return Hat credential metadata.")
+    expected_names = {
+        normalize_secret_name(str(item.get("name") or ""))
+        for item in expected_credentials
+        if isinstance(item, dict)
+    }
+    creator_public_key_pem = str(state.get("creator_public_key_pem") or "").strip()
+    creator_fingerprint = str(state.get("creator_public_key_fingerprint_sha256") or "").strip()
+    consumer_fingerprint = str(state.get("consumer_public_key_fingerprint_sha256") or "").strip()
+    if not creator_public_key_pem or not creator_fingerprint or not consumer_fingerprint:
+        raise SecretHandoffError(
+            "The platform did not return the Hat credential transfer identities."
+        )
+    expected_context = {
+        "handoff_id": handoff_id,
+        "installation_id": str(state.get("installation_id") or "").strip(),
+        "hat_handle": requested_handle,
+        "credential_names_sha256": credential_names_fingerprint_sha256(list(expected_names)),
+        "consumer_public_key_fingerprint_sha256": consumer_fingerprint,
+    }
+    try:
+        verify_authenticated_hat_secret_envelope(
+            ciphertext_payload,
+            creator_public_key_pem=creator_public_key_pem,
+            expected_context=expected_context,
+        )
+    except HatSecretStoreError as exc:
+        raise SecretHandoffError(
+            "The Hat credential creator signature could not be verified."
+        ) from exc
+    if (
+        str(ciphertext_payload.get("creator_public_key_fingerprint_sha256") or "")
+        != creator_fingerprint
+    ):
+        raise SecretHandoffError("The Hat credential envelope has a different creator identity.")
+    plaintext = _decrypt_ciphertext(private_key_pem, ciphertext_payload)
+    values: dict[str, str] = {}
+    try:
+        bundle = json.loads(plaintext)
+        if (
+            not isinstance(bundle, dict)
+            or bundle.get("schema") != "tinyhat_hat_credentials_bundle_v1"
+            or not isinstance(bundle.get("credentials"), dict)
+        ):
+            raise SecretHandoffError("The Hat credential bundle is invalid.")
+        values = {
+            normalize_secret_name(str(name)): str(value)
+            for name, value in bundle["credentials"].items()
+        }
+        if set(values) != expected_names or any(not value for value in values.values()):
+            raise SecretHandoffError("The Hat credential bundle does not match the expected names.")
+        set_hat_secrets(requested_handle, values)
+        for name, value in values.items():
+            _set_hermes_secret(name, value)
+            _register_terminal_env_secret(name)
+    finally:
+        plaintext = ""
+        values.clear()
+    _claim_handoff(
+        client,
+        platform_auth,
+        handoff_id,
+        installed=True,
+        message=None,
+        outcome=HANDOFF_OUTCOME_RESTART_PENDING,
+    )
+    return True
+
+
 def _claim_handoff(
     client: PlatformClient,
     platform_auth: str,
@@ -764,7 +934,18 @@ def _generate_key_pair() -> tuple[str, str]:
     with tempfile.TemporaryDirectory(prefix="tinyhat-secret-") as temp_dir:
         private_key = Path(temp_dir) / "private.pem"
         public_key = Path(temp_dir) / "public.pem"
-        _run([openssl, "genpkey", "-algorithm", "RSA", "-pkeyopt", "rsa_keygen_bits:3072", "-out", str(private_key)])
+        _run(
+            [
+                openssl,
+                "genpkey",
+                "-algorithm",
+                "RSA",
+                "-pkeyopt",
+                "rsa_keygen_bits:3072",
+                "-out",
+                str(private_key),
+            ]
+        )
         _run([openssl, "rsa", "-pubout", "-in", str(private_key), "-out", str(public_key)])
         return (
             private_key.read_text(encoding="utf-8"),
@@ -778,8 +959,7 @@ def _decrypt_ciphertext(private_key_pem: str, payload: dict[str, Any]) -> str:
     chunks = payload.get("ciphertext_chunks_b64")
     if isinstance(chunks, list) and chunks:
         plaintext_parts = [
-            _decrypt_one_chunk(private_key_pem, str(chunk or "").strip())
-            for chunk in chunks
+            _decrypt_one_chunk(private_key_pem, str(chunk or "").strip()) for chunk in chunks
         ]
         return b"".join(plaintext_parts).decode("utf-8")
     ciphertext_b64 = str(payload.get("ciphertext_b64") or "").strip()
@@ -878,8 +1058,7 @@ def _register_terminal_env_secret(secret_name: str) -> dict[str, Any]:
     if completed.returncode != 0:
         return {
             "ok": False,
-            "error": (completed.stderr or completed.stdout or "register failed")
-            .strip()[:200],
+            "error": (completed.stderr or completed.stdout or "register failed").strip()[:200],
         }
     return {"ok": True}
 
@@ -1185,9 +1364,9 @@ def _parse_expires_at(value: Any) -> float | None:
     if not text:
         return None
     try:
-        return datetime.fromisoformat(text.replace("Z", "+00:00")).astimezone(
-            timezone.utc
-        ).timestamp()
+        return (
+            datetime.fromisoformat(text.replace("Z", "+00:00")).astimezone(timezone.utc).timestamp()
+        )
     except ValueError:
         return None
 
@@ -1201,15 +1380,11 @@ def _normalize_secret_name(value: str) -> str:
 
 def _resolve_secret_name(value: Any, description: str | None) -> str:
     raw = str(value or "").strip()
-    inferred = _infer_secret_name(
-        " ".join(part for part in (raw, description or "") if part)
-    )
+    inferred = _infer_secret_name(" ".join(part for part in (raw, description or "") if part))
     if not raw:
         if inferred:
             return inferred
-        raise SecretHandoffError(
-            "Choose a specific secret name like EXA_API_KEY or GITHUB_TOKEN."
-        )
+        raise SecretHandoffError("Choose a specific secret name like EXA_API_KEY or GITHUB_TOKEN.")
 
     try:
         name = _normalize_secret_name(raw)

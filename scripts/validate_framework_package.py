@@ -36,6 +36,7 @@ REQUIRED_COMMANDS = [
 ]
 REQUIRED_SKILLS = [
     "hat-authoring",
+    "tinyhat-hat-wearing",
     "tinyhat-plugin-version",
     "tinyhat-tell-joke",
     "tinyhat-skill-catalog",
@@ -802,6 +803,7 @@ def validate_hermes_adapter(root: Path) -> None:
     require(skill_names == REQUIRED_SKILLS, "skill declaration drift")
     expected_skill_paths = {
         "hat-authoring": "skills/hat-authoring/SKILL.md",
+        "tinyhat-hat-wearing": "skills/tinyhat-hat-wearing/SKILL.md",
         "tinyhat-plugin-version": "skills/tinyhat-plugin-version/SKILL.md",
         "tinyhat-tell-joke": "skills/tinyhat-tell-joke/SKILL.md",
         "tinyhat-skill-catalog": "skills/tinyhat-skill-catalog/SKILL.md",
@@ -918,6 +920,7 @@ def validate_docs(root: Path) -> None:
             "tinyhat-platform",
             "tinyhat-privacy",
             "hat-authoring",
+            "tinyhat-hat-wearing",
             "tinyhat_hats",
             "pre_llm_call",
             "channels/lts",
@@ -940,7 +943,17 @@ def validate_docs(root: Path) -> None:
             "tinyhat-privacy",
             "tinyhat_get_platform_status",
             "hat-authoring",
+            "tinyhat-hat-wearing",
             "tinyhat_hats",
+        ),
+        "skills/tinyhat-hat-wearing/SKILL.md": (
+            "tinyhat_hats",
+            'action":"wear',
+            "resume_installation",
+            "read-only GitHub credential",
+            "does not require an agent or creator-side chat turn",
+            "signs with the Hat's creator key",
+            "Tinyhat relays ciphertext only",
         ),
         "skills/tinyhat-platform/SKILL.md": (
             "tinyhat_get_platform_status",

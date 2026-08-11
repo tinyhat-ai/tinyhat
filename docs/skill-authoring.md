@@ -93,6 +93,9 @@ question before creating the handoff.
 
 ## Tinyhat Platform Context
 
+Use `tinyhat-hat-wearing` when an agent is asked to install or resume a Hat;
+keep `hat-authoring` focused on the creator-side package lifecycle.
+
 Use `pre_llm_call` only for short operating context that should be visible
 before a specific Tinyhat skill is loaded. Keep the detailed instructions
 inside skills so the plugin stays readable and token efficient.
