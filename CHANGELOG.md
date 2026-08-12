@@ -6,6 +6,11 @@ All notable changes to the Tinyhat plugin are documented here.
 
 ### Changed
 
+- Bump the Hermes plugin package to `0.24.1` for fail-closed Hat retirement.
+  Retirement hides the Hat from owner and public discovery, preserves
+  installation history and already-installed consumers, and removes creator
+  package state only after the platform returns a complete retirement receipt.
+
 - Add private Hat consumption for new and existing agents. The consumer
   Computer receives a one-repository read-only checkout, installs namespaced
   skills, and requests an encrypted credential bundle. The platform
