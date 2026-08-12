@@ -536,6 +536,11 @@ TINYHAT_PLUGIN_REF=vX.Y.Z
 | `channels/latest` | Newest promoted final version, used when we want faster adoption. |
 | exact tag, for example `vX.Y.Z` | Immutable version for tests, rollbacks, and audits. |
 
+For v0.24.1, deploy the matching Tinyloop Hat-retirement API before promoting
+`channels/latest` and `channels/lts`. The plugin fails closed unless the
+platform returns a complete retirement receipt, and it preserves existing
+consumer agents and installation history.
+
 For v0.24.0, deploy the matching platform repository-grant broker and promote
 Hermes runtime `v0.0.51` before promoting `channels/latest` and `channels/lts`.
 The runtime owns the Computer-local clone and non-persistent Git credential
