@@ -4,6 +4,8 @@ All notable changes to the Tinyhat plugin are documented here.
 
 ## Unreleased
 
+## 0.24.1 - 2026-08-12
+
 ### Changed
 
 - Add private Hat consumption for new and existing agents. The consumer
