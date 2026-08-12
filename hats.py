@@ -506,10 +506,20 @@ def hats(  # noqa: PLR0911, PLR0912, PLR0915 - one public tool dispatches bounde
     elif action == "delete":
         lifecycle_status = str(result.get("lifecycle_status") or "").strip()
         if lifecycle_status == "retired":
+            repository_outcome = (
+                "Its private repository was permanently deleted. "
+                if result.get("repository_deleted") is True
+                else (
+                    "The platform did not confirm private repository deletion; "
+                    "report repository_deleted literally and request platform "
+                    "reconciliation. "
+                )
+            )
             result["agent_instruction"] = (
                 "Report that the Hat was retired: it no longer appears in the owner's "
-                "Hat list, on its public page, or for new installs, and its private "
-                "repository was permanently deleted. Explain that Tinyhat retains "
+                "Hat list, on its public page, or for new installs. "
+                + repository_outcome
+                + "Explain that Tinyhat retains "
                 "platform and installation history and does not delete already-installed "
                 "consumer agents. Report local_store_removed and "
                 "local_checkout_cleanup_complete honestly. No plaintext value was "
