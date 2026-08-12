@@ -656,7 +656,12 @@ class HatToolTests(unittest.TestCase):
 
         self.assertEqual(refused["error"], "confirmation_required")
         self.assertIn("retire this exact Hat", refused["message"])
+        self.assertIn(
+            "requires GitHub to acknowledge deleting its private repository",
+            refused["message"],
+        )
         self.assertIn("already-installed consumer agents", refused["message"])
+        self.assertNotRegex(refused["message"].lower(), r"\bpermanent(?:ly)?\b")
         self.assertEqual(
             client.get_paths,
             [],
@@ -706,10 +711,18 @@ class HatToolTests(unittest.TestCase):
         self.assertTrue(deleted["local_store_removed"])
         self.assertTrue(deleted["local_checkout_cleanup_complete"])
         self.assertIn("Hat was retired", deleted["agent_instruction"])
-        self.assertIn("already-installed consumer agents", deleted["agent_instruction"])
-        self.assertNotIn(
-            "Hat and private repository were permanently deleted",
+        self.assertIn(
+            "GitHub acknowledged deletion of its private repository",
             deleted["agent_instruction"],
+        )
+        self.assertIn(
+            "from the Hat's GitHub organization",
+            deleted["agent_instruction"],
+        )
+        self.assertIn("already-installed consumer agents", deleted["agent_instruction"])
+        self.assertNotRegex(
+            deleted["agent_instruction"].lower(),
+            r"\bpermanent(?:ly)?\b",
         )
 
     def test_delete_does_not_claim_retirement_without_lifecycle_receipt(self) -> None:
@@ -831,9 +844,9 @@ class HatToolTests(unittest.TestCase):
             )
 
         self.assertIn("did not contain a verifiable", result["agent_instruction"])
-        self.assertNotIn(
-            "private repository was permanently deleted",
-            result["agent_instruction"],
+        self.assertNotRegex(
+            result["agent_instruction"].lower(),
+            r"\bpermanent(?:ly)?\b",
         )
         self.assertFalse(result["local_store_removed"])
         self.assertFalse(result["local_checkout_cleanup_complete"])

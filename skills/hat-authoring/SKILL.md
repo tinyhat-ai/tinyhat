@@ -73,10 +73,11 @@ private unless the user explicitly asked to inspect or change that email.
 Use the compatibility `delete` action to retire a Hat only after the user
 explicitly asks to retire that exact Hat. Explain the consequences before
 confirming: the Hat disappears from the owner's Hat list, its public page, and
-new installations; its private repository and creator Computer-local package
-state are permanently deleted; Tinyhat retains platform and installation
-history; and already-installed consumer agents and their local state are not
-deleted.
+new installations; its private repository is deleted from the Hat's GitHub
+organization only after the provider acknowledges deletion; creator
+Computer-local package state is removed; Tinyhat retains platform and
+installation history; and already-installed consumer agents and their local
+state are not deleted.
 
 Call `tinyhat_hats` with `action="delete"`, the canonical `identifier`, and
 `confirmed=true`. Retirement removes the creator Computer-local secret bundle

@@ -158,10 +158,11 @@ TINYHAT_HATS_SCHEMA = {
                 "True only after the user explicitly asks to remove this exact "
                 "credential from this exact Hat, or to retire this exact Hat. Hat "
                 "retirement hides it from the owner's Hat list, its public page, "
-                "and new installs; permanently removes its private repository and "
-                "creator Computer-local package state; and preserves platform and "
-                "installation history plus already-installed consumer agents. This "
-                "also confirms repository_reset when stopping this Computer from "
+                "and new installs; requires GitHub to acknowledge deleting its private "
+                "repository from the Hat's GitHub organization before completion; "
+                "removes creator Computer-local package state; and preserves platform "
+                "and installation history plus already-installed consumer agents. "
+                "This also confirms repository_reset when stopping this Computer from "
                 "renewing repository access."
             ),
         },

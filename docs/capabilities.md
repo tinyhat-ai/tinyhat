@@ -45,11 +45,11 @@ credential files, private keys, branch deletion, history rewrites, and repo
 deletion are not available through the file-writing action. `action=delete`
 retires one exact Hat only after the user explicitly confirms the canonical Hat
 handle. Retirement removes the Hat from the owner's Hat list, its public page,
-and new installations, and permanently deletes its private repository,
-verified creator checkouts for the current and former handles, and creator
-Computer-local package state. Tinyhat retains the platform and installation
-history, and already-installed consumer agents and their local state are not
-deleted.
+and new installations. The private repository is deleted from the Hat's GitHub
+organization only after the provider acknowledges deletion; verified creator
+checkouts for the current and former handles and creator Computer-local package
+state are also removed. Tinyhat retains the platform and installation history,
+and already-installed consumer agents and their local state are not deleted.
 
 The intended customer verifies their email on the public page, then opens a
 prefilled Telegram managed-bot dialog to create an agent that wears the hat.

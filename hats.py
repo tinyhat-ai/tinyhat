@@ -234,10 +234,11 @@ def hats(  # noqa: PLR0911, PLR0912, PLR0915 - one public tool dispatches bounde
                     message=(
                         "Only call delete after the user explicitly asks to retire this "
                         "exact Hat. Retirement removes it from the owner's Hat list, "
-                        "its public page, and new installs; permanently removes its "
-                        "private repository and creator Computer-local package state; "
-                        "and preserves platform and installation history plus "
-                        "already-installed consumer agents."
+                        "its public page, and new installs; requires GitHub to "
+                        "acknowledge deleting its private repository from the Hat's "
+                        "GitHub organization before completion; removes creator "
+                        "Computer-local package state; and preserves platform and "
+                        "installation history plus already-installed consumer agents."
                     ),
                     example_call={
                         "action": "delete",
@@ -517,10 +518,11 @@ def hats(  # noqa: PLR0911, PLR0912, PLR0915 - one public tool dispatches bounde
         if retirement_confirmed:
             result["agent_instruction"] = (
                 "Report that the Hat was retired: it no longer appears in the owner's "
-                "Hat list, on its public page, or for new installs, and its private "
-                "repository was permanently deleted. Explain that Tinyhat retains "
-                "platform and installation history and does not delete already-installed "
-                "consumer agents. Report local_store_removed and "
+                "Hat list, on its public page, or for new installs, and GitHub "
+                "acknowledged deletion of its private repository from the Hat's GitHub "
+                "organization. Explain that Tinyhat retains platform and installation "
+                "history and does not delete already-installed consumer agents. Report "
+                "local_store_removed and "
                 "local_checkout_cleanup_complete honestly. No plaintext value was "
                 "returned or exposed."
             )

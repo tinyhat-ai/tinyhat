@@ -7,6 +7,7 @@ import importlib.util
 import io
 import json
 import os
+import re
 import subprocess
 import sys
 import tempfile
@@ -194,6 +195,10 @@ class HermesAdapterTests(unittest.TestCase):
             hats_schema["properties"]["confirmed"]["description"],
         )
         self.assertIn(
+            "requires GitHub to acknowledge deleting its private repository",
+            hats_schema["properties"]["confirmed"]["description"],
+        )
+        self.assertIn(
             "optional replacement audience",
             hats_schema["properties"]["customer_email"]["description"],
         )
@@ -252,29 +257,56 @@ class HermesAdapterTests(unittest.TestCase):
         self.assertIn("restart_gateway", update_schema["properties"])
 
     def test_hat_retirement_wording_is_truthful_everywhere(self) -> None:
-        files = (
-            REPO_ROOT / "skills" / "hat-authoring" / "SKILL.md",
-            REPO_ROOT / "README.md",
-            REPO_ROOT / "docs" / "capabilities.md",
-            REPO_ROOT / "CHANGELOG.md",
-        )
-        required_fragments = (
-            "platform and installation history",
-            "already-installed consumer agents",
-        )
-        banned_claims = (
-            "permanently deletes one exact Hat",
-            "Hat and private repository were permanently deleted",
+        def text_between(path: Path, start: str, end: str) -> str:
+            text = path.read_text(encoding="utf-8")
+            start_index = text.index(start)
+            end_index = text.index(end, start_index)
+            return " ".join(text[start_index:end_index].split())
+
+        retirement_surfaces = (
+            schemas.TINYHAT_HATS_SCHEMA["properties"]["confirmed"]["description"],
+            text_between(
+                REPO_ROOT / "skills" / "hat-authoring" / "SKILL.md",
+                "## Delete a Hat",
+                "## Add or update repo content",
+            ),
+            text_between(
+                REPO_ROOT / "README.md",
+                "`hat-authoring` creates and evolves shareable Hats.",
+                "For repositories in `tinyhat-ai`",
+            ),
+            text_between(
+                REPO_ROOT / "docs" / "capabilities.md",
+                "## Shareable Hat Authoring",
+                "## Private Secret Handoff",
+            ),
+            text_between(
+                REPO_ROOT / "CHANGELOG.md",
+                "- Retire one exact Hat",
+                "- Start `0.23.0`",
+            ),
         )
 
-        for path in files:
-            text = " ".join(path.read_text(encoding="utf-8").split())
-            for fragment in required_fragments:
-                with self.subTest(path=path.name, fragment=fragment):
-                    self.assertIn(fragment, text)
-            for claim in banned_claims:
-                with self.subTest(path=path.name, claim=claim):
-                    self.assertNotIn(claim, text)
+        for surface in retirement_surfaces:
+            with self.subTest(surface=surface[:80]):
+                self.assertRegex(
+                    surface,
+                    r"(?:GitHub(?: to)?|provider) acknowledge(?:d|s)? delet(?:e|ing|ion)",
+                )
+                self.assertIsNone(
+                    re.search(r"\bpermanent(?:ly)?\b", surface, re.IGNORECASE)
+                )
+
+        executable_instruction_source = (REPO_ROOT / "hats.py").read_text(
+            encoding="utf-8"
+        )
+        self.assertIsNone(
+            re.search(
+                r"\bpermanent(?:ly)?\b",
+                executable_instruction_source,
+                re.IGNORECASE,
+            )
+        )
 
     def test_plugin_version_returns_live_manifest_version(self) -> None:
         payload = json.loads(tools.plugin_version())
