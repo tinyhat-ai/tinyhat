@@ -293,6 +293,8 @@ class HermesAdapterTests(unittest.TestCase):
                     surface,
                     r"(?:GitHub(?: to)?|provider) acknowledge(?:d|s)? delet(?:e|ing|ion)",
                 )
+                self.assertIn("platform and installation history", surface)
+                self.assertIn("already-installed consumer agents", surface)
                 self.assertIsNone(
                     re.search(r"\bpermanent(?:ly)?\b", surface, re.IGNORECASE)
                 )
