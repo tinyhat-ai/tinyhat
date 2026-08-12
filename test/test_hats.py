@@ -40,8 +40,9 @@ class FakePlatformClient:
         self.delete_paths.append(path)
         return {
             "handle": "acme/hats/trade-show-sales",
-            "deleted": True,
+            "retired": True,
             "repository_deleted": True,
+            "lifecycle_status": "retired",
             "local_checkout_handles": ["acme/hats/trade-show-sales"],
         }
 
@@ -574,7 +575,7 @@ class HatToolTests(unittest.TestCase):
         )
         self.assertTrue(result["local_value_removed"])
 
-    def test_delete_requires_confirmation_then_removes_platform_and_local_store(
+    def test_delete_requires_confirmation_then_retires_hat_and_removes_local_store(
         self,
     ) -> None:
         client = FakePlatformClient()
@@ -587,8 +588,9 @@ class HatToolTests(unittest.TestCase):
             client.delete_paths.append(path)
             return {
                 "handle": "acme/hats/forecasting",
-                "deleted": True,
+                "retired": True,
                 "repository_deleted": True,
+                "lifecycle_status": "retired",
                 "local_checkout_handles": [
                     "acme/hats/forecasting",
                     "acme/hats/forecasting-before-rename",
@@ -653,16 +655,21 @@ class HatToolTests(unittest.TestCase):
             )
 
         self.assertEqual(refused["error"], "confirmation_required")
+        self.assertIn("retire this exact Hat", refused["message"])
+        self.assertIn(
+            "requires GitHub to acknowledge deleting its private repository",
+            refused["message"],
+        )
+        self.assertIn("already-installed consumer agents", refused["message"])
+        self.assertNotRegex(refused["message"].lower(), r"\bpermanent(?:ly)?\b")
         self.assertEqual(
             client.get_paths,
-            [
-                "/hapi/v1/computers/local-dev/hats/v1/detail?identifier=acme%2Fhats%2Fforecasting"
-            ],
+            [],
         )
         self.assertEqual(
             client.delete_paths,
             [
-                "/hapi/v1/computers/local-dev/hats/v1?identifier=acme%2Fhats%2Fforecasting"
+                "/hapi/v1/computers/local-dev/hats/v1/retire?identifier=acme%2Fhats%2Fforecasting"
             ],
         )
         self.assertEqual(
@@ -699,9 +706,190 @@ class HatToolTests(unittest.TestCase):
                 ),
             ],
         )
-        self.assertTrue(deleted["deleted"])
+        self.assertTrue(deleted["retired"])
+        self.assertEqual(deleted["lifecycle_status"], "retired")
         self.assertTrue(deleted["local_store_removed"])
         self.assertTrue(deleted["local_checkout_cleanup_complete"])
+        self.assertIn("Hat was retired", deleted["agent_instruction"])
+        self.assertIn(
+            "GitHub acknowledged deletion of its private repository",
+            deleted["agent_instruction"],
+        )
+        self.assertIn(
+            "from the Hat's GitHub organization",
+            deleted["agent_instruction"],
+        )
+        self.assertIn("already-installed consumer agents", deleted["agent_instruction"])
+        self.assertNotRegex(
+            deleted["agent_instruction"].lower(),
+            r"\bpermanent(?:ly)?\b",
+        )
+
+    def test_delete_does_not_claim_retirement_without_lifecycle_receipt(self) -> None:
+        client = FakePlatformClient()
+
+        def fake_delete(path: str) -> dict[str, object]:
+            client.delete_paths.append(path)
+            return {
+                "handle": "acme/hats/forecasting",
+                "retired": True,
+                "repository_deleted": True,
+                "local_checkout_handles": ["acme/hats/forecasting"],
+            }
+
+        client.delete_json = fake_delete  # type: ignore[method-assign]
+        with (
+            mock.patch.object(
+                hats_module,
+                "build_platform_client",
+                return_value=(client, "local_dev"),
+            ),
+            mock.patch.object(hats_module, "delete_hat_secret_store") as delete_local,
+            mock.patch.object(hats_module, "run_hat_repository") as delete_checkout,
+        ):
+            result = json.loads(
+                hats_module.hats(
+                    {
+                        "action": "delete",
+                        "identifier": "acme/hats/forecasting",
+                        "confirmed": True,
+                    }
+                )
+            )
+
+        self.assertNotIn("was retired", result["agent_instruction"])
+        self.assertNotIn("already-installed consumer agents", result["agent_instruction"])
+        self.assertIn("did not contain a verifiable", result["agent_instruction"])
+        self.assertFalse(result["local_checkout_cleanup_complete"])
+        self.assertFalse(result["local_store_removed"])
+        delete_local.assert_not_called()
+        delete_checkout.assert_not_called()
+
+    def test_delete_404_fails_closed_without_local_cleanup(self) -> None:
+        client = FakePlatformClient()
+
+        def fake_delete(path: str) -> dict[str, object]:
+            client.delete_paths.append(path)
+            raise hats_module.PlatformError(
+                "Platform request failed with HTTP 404: Not Found",
+                status_code=404,
+            )
+
+        client.delete_json = fake_delete  # type: ignore[method-assign]
+        with (
+            mock.patch.object(
+                hats_module,
+                "build_platform_client",
+                return_value=(client, "local_dev"),
+            ),
+            mock.patch.object(hats_module, "delete_hat_secret_store") as delete_local,
+            mock.patch.object(hats_module, "run_hat_repository") as delete_checkout,
+        ):
+            result = json.loads(
+                hats_module.hats(
+                    {
+                        "action": "delete",
+                        "identifier": "acme/hats/forecasting",
+                        "confirmed": True,
+                    }
+                )
+            )
+
+        self.assertEqual(result["error"], "platform_request_failed")
+        self.assertIn("HTTP 404", result["message"])
+        self.assertEqual(
+            client.delete_paths,
+            [
+                "/hapi/v1/computers/local-dev/hats/v1/retire?identifier=acme%2Fhats%2Fforecasting"
+            ],
+        )
+        delete_local.assert_not_called()
+        delete_checkout.assert_not_called()
+
+    def test_retired_receipt_does_not_invent_repository_deletion(self) -> None:
+        client = FakePlatformClient()
+
+        def fake_delete(path: str) -> dict[str, object]:
+            client.delete_paths.append(path)
+            return {
+                "handle": "acme/hats/forecasting",
+                "retired": True,
+                "repository_deleted": False,
+                "lifecycle_status": "retired",
+                "local_checkout_handles": [],
+                "local_checkouts": [],
+            }
+
+        client.delete_json = fake_delete  # type: ignore[method-assign]
+        with (
+            mock.patch.object(
+                hats_module,
+                "build_platform_client",
+                return_value=(client, "local_dev"),
+            ),
+            mock.patch.object(
+                hats_module,
+                "delete_hat_secret_store",
+                return_value={"removed": False},
+            ),
+        ):
+            result = json.loads(
+                hats_module.hats(
+                    {
+                        "action": "delete",
+                        "identifier": "acme/hats/forecasting",
+                        "confirmed": True,
+                    }
+                )
+            )
+
+        self.assertIn("did not contain a verifiable", result["agent_instruction"])
+        self.assertNotRegex(
+            result["agent_instruction"].lower(),
+            r"\bpermanent(?:ly)?\b",
+        )
+        self.assertFalse(result["local_store_removed"])
+        self.assertFalse(result["local_checkout_cleanup_complete"])
+
+    def test_delete_reports_retiring_receipt_as_retryable(self) -> None:
+        client = FakePlatformClient()
+
+        def fake_delete(path: str) -> dict[str, object]:
+            client.delete_paths.append(path)
+            return {
+                "handle": "acme/hats/forecasting",
+                "retired": False,
+                "repository_deleted": False,
+                "lifecycle_status": "retiring",
+                "local_checkout_handles": ["acme/hats/forecasting"],
+            }
+
+        client.delete_json = fake_delete  # type: ignore[method-assign]
+        with (
+            mock.patch.object(
+                hats_module,
+                "build_platform_client",
+                return_value=(client, "local_dev"),
+            ),
+            mock.patch.object(hats_module, "delete_hat_secret_store") as delete_local,
+            mock.patch.object(hats_module, "run_hat_repository") as delete_checkout,
+        ):
+            result = json.loads(
+                hats_module.hats(
+                    {
+                        "action": "delete",
+                        "identifier": "acme/hats/forecasting",
+                        "confirmed": True,
+                    }
+                )
+            )
+
+        self.assertIn("still pending", result["agent_instruction"])
+        self.assertNotIn("already-installed consumer agents", result["agent_instruction"])
+        self.assertFalse(result["local_checkout_cleanup_complete"])
+        self.assertFalse(result["local_store_removed"])
+        delete_local.assert_not_called()
+        delete_checkout.assert_not_called()
 
     def test_define_then_configure_uses_one_hat_bundle_flow(self) -> None:
         client = FakePlatformClient()

@@ -134,9 +134,14 @@ The same tool lists up to 100 owner-scoped Hats, retrieves one by key or
 handle, updates its public title, intended customer email, proposed Telegram
 bot defaults, or namespaced handle while preserving its files and local
 credential bundle, and creates or updates guarded non-secret repo files. It
-also permanently deletes one exact Hat, its private repository, verified local
-checkouts for current and former handles, and its Computer-local package state
-only after the user explicitly confirms the canonical handle. For Hat credentials, the agent first defines every
+also retires one exact Hat only after the user explicitly confirms the
+canonical handle. Retirement removes the Hat from the owner's Hat list, its
+public page, and new installations. The private repository is deleted from the
+Hat's GitHub organization only after the provider acknowledges deletion;
+verified creator checkouts for current and former handles and creator
+Computer-local package state are also removed. Tinyhat retains the platform
+and installation history, and already-installed consumer agents and their
+local state are not deleted. For Hat credentials, the agent first defines every
 value-blind name and purpose, then sends one encrypted Mini App form for all
 fields. Computer-local presence is checked without returning a value; existing
 values are marked without being disclosed, blank saved fields are preserved,

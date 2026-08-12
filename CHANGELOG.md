@@ -34,9 +34,13 @@ All notable changes to the Tinyhat plugin are documented here.
   page. The Hat reuses one Computer-local key pair for the bundle, saves all
   values atomically in its local store, supports reopening the form from the
   Hat preview, and never restarts Hermes for these package-only credentials.
-- Permanently delete one exact Hat, its private repository, and its
-  Computer-local package state only after the user explicitly confirms the
-  canonical Hat handle.
+- Retire one exact Hat only after the user explicitly confirms the canonical
+  handle. Retirement removes it from the owner's Hat list, its public page,
+  and new installations. The private repository is deleted from the Hat's
+  GitHub organization only after the provider acknowledges deletion; creator
+  Computer-local package state is removed; and platform and installation
+  history plus already-installed consumer agents and their local state are
+  preserved.
 - Start `0.23.0` with the first shareable-hats milestone. The new
   `tinyhat:hat-authoring` skill and `tinyhat_hats` tool create an owner-scoped,
   one-customer hat shell with a private platform-managed repository and

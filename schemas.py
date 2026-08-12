@@ -22,10 +22,10 @@ TINYHAT_GET_PLATFORM_STATUS_SCHEMA = {
 TINYHAT_HATS_SCHEMA = {
     "type": "object",
     "description": (
-        "Creates, lists, inspects, updates, and permanently deletes owner-scoped "
-        "Tinyhat Hats; commits guarded non-secret files to their private repos; "
-        "and defines, configures, lists, or removes Computer-local Hat credentials "
-        "without returning values."
+        "Creates, lists, inspects, updates, and retires owner-scoped Tinyhat Hats; "
+        "commits guarded non-secret files to their private repos; and defines, "
+        "configures, lists, or removes Computer-local Hat credentials without "
+        "returning values. Retirement preserves platform and installation history."
     ),
     "properties": {
         "action": {
@@ -156,9 +156,14 @@ TINYHAT_HATS_SCHEMA = {
             "type": "boolean",
             "description": (
                 "True only after the user explicitly asks to remove this exact "
-                "credential from this exact Hat, or to permanently delete this "
-                "exact Hat and its private repository, or to stop this Computer "
-                "from renewing repository access with repository_reset."
+                "credential from this exact Hat, or to retire this exact Hat. Hat "
+                "retirement hides it from the owner's Hat list, its public page, "
+                "and new installs; requires GitHub to acknowledge deleting its private "
+                "repository from the Hat's GitHub organization before completion; "
+                "removes creator Computer-local package state; and preserves platform "
+                "and installation history plus already-installed consumer agents. "
+                "This also confirms repository_reset when stopping this Computer from "
+                "renewing repository access."
             ),
         },
         "paths": {

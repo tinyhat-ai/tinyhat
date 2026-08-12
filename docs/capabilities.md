@@ -6,7 +6,7 @@ The current capability list is intentionally small.
 | --- | --- | --- |
 | `tinyhat_plugin_version` | Available now | Proves which Tinyhat plugin version Hermes has loaded for the live agent. |
 | `tinyhat_get_platform_status` | Available now | Reads this authenticated Computer's safe platform state, assignment, configuration revisions, and package inventory. |
-| `tinyhat_hats` | Available now | Creates, lists, inspects, renames, and permanently deletes one-customer Hats; checks out and syncs private repositories through Computer-scoped GitHub leases; and manages value-blind Hat credentials. Authorized installation transfers are dispatched automatically to the registered creator Computer, signed there, and decrypted only by the consumer Computer. |
+| `tinyhat_hats` | Available now | Creates, lists, inspects, renames, and retires one-customer Hats; checks out and syncs private repositories through Computer-scoped GitHub leases; and manages value-blind Hat credentials. Retirement hides a Hat from owner/public/new-install surfaces and deletes creator package state while preserving platform and installation history and already-installed consumer agents. Authorized installation transfers are dispatched automatically to the registered creator Computer, signed there, and decrypted only by the consumer Computer. |
 | `tinyhat_tell_joke` | Available now | Proves Hermes loaded the Tinyhat plugin and can call a plugin tool. |
 | `tinyhat_skill_catalog` | Available now | Lists Tinyhat plugin skills with `tinyhat:<skill>` qualified names and unqualified aliases. |
 | `tinyhat-skill-authoring` skill | Available now | Teaches agents to write portable user skills with valid names, explicit trigger and non-trigger boundaries, progressive disclosure, and bounded context size. |
@@ -43,9 +43,13 @@ public-link aliases, and Computer-local credential bundle. `action=put_file`
 creates or updates one relative text path in a commit; secret-shaped paths,
 credential files, private keys, branch deletion, history rewrites, and repo
 deletion are not available through the file-writing action. `action=delete`
-permanently deletes one exact Hat, its private repository, verified local
-checkouts for the current and former handles, and its Computer-local package
-state only after the user explicitly confirms the canonical Hat handle.
+retires one exact Hat only after the user explicitly confirms the canonical Hat
+handle. Retirement removes the Hat from the owner's Hat list, its public page,
+and new installations. The private repository is deleted from the Hat's GitHub
+organization only after the provider acknowledges deletion; verified creator
+checkouts for the current and former handles and creator Computer-local package
+state are also removed. Tinyhat retains the platform and installation history,
+and already-installed consumer agents and their local state are not deleted.
 
 The intended customer verifies their email on the public page, then opens a
 prefilled Telegram managed-bot dialog to create an agent that wears the hat.
