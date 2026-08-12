@@ -253,7 +253,11 @@ def hats(  # noqa: PLR0911, PLR0912, PLR0915 - one public tool dispatches bounde
             # retirement receipt without a detail preflight.
             result = client.delete_json(f"{path}/retire?{query}")
             lifecycle_status = str(result.get("lifecycle_status") or "").strip()
-            retirement_confirmed = lifecycle_status == "retired"
+            retirement_confirmed = (
+                lifecycle_status == "retired"
+                and result.get("retired") is True
+                and result.get("repository_deleted") is True
+            )
             handle = str(result.get("handle") or identifier)
             checkout_handles = result.get("local_checkout_handles")
             if not isinstance(checkout_handles, list):
@@ -505,21 +509,16 @@ def hats(  # noqa: PLR0911, PLR0912, PLR0915 - one public tool dispatches bounde
         )
     elif action == "delete":
         lifecycle_status = str(result.get("lifecycle_status") or "").strip()
-        if lifecycle_status == "retired":
-            repository_outcome = (
-                "Its private repository was permanently deleted. "
-                if result.get("repository_deleted") is True
-                else (
-                    "The platform did not confirm private repository deletion; "
-                    "report repository_deleted literally and request platform "
-                    "reconciliation. "
-                )
-            )
+        retirement_confirmed = (
+            lifecycle_status == "retired"
+            and result.get("retired") is True
+            and result.get("repository_deleted") is True
+        )
+        if retirement_confirmed:
             result["agent_instruction"] = (
                 "Report that the Hat was retired: it no longer appears in the owner's "
-                "Hat list, on its public page, or for new installs. "
-                + repository_outcome
-                + "Explain that Tinyhat retains "
+                "Hat list, on its public page, or for new installs, and its private "
+                "repository was permanently deleted. Explain that Tinyhat retains "
                 "platform and installation history and does not delete already-installed "
                 "consumer agents. Report local_store_removed and "
                 "local_checkout_cleanup_complete honestly. No plaintext value was "
@@ -535,7 +534,8 @@ def hats(  # noqa: PLR0911, PLR0912, PLR0915 - one public tool dispatches bounde
         else:
             result["agent_instruction"] = (
                 "The platform response did not contain a verifiable Hat retirement "
-                "lifecycle. Report only the literal deleted and repository_deleted "
+                "receipt. Report only the literal retired, lifecycle_status, and "
+                "repository_deleted "
                 "fields returned by the platform. Do not claim that retirement "
                 "completed or that platform and installation history was retained. "
                 "Local package cleanup was skipped."

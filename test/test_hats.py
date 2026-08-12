@@ -40,8 +40,9 @@ class FakePlatformClient:
         self.delete_paths.append(path)
         return {
             "handle": "acme/hats/trade-show-sales",
-            "deleted": True,
+            "retired": True,
             "repository_deleted": True,
+            "lifecycle_status": "retired",
             "local_checkout_handles": ["acme/hats/trade-show-sales"],
         }
 
@@ -587,7 +588,7 @@ class HatToolTests(unittest.TestCase):
             client.delete_paths.append(path)
             return {
                 "handle": "acme/hats/forecasting",
-                "deleted": True,
+                "retired": True,
                 "repository_deleted": True,
                 "lifecycle_status": "retired",
                 "local_checkout_handles": [
@@ -700,7 +701,7 @@ class HatToolTests(unittest.TestCase):
                 ),
             ],
         )
-        self.assertTrue(deleted["deleted"])
+        self.assertTrue(deleted["retired"])
         self.assertEqual(deleted["lifecycle_status"], "retired")
         self.assertTrue(deleted["local_store_removed"])
         self.assertTrue(deleted["local_checkout_cleanup_complete"])
@@ -718,7 +719,7 @@ class HatToolTests(unittest.TestCase):
             client.delete_paths.append(path)
             return {
                 "handle": "acme/hats/forecasting",
-                "deleted": True,
+                "retired": True,
                 "repository_deleted": True,
                 "local_checkout_handles": ["acme/hats/forecasting"],
             }
@@ -799,7 +800,7 @@ class HatToolTests(unittest.TestCase):
             client.delete_paths.append(path)
             return {
                 "handle": "acme/hats/forecasting",
-                "deleted": True,
+                "retired": True,
                 "repository_deleted": False,
                 "lifecycle_status": "retired",
                 "local_checkout_handles": [],
@@ -829,14 +830,13 @@ class HatToolTests(unittest.TestCase):
                 )
             )
 
-        self.assertIn(
-            "did not confirm private repository deletion",
-            result["agent_instruction"],
-        )
+        self.assertIn("did not contain a verifiable", result["agent_instruction"])
         self.assertNotIn(
             "private repository was permanently deleted",
             result["agent_instruction"],
         )
+        self.assertFalse(result["local_store_removed"])
+        self.assertFalse(result["local_checkout_cleanup_complete"])
 
     def test_delete_reports_retiring_receipt_as_retryable(self) -> None:
         client = FakePlatformClient()
@@ -845,7 +845,7 @@ class HatToolTests(unittest.TestCase):
             client.delete_paths.append(path)
             return {
                 "handle": "acme/hats/forecasting",
-                "deleted": False,
+                "retired": False,
                 "repository_deleted": False,
                 "lifecycle_status": "retiring",
                 "local_checkout_handles": ["acme/hats/forecasting"],
