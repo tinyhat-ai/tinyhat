@@ -232,8 +232,12 @@ def hats(  # noqa: PLR0911, PLR0912, PLR0915 - one public tool dispatches bounde
                     tool="tinyhat_hats",
                     error_name="confirmation_required",
                     message=(
-                        "Only call delete after the user explicitly asks to permanently "
-                        "remove this exact Hat and its private repository."
+                        "Only call delete after the user explicitly asks to retire this "
+                        "exact Hat. Retirement removes it from the owner's Hat list, "
+                        "its public page, and new installs; permanently removes its "
+                        "private repository and creator Computer-local package state; "
+                        "and preserves platform and installation history plus "
+                        "already-installed consumer agents."
                     ),
                     example_call={
                         "action": "delete",
@@ -242,9 +246,15 @@ def hats(  # noqa: PLR0911, PLR0912, PLR0915 - one public tool dispatches bounde
                     },
                 )
             query = urlencode({"identifier": identifier})
-            hat = client.get_json(f"{path}/detail?{query}")
-            handle = str(hat.get("handle") or identifier)
-            result = client.delete_json(f"{path}?{urlencode({'identifier': handle})}")
+            # The dedicated retirement endpoint was introduced with the
+            # tombstone contract. Calling it directly makes an older platform
+            # fail closed with 404 instead of reaching the legacy hard-delete
+            # endpoint, and lets retries resolve aliases from the durable
+            # retirement receipt without a detail preflight.
+            result = client.delete_json(f"{path}/retire?{query}")
+            lifecycle_status = str(result.get("lifecycle_status") or "").strip()
+            retirement_confirmed = lifecycle_status == "retired"
+            handle = str(result.get("handle") or identifier)
             checkout_handles = result.get("local_checkout_handles")
             if not isinstance(checkout_handles, list):
                 checkout_handles = [handle]
@@ -253,7 +263,18 @@ def hats(  # noqa: PLR0911, PLR0912, PLR0915 - one public tool dispatches bounde
             )
             checkout_cleanup: list[dict[str, Any]] = []
             local_checkouts = result.get("local_checkouts")
-            if not isinstance(local_checkouts, list) or not local_checkouts:
+            if not retirement_confirmed:
+                checkout_cleanup.append(
+                    {
+                        "action": "delete_local",
+                        "removed": False,
+                        "error": (
+                            "The platform did not return a completed Hat retirement "
+                            "receipt; local checkout deletion was skipped."
+                        ),
+                    }
+                )
+            elif not isinstance(local_checkouts, list) or not local_checkouts:
                 checkout_cleanup.append(
                     {
                         "action": "delete_local",
@@ -306,13 +327,16 @@ def hats(  # noqa: PLR0911, PLR0912, PLR0915 - one public tool dispatches bounde
             )
             secret_store_removed = False
             secret_cleanup_errors: list[str] = []
-            for checkout_handle in checkout_handles:
-                try:
-                    local_result = delete_hat_secret_store(checkout_handle)
-                except HatSecretStoreError as exc:
-                    secret_cleanup_errors.append(str(exc))
-                else:
-                    secret_store_removed = bool(local_result["removed"]) or secret_store_removed
+            if retirement_confirmed:
+                for checkout_handle in checkout_handles:
+                    try:
+                        local_result = delete_hat_secret_store(checkout_handle)
+                    except HatSecretStoreError as exc:
+                        secret_cleanup_errors.append(str(exc))
+                    else:
+                        secret_store_removed = (
+                            bool(local_result["removed"]) or secret_store_removed
+                        )
             result["local_store_removed"] = secret_store_removed
             if secret_cleanup_errors:
                 result["local_cleanup_error"] = "; ".join(secret_cleanup_errors)
@@ -480,11 +504,32 @@ def hats(  # noqa: PLR0911, PLR0912, PLR0915 - one public tool dispatches bounde
             "succeeded but Computer-local credentials need recovery."
         )
     elif action == "delete":
-        result["agent_instruction"] = (
-            "Report that the Hat and private repository were permanently deleted. "
-            "Report local_store_removed and local_checkout_cleanup_complete honestly. "
-            "No plaintext value was returned or exposed."
-        )
+        lifecycle_status = str(result.get("lifecycle_status") or "").strip()
+        if lifecycle_status == "retired":
+            result["agent_instruction"] = (
+                "Report that the Hat was retired: it no longer appears in the owner's "
+                "Hat list, on its public page, or for new installs, and its private "
+                "repository was permanently deleted. Explain that Tinyhat retains "
+                "platform and installation history and does not delete already-installed "
+                "consumer agents. Report local_store_removed and "
+                "local_checkout_cleanup_complete honestly. No plaintext value was "
+                "returned or exposed."
+            )
+        elif lifecycle_status == "retiring":
+            result["agent_instruction"] = (
+                "Report that Hat retirement is still pending and must be retried. Do "
+                "not claim that its provider repository or local package state was "
+                "removed, and do not claim that retirement completed. No plaintext "
+                "value was returned or exposed."
+            )
+        else:
+            result["agent_instruction"] = (
+                "The platform response did not contain a verifiable Hat retirement "
+                "lifecycle. Report only the literal deleted and repository_deleted "
+                "fields returned by the platform. Do not claim that retirement "
+                "completed or that platform and installation history was retained. "
+                "Local package cleanup was skipped."
+            )
     elif action in {"wear", "resume_installation"}:
         result["agent_instruction"] = (
             "Send onboarding_message as the immediate progress update when it is "

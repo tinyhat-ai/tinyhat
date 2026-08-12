@@ -176,13 +176,21 @@ class HermesAdapterTests(unittest.TestCase):
                 "resume_installation",
             ],
         )
-        self.assertIn("permanently deletes", hats_schema["description"])
+        self.assertIn("retires owner-scoped", hats_schema["description"])
+        self.assertIn(
+            "preserves platform and installation history",
+            hats_schema["description"],
+        )
         self.assertIn(
             "delete",
             hats_schema["properties"]["identifier"]["description"],
         )
         self.assertIn(
-            "permanently delete this exact Hat",
+            "retire this exact Hat",
+            hats_schema["properties"]["confirmed"]["description"],
+        )
+        self.assertIn(
+            "already-installed consumer agents",
             hats_schema["properties"]["confirmed"]["description"],
         )
         self.assertIn(
@@ -242,6 +250,31 @@ class HermesAdapterTests(unittest.TestCase):
         self.assertEqual(update_schema["properties"]["action"]["enum"], ["status", "update"])
         self.assertIn("confirmed", update_schema["properties"])
         self.assertIn("restart_gateway", update_schema["properties"])
+
+    def test_hat_retirement_wording_is_truthful_everywhere(self) -> None:
+        files = (
+            REPO_ROOT / "skills" / "hat-authoring" / "SKILL.md",
+            REPO_ROOT / "README.md",
+            REPO_ROOT / "docs" / "capabilities.md",
+            REPO_ROOT / "CHANGELOG.md",
+        )
+        required_fragments = (
+            "platform and installation history",
+            "already-installed consumer agents",
+        )
+        banned_claims = (
+            "permanently deletes one exact Hat",
+            "Hat and private repository were permanently deleted",
+        )
+
+        for path in files:
+            text = " ".join(path.read_text(encoding="utf-8").split())
+            for fragment in required_fragments:
+                with self.subTest(path=path.name, fragment=fragment):
+                    self.assertIn(fragment, text)
+            for claim in banned_claims:
+                with self.subTest(path=path.name, claim=claim):
+                    self.assertNotIn(claim, text)
 
     def test_plugin_version_returns_live_manifest_version(self) -> None:
         payload = json.loads(tools.plugin_version())

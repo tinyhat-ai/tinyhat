@@ -70,15 +70,22 @@ private unless the user explicitly asked to inspect or change that email.
 
 ## Delete a Hat
 
-Delete only after the user explicitly asks to permanently remove an exact Hat.
-Call `tinyhat_hats` with `action="delete"`, its canonical `identifier`, and
-`confirmed=true`. This permanently deletes the private repository and removes
-that Hat's Computer-local secret bundle and encryption key without returning a
-secret value. Existing agents are not deleted; they simply stop referencing the
-removed Hat. Report the returned repository and local-store outcomes honestly.
-Also report `local_checkout_cleanup_complete` honestly: successful deletion
-removes verified checkouts for both the current handle and former handles while
-leaving unrelated Hat checkouts untouched.
+Use the compatibility `delete` action to retire a Hat only after the user
+explicitly asks to retire that exact Hat. Explain the consequences before
+confirming: the Hat disappears from the owner's Hat list, its public page, and
+new installations; its private repository and creator Computer-local package
+state are permanently deleted; Tinyhat retains platform and installation
+history; and already-installed consumer agents and their local state are not
+deleted.
+
+Call `tinyhat_hats` with `action="delete"`, the canonical `identifier`, and
+`confirmed=true`. Retirement removes the creator Computer-local secret bundle
+and encryption key without returning a secret value. Report the returned
+repository and local-store outcomes honestly. Also report
+`local_checkout_cleanup_complete` honestly: successful retirement removes
+verified creator checkouts for both the current handle and former handles while
+leaving unrelated Hat checkouts untouched. Never claim the Hat database record,
+installation history, or already-installed consumer agents were deleted.
 
 ## Add or update repo content
 

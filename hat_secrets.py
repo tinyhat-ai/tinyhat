@@ -745,7 +745,7 @@ def _run_openssl_bytes(command: list[str], payload: bytes) -> bytes:
 
 
 def delete_hat_secret_store(handle: str) -> dict[str, Any]:
-    """Remove every local value and key belonging to one deleted Hat."""
+    """Remove every creator-local value and key belonging to one retired Hat."""
     clean_handle = normalize_hat_handle(handle)
     root = _store_root().resolve()
     directory = hat_secret_store_path(clean_handle).parent
