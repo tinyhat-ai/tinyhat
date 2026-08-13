@@ -27,6 +27,7 @@ a fresh Hermes-only start.
   detached owner-bound connection and disconnect workers.
 - `skills/tinyhat-tell-joke/SKILL.md`: deterministic joke proof.
 - `skills/tinyhat-plugin-version/SKILL.md`: live plugin version proof.
+- `skills/tinyhat-onboarding-greeting/SKILL.md`: one-shot first owner greeting after Computer setup.
 - `skills/tinyhat-skill-catalog/SKILL.md`: plugin-qualified skill discovery.
 - `skills/tinyhat-skill-authoring/SKILL.md`: customer-facing best practices for
   creating and revising portable Agent Skills, including trigger boundaries and

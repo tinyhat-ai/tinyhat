@@ -26,6 +26,13 @@
       "purpose": "Authorizes, installs, and resumes one private Hat on this agent."
     },
     {
+      "name": "tinyhat-onboarding-greeting",
+      "qualified_name": "tinyhat:tinyhat-onboarding-greeting",
+      "aliases": ["tinyhat-onboarding-greeting"],
+      "path": "skills/tinyhat-onboarding-greeting/SKILL.md",
+      "purpose": "Writes the agent's short first owner greeting after Tinyhat finishes Computer setup."
+    },
+    {
       "name": "tinyhat-plugin-version",
       "qualified_name": "tinyhat:tinyhat-plugin-version",
       "aliases": ["tinyhat-plugin-version"],
