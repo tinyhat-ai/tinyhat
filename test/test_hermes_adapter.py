@@ -1572,6 +1572,29 @@ class HermesAdapterTests(unittest.TestCase):
         assert injected is not None
         self.assertIn("Tinyhat-managed Computer", injected["context"])
 
+    def test_onboarding_greeting_turn_preserves_owner_first_turn_reminder(self) -> None:
+        marker = Path(self._hermes_home.name) / "tinyhat-funding-reminder-shown"
+        with mock.patch.dict(
+            os.environ,
+            {tinyhat_context.ONBOARDING_GREETING_TURN_ENV: "1"},
+        ):
+            injected = tinyhat_context.inject_tinyhat_context(
+                user_message="Tinyhat finished setup; introduce yourself.",
+                is_first_turn=True,
+            )
+
+        self.assertIsNone(injected)
+        self.assertFalse(marker.exists())
+        owner_turn = tinyhat_context.inject_tinyhat_context(
+            user_message="hello",
+            is_first_turn=True,
+        )
+        assert owner_turn is not None
+        self.assertIn(
+            tinyhat_context.FUNDING_REMINDER_DIRECTIVE,
+            owner_turn["context"],
+        )
+
     def test_tinyhat_secret_command_without_args_returns_usage(self) -> None:
         ctx = FakeHermesContext()
         tinyhat.register(ctx)
