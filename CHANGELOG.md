@@ -6,6 +6,10 @@ All notable changes to the Tinyhat plugin are documented here.
 
 ### Changed
 
+- Add `tinyhat-onboarding-greeting`, a setup-only skill that helps a newly
+  configured agent introduce itself briefly in its own voice after Tinyhat
+  finishes Computer setup.
+
 - Bump the Hermes plugin package to `0.24.1` for fail-closed Hat retirement.
   Retirement hides the Hat from owner and public discovery, preserves
   installation history and already-installed consumers, and removes creator
