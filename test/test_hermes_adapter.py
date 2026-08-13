@@ -114,6 +114,7 @@ class HermesAdapterTests(unittest.TestCase):
         self.assertIn("tinyhat-tell-joke", ctx.skills)
         self.assertIn("tinyhat-skill-catalog", ctx.skills)
         self.assertIn("tinyhat-skill-authoring", ctx.skills)
+        self.assertIn("tinyhat-onboarding-greeting", ctx.skills)
         self.assertIn("tinyhat-private-secret", ctx.skills)
         self.assertIn("tinyhat-slack", ctx.skills)
         self.assertIn("tinyhat-credentials", ctx.skills)
@@ -126,6 +127,7 @@ class HermesAdapterTests(unittest.TestCase):
         self.assertTrue(ctx.skills["tinyhat-tell-joke"].is_file())
         self.assertTrue(ctx.skills["tinyhat-skill-catalog"].is_file())
         self.assertTrue(ctx.skills["tinyhat-skill-authoring"].is_file())
+        self.assertTrue(ctx.skills["tinyhat-onboarding-greeting"].is_file())
         self.assertTrue(ctx.skills["tinyhat-private-secret"].is_file())
         self.assertTrue(ctx.skills["tinyhat-slack"].is_file())
         self.assertTrue(ctx.skills["tinyhat-credentials"].is_file())
@@ -315,7 +317,7 @@ class HermesAdapterTests(unittest.TestCase):
 
         self.assertEqual(payload["schema"], "tinyhat_plugin_version_v1")
         self.assertEqual(payload["name"], "tinyhat")
-        self.assertEqual(payload["version"], "0.24.1")
+        self.assertEqual(payload["version"], "0.24.2")
 
     def test_platform_status_uses_attested_computer_endpoint(self) -> None:
         original_build = tools.build_platform_client
@@ -328,7 +330,7 @@ class HermesAdapterTests(unittest.TestCase):
                     "computer_id": 5359,
                     "state": "active",
                     "assigned": True,
-                    "package_inventory": {"plugin": {"version": "0.24.1"}},
+                    "package_inventory": {"plugin": {"version": "0.24.2"}},
                 }
 
         try:
@@ -341,7 +343,7 @@ class HermesAdapterTests(unittest.TestCase):
         self.assertEqual(payload["computer_id"], 5359)
         self.assertEqual(payload["state"], "active")
         self.assertTrue(payload["assigned"])
-        self.assertEqual(payload["package_inventory"]["plugin"]["version"], "0.24.1")
+        self.assertEqual(payload["package_inventory"]["plugin"]["version"], "0.24.2")
 
     def test_platform_status_returns_structured_platform_error(self) -> None:
         original_build = tools.build_platform_client
@@ -364,7 +366,7 @@ class HermesAdapterTests(unittest.TestCase):
 
         self.assertEqual(payload["schema"], "tinyhat_skill_catalog_v1")
         self.assertEqual(payload["plugin"]["name"], "tinyhat")
-        self.assertEqual(payload["plugin"]["version"], "0.24.1")
+        self.assertEqual(payload["plugin"]["version"], "0.24.2")
         by_name = {skill["name"]: skill for skill in payload["skills"]}
         self.assertEqual(
             by_name["tinyhat-codex-auth"]["qualified_name"],
@@ -1569,6 +1571,29 @@ class HermesAdapterTests(unittest.TestCase):
         self.assertIsNotNone(injected)
         assert injected is not None
         self.assertIn("Tinyhat-managed Computer", injected["context"])
+
+    def test_onboarding_greeting_turn_preserves_owner_first_turn_reminder(self) -> None:
+        marker = Path(self._hermes_home.name) / "tinyhat-funding-reminder-shown"
+        with mock.patch.dict(
+            os.environ,
+            {tinyhat_context.ONBOARDING_GREETING_TURN_ENV: "1"},
+        ):
+            injected = tinyhat_context.inject_tinyhat_context(
+                user_message="Tinyhat finished setup; introduce yourself.",
+                is_first_turn=True,
+            )
+
+        self.assertIsNone(injected)
+        self.assertFalse(marker.exists())
+        owner_turn = tinyhat_context.inject_tinyhat_context(
+            user_message="hello",
+            is_first_turn=True,
+        )
+        assert owner_turn is not None
+        self.assertIn(
+            tinyhat_context.FUNDING_REMINDER_DIRECTIVE,
+            owner_turn["context"],
+        )
 
     def test_tinyhat_secret_command_without_args_returns_usage(self) -> None:
         ctx = FakeHermesContext()

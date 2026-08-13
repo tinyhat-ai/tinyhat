@@ -62,6 +62,7 @@ normal local Git checkout synchronized with exact-repository GitHub leases.
 | `skills/tinyhat-google-workspace-app-manager/SKILL.md` | Approval-gated managed `gws` installation guidance. |
 | `skills/tinyhat-codex-auth/SKILL.md` | OpenAI Codex / ChatGPT subscription auth guidance. |
 | `skills/tinyhat-plugin-update/SKILL.md` | Channel update guidance for stale installed plugin checkouts. |
+| `skills/tinyhat-onboarding-greeting/SKILL.md` | One-shot guidance for the agent's first owner greeting after Computer setup finishes. |
 | `skills/tinyhat-platform/SKILL.md` | Platform context for Tinyhat-managed Hermes agents. |
 | `skills/tinyhat-privacy/SKILL.md` | Privacy and trust model guidance: who can see user data, and when. |
 | `skills/hat-authoring/SKILL.md` | Create, list, and inspect one-customer shareable hat shells. |
@@ -119,6 +120,10 @@ whole installation path before adding real platform capabilities.
 Tinyhat plugin version is running, the agent can call
 `tinyhat_plugin_version`. The answer comes from the plugin code loaded by
 Hermes, not from admin metadata or a GitHub branch name.
+
+`tinyhat-onboarding-greeting` is used only after Tinyhat reports that Computer
+setup finished. It helps the newly configured agent introduce itself briefly
+in its own voice, explain how it can help, and ask what to work on first.
 
 `tinyhat_get_platform_status` reads the existing Computer-authenticated
 platform status endpoint. It returns only safe Computer state, assignment,

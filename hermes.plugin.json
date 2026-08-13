@@ -1,6 +1,6 @@
 {
   "schema": "tinyhat.framework-adapter.v1",
-  "version": "0.24.1",
+  "version": "0.24.2",
   "framework": {
     "name": "hermes",
     "minimum": "0.0.0"
@@ -24,6 +24,13 @@
       "aliases": ["tinyhat-hat-wearing"],
       "path": "skills/tinyhat-hat-wearing/SKILL.md",
       "purpose": "Authorizes, installs, and resumes one private Hat on this agent."
+    },
+    {
+      "name": "tinyhat-onboarding-greeting",
+      "qualified_name": "tinyhat:tinyhat-onboarding-greeting",
+      "aliases": ["tinyhat-onboarding-greeting"],
+      "path": "skills/tinyhat-onboarding-greeting/SKILL.md",
+      "purpose": "Writes the agent's short first owner greeting after Tinyhat finishes Computer setup."
     },
     {
       "name": "tinyhat-plugin-version",

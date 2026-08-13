@@ -9,6 +9,8 @@ from typing import Any
 
 from .google_workspace import remove_credentials_if_assignment_changed_for_context
 
+ONBOARDING_GREETING_TURN_ENV = "TINYHAT_ONBOARDING_GREETING_TURN"
+
 TINYHAT_CONTEXT = """Tinyhat context: this Hermes agent runs on a Tinyhat-managed Computer.
 - First turn after assignment: call tinyhat_hats action=resume_installation. If started, send onboarding_message; never wait silently.
 - Hats: authoring -> tinyhat:hat-authoring; skill writing -> tinyhat:tinyhat-skill-authoring; owner/hats/name or installation -> tinyhat:tinyhat-hat-wearing. Credential delivery is an automatic signed Computer-to-Computer runtime flow; never ask the creator to approve or complete it. Repo files have no secrets.
@@ -829,6 +831,11 @@ def inject_tinyhat_context(  # noqa: PLR0913
 ) -> dict[str, str] | None:
     """Hermes pre_llm_call hook that adds compact Tinyhat context when useful."""
     _ = (session_id, conversation_history, model, platform)
+    # The runtime preloads the dedicated greeting skill for this internal
+    # one-shot turn. Do not inject general first-turn instructions or claim the
+    # owner's durable funding reminder before their first real conversation.
+    if os.environ.get(ONBOARDING_GREETING_TURN_ENV) == "1":
+        return None
     if not should_inject_tinyhat_context(user_message, is_first_turn=is_first_turn):
         return None
     # This helper returns before any network call when no Google credential
