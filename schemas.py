@@ -19,6 +19,19 @@ TINYHAT_GET_PLATFORM_STATUS_SCHEMA = {
     "additionalProperties": False,
 }
 
+TINYHAT_CREDIT_SCHEMA = {
+    "type": "object",
+    "description": (
+        "Reads this authenticated Computer owner's current Tinyhat credit "
+        "balance and up to ten newest ledger entries. This operation is "
+        "read-only and cannot add, spend, reserve, transfer, refund, or "
+        "otherwise change credit. It accepts no user or account identifier."
+    ),
+    "properties": {},
+    "required": [],
+    "additionalProperties": False,
+}
+
 TINYHAT_HATS_SCHEMA = {
     "type": "object",
     "description": (

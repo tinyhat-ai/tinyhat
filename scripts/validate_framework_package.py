@@ -16,6 +16,7 @@ CODEX_SCREENSHOT_MIN_BYTES = 10_000
 REQUIRED_TOOLS = [
     "tinyhat_plugin_version",
     "tinyhat_get_platform_status",
+    "tinyhat_credit",
     "tinyhat_hats",
     "tinyhat_tell_joke",
     "tinyhat_skill_catalog",
@@ -50,6 +51,7 @@ REQUIRED_SKILLS = [
     "tinyhat-codex-auth",
     "tinyhat-plugin-update",
     "tinyhat-platform",
+    "tinyhat-credit",
     "tinyhat-privacy",
 ]
 FORBIDDEN_PATHS = (
@@ -822,6 +824,7 @@ def validate_hermes_adapter(root: Path) -> None:
         "tinyhat-codex-auth": "skills/tinyhat-codex-auth/SKILL.md",
         "tinyhat-plugin-update": "skills/tinyhat-plugin-update/SKILL.md",
         "tinyhat-platform": "skills/tinyhat-platform/SKILL.md",
+        "tinyhat-credit": "skills/tinyhat-credit/SKILL.md",
         "tinyhat-privacy": "skills/tinyhat-privacy/SKILL.md",
     }
     for skill in skills:
@@ -878,6 +881,7 @@ def validate_fresh_surface(root: Path) -> None:
         root / "__init__.py",
         root / "platform.py",
         root / "context.py",
+        root / "credit.py",
         root / GOOGLE_SCOPE_MANIFEST_PATH,
         root / GOOGLE_SCOPE_MANIFEST_LOADER_PATH,
         root / "google_workspace.py",
