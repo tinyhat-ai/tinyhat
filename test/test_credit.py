@@ -10,11 +10,41 @@ from pathlib import Path
 REPO_ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(REPO_ROOT.parent))
 
-from tinyhat import credit  # noqa: E402
+from tinyhat import credit, platform  # noqa: E402
 from tinyhat.platform import PlatformError  # noqa: E402
 
 
 class CreditToolTests(unittest.TestCase):
+    def test_openclaw_runtime_uses_its_platform_contract(self) -> None:
+        client, platform_auth = platform.build_platform_client(
+            {
+                "TINYHAT_PLATFORM_BASE_URL": "https://platform.test",
+                "TINYHAT_BACKEND_AUDIENCE": "https://audience.test",
+                "TINYHAT_DEV_RUNTIME": "1",
+            }
+        )
+
+        self.assertEqual(client.base_url, "https://platform.test")
+        self.assertEqual(client.token, "dev-runtime")
+        self.assertIsNone(client.token_provider)
+        self.assertEqual(platform_auth, "gcloud")
+
+    def test_openclaw_production_uses_backend_audience(self) -> None:
+        client, platform_auth = platform.build_platform_client(
+            {
+                "TINYHAT_PLATFORM_BASE_URL": "https://platform.test",
+                "TINYHAT_BACKEND_AUDIENCE": "https://audience.test",
+            }
+        )
+
+        self.assertEqual(client.base_url, "https://platform.test")
+        self.assertIsInstance(
+            client.token_provider,
+            platform.CachedGoogleIdentityToken,
+        )
+        self.assertEqual(client.token_provider.audience, "https://audience.test")
+        self.assertEqual(platform_auth, "gcloud")
+
     def test_reads_owner_summary_from_attested_computer_route(self) -> None:
         original_build = credit.build_platform_client
         paths: list[str] = []

@@ -173,6 +173,12 @@ safe `tinyhat_credit_summary_v1` object containing integer cents, currency, and
 up to ten newest ledger entries. The plugin projects only those documented
 fields before returning them to the agent.
 
+Hermes exposes this as a native plugin tool. An OpenClaw Computer uses the same
+packaged Python handler through the exact read-only command documented in the
+skill; the handler accepts OpenClaw's platform URL, audience, and local-dev
+environment names. The skill forbids inspecting runtime configuration,
+identity, credential, or secret files to assemble a request.
+
 The operation accepts no user, account, Stripe, or ledger identifier and does
 not expose Checkout URLs or payment-method data. It cannot add, reserve, spend,
 transfer, refund, withdraw, or correct credit. Users add credit themselves from

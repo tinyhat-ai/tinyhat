@@ -157,9 +157,12 @@ def build_platform_client(
     timeout_seconds: int = 20,
 ) -> tuple[PlatformClient, str]:
     values = runtime_env(env)
-    base_url = values.get("TINYHAT_PLATFORM_URL", "").strip()
+    base_url = (
+        values.get("TINYHAT_PLATFORM_URL", "").strip()
+        or values.get("TINYHAT_PLATFORM_BASE_URL", "").strip()
+    )
     if not base_url:
-        raise PlatformError("TINYHAT_PLATFORM_URL is not configured")
+        raise PlatformError("Tinyhat platform URL is not configured")
     local_token = values.get("TINYHAT_LOCAL_DEV_TOKEN", "").strip()
     if local_token:
         return (
@@ -170,7 +173,20 @@ def build_platform_client(
             ),
             "local_dev",
         )
-    audience = values.get("TINYHAT_COMPUTER_TOKEN_AUDIENCE", "").strip() or base_url
+    if values.get("TINYHAT_DEV_RUNTIME", "").strip() == "1":
+        return (
+            PlatformClient(
+                base_url=base_url,
+                token="dev-runtime",
+                timeout_seconds=timeout_seconds,
+            ),
+            "gcloud",
+        )
+    audience = (
+        values.get("TINYHAT_COMPUTER_TOKEN_AUDIENCE", "").strip()
+        or values.get("TINYHAT_BACKEND_AUDIENCE", "").strip()
+        or base_url
+    )
     return (
         PlatformClient(
             base_url=base_url,

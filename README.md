@@ -140,6 +140,11 @@ accepts no identity input and cannot add, reserve, spend, transfer, refund, or
 otherwise change credit. Human top-ups remain in the Configure Mini App opened
 from the user's assigned agent bot.
 
+Hermes calls the native plugin tool. OpenClaw uses the same packaged Python
+handler through one exact read-only fallback command in the skill. That command
+uses the runtime's existing platform contract; the agent must not inspect
+runtime config, identity, credential, or secret files to build the request.
+
 `hat-authoring` creates and evolves shareable Hats. For creation, the
 agent collects a name and one customer's work email, plus optional Telegram
 bot username and display-name defaults, then `tinyhat_hats`

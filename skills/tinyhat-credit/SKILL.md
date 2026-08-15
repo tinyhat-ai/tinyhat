@@ -8,6 +8,17 @@ description: Use when the user asks for their Tinyhat credit balance, remaining 
 Read the authenticated owner's Tinyhat credit summary with
 `tinyhat_credit`.
 
+On OpenClaw, where the native Python adapter tool is not registered, run this
+packaged read-only wrapper instead:
+
+```bash
+PYTHONPATH="$TINYHAT_RUNTIME_HOME/extensions" python3 -c 'from tinyhat.tools import credit; print(credit({}))'
+```
+
+Use only that exact fallback. It derives the platform endpoint and Computer
+identity from the runtime. Do not inspect environment values, config files,
+identity files, credential stores, or secret files to assemble the request.
+
 ## What the tool returns
 
 - `balance_cents`: current available Tinyhat credit in integer cents.
