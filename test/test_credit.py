@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import sys
+import tempfile
 import unittest
 from pathlib import Path
 
@@ -44,6 +45,39 @@ class CreditToolTests(unittest.TestCase):
         )
         self.assertEqual(client.token_provider.audience, "https://audience.test")
         self.assertEqual(platform_auth, "gcloud")
+
+    def test_openclaw_production_reads_runtime_environment_file(self) -> None:
+        original_env_files = platform.DEFAULT_ENV_FILES
+        try:
+            with tempfile.TemporaryDirectory() as tmp:
+                runtime_env_file = Path(tmp) / "runtime.env"
+                runtime_env_file.write_text(
+                    "TINYHAT_PLATFORM_BASE_URL=https://platform.test\n"
+                    "TINYHAT_BACKEND_AUDIENCE=https://audience.test\n",
+                    encoding="utf-8",
+                )
+                platform.DEFAULT_ENV_FILES = (runtime_env_file,)
+                client, platform_auth = platform.build_platform_client({})
+        finally:
+            platform.DEFAULT_ENV_FILES = original_env_files
+
+        self.assertEqual(client.base_url, "https://platform.test")
+        self.assertIsInstance(
+            client.token_provider,
+            platform.CachedGoogleIdentityToken,
+        )
+        self.assertEqual(client.token_provider.audience, "https://audience.test")
+        self.assertEqual(platform_auth, "gcloud")
+
+    def test_openclaw_skill_fallback_supports_production_state_dir(self) -> None:
+        skill = (REPO_ROOT / "skills" / "tinyhat-credit" / "SKILL.md").read_text(
+            encoding="utf-8"
+        )
+
+        self.assertIn(
+            '${TINYHAT_RUNTIME_HOME:-$OPENCLAW_STATE_DIR}/extensions',
+            skill,
+        )
 
     def test_reads_owner_summary_from_attested_computer_route(self) -> None:
         original_build = credit.build_platform_client

@@ -12,7 +12,7 @@ On OpenClaw, where the native Python adapter tool is not registered, run this
 packaged read-only wrapper instead:
 
 ```bash
-PYTHONPATH="$TINYHAT_RUNTIME_HOME/extensions" python3 -c 'from tinyhat.tools import credit; print(credit({}))'
+PYTHONPATH="${TINYHAT_RUNTIME_HOME:-$OPENCLAW_STATE_DIR}/extensions" python3 -c 'from tinyhat.tools import credit; print(credit({}))'
 ```
 
 Use only that exact fallback. It derives the platform endpoint and Computer

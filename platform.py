@@ -19,6 +19,7 @@ from urllib import error, parse, request
 JWT_MIN_PARTS = 2
 
 DEFAULT_ENV_FILES = (
+    Path("/etc/tinyhat/runtime.env"),
     Path("/opt/tinyhat-hermes-runtime/env/runtime.env"),
     Path("/etc/tinyhat/hermes-runtime.env"),
 )
