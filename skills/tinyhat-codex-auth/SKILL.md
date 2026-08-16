@@ -46,9 +46,8 @@ Rules for that step:
   `tinyhat_codex_auth` with `{"action": "status"}` before claiming it
   is not connected.
 - Never estimate remaining included platform funding or exact spend. The
-  separate `tinyhat:tinyhat-credit` skill can read the user's added-credit
-  ledger, but that first ledger slice records additions only and does not yet
-  record consumption.
+  separate `tinyhat:tinyhat-credit` skill can show the user's credit balance
+  and recent transactions, including credit added to the AI model budget.
 - When the user says yes, start the flow below; do not re-explain the
   funding model first.
 

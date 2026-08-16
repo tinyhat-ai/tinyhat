@@ -6,6 +6,16 @@ All notable changes to the Tinyhat plugin are documented here.
 
 ### Changed
 
+- Start `0.26.0` with `tinyhat_openrouter_credit_allocate`, the first explicit
+  Tinyhat credit-consumption action. An authenticated Computer can allocate an
+  exact user-requested amount to its assigned Agent's AI model budget;
+  the user's request is the authorization and the Agent does not ask for a
+  second confirmation. Runtime-derived identity and idempotency stay outside
+  model input, pending provider outcomes are never retried automatically, and
+  tool output contains no provider key, key hash, account identifier, or
+  management credential. Deploy the matching platform allocation endpoint
+  before plugin promotion.
+
 - Start `0.25.0` with the read-only `tinyhat_credit` tool and
   `tinyhat:tinyhat-credit` skill. The authenticated Computer asks the matching
   versioned platform API for its assigned owner's current Tinyhat credit and

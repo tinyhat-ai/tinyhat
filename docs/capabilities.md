@@ -6,7 +6,8 @@ The current capability list is intentionally small.
 | --- | --- | --- |
 | `tinyhat_plugin_version` | Available now | Proves which Tinyhat plugin version Hermes has loaded for the live agent. |
 | `tinyhat_get_platform_status` | Available now | Reads this authenticated Computer's safe platform state, assignment, configuration revisions, and package inventory. |
-| `tinyhat_credit` | Platform API required | Reads the authenticated owner's current credit balance and up to ten newest ledger entries. It cannot change credit. |
+| `tinyhat_credit` | Platform API required | Reads the authenticated owner's current credit balance and up to ten recent transactions. It cannot change credit. |
+| `tinyhat_openrouter_credit_allocate` | Platform API required | Adds an exact amount of the owner's credit to this Agent's model budget. |
 | `tinyhat_hats` | Available now | Creates, lists, inspects, renames, and retires one-customer Hats; checks out and syncs private repositories through Computer-scoped GitHub leases; and manages value-blind Hat credentials. Retirement hides a Hat from owner/public/new-install surfaces and deletes creator package state while preserving platform and installation history and already-installed consumer agents. Authorized installation transfers are dispatched automatically to the registered creator Computer, signed there, and decrypted only by the consumer Computer. |
 | `tinyhat_tell_joke` | Available now | Proves Hermes loaded the Tinyhat plugin and can call a plugin tool. |
 | `tinyhat_skill_catalog` | Available now | Lists Tinyhat plugin skills with `tinyhat:<skill>` qualified names and unqualified aliases. |
@@ -167,23 +168,16 @@ skill lookup, and runtime channel commands for stale installed plugins. The long
 
 ## User Credit
 
-`tinyhat_credit` reads one fixed platform route using the Computer identity
-provided by the runtime. The platform resolves the assigned owner and returns a
-safe `tinyhat_credit_summary_v1` object containing integer cents, currency, and
-up to ten newest ledger entries. The plugin projects only those documented
-fields before returning them to the agent.
+`tinyhat_credit` shows the owner's balance and up to ten recent transactions.
+`tinyhat_openrouter_credit_allocate` adds the exact amount the user requested to
+this Agent's model budget. Both are native Hermes tools. The runtime supplies
+the Computer identity, so the agent never supplies a user or Agent id.
 
-Hermes exposes this as a native plugin tool. An OpenClaw Computer uses the same
-packaged Python handler through the exact read-only command documented in the
-skill; the handler accepts OpenClaw's platform URL, audience, and local-dev
-environment names. The skill forbids inspecting runtime configuration,
-identity, credential, or secret files to assemble a request.
-
-The operation accepts no user, account, Stripe, or ledger identifier and does
-not expose Checkout URLs or payment-method data. It cannot add, reserve, spend,
-transfer, refund, withdraw, or correct credit. Users add credit themselves from
-the Credit control in the authenticated Configure Mini App opened from their
-assigned agent bot.
+The model-budget action accepts only an amount in cents. It does not expose API
+keys, payment details, or internal ids. The Agent should use plain phrases such
+as **Current balance**, **Recent transactions**, **Credit added**, **Added to
+model budget**, and **Credit returned**. It should never show internal system
+names. Users add credit themselves from the Credit control in the Mini App.
 
 ## Privacy And Trust
 

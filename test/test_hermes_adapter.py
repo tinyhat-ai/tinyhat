@@ -97,6 +97,8 @@ class HermesAdapterTests(unittest.TestCase):
 
         self.assertIn("tinyhat_plugin_version", ctx.tools)
         self.assertIn("tinyhat_get_platform_status", ctx.tools)
+        self.assertIn("tinyhat_credit", ctx.tools)
+        self.assertIn("tinyhat_openrouter_credit_allocate", ctx.tools)
         self.assertIn("tinyhat_hats", ctx.tools)
         self.assertIn("tinyhat_tell_joke", ctx.tools)
         self.assertIn("tinyhat_skill_catalog", ctx.tools)
@@ -156,6 +158,17 @@ class HermesAdapterTests(unittest.TestCase):
         self.assertEqual(schemas.TINYHAT_GET_PLATFORM_STATUS_SCHEMA["properties"], {})
         self.assertEqual(schemas.TINYHAT_GET_PLATFORM_STATUS_SCHEMA["required"], [])
         self.assertFalse(schemas.TINYHAT_GET_PLATFORM_STATUS_SCHEMA["additionalProperties"])
+        allocation_schema = schemas.TINYHAT_OPENROUTER_CREDIT_ALLOCATE_SCHEMA
+        self.assertEqual(allocation_schema["required"], ["amount_cents"])
+        self.assertEqual(
+            allocation_schema["properties"]["amount_cents"]["minimum"],
+            100,
+        )
+        self.assertNotIn("user_id", allocation_schema["properties"])
+        self.assertNotIn("agent_id", allocation_schema["properties"])
+        self.assertNotIn("key_hash", allocation_schema["properties"])
+        self.assertNotIn("idempotency_key", allocation_schema["properties"])
+        self.assertFalse(allocation_schema["additionalProperties"])
         hats_schema = schemas.TINYHAT_HATS_SCHEMA
         self.assertEqual(hats_schema["required"], ["action"])
         self.assertEqual(
@@ -317,7 +330,7 @@ class HermesAdapterTests(unittest.TestCase):
 
         self.assertEqual(payload["schema"], "tinyhat_plugin_version_v1")
         self.assertEqual(payload["name"], "tinyhat")
-        self.assertEqual(payload["version"], "0.25.0")
+        self.assertEqual(payload["version"], "0.26.0")
 
     def test_platform_status_uses_attested_computer_endpoint(self) -> None:
         original_build = tools.build_platform_client
@@ -330,7 +343,7 @@ class HermesAdapterTests(unittest.TestCase):
                     "computer_id": 5359,
                     "state": "active",
                     "assigned": True,
-                    "package_inventory": {"plugin": {"version": "0.25.0"}},
+                    "package_inventory": {"plugin": {"version": "0.26.0"}},
                 }
 
         try:
@@ -343,7 +356,7 @@ class HermesAdapterTests(unittest.TestCase):
         self.assertEqual(payload["computer_id"], 5359)
         self.assertEqual(payload["state"], "active")
         self.assertTrue(payload["assigned"])
-        self.assertEqual(payload["package_inventory"]["plugin"]["version"], "0.25.0")
+        self.assertEqual(payload["package_inventory"]["plugin"]["version"], "0.26.0")
 
     def test_platform_status_returns_structured_platform_error(self) -> None:
         original_build = tools.build_platform_client
@@ -366,7 +379,7 @@ class HermesAdapterTests(unittest.TestCase):
 
         self.assertEqual(payload["schema"], "tinyhat_skill_catalog_v1")
         self.assertEqual(payload["plugin"]["name"], "tinyhat")
-        self.assertEqual(payload["plugin"]["version"], "0.25.0")
+        self.assertEqual(payload["plugin"]["version"], "0.26.0")
         by_name = {skill["name"]: skill for skill in payload["skills"]}
         self.assertEqual(
             by_name["tinyhat-codex-auth"]["qualified_name"],
@@ -739,6 +752,8 @@ class HermesAdapterTests(unittest.TestCase):
             "Could you explain your rates?",
             "Would you show me your fees?",
             "Check my balance?",
+            "Add $5 of my credit to this agent's OpenRouter model budget",
+            "Charge this agent's OpenRouter key with ten dollars",
         )
         for user_message in examples:
             with self.subTest(user_message=user_message):
@@ -751,7 +766,7 @@ class HermesAdapterTests(unittest.TestCase):
                 self.assertIn("starter credit", injected["context"])
                 self.assertIn("about $10", injected["context"])
                 self.assertIn("/codex_auth", injected["context"])
-                self.assertIn("tinyhat:tinyhat-codex-auth", injected["context"])
+                self.assertIn("tinyhat:tinyhat-credit", injected["context"])
 
     def test_context_states_funding_reminder_rules(self) -> None:
         directive = tinyhat_context.FUNDING_REMINDER_DIRECTIVE
@@ -799,6 +814,14 @@ class HermesAdapterTests(unittest.TestCase):
             tinyhat_context.TINYHAT_CONTEXT,
         )
         self.assertIn("load tinyhat:tinyhat-credit", tinyhat_context.TINYHAT_CONTEXT)
+        self.assertIn(
+            "call tinyhat_openrouter_credit_allocate immediately",
+            tinyhat_context.TINYHAT_CONTEXT,
+        )
+        self.assertIn(
+            "do not ask for a second confirmation",
+            tinyhat_context.TINYHAT_CONTEXT,
+        )
         self.assertIn(
             "check tinyhat_codex_auth with action=status",
             tinyhat_context.TINYHAT_CONTEXT,
@@ -1024,7 +1047,7 @@ class HermesAdapterTests(unittest.TestCase):
         assert first is not None
         self.assertLessEqual(len(first["context"]), tinyhat_context._HOOK_SPILL_SAFE_CHARS)
         self.assertLess(len(first["context"]), 10_000)
-        self.assertIn("- Funding model:", first["context"])
+        self.assertIn("- User credit:", first["context"])
         self.assertIn(
             "Never infer remaining included platform funding",
             first["context"],
