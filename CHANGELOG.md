@@ -8,7 +8,7 @@ All notable changes to the Tinyhat plugin are documented here.
 
 - Start `0.26.0` with `tinyhat_openrouter_credit_allocate`, the first explicit
   Tinyhat credit-consumption action. An authenticated Computer can allocate an
-  exact user-requested amount to its assigned Agent's OpenRouter model budget;
+  exact user-requested amount to its assigned Agent's AI model budget;
   the user's request is the authorization and the Agent does not ask for a
   second confirmation. Runtime-derived identity and idempotency stay outside
   model input, pending provider outcomes are never retried automatically, and

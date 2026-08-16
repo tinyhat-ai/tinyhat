@@ -97,7 +97,7 @@ def openrouter_credit_allocate(
     args: dict[str, Any] | None = None,
     **kwargs: Any,
 ) -> str:
-    """Allocate owner credit to the assigned Agent's OpenRouter model budget."""
+    """Add owner credit to the assigned Agent's AI model budget."""
     return handle_allocate_openrouter_credit(args, **kwargs)
 
 

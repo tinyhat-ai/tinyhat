@@ -154,7 +154,7 @@ def _openrouter_allocation_error(exc: PlatformError) -> str:
         message = "The user does not have enough Tinyhat credit for this amount."
     elif exc.status_code == 404:
         error_name = "openrouter_key_unavailable"
-        message = "This Agent does not have an OpenRouter model key available to fund."
+        message = "This Agent does not have an AI model budget available to add credit to."
     elif exc.status_code == 409:
         error_name = "allocation_conflict"
         message = (
