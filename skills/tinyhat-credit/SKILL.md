@@ -1,12 +1,12 @@
 ---
 name: tinyhat-credit
-description: Use when the user asks for their Tinyhat credit balance or recent transactions, or explicitly asks to allocate an exact amount of that credit to this Agent's OpenRouter model budget. Do not use it for automatic, recurring, guessed, or cross-Agent spending.
+description: Use when the user asks for their Tinyhat credit balance or recent transactions, or explicitly asks to add an exact amount of that credit to this Agent's AI model budget. Do not use it for automatic, recurring, guessed, or cross-Agent spending.
 ---
 
 # Tinyhat Credit
 
 Read the authenticated owner's Tinyhat credit summary with `tinyhat_credit`.
-Allocate credit to this Agent's OpenRouter model budget with
+Add credit to this Agent's AI model budget with
 `tinyhat_openrouter_credit_allocate`.
 
 ## What the tool returns
@@ -30,7 +30,7 @@ terms such as ledger, entry, provider key, or idempotency.
   authorization. Do not ask “Are you sure?” or require another approval.
 - If the amount is missing, ask only for the amount. Never guess, round, or
   choose an amount for the user. The minimum is US$1.00.
-- On `allocated`, state the amount, the new OpenRouter model-budget limit, and
+- On `allocated`, state the amount, the new AI model budget, and
   the remaining Tinyhat balance.
 - On `pending`, explain that Tinyhat is reconciling the provider outcome. Do
   not retry automatically and do not claim the credit was restored.
