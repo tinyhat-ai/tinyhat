@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import hashlib
 import json
-import uuid
+import os
 from typing import Any
 
 from .platform import PlatformError, build_platform_client, computer_api_path
@@ -97,7 +97,7 @@ def _allocation_idempotency_key(task_id: Any, amount_cents: int) -> str:
     runtime_request = (
         task_id.strip()
         if isinstance(task_id, str) and task_id.strip()
-        else uuid.uuid4().hex
+        else os.urandom(16).hex()
     )
     digest = hashlib.sha256(
         f"tinyhat-openrouter-credit:{runtime_request}:{amount_cents}".encode("utf-8")
