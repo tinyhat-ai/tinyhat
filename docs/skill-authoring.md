@@ -265,8 +265,9 @@ funding note is directed by the platform context with a durable
 marker: a new user's onboarding reply presents the subscription
 connection as one of the onboarding steps, a returning user gets one
 brief line, and an already-connected subscription skips it. Tool-owned
-native first replies satisfy it, and the agent must never state a
-remaining credit balance it cannot see.
+native first replies satisfy it, and the agent must never estimate remaining
+included platform funding. Current user-added credit is a separate read-only
+query through `tinyhat:tinyhat-credit`; consumption is not yet recorded.
 
 `tinyhat-plugin-update` checks and applies the configured plugin channel
 through installed runtime commands. It should start with

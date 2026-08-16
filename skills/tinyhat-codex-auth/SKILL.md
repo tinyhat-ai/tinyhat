@@ -45,9 +45,10 @@ Rules for that step:
 - If unsure whether a subscription is already connected, check
   `tinyhat_codex_auth` with `{"action": "status"}` before claiming it
   is not connected.
-- Never state a remaining credit balance or an exact spend — the agent
-  cannot see one. Say the starter credit is small and limited, not a
-  number you cannot verify beyond its rough size.
+- Never estimate remaining included platform funding or exact spend. The
+  separate `tinyhat:tinyhat-credit` skill can read the user's added-credit
+  ledger, but that first ledger slice records additions only and does not yet
+  record consumption.
 - When the user says yes, start the flow below; do not re-explain the
   funding model first.
 

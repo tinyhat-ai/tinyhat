@@ -6,6 +6,16 @@ All notable changes to the Tinyhat plugin are documented here.
 
 ### Changed
 
+- Start `0.25.0` with the read-only `tinyhat_credit` tool and
+  `tinyhat:tinyhat-credit` skill. The authenticated Computer asks the matching
+  versioned platform API for its assigned owner's current Tinyhat credit and
+  at most ten newest ledger entries. The call accepts no identity or ledger
+  selector, strips provider/payment details from its output, and cannot add,
+  spend, reserve, transfer, correct, refund, or withdraw credit. Deploy the
+  matching platform ledger API before plugin promotion. Funding context now
+  routes current-balance questions to this tool while keeping included
+  platform funding distinct from the additions-only user ledger.
+
 - Bump the Hermes plugin package to `0.24.2` for the setup-only onboarding
   greeting generated and delivered by the configured Hermes agent.
 

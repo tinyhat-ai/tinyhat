@@ -317,7 +317,7 @@ class HermesAdapterTests(unittest.TestCase):
 
         self.assertEqual(payload["schema"], "tinyhat_plugin_version_v1")
         self.assertEqual(payload["name"], "tinyhat")
-        self.assertEqual(payload["version"], "0.24.2")
+        self.assertEqual(payload["version"], "0.25.0")
 
     def test_platform_status_uses_attested_computer_endpoint(self) -> None:
         original_build = tools.build_platform_client
@@ -330,7 +330,7 @@ class HermesAdapterTests(unittest.TestCase):
                     "computer_id": 5359,
                     "state": "active",
                     "assigned": True,
-                    "package_inventory": {"plugin": {"version": "0.24.2"}},
+                    "package_inventory": {"plugin": {"version": "0.25.0"}},
                 }
 
         try:
@@ -343,7 +343,7 @@ class HermesAdapterTests(unittest.TestCase):
         self.assertEqual(payload["computer_id"], 5359)
         self.assertEqual(payload["state"], "active")
         self.assertTrue(payload["assigned"])
-        self.assertEqual(payload["package_inventory"]["plugin"]["version"], "0.24.2")
+        self.assertEqual(payload["package_inventory"]["plugin"]["version"], "0.25.0")
 
     def test_platform_status_returns_structured_platform_error(self) -> None:
         original_build = tools.build_platform_client
@@ -366,7 +366,7 @@ class HermesAdapterTests(unittest.TestCase):
 
         self.assertEqual(payload["schema"], "tinyhat_skill_catalog_v1")
         self.assertEqual(payload["plugin"]["name"], "tinyhat")
-        self.assertEqual(payload["plugin"]["version"], "0.24.2")
+        self.assertEqual(payload["plugin"]["version"], "0.25.0")
         by_name = {skill["name"]: skill for skill in payload["skills"]}
         self.assertEqual(
             by_name["tinyhat-codex-auth"]["qualified_name"],
@@ -795,9 +795,10 @@ class HermesAdapterTests(unittest.TestCase):
         self.assertIn("Never repeat this note", directive)
         self.assertIn("never block the user's actual request", directive)
         self.assertIn(
-            "Never state a remaining credit balance",
+            "Never infer remaining included platform funding",
             tinyhat_context.TINYHAT_CONTEXT,
         )
+        self.assertIn("load tinyhat:tinyhat-credit", tinyhat_context.TINYHAT_CONTEXT)
         self.assertIn(
             "check tinyhat_codex_auth with action=status",
             tinyhat_context.TINYHAT_CONTEXT,
@@ -1024,7 +1025,10 @@ class HermesAdapterTests(unittest.TestCase):
         self.assertLessEqual(len(first["context"]), tinyhat_context._HOOK_SPILL_SAFE_CHARS)
         self.assertLess(len(first["context"]), 10_000)
         self.assertIn("- Funding model:", first["context"])
-        self.assertIn("Never state a remaining credit balance", first["context"])
+        self.assertIn(
+            "Never infer remaining included platform funding",
+            first["context"],
+        )
 
     def test_funding_reminder_directive_is_once_per_computer(self) -> None:
         first = tinyhat_context.inject_tinyhat_context(
@@ -1117,7 +1121,8 @@ class HermesAdapterTests(unittest.TestCase):
         self.assertIn("durable per-Computer marker", text)
         self.assertIn("tool-owned native response", text)
         self.assertIn("Never block or delay the user's actual request", text)
-        self.assertIn("Never state a remaining credit balance", text)
+        self.assertIn("Never estimate remaining included platform funding", text)
+        self.assertIn("tinyhat:tinyhat-credit", text)
         self.assertIn('{"action": "status"}', text)
         self.assertIn("/codex_auth", text)
 

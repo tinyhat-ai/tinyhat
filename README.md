@@ -43,7 +43,8 @@ normal local Git checkout synchronized with exact-repository GitHub leases.
 | `__init__.py` | Hermes registration entrypoint. |
 | `hermes.plugin.json` | Tinyhat metadata for the Hermes adapter, skill, command, and release channels. |
 | `context.py` | Small Hermes `pre_llm_call` context hook for Tinyhat-sensitive turns. |
-| `tools.py` / `schemas.py` | Tinyhat tools: plugin version, safe platform status, shareable hats, joke proof, skill catalog, private secret handoff and removal, Slack connection, Google identity connection, Codex auth setup/status helpers, and plugin update helper. |
+| `tools.py` / `schemas.py` | Tinyhat tools: plugin version, safe platform status, read-only user credit, shareable hats, joke proof, skill catalog, private secret handoff and removal, Slack connection, Google identity connection, Codex auth setup/status helpers, and plugin update helper. |
+| `credit.py` | Safe projection of the authenticated owner's balance and newest Tinyhat ledger entries. |
 | `hats.py` / `hat_repository.py` | Owner-scoped Hat lifecycle plus the value-blind bridge to Computer-local Git checkout and sync. |
 | `slack_connection.py` | Hermes manifest generation plus Computer-local Slack token validation and installation. |
 | `credentials.py` | Value-blind credential name/description discovery and platform-owned, expiring Telegram removal confirmation. |
@@ -64,6 +65,7 @@ normal local Git checkout synchronized with exact-repository GitHub leases.
 | `skills/tinyhat-plugin-update/SKILL.md` | Channel update guidance for stale installed plugin checkouts. |
 | `skills/tinyhat-onboarding-greeting/SKILL.md` | One-shot guidance for the agent's first owner greeting after Computer setup finishes. |
 | `skills/tinyhat-platform/SKILL.md` | Platform context for Tinyhat-managed Hermes agents. |
+| `skills/tinyhat-credit/SKILL.md` | Read-only balance and recent credit transaction guidance. |
 | `skills/tinyhat-privacy/SKILL.md` | Privacy and trust model guidance: who can see user data, and when. |
 | `skills/hat-authoring/SKILL.md` | Create, list, and inspect one-customer shareable hat shells. |
 | `skills/tinyhat-hat-wearing/SKILL.md` | Install or resume an authorized Hat on an existing or newly assigned agent without exposing repository or credential capabilities. |
@@ -129,6 +131,19 @@ in its own voice, explain how it can help, and ask what to work on first.
 platform status endpoint. It returns only safe Computer state, assignment,
 configuration revision, and package inventory metadata; it never returns
 tokens, credentials, or private platform URLs.
+
+`tinyhat-credit` answers questions about the owner's Tinyhat credit. The
+`tinyhat_credit` tool calls a fixed Computer-authenticated platform route and
+returns only the current USD balance plus up to ten newest ledger entries. The
+platform derives the user from the verified Computer assignment; the tool
+accepts no identity input and cannot add, reserve, spend, transfer, refund, or
+otherwise change credit. Human top-ups remain in the Configure Mini App opened
+from the user's assigned agent bot.
+
+Hermes calls the native plugin tool. OpenClaw uses the same packaged Python
+handler through one exact read-only fallback command in the skill. That command
+uses the runtime's existing platform contract; the agent must not inspect
+runtime config, identity, credential, or secret files to build the request.
 
 `hat-authoring` creates and evolves shareable Hats. For creation, the
 agent collects a name and one customer's work email, plus optional Telegram
@@ -427,8 +442,9 @@ user's onboarding reply — once per Computer, without nagging (a durable
 marker, tool-owned native first replies satisfying the note, a brief
 line for returning users after an in-place upgrade, and a silent skip
 when already connected) — check `{"action": "status"}` before claiming
-it is not connected, and never state a remaining credit balance it
-cannot see. When
+it is not connected, and never estimate remaining included platform funding.
+The separate `tinyhat_credit` tool reports user-added credit only; consumption
+is not yet recorded. When
 the user says "connect you to my ChatGPT account", "use my Codex
 subscription", or "switch from platform credits", the agent calls
 `tinyhat_codex_auth` with `{"action": "prerequisite"}`. The helper sends
@@ -540,6 +556,11 @@ TINYHAT_PLUGIN_REF=vX.Y.Z
 | `channels/lts` | Conservative default for managed Computers. |
 | `channels/latest` | Newest promoted final version, used when we want faster adoption. |
 | exact tag, for example `vX.Y.Z` | Immutable version for tests, rollbacks, and audits. |
+
+For v0.25.0, deploy the matching Tinyloop user-credit ledger and versioned
+Computer credit-summary API before promoting `channels/latest` and
+`channels/lts`. The plugin operation is intentionally read-only and derives
+the user from the authenticated Computer assignment.
 
 For v0.24.1, deploy the matching Tinyloop Hat-retirement API before promoting
 `channels/latest` and `channels/lts`. The plugin fails closed unless the

@@ -10,6 +10,7 @@ from typing import Any
 from urllib import error, parse, request
 
 from .credentials import credentials as handle_credentials
+from .credit import credit_summary as handle_credit_summary
 from .google_workspace import google_workspace as handle_google_workspace
 from .google_workspace_app import google_workspace_app as handle_google_workspace_app
 from .google_workspace_app_manager import (
@@ -82,6 +83,11 @@ def get_platform_status(args: dict[str, Any] | None = None, **_: Any) -> str:
             message=str(exc),
         )
     return json.dumps(payload, sort_keys=True)
+
+
+def credit(args: dict[str, Any] | None = None, **kwargs: Any) -> str:
+    """Read the authenticated owner's Tinyhat credit summary."""
+    return handle_credit_summary(args, **kwargs)
 
 
 def hats(args: dict[str, Any] | None = None, **kwargs: Any) -> str:
