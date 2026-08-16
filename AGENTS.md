@@ -39,8 +39,8 @@ a fresh Hermes-only start.
 - `skills/tinyhat-codex-auth/SKILL.md`: OpenAI Codex / ChatGPT subscription auth flow guidance.
 - `skills/tinyhat-plugin-update/SKILL.md`: installed plugin channel update guidance.
 - `skills/tinyhat-platform/SKILL.md`: Tinyhat-managed Hermes operating context.
-- `skills/tinyhat-credit/SKILL.md`: read-only owner balance and recent credit
-  ledger entries through the versioned platform API.
+- `skills/tinyhat-credit/SKILL.md`: owner balance, recent transactions, and
+  adding an exact amount to the Agent's model budget.
 - `skills/tinyhat-privacy/SKILL.md`: privacy and trust model answers for who-can-see-my-data questions.
 - `context.py`: small keyword-gated Hermes `pre_llm_call` context hook.
 - `.agents/skills/tinyhat-plugin-skill-authoring/SKILL.md`: maintainer

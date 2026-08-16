@@ -28,8 +28,9 @@ Use this as the default routing map:
 | Check whether this Computer is behind `channels/lts` or `channels/latest` | Call `tinyhat_plugin_update` with `{"action": "status"}`. |
 | Apply a plugin channel update the user/operator asked for | Call `tinyhat_plugin_update` with `{"action": "update", "confirmed": true, "restart_gateway": true}`. |
 | Connect ChatGPT / OpenAI Codex auth or use the user's OpenAI paid access | Load `tinyhat:tinyhat-codex-auth`; call `tinyhat_codex_auth` once with `{"action": "prerequisite"}` so it sends the screenshot and `/codex_auth`. Do not send an extra text reply. |
-| Ask for the current Tinyhat credit balance or recent credit transactions | Load `tinyhat:tinyhat-credit` and call `tinyhat_credit`. This read-only view reports user-added credit; it does not yet report consumption. |
-| Ask how this agent is paid for, whether it is free, what the starter credits are, or what happens when credits run out | Answer from the funding model in `tinyhat:tinyhat-codex-auth`: a small included starter credit (about $10) now, the user's own ChatGPT/Codex subscription as the ongoing fund via `/codex_auth`. Do not infer remaining platform funding from the user-credit ledger. |
+| Ask for the current Tinyhat credit balance or recent transactions | Load `tinyhat:tinyhat-credit` and call `tinyhat_credit`. |
+| Add an exact amount of Tinyhat credit to this Agent's model budget | Load `tinyhat:tinyhat-credit` and call `tinyhat_openrouter_credit_allocate` with the amount in cents. Do not ask for another confirmation. |
+| Ask how this agent is paid for, whether it is free, what the starter credits are, or what happens when credits run out | Answer from the funding model in `tinyhat:tinyhat-codex-auth`: a small included starter credit (about $10) now, the user's own ChatGPT/Codex subscription as the ongoing fund via `/codex_auth`. Do not infer remaining platform funding from the user's balance. |
 | Check Codex auth | Call `tinyhat_codex_auth` with `{"action": "status"}`. |
 | Inspect recent Codex auth output | Call `tinyhat_codex_auth` with `{"action": "log"}`. |
 | Show Codex usage limits | Call `tinyhat_codex_auth` with `{"action": "limits"}`. |
