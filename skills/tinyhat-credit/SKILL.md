@@ -13,14 +13,14 @@ Allocate credit to this Agent's OpenRouter model budget with
 
 - `balance_cents`: current available Tinyhat credit in integer cents.
 - `currency`: the balance currency, currently `usd`.
-- `recent_transactions`: up to ten newest ledger entries, each with a type,
+- `recent_transactions`: up to ten recent transactions, each with a type,
   signed amount in cents, currency, and timestamp.
 
-Format cents as money in the returned currency. Describe `top_up` as credit
-the user added. Describe `openrouter_allocation` as credit allocated to this
-Agent's OpenRouter model budget. Describe `openrouter_allocation_release` as a
-failed allocation that Tinyhat restored. If the list is empty, say that there
-are no credit transactions yet.
+Format cents as money in the returned currency. Say `top_up` is "Credit
+added." Say `openrouter_allocation` is "Added to model budget." Say
+`openrouter_allocation_release` is "Credit returned." If the list is empty,
+say there are no transactions yet. Keep the answer short and avoid internal
+terms such as ledger, entry, provider key, or idempotency.
 
 ## Allocate model credit
 
@@ -34,20 +34,19 @@ are no credit transactions yet.
   the remaining Tinyhat balance.
 - On `pending`, explain that Tinyhat is reconciling the provider outcome. Do
   not retry automatically and do not claim the credit was restored.
-- On `failed`, explain that the allocation failed and the ledger shows the
-  compensating restored credit.
+- On `failed`, say the model budget was not changed and the credit was returned.
 
 ## Boundaries
 
 - The platform derives the owner from this Computer's verified assignment.
-  Never ask for or invent a user id, account id, Stripe id, or ledger id.
+  Never ask for or invent a user id, account id, Stripe id, or transaction id.
 - Only `tinyhat_openrouter_credit_allocate` can change credit, and only for the
   current Computer's assigned Agent after an exact user request. It cannot fund
   another Agent, another user, or a provider key selected by the model.
 - If the user wants to add credit, direct them to the Credit control at the top
   of the Configure Mini App opened from their assigned agent bot. Do not claim
-  that payment succeeded until the ledger balance reflects it.
+  that payment succeeded until the credit balance reflects it.
 - Never ask for or expose a provider API key, key hash, management credential,
-  user id, Agent id, Computer id, request id, or ledger id.
+  user id, Agent id, Computer id, request id, or transaction id.
 - Never retry a pending or uncertain allocation. Read `tinyhat_credit` to show
-  the latest ledger state when the user asks what happened.
+  the latest credit history when the user asks what happened.

@@ -121,7 +121,7 @@
       "qualified_name": "tinyhat:tinyhat-credit",
       "aliases": ["tinyhat-credit"],
       "path": "skills/tinyhat-credit/SKILL.md",
-      "purpose": "Reads the authenticated owner's Tinyhat credit ledger and allocates an explicitly requested amount to this Agent's OpenRouter model budget."
+      "purpose": "Reads the authenticated owner's Tinyhat credit history and adds an explicitly requested amount to this Agent's model budget."
     },
     {
       "name": "tinyhat-privacy",

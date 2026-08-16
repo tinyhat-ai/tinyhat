@@ -134,7 +134,7 @@ tokens, credentials, or private platform URLs.
 
 `tinyhat-credit` answers questions about the owner's Tinyhat credit. The
 `tinyhat_credit` tool calls a fixed Computer-authenticated platform route and
-returns only the current USD balance plus up to ten newest ledger entries.
+returns only the current USD balance plus up to ten recent transactions.
 When the user explicitly requests an exact amount, the separate
 `tinyhat_openrouter_credit_allocate` tool allocates it to this Agent's
 OpenRouter model budget without a second confirmation. The platform derives
@@ -554,7 +554,7 @@ TINYHAT_PLUGIN_REF=vX.Y.Z
 | `channels/latest` | Newest promoted final version, used when we want faster adoption. |
 | exact tag, for example `vX.Y.Z` | Immutable version for tests, rollbacks, and audits. |
 
-For v0.26.0, deploy the matching Tinyloop allocation ledger and versioned
+For v0.26.0, deploy the matching Tinyloop credit service and versioned
 Computer OpenRouter-credit API before promoting `channels/latest` and
 `channels/lts`. The mutation derives both user and Agent from the authenticated
 Computer assignment, accepts an exact amount only, and treats the user's chat

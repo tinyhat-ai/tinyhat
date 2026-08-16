@@ -23,7 +23,7 @@ TINYHAT_CREDIT_SCHEMA = {
     "type": "object",
     "description": (
         "Reads this authenticated Computer owner's current Tinyhat credit "
-        "balance and up to ten newest ledger entries. This operation is "
+        "balance and up to ten recent transactions. This operation is "
         "read-only and cannot add, spend, reserve, transfer, refund, or "
         "otherwise change credit. It accepts no user or account identifier."
     ),
@@ -35,9 +35,9 @@ TINYHAT_CREDIT_SCHEMA = {
 TINYHAT_OPENROUTER_CREDIT_ALLOCATE_SCHEMA = {
     "type": "object",
     "description": (
-        "Allocates an exact amount of this authenticated Computer owner's "
-        "Tinyhat credit to this Computer's assigned Agent OpenRouter model "
-        "budget. Use only after the user explicitly requests the allocation "
+        "Adds an exact amount of this authenticated Computer owner's Tinyhat "
+        "credit to this Computer's assigned Agent model budget. Use only "
+        "after the user explicitly requests it "
         "and supplies the exact amount. Their request is the authorization; "
         "do not ask for a second confirmation. Identity and idempotency are "
         "runtime-controlled."
@@ -47,7 +47,7 @@ TINYHAT_OPENROUTER_CREDIT_ALLOCATE_SCHEMA = {
             "type": "integer",
             "minimum": 100,
             "description": (
-                "Exact allocation in USD cents. US$5.00 is 500. Ask for the "
+                "Exact amount in USD cents. US$5.00 is 500. Ask for the "
                 "amount if the user did not provide one; never guess it."
             ),
         }

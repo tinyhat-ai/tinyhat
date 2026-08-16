@@ -16,7 +16,7 @@ OPENROUTER_ALLOCATION_STATUSES = {"allocated", "pending", "failed"}
 
 
 def credit_summary(args: dict[str, Any] | None = None, **_: Any) -> str:
-    """Return safe credit balance and recent ledger entries from Tinyhat."""
+    """Return the owner's credit balance and recent transactions."""
     _ = args
     try:
         client, platform_auth = build_platform_client()
@@ -42,7 +42,7 @@ def allocate_openrouter_credit(
         return tool_error_json(
             tool="tinyhat_openrouter_credit_allocate",
             error_name="missing_required_parameter",
-            message="Ask the user for the exact amount to allocate, in US dollars.",
+            message="Ask the user how much credit to add to the model budget.",
             missing=["amount_cents"],
             example_call={"amount_cents": 500},
         )
@@ -54,7 +54,7 @@ def allocate_openrouter_credit(
         return tool_error_json(
             tool="tinyhat_openrouter_credit_allocate",
             error_name="invalid_amount",
-            message="The allocation must be at least US$1.00 in whole cents.",
+            message="The amount must be at least US$1.00 in whole cents.",
             expected={"amount_cents": "integer greater than or equal to 100"},
             example_call={"amount_cents": 500},
         )
@@ -151,20 +151,20 @@ def _openrouter_allocation_error(exc: PlatformError) -> str:
     """Return stable, value-blind errors without echoing platform responses."""
     if exc.status_code == 402:
         error_name = "insufficient_credit"
-        message = "The user does not have enough Tinyhat credit for this allocation."
+        message = "The user does not have enough Tinyhat credit for this amount."
     elif exc.status_code == 404:
         error_name = "openrouter_key_unavailable"
         message = "This Agent does not have an OpenRouter model key available to fund."
     elif exc.status_code == 409:
         error_name = "allocation_conflict"
         message = (
-            "Tinyhat could not safely start this allocation. Check the current "
+            "Tinyhat could not safely add this credit. Check the current "
             "balance and recent transactions before trying a new request."
         )
     else:
         error_name = "openrouter_credit_allocation_unavailable"
         message = (
-            "Tinyhat could not confirm the allocation. Do not retry automatically; "
+            "Tinyhat could not confirm the model budget change. Do not retry; "
             "ask the user to check their credit history."
         )
     return tool_error_json(
