@@ -17,6 +17,7 @@ REQUIRED_TOOLS = [
     "tinyhat_plugin_version",
     "tinyhat_get_platform_status",
     "tinyhat_credit",
+    "tinyhat_openrouter_credit_allocate",
     "tinyhat_hats",
     "tinyhat_tell_joke",
     "tinyhat_skill_catalog",

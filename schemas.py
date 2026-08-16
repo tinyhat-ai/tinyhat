@@ -32,6 +32,30 @@ TINYHAT_CREDIT_SCHEMA = {
     "additionalProperties": False,
 }
 
+TINYHAT_OPENROUTER_CREDIT_ALLOCATE_SCHEMA = {
+    "type": "object",
+    "description": (
+        "Allocates an exact amount of this authenticated Computer owner's "
+        "Tinyhat credit to this Computer's assigned Agent OpenRouter model "
+        "budget. Use only after the user explicitly requests the allocation "
+        "and supplies the exact amount. Their request is the authorization; "
+        "do not ask for a second confirmation. Identity and idempotency are "
+        "runtime-controlled."
+    ),
+    "properties": {
+        "amount_cents": {
+            "type": "integer",
+            "minimum": 100,
+            "description": (
+                "Exact allocation in USD cents. US$5.00 is 500. Ask for the "
+                "amount if the user did not provide one; never guess it."
+            ),
+        }
+    },
+    "required": ["amount_cents"],
+    "additionalProperties": False,
+}
+
 TINYHAT_HATS_SCHEMA = {
     "type": "object",
     "description": (

@@ -1,23 +1,13 @@
 ---
 name: tinyhat-credit
-description: Use when the user asks for their Tinyhat credit balance, remaining credit, or recent credit transactions. Do not use it to add, spend, transfer, refund, or change credit.
+description: Use when the user asks for their Tinyhat credit balance or recent transactions, or explicitly asks to allocate an exact amount of that credit to this Agent's OpenRouter model budget. Do not use it for automatic, recurring, guessed, or cross-Agent spending.
 ---
 
 # Tinyhat Credit
 
-Read the authenticated owner's Tinyhat credit summary with
-`tinyhat_credit`.
-
-On OpenClaw, where the native Python adapter tool is not registered, run this
-packaged read-only wrapper instead:
-
-```bash
-PYTHONPATH="${TINYHAT_RUNTIME_HOME:-$OPENCLAW_STATE_DIR}/extensions" python3 -c 'from tinyhat.tools import credit; print(credit({}))'
-```
-
-Use only that exact fallback. It derives the platform endpoint and Computer
-identity from the runtime. Do not inspect environment values, config files,
-identity files, credential stores, or secret files to assemble the request.
+Read the authenticated owner's Tinyhat credit summary with `tinyhat_credit`.
+Allocate credit to this Agent's OpenRouter model budget with
+`tinyhat_openrouter_credit_allocate`.
 
 ## What the tool returns
 
@@ -27,17 +17,37 @@ identity files, credential stores, or secret files to assemble the request.
   signed amount in cents, currency, and timestamp.
 
 Format cents as money in the returned currency. Describe `top_up` as credit
-the user added. If the list is empty, say that there are no credit transactions
-yet.
+the user added. Describe `openrouter_allocation` as credit allocated to this
+Agent's OpenRouter model budget. Describe `openrouter_allocation_release` as a
+failed allocation that Tinyhat restored. If the list is empty, say that there
+are no credit transactions yet.
+
+## Allocate model credit
+
+- The user must explicitly ask to allocate credit and provide the exact amount.
+- Convert the exact amount to integer USD cents and call
+  `tinyhat_openrouter_credit_allocate` immediately. Their request is the
+  authorization. Do not ask “Are you sure?” or require another approval.
+- If the amount is missing, ask only for the amount. Never guess, round, or
+  choose an amount for the user. The minimum is US$1.00.
+- On `allocated`, state the amount, the new OpenRouter model-budget limit, and
+  the remaining Tinyhat balance.
+- On `pending`, explain that Tinyhat is reconciling the provider outcome. Do
+  not retry automatically and do not claim the credit was restored.
+- On `failed`, explain that the allocation failed and the ledger shows the
+  compensating restored credit.
 
 ## Boundaries
 
 - The platform derives the owner from this Computer's verified assignment.
   Never ask for or invent a user id, account id, Stripe id, or ledger id.
-- The tool is read-only. It cannot top up, spend, reserve, transfer, correct,
-  refund, or withdraw credit.
+- Only `tinyhat_openrouter_credit_allocate` can change credit, and only for the
+  current Computer's assigned Agent after an exact user request. It cannot fund
+  another Agent, another user, or a provider key selected by the model.
 - If the user wants to add credit, direct them to the Credit control at the top
   of the Configure Mini App opened from their assigned agent bot. Do not claim
   that payment succeeded until the ledger balance reflects it.
-- Do not infer spending from a smaller balance. This first ledger slice records
-  additions only; credit consumption is not yet implemented.
+- Never ask for or expose a provider API key, key hash, management credential,
+  user id, Agent id, Computer id, request id, or ledger id.
+- Never retry a pending or uncertain allocation. Read `tinyhat_credit` to show
+  the latest ledger state when the user asks what happened.

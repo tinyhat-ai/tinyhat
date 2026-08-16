@@ -10,7 +10,10 @@ from typing import Any
 from urllib import error, parse, request
 
 from .credentials import credentials as handle_credentials
-from .credit import credit_summary as handle_credit_summary
+from .credit import (
+    allocate_openrouter_credit as handle_allocate_openrouter_credit,
+    credit_summary as handle_credit_summary,
+)
 from .google_workspace import google_workspace as handle_google_workspace
 from .google_workspace_app import google_workspace_app as handle_google_workspace_app
 from .google_workspace_app_manager import (
@@ -88,6 +91,14 @@ def get_platform_status(args: dict[str, Any] | None = None, **_: Any) -> str:
 def credit(args: dict[str, Any] | None = None, **kwargs: Any) -> str:
     """Read the authenticated owner's Tinyhat credit summary."""
     return handle_credit_summary(args, **kwargs)
+
+
+def openrouter_credit_allocate(
+    args: dict[str, Any] | None = None,
+    **kwargs: Any,
+) -> str:
+    """Allocate owner credit to the assigned Agent's OpenRouter model budget."""
+    return handle_allocate_openrouter_credit(args, **kwargs)
 
 
 def hats(args: dict[str, Any] | None = None, **kwargs: Any) -> str:
