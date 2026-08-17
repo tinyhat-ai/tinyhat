@@ -267,8 +267,9 @@ connection as one of the onboarding steps, a returning user gets one
 brief line, and an already-connected subscription skips it. Tool-owned
 native first replies satisfy it, and the agent must never estimate remaining
 included platform funding. The separate `tinyhat:tinyhat-credit` skill shows
-the user's balance and recent transactions, and can add an exact amount to this
-Agent's model budget when the user asks.
+the user's balance and recent transactions, reads this Agent's current total,
+remaining, and used AI model budget, and can add an exact amount to that budget
+when the user asks.
 
 `tinyhat-plugin-update` checks and applies the configured plugin channel
 through installed runtime commands. It should start with

@@ -43,8 +43,8 @@ normal local Git checkout synchronized with exact-repository GitHub leases.
 | `__init__.py` | Hermes registration entrypoint. |
 | `hermes.plugin.json` | Tinyhat metadata for the Hermes adapter, skill, command, and release channels. |
 | `context.py` | Small Hermes `pre_llm_call` context hook for Tinyhat-sensitive turns. |
-| `tools.py` / `schemas.py` | Tinyhat tools: plugin version, safe platform status, user credit and explicit AI model-budget allocation, shareable hats, joke proof, skill catalog, private secret handoff and removal, Slack connection, Google identity connection, Codex auth setup/status helpers, and plugin update helper. |
-| `credit.py` | Safe owner balance/history projection and explicit allocation to this Agent's AI model budget. |
+| `tools.py` / `schemas.py` | Tinyhat tools: plugin version, safe platform status, user credit, current AI model budget, explicit budget allocation, shareable hats, joke proof, skill catalog, private secret handoff and removal, Slack connection, Google identity connection, Codex auth setup/status helpers, and plugin update helper. |
+| `credit.py` | Safe owner balance/history and Agent model-budget projections, plus explicit allocation to this Agent's AI model budget. |
 | `hats.py` / `hat_repository.py` | Owner-scoped Hat lifecycle plus the value-blind bridge to Computer-local Git checkout and sync. |
 | `slack_connection.py` | Hermes manifest generation plus Computer-local Slack token validation and installation. |
 | `credentials.py` | Value-blind credential name/description discovery and platform-owned, expiring Telegram removal confirmation. |
@@ -65,7 +65,7 @@ normal local Git checkout synchronized with exact-repository GitHub leases.
 | `skills/tinyhat-plugin-update/SKILL.md` | Channel update guidance for stale installed plugin checkouts. |
 | `skills/tinyhat-onboarding-greeting/SKILL.md` | One-shot guidance for the agent's first owner greeting after Computer setup finishes. |
 | `skills/tinyhat-platform/SKILL.md` | Platform context for Tinyhat-managed Hermes agents. |
-| `skills/tinyhat-credit/SKILL.md` | Balance/history guidance and exact user-authorized OpenRouter model-budget allocation. |
+| `skills/tinyhat-credit/SKILL.md` | Balance/history and current AI model-budget guidance, plus exact user-authorized budget allocation. |
 | `skills/tinyhat-privacy/SKILL.md` | Privacy and trust model guidance: who can see user data, and when. |
 | `skills/hat-authoring/SKILL.md` | Create, list, and inspect one-customer shareable hat shells. |
 | `skills/tinyhat-hat-wearing/SKILL.md` | Install or resume an authorized Hat on an existing or newly assigned agent without exposing repository or credential capabilities. |
@@ -135,6 +135,9 @@ tokens, credentials, or private platform URLs.
 `tinyhat-credit` answers questions about the owner's Tinyhat credit. The
 `tinyhat_credit` tool calls a fixed Computer-authenticated platform route and
 returns only the current USD balance plus up to ten recent transactions.
+The read-only `tinyhat_model_budget` tool reports this Agent's current total AI
+model budget, remaining amount, and used amount. It accepts no identity or key
+input and returns no API key or internal identifier.
 When the user explicitly requests an exact amount, the separate
 `tinyhat_openrouter_credit_allocate` tool allocates it to this Agent's
 AI model budget without a second confirmation. The platform derives
@@ -553,6 +556,11 @@ TINYHAT_PLUGIN_REF=vX.Y.Z
 | `channels/lts` | Conservative default for managed Computers. |
 | `channels/latest` | Newest promoted final version, used when we want faster adoption. |
 | exact tag, for example `vX.Y.Z` | Immutable version for tests, rollbacks, and audits. |
+
+For v0.27.0, deploy the matching Tinyloop model-budget read API before
+promoting `channels/latest` and `channels/lts`. The read derives the assigned
+Agent from the authenticated Computer, reads current amounts through the
+platform, and returns no API key or internal identifier.
 
 For v0.26.0, deploy the matching Tinyloop credit service and versioned
 Computer OpenRouter-credit API before promoting `channels/latest` and

@@ -32,6 +32,19 @@ TINYHAT_CREDIT_SCHEMA = {
     "additionalProperties": False,
 }
 
+TINYHAT_MODEL_BUDGET_SCHEMA = {
+    "type": "object",
+    "description": (
+        "Reads this authenticated Computer's assigned Agent AI model budget, "
+        "including the total amount, remaining amount, used amount, currency, "
+        "and check time. This operation is read-only. It accepts no user, "
+        "Agent, Computer, account, or API-key identifier."
+    ),
+    "properties": {},
+    "required": [],
+    "additionalProperties": False,
+}
+
 TINYHAT_OPENROUTER_CREDIT_ALLOCATE_SCHEMA = {
     "type": "object",
     "description": (

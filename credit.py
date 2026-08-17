@@ -31,6 +31,26 @@ def credit_summary(args: dict[str, Any] | None = None, **_: Any) -> str:
     return json.dumps(safe_payload, sort_keys=True)
 
 
+def model_budget(args: dict[str, Any] | None = None, **_: Any) -> str:
+    """Return the assigned Agent's current AI model budget."""
+    _ = args
+    try:
+        client, platform_auth = build_platform_client()
+        payload = client.get_json(
+            computer_api_path(platform_auth, "credit/v1/model-budget")
+        )
+        safe_payload = _safe_model_budget_payload(payload)
+    except PlatformError as exc:
+        return _model_budget_error(exc)
+    except (ValueError, TypeError):
+        return tool_error_json(
+            tool="tinyhat_model_budget",
+            error_name="invalid_platform_response",
+            message="Tinyhat returned an invalid AI model budget result.",
+        )
+    return json.dumps(safe_payload, sort_keys=True)
+
+
 def allocate_openrouter_credit(
     args: dict[str, Any] | None = None,
     **metadata: Any,
@@ -172,6 +192,53 @@ def _openrouter_allocation_error(exc: PlatformError) -> str:
         error_name=error_name,
         message=message,
     )
+
+
+def _model_budget_error(exc: PlatformError) -> str:
+    """Return stable errors without echoing platform or provider details."""
+    if exc.status_code == 404:
+        error_name = "model_budget_unavailable"
+        message = "This Agent does not have an AI model budget available."
+    else:
+        error_name = "model_budget_temporarily_unavailable"
+        message = "Tinyhat could not read this Agent's AI model budget right now."
+    return tool_error_json(
+        tool="tinyhat_model_budget",
+        error_name=error_name,
+        message=message,
+    )
+
+
+def _safe_model_budget_payload(payload: dict[str, Any]) -> dict[str, Any]:
+    """Project only safe amounts and time information into tool output."""
+    limit_cents = payload.get("limit_cents")
+    remaining_cents = payload.get("remaining_cents")
+    used_cents = payload.get("used_cents")
+    currency = payload.get("currency")
+    checked_at = payload.get("checked_at")
+    if (
+        isinstance(limit_cents, bool)
+        or not isinstance(limit_cents, int)
+        or limit_cents < 0
+    ):
+        raise ValueError("invalid model budget limit")
+    for value in (remaining_cents, used_cents):
+        if value is not None and (
+            isinstance(value, bool) or not isinstance(value, int) or value < 0
+        ):
+            raise ValueError("invalid model budget amount")
+    if not isinstance(currency, str) or not currency.strip():
+        raise ValueError("invalid model budget currency")
+    if not isinstance(checked_at, str) or not checked_at.strip():
+        raise ValueError("invalid model budget timestamp")
+    return {
+        "schema": "tinyhat_model_budget_v1",
+        "limit_cents": limit_cents,
+        "remaining_cents": remaining_cents,
+        "used_cents": used_cents,
+        "currency": currency,
+        "checked_at": checked_at,
+    }
 
 
 def _safe_credit_payload(payload: dict[str, Any]) -> dict[str, Any]:

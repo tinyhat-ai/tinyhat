@@ -13,6 +13,7 @@ from .credentials import credentials as handle_credentials
 from .credit import (
     allocate_openrouter_credit as handle_allocate_openrouter_credit,
     credit_summary as handle_credit_summary,
+    model_budget as handle_model_budget,
 )
 from .google_workspace import google_workspace as handle_google_workspace
 from .google_workspace_app import google_workspace_app as handle_google_workspace_app
@@ -91,6 +92,11 @@ def get_platform_status(args: dict[str, Any] | None = None, **_: Any) -> str:
 def credit(args: dict[str, Any] | None = None, **kwargs: Any) -> str:
     """Read the authenticated owner's Tinyhat credit summary."""
     return handle_credit_summary(args, **kwargs)
+
+
+def model_budget(args: dict[str, Any] | None = None, **kwargs: Any) -> str:
+    """Read the assigned Agent's current AI model budget."""
+    return handle_model_budget(args, **kwargs)
 
 
 def openrouter_credit_allocate(

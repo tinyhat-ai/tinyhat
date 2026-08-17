@@ -1,11 +1,12 @@
 ---
 name: tinyhat-credit
-description: Use when the user asks for their Tinyhat credit balance or recent transactions, or explicitly asks to add an exact amount of that credit to this Agent's AI model budget. Do not use it for automatic, recurring, guessed, or cross-Agent spending.
+description: Use when the user asks for their Tinyhat credit balance or recent transactions, asks how much AI model budget this Agent has left or has used, or explicitly asks to add an exact amount of Tinyhat credit to this Agent's AI model budget. Do not use it for automatic, recurring, guessed, or cross-Agent spending.
 ---
 
 # Tinyhat Credit
 
 Read the authenticated owner's Tinyhat credit summary with `tinyhat_credit`.
+Read this Agent's current AI model budget with `tinyhat_model_budget`.
 Add credit to this Agent's AI model budget with
 `tinyhat_openrouter_credit_allocate`.
 
@@ -21,6 +22,21 @@ added." Say `openrouter_allocation` is "Added to model budget." Say
 `openrouter_allocation_release` is "Credit returned." If the list is empty,
 say there are no transactions yet. Keep the answer short and avoid internal
 terms such as ledger, entry, provider key, or idempotency.
+
+## Check the AI model budget
+
+Call `tinyhat_model_budget` when the user asks how much model budget this Agent
+has, how much is left, or how much has been used. This is read-only and needs no
+confirmation.
+
+- `limit_cents`: the Agent's total AI model budget.
+- `remaining_cents`: how much is left, when available.
+- `used_cents`: how much has been used, when available.
+- `currency` and `checked_at`: the currency and time of the live check.
+
+Format cents as money. Use short labels: **AI model budget**, **Remaining**, and
+**Used**. If a value is unavailable, say that briefly instead of estimating it.
+Do not mix this with the owner's Tinyhat credit balance.
 
 ## Allocate model credit
 

@@ -6,6 +6,14 @@ All notable changes to the Tinyhat plugin are documented here.
 
 ### Changed
 
+- Start `0.27.0` with `tinyhat_model_budget`, a read-only tool that reports
+  this Agent's current total AI model budget, remaining amount, and used
+  amount. The authenticated Computer chooses the assigned Agent; the tool
+  accepts no identity or key input and returns no API keys, hashes, labels, or
+  internal ids. The existing credit skill now answers model-budget questions
+  with short labels and keeps them separate from the owner's Tinyhat balance.
+  Deploy the matching platform read endpoint before plugin promotion.
+
 - Start `0.26.0` with `tinyhat_openrouter_credit_allocate`, the first explicit
   Tinyhat credit-consumption action. An authenticated Computer can allocate an
   exact user-requested amount to its assigned Agent's AI model budget;
