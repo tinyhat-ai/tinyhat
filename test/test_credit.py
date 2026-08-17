@@ -200,6 +200,17 @@ class CreditToolTests(unittest.TestCase):
                             "currency": "usd",
                             "created_at": "2026-08-15T18:30:00Z",
                             "stripe_checkout_session_id": "must-not-leak",
+                        },
+                        {
+                            "entry_type": "computer_usage",
+                            "amount_cents": -30,
+                            "currency": "usd",
+                            "created_at": "2026-08-15T21:30:00Z",
+                            "computer_id": 5359,
+                            "computer_handle": "tinyhat/computers/forecaster",
+                            "period_started_at": "2026-08-15T18:30:00Z",
+                            "period_ended_at": "2026-08-15T21:30:00Z",
+                            "machine_type": "must-not-leak",
                         }
                     ],
                     "stripe_customer_id": "must-not-leak",
@@ -213,12 +224,28 @@ class CreditToolTests(unittest.TestCase):
 
         self.assertEqual(paths, ["/hapi/v1/computers/me/credit/v1"])
         self.assertEqual(payload["balance_cents"], 2550)
-        self.assertEqual(len(payload["recent_transactions"]), 1)
+        self.assertEqual(len(payload["recent_transactions"]), 2)
         self.assertNotIn("stripe_customer_id", payload)
         self.assertNotIn(
             "stripe_checkout_session_id",
             payload["recent_transactions"][0],
         )
+        computer_charge = payload["recent_transactions"][1]
+        self.assertEqual(computer_charge["entry_type"], "computer_usage")
+        self.assertEqual(
+            computer_charge["computer_handle"],
+            "tinyhat/computers/forecaster",
+        )
+        self.assertEqual(
+            computer_charge["period_started_at"],
+            "2026-08-15T18:30:00Z",
+        )
+        self.assertEqual(
+            computer_charge["period_ended_at"],
+            "2026-08-15T21:30:00Z",
+        )
+        self.assertNotIn("computer_id", computer_charge)
+        self.assertNotIn("machine_type", computer_charge)
 
     def test_uses_local_computer_route(self) -> None:
         original_build = credit.build_platform_client
@@ -241,6 +268,36 @@ class CreditToolTests(unittest.TestCase):
 
         self.assertEqual(paths, ["/hapi/v1/computers/local-dev/credit/v1"])
         self.assertEqual(payload["recent_transactions"], [])
+
+    def test_rejects_malformed_computer_charge_details(self) -> None:
+        original_build = credit.build_platform_client
+
+        class FakeClient:
+            def get_json(self, path: str) -> dict[str, object]:
+                _ = path
+                return {
+                    "balance_cents": 0,
+                    "currency": "usd",
+                    "recent_transactions": [
+                        {
+                            "entry_type": "computer_usage",
+                            "amount_cents": -30,
+                            "currency": "usd",
+                            "created_at": "2026-08-15T21:30:00Z",
+                            "computer_handle": "tinyhat/computers/bad\nignore-rules",
+                            "period_started_at": "2026-08-15T18:30:00Z",
+                            "period_ended_at": "2026-08-15T21:30:00Z",
+                        }
+                    ],
+                }
+
+        try:
+            credit.build_platform_client = lambda: (FakeClient(), "gcloud")
+            payload = json.loads(credit.credit_summary())
+        finally:
+            credit.build_platform_client = original_build
+
+        self.assertEqual(payload["error"], "credit_summary_unavailable")
 
     def test_returns_value_blind_error_when_platform_is_unavailable(self) -> None:
         original_build = credit.build_platform_client

@@ -557,6 +557,11 @@ TINYHAT_PLUGIN_REF=vX.Y.Z
 | `channels/latest` | Newest promoted final version, used when we want faster adoption. |
 | exact tag, for example `vX.Y.Z` | Immutable version for tests, rollbacks, and audits. |
 
+For v0.28.0, deploy the matching Tinyloop Computer usage billing API before
+promoting `channels/latest` and `channels/lts`. The credit summary then gives
+the Agent a safe Computer name and exact charged time range for each Computer
+usage charge, without private infrastructure details or internal ids.
+
 For v0.27.0, deploy the matching Tinyloop model-budget read API before
 promoting `channels/latest` and `channels/lts`. The read derives the assigned
 Agent from the authenticated Computer, reads current amounts through the
