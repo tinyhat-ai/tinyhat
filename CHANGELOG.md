@@ -7,10 +7,11 @@ All notable changes to the Tinyhat plugin are documented here.
 ### Changed
 
 - Start `0.28.0` by teaching `tinyhat_credit` to preserve the safe Computer
-  name and exact charged time range for automatic Computer usage charges. The
-  credit skill explains these as **Computer usage** in plain language and
-  still removes internal ids, provider details, and payment details. Deploy
-  the matching platform Computer billing API before plugin promotion.
+  name, exact charged time range, and hourly rate applied to each automatic
+  Computer usage charge. The credit skill explains these as **Computer usage**
+  in plain language and still removes internal ids, provider details, and
+  payment details. Deploy the matching platform Computer billing API before
+  plugin promotion.
 
 - Start `0.27.0` with `tinyhat_model_budget`, a read-only tool that reports
   this Agent's current total AI model budget, remaining amount, and used

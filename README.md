@@ -562,8 +562,9 @@ TINYHAT_PLUGIN_REF=vX.Y.Z
 
 For v0.28.0, deploy the matching Tinyloop Computer usage billing API before
 promoting `channels/latest` and `channels/lts`. The credit summary then gives
-the Agent a safe Computer name and exact charged time range for each Computer
-usage charge, without private infrastructure details or internal ids.
+the Agent a safe Computer name, exact charged time range, and the applied
+hourly rate for each Computer usage charge, without private infrastructure
+details or internal ids.
 
 For v0.27.0, deploy the matching Tinyloop model-budget read API before
 promoting `channels/latest` and `channels/lts`. The read derives the assigned
