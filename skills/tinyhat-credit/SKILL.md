@@ -19,7 +19,10 @@ Add credit to this Agent's AI model budget with
 
 Format cents as money in the returned currency. Say `top_up` is "Credit
 added." Say `openrouter_allocation` is "Added to model budget." Say
-`openrouter_allocation_release` is "Credit returned." If the list is empty,
+`openrouter_allocation_release` is "Credit returned." Say `computer_usage` is
+"Computer usage." For a Computer charge, use its short Computer name, start and
+end times, and `hourly_rate_microusd`. Explain the time and applied rate in one
+short phrase, such as "2 hr 45 min at $0.10 per hour." If the list is empty,
 say there are no transactions yet. Keep the answer short and avoid internal
 terms such as ledger, entry, provider key, or idempotency.
 
@@ -64,5 +67,7 @@ Do not mix this with the owner's Tinyhat credit balance.
   that payment succeeded until the credit balance reflects it.
 - Never ask for or expose a provider API key, key hash, management credential,
   user id, Agent id, Computer id, request id, or transaction id.
+- Computer charges are automatic. `tinyhat_credit` can explain them, but it
+  cannot start, stop, change, refund, or retry a charge.
 - Never retry a pending or uncertain allocation. Read `tinyhat_credit` to show
   the latest credit history when the user asks what happened.

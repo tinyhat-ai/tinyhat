@@ -5,6 +5,7 @@ from __future__ import annotations
 import hashlib
 import json
 import os
+import re
 from typing import Any
 
 from .platform import PlatformError, build_platform_client, computer_api_path
@@ -13,6 +14,9 @@ from .tool_errors import tool_error_json
 MAX_RECENT_TRANSACTIONS = 10
 MIN_OPENROUTER_ALLOCATION_CENTS = 100
 OPENROUTER_ALLOCATION_STATUSES = {"allocated", "pending", "failed"}
+COMPUTER_HANDLE_RE = re.compile(
+    r"^tinyhat/computers/(?!.*--)[a-z0-9](?:[a-z0-9_-]{0,45}[a-z0-9])?$"
+)
 
 
 def credit_summary(args: dict[str, Any] | None = None, **_: Any) -> str:
@@ -277,6 +281,31 @@ def _safe_credit_payload(payload: dict[str, Any]) -> dict[str, Any]:
                 "created_at": created_at,
             }
         )
+        if entry_type == "computer_usage":
+            computer_handle = raw_entry.get("computer_handle")
+            period_started_at = raw_entry.get("period_started_at")
+            period_ended_at = raw_entry.get("period_ended_at")
+            hourly_rate_microusd = raw_entry.get("hourly_rate_microusd")
+            if (
+                not isinstance(computer_handle, str)
+                or COMPUTER_HANDLE_RE.fullmatch(computer_handle) is None
+                or not isinstance(period_started_at, str)
+                or not period_started_at.strip()
+                or not isinstance(period_ended_at, str)
+                or not period_ended_at.strip()
+                or isinstance(hourly_rate_microusd, bool)
+                or not isinstance(hourly_rate_microusd, int)
+                or hourly_rate_microusd < 0
+            ):
+                raise ValueError("Tinyhat returned an invalid Computer charge.")
+            entries[-1].update(
+                {
+                    "computer_handle": computer_handle,
+                    "period_started_at": period_started_at,
+                    "period_ended_at": period_ended_at,
+                    "hourly_rate_microusd": hourly_rate_microusd,
+                }
+            )
 
     return {
         "schema": "tinyhat_credit_summary_v1",

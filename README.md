@@ -135,6 +135,8 @@ tokens, credentials, or private platform URLs.
 `tinyhat-credit` answers questions about the owner's Tinyhat credit. The
 `tinyhat_credit` tool calls a fixed Computer-authenticated platform route and
 returns only the current USD balance plus up to ten recent transactions.
+Computer usage transactions include the billed time range and the hourly rate
+used for that charge.
 The read-only `tinyhat_model_budget` tool reports this Agent's current total AI
 model budget, remaining amount, and used amount. It accepts no identity or key
 input and returns no API key or internal identifier.
@@ -444,7 +446,8 @@ line for returning users after an in-place upgrade, and a silent skip
 when already connected) — check `{"action": "status"}` before claiming
 it is not connected, and never estimate remaining included platform funding.
 The separate `tinyhat_credit` tool reports the user's credit balance and recent
-transactions, including credit added to the AI model budget. When
+transactions, including Computer usage with its applied hourly rate and credit
+added to the AI model budget. When
 the user says "connect you to my ChatGPT account", "use my Codex
 subscription", or "switch from platform credits", the agent calls
 `tinyhat_codex_auth` with `{"action": "prerequisite"}`. The helper sends
@@ -556,6 +559,12 @@ TINYHAT_PLUGIN_REF=vX.Y.Z
 | `channels/lts` | Conservative default for managed Computers. |
 | `channels/latest` | Newest promoted final version, used when we want faster adoption. |
 | exact tag, for example `vX.Y.Z` | Immutable version for tests, rollbacks, and audits. |
+
+For v0.28.0, deploy the matching Tinyloop Computer usage billing API before
+promoting `channels/latest` and `channels/lts`. The credit summary then gives
+the Agent a safe Computer name, exact charged time range, and the applied
+hourly rate for each Computer usage charge, without private infrastructure
+details or internal ids.
 
 For v0.27.0, deploy the matching Tinyloop model-budget read API before
 promoting `channels/latest` and `channels/lts`. The read derives the assigned
