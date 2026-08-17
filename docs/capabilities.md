@@ -7,6 +7,7 @@ The current capability list is intentionally small.
 | `tinyhat_plugin_version` | Available now | Proves which Tinyhat plugin version Hermes has loaded for the live agent. |
 | `tinyhat_get_platform_status` | Available now | Reads this authenticated Computer's safe platform state, assignment, configuration revisions, and package inventory. |
 | `tinyhat_credit` | Platform API required | Reads the authenticated owner's current credit balance and up to ten recent transactions. It cannot change credit. |
+| `tinyhat_model_budget` | Platform API required | Reads this Agent's current total AI model budget, remaining amount, and used amount. It cannot change the budget. |
 | `tinyhat_openrouter_credit_allocate` | Platform API required | Adds an exact amount of the owner's credit to this Agent's model budget. |
 | `tinyhat_hats` | Available now | Creates, lists, inspects, renames, and retires one-customer Hats; checks out and syncs private repositories through Computer-scoped GitHub leases; and manages value-blind Hat credentials. Retirement hides a Hat from owner/public/new-install surfaces and deletes creator package state while preserving platform and installation history and already-installed consumer agents. Authorized installation transfers are dispatched automatically to the registered creator Computer, signed there, and decrypted only by the consumer Computer. |
 | `tinyhat_tell_joke` | Available now | Proves Hermes loaded the Tinyhat plugin and can call a plugin tool. |
@@ -169,15 +170,19 @@ skill lookup, and runtime channel commands for stale installed plugins. The long
 ## User Credit
 
 `tinyhat_credit` shows the owner's balance and up to ten recent transactions.
+`tinyhat_model_budget` shows this Agent's current total AI model budget,
+remaining amount, and used amount.
 `tinyhat_openrouter_credit_allocate` adds the exact amount the user requested to
-this Agent's model budget. Both are native Hermes tools. The runtime supplies
+this Agent's model budget. All three are native Hermes tools. The runtime supplies
 the Computer identity, so the agent never supplies a user or Agent id.
 
-The model-budget action accepts only an amount in cents. It does not expose API
-keys, payment details, or internal ids. The Agent should use plain phrases such
-as **Current balance**, **Recent transactions**, **Credit added**, **Added to
-model budget**, and **Credit returned**. It should never show internal system
-names. Users add credit themselves from the Credit control in the Mini App.
+The model-budget read accepts no input. The model-budget action accepts only an
+amount in cents. Neither exposes API keys, payment details, or internal ids.
+The Agent should use plain phrases such as **Current balance**, **Recent
+transactions**, **AI model budget**, **Remaining**, **Used**, **Credit added**,
+**Added to model budget**, and **Credit returned**. It should never show
+internal system names. Users add credit themselves from the Credit control in
+the Mini App.
 
 ## Privacy And Trust
 

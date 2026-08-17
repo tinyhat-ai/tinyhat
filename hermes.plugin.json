@@ -1,6 +1,6 @@
 {
   "schema": "tinyhat.framework-adapter.v1",
-  "version": "0.26.0",
+  "version": "0.27.0",
   "framework": {
     "name": "hermes",
     "minimum": "0.0.0"
@@ -121,7 +121,7 @@
       "qualified_name": "tinyhat:tinyhat-credit",
       "aliases": ["tinyhat-credit"],
       "path": "skills/tinyhat-credit/SKILL.md",
-      "purpose": "Reads the authenticated owner's Tinyhat credit history and adds an explicitly requested amount to this Agent's model budget."
+      "purpose": "Reads the owner's Tinyhat credit history, checks this Agent's current AI model budget, and adds an explicitly requested amount to that budget."
     },
     {
       "name": "tinyhat-privacy",
@@ -145,6 +145,11 @@
     {
       "name": "tinyhat_credit",
       "handler": "tools.credit",
+      "skill": "tinyhat-credit"
+    },
+    {
+      "name": "tinyhat_model_budget",
+      "handler": "tools.model_budget",
       "skill": "tinyhat-credit"
     },
     {

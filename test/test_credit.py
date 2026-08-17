@@ -1,4 +1,4 @@
-"""Tests for Tinyhat credit summary and OpenRouter allocation tools."""
+"""Tests for Tinyhat credit summary, model budget, and allocation tools."""
 
 from __future__ import annotations
 
@@ -76,7 +76,111 @@ class CreditToolTests(unittest.TestCase):
 
         self.assertNotIn("OpenClaw", skill)
         self.assertNotIn("OPENCLAW_STATE_DIR", skill)
+        self.assertIn("tinyhat_model_budget", skill)
         self.assertIn("tinyhat_openrouter_credit_allocate", skill)
+
+    def test_reads_safe_model_budget_from_attested_computer_route(self) -> None:
+        original_build = credit.build_platform_client
+        paths: list[str] = []
+
+        class FakeClient:
+            def get_json(self, path: str) -> dict[str, object]:
+                paths.append(path)
+                return {
+                    "schema": "tinyhat_model_budget_v1",
+                    "limit_cents": 5300,
+                    "remaining_cents": 4125,
+                    "used_cents": 1175,
+                    "currency": "usd",
+                    "checked_at": "2026-08-16T18:30:00Z",
+                    "agent_id": 91,
+                    "key_hash": "must-not-leak",
+                    "provider": "must-not-leak",
+                }
+
+        try:
+            credit.build_platform_client = lambda: (FakeClient(), "gcloud")
+            payload = json.loads(credit.model_budget())
+        finally:
+            credit.build_platform_client = original_build
+
+        self.assertEqual(paths, ["/hapi/v1/computers/me/credit/v1/model-budget"])
+        self.assertEqual(payload["limit_cents"], 5300)
+        self.assertEqual(payload["remaining_cents"], 4125)
+        self.assertEqual(payload["used_cents"], 1175)
+        self.assertNotIn("agent_id", payload)
+        self.assertNotIn("key_hash", payload)
+        self.assertNotIn("provider", payload)
+
+    def test_model_budget_uses_local_computer_route(self) -> None:
+        original_build = credit.build_platform_client
+        paths: list[str] = []
+
+        class FakeClient:
+            def get_json(self, path: str) -> dict[str, object]:
+                paths.append(path)
+                return {
+                    "limit_cents": 5300,
+                    "remaining_cents": None,
+                    "used_cents": 1175,
+                    "currency": "usd",
+                    "checked_at": "2026-08-16T18:30:00Z",
+                }
+
+        try:
+            credit.build_platform_client = lambda: (FakeClient(), "local_dev")
+            payload = json.loads(credit.model_budget(task_id="ignored"))
+        finally:
+            credit.build_platform_client = original_build
+
+        self.assertEqual(
+            paths,
+            ["/hapi/v1/computers/local-dev/credit/v1/model-budget"],
+        )
+        self.assertIsNone(payload["remaining_cents"])
+
+    def test_model_budget_rejects_malformed_platform_amounts(self) -> None:
+        original_build = credit.build_platform_client
+
+        class FakeClient:
+            def get_json(self, path: str) -> dict[str, object]:
+                _ = path
+                return {
+                    "limit_cents": 5300,
+                    "remaining_cents": True,
+                    "used_cents": 1175,
+                    "currency": "usd",
+                    "checked_at": "2026-08-16T18:30:00Z",
+                }
+
+        try:
+            credit.build_platform_client = lambda: (FakeClient(), "gcloud")
+            payload = json.loads(credit.model_budget())
+        finally:
+            credit.build_platform_client = original_build
+
+        self.assertEqual(payload["error"], "invalid_platform_response")
+
+    def test_model_budget_errors_do_not_echo_platform_details(self) -> None:
+        original_build = credit.build_platform_client
+
+        def fail() -> tuple[object, str]:
+            raise PlatformError(
+                "provider key sk-or-secret failed",
+                status_code=503,
+                response={"detail": "key_hash=must-not-leak"},
+            )
+
+        try:
+            credit.build_platform_client = fail
+            payload = json.loads(credit.model_budget())
+        finally:
+            credit.build_platform_client = original_build
+
+        self.assertEqual(payload["error"], "model_budget_temporarily_unavailable")
+        serialized = json.dumps(payload)
+        self.assertNotIn("sk-or-secret", serialized)
+        self.assertNotIn("key_hash", serialized)
 
     def test_reads_owner_summary_from_attested_computer_route(self) -> None:
         original_build = credit.build_platform_client

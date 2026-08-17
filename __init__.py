@@ -65,6 +65,12 @@ def register(ctx: Any) -> None:
         handler=tools.credit,
     )
     ctx.register_tool(
+        name="tinyhat_model_budget",
+        toolset="tinyhat",
+        schema=schemas.TINYHAT_MODEL_BUDGET_SCHEMA,
+        handler=tools.model_budget,
+    )
+    ctx.register_tool(
         name="tinyhat_openrouter_credit_allocate",
         toolset="tinyhat",
         schema=schemas.TINYHAT_OPENROUTER_CREDIT_ALLOCATE_SCHEMA,
