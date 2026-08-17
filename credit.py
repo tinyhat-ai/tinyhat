@@ -285,6 +285,7 @@ def _safe_credit_payload(payload: dict[str, Any]) -> dict[str, Any]:
             computer_handle = raw_entry.get("computer_handle")
             period_started_at = raw_entry.get("period_started_at")
             period_ended_at = raw_entry.get("period_ended_at")
+            hourly_rate_microusd = raw_entry.get("hourly_rate_microusd")
             if (
                 not isinstance(computer_handle, str)
                 or COMPUTER_HANDLE_RE.fullmatch(computer_handle) is None
@@ -292,6 +293,9 @@ def _safe_credit_payload(payload: dict[str, Any]) -> dict[str, Any]:
                 or not period_started_at.strip()
                 or not isinstance(period_ended_at, str)
                 or not period_ended_at.strip()
+                or isinstance(hourly_rate_microusd, bool)
+                or not isinstance(hourly_rate_microusd, int)
+                or hourly_rate_microusd < 0
             ):
                 raise ValueError("Tinyhat returned an invalid Computer charge.")
             entries[-1].update(
@@ -299,6 +303,7 @@ def _safe_credit_payload(payload: dict[str, Any]) -> dict[str, Any]:
                     "computer_handle": computer_handle,
                     "period_started_at": period_started_at,
                     "period_ended_at": period_ended_at,
+                    "hourly_rate_microusd": hourly_rate_microusd,
                 }
             )
 

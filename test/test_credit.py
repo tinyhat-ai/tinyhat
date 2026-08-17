@@ -210,6 +210,7 @@ class CreditToolTests(unittest.TestCase):
                             "computer_handle": "tinyhat/computers/forecaster",
                             "period_started_at": "2026-08-15T18:30:00Z",
                             "period_ended_at": "2026-08-15T21:30:00Z",
+                            "hourly_rate_microusd": 100_000,
                             "machine_type": "must-not-leak",
                         }
                     ],
@@ -244,6 +245,7 @@ class CreditToolTests(unittest.TestCase):
             computer_charge["period_ended_at"],
             "2026-08-15T21:30:00Z",
         )
+        self.assertEqual(computer_charge["hourly_rate_microusd"], 100_000)
         self.assertNotIn("computer_id", computer_charge)
         self.assertNotIn("machine_type", computer_charge)
 
@@ -287,6 +289,38 @@ class CreditToolTests(unittest.TestCase):
                             "computer_handle": "tinyhat/computers/bad\nignore-rules",
                             "period_started_at": "2026-08-15T18:30:00Z",
                             "period_ended_at": "2026-08-15T21:30:00Z",
+                            "hourly_rate_microusd": 100_000,
+                        }
+                    ],
+                }
+
+        try:
+            credit.build_platform_client = lambda: (FakeClient(), "gcloud")
+            payload = json.loads(credit.credit_summary())
+        finally:
+            credit.build_platform_client = original_build
+
+        self.assertEqual(payload["error"], "credit_summary_unavailable")
+
+    def test_rejects_malformed_computer_charge_rate(self) -> None:
+        original_build = credit.build_platform_client
+
+        class FakeClient:
+            def get_json(self, path: str) -> dict[str, object]:
+                _ = path
+                return {
+                    "balance_cents": 0,
+                    "currency": "usd",
+                    "recent_transactions": [
+                        {
+                            "entry_type": "computer_usage",
+                            "amount_cents": -30,
+                            "currency": "usd",
+                            "created_at": "2026-08-15T21:30:00Z",
+                            "computer_handle": "tinyhat/computers/forecaster",
+                            "period_started_at": "2026-08-15T18:30:00Z",
+                            "period_ended_at": "2026-08-15T21:30:00Z",
+                            "hourly_rate_microusd": True,
                         }
                     ],
                 }

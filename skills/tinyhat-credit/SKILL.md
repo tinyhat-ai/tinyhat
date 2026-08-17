@@ -20,10 +20,11 @@ Add credit to this Agent's AI model budget with
 Format cents as money in the returned currency. Say `top_up` is "Credit
 added." Say `openrouter_allocation` is "Added to model budget." Say
 `openrouter_allocation_release` is "Credit returned." Say `computer_usage` is
-"Computer usage." For a Computer charge, use its short Computer name and the
-returned start and end times when the user asks what the charge covered. If
-the list is empty, say there are no transactions yet. Keep the answer short
-and avoid internal terms such as ledger, entry, provider key, or idempotency.
+"Computer usage." For a Computer charge, use its short Computer name, start and
+end times, and `hourly_rate_microusd`. Explain the time and applied rate in one
+short phrase, such as "2 hr 45 min at $0.10 per hour." If the list is empty,
+say there are no transactions yet. Keep the answer short and avoid internal
+terms such as ledger, entry, provider key, or idempotency.
 
 ## Check the AI model budget
 
