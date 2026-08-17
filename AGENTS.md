@@ -1,7 +1,6 @@
 # Tinyhat Plugin Agent Guide
 
-This repository is the public Tinyhat plugin package. The v0.20 branch is
-a fresh Hermes-only start.
+This repository is the public Tinyhat plugin package. `main` is Hermes-only.
 
 ## Boundaries
 
@@ -12,7 +11,7 @@ a fresh Hermes-only start.
 - Keep skills framework-neutral whenever possible. Framework-specific
   loading belongs in adapter files such as `plugin.yaml` and
   `hermes.plugin.json`.
-- Do not add legacy framework files to this branch. Additional frameworks
+- Do not add legacy framework files to this repository. Additional frameworks
   will return later as separate adapters once the Hermes path is stable.
 
 ## Current Package Shape
@@ -62,7 +61,7 @@ When adding or changing plugin skills, read
 ## Version Bumps
 
 Follow `RELEASING.md` section **Version Bump Checklist** for every plugin
-version change. Update all listed live manifests, package metadata, and
+version change. Update `VERSION`, all listed live manifests, package metadata, and
 adapter-test expectations in the same PR. Do not assume the loader manifest
 is the running-version source: `tinyhat_plugin_version` and the
 `/tinyhat-plugin-version` command report the `version` field from

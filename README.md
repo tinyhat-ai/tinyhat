@@ -39,6 +39,8 @@ normal local Git checkout synchronized with exact-repository GitHub leases.
 
 | File | Purpose |
 | --- | --- |
+| `VERSION` | Current final plugin version used for release and channel verification. |
+| `VERSIONING.md` | Immutable tag and moving channel policy. |
 | `plugin.yaml` | Hermes plugin manifest. |
 | `__init__.py` | Hermes registration entrypoint. |
 | `hermes.plugin.json` | Tinyhat metadata for the Hermes adapter, skill, command, and release channels. |

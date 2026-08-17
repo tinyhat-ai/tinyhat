@@ -718,6 +718,7 @@ def validate_google_scope_manifest(root: Path) -> None:  # noqa: PLR0912, PLR091
 
 
 def validate_versions(root: Path) -> str:
+    root_version = (root / "VERSION").read_text(encoding="utf-8").strip()
     package = read_json(root / "package.json")
     hermes = read_json(root / "hermes.plugin.json")
     release_please = read_json(root / ".release-please-manifest.json")
@@ -730,6 +731,7 @@ def validate_versions(root: Path) -> str:
     require(isinstance(version, str), "package.json version must be a string")
     require(VERSION_SHAPE.fullmatch(version) is not None, "version must be shaped X.Y.Z")
     for label, found in (
+        ("VERSION", root_version),
         ("hermes.plugin.json version", hermes.get("version")),
         ("plugin.yaml version", yaml_data.get("version")),
         ("pyproject.toml project.version", read_pyproject_version(root)),
@@ -1089,9 +1091,16 @@ def validate_docs(root: Path) -> None:
             "Reject or clarify generic names",
         ),
         "RELEASING.md": (
+            "Publish a final release",
+            "VERSION",
             "channels/lts",
             "channels/latest",
-            "codex/v0.20-hermes-plugin",
+        ),
+        "VERSIONING.md": (
+            "Release lifecycle",
+            "main",
+            "channels/lts",
+            "channels/latest",
         ),
     }
     for rel, phrases in checks.items():

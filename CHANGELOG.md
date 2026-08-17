@@ -4,6 +4,8 @@ All notable changes to the Tinyhat plugin are documented here.
 
 ## Unreleased
 
+## 0.28.0 - 2026-08-17
+
 ### Changed
 
 - Start `0.28.0` by teaching `tinyhat_credit` to preserve the safe Computer
