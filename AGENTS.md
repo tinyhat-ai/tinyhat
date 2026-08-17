@@ -1,101 +1,78 @@
-# AGENTS.md — Contribution policy
+# Tinyhat Plugin Agent Guide
 
-Canonical policy for humans and AI agents contributing to this repo.
-Agent-specific files (`CLAUDE.md`) defer here and do not duplicate.
+This repository is the public Tinyhat plugin package. `main` is Hermes-only.
 
-**Agents currently provisioned on the maintainer's machine:** Claude
-Code, Codex. The maintainer onboards new agents via the
-[`add-agent`](.agents/skills/add-agent/SKILL.md) skill.
+## Boundaries
 
-## External contributors — the short version
+- Keep the runtime small. Runtime work belongs in
+  `tinyloophub/tinyhat--runtimes--hermes`.
+- Keep platform APIs in the Tinyloop backend. This repo should not carry
+  private backend URLs, tokens, tenant data, or provisioning scripts.
+- Keep skills framework-neutral whenever possible. Framework-specific
+  loading belongs in adapter files such as `plugin.yaml` and
+  `hermes.plugin.json`.
+- Do not add legacy framework files to this repository. Additional frameworks
+  will return later as separate adapters once the Hermes path is stable.
 
-Thanks for wanting to contribute. Here's all you actually need:
+## Current Package Shape
 
-1. Fork, branch, commit, push, open a PR against `main`.
-2. Use [Conventional Commits](https://www.conventionalcommits.org) for the
-   commit subject if you can — e.g. `fix: typo in README`. Not a hard
-   requirement for first-time contributors.
-3. Keep the PR focused on one thing. Describe what and why in a sentence
-   or two.
+- `plugin.yaml`: Hermes manifest.
+- `__init__.py`: Hermes registration entrypoint.
+- `hermes.plugin.json`: Tinyhat adapter metadata.
+- `tools.py`, `schemas.py`, `platform.py`, `secret_handoff.py`,
+  `google_workspace.py`, `google_workspace_app.py`, and
+  `google_workspace_app_manager.py`: tiny public tool surface.
+- `google_workspace_worker.py` and `google_workspace_disconnect_worker.py`:
+  detached owner-bound connection and disconnect workers.
+- `skills/tinyhat-tell-joke/SKILL.md`: deterministic joke proof.
+- `skills/tinyhat-plugin-version/SKILL.md`: live plugin version proof.
+- `skills/tinyhat-onboarding-greeting/SKILL.md`: one-shot first owner greeting after Computer setup.
+- `skills/tinyhat-skill-catalog/SKILL.md`: plugin-qualified skill discovery.
+- `skills/tinyhat-skill-authoring/SKILL.md`: customer-facing best practices for
+  creating and revising portable Agent Skills, including trigger boundaries and
+  context limits.
+- `skills/tinyhat-private-secret/SKILL.md`: private Mini App secret handoff.
+- `skills/tinyhat-credentials/SKILL.md`: value-blind credential discovery and confirmed Computer-side removal.
+- `skills/tinyhat-google-workspace/SKILL.md`: multiple Google Workspace accounts, recommended/legacy/custom permissions, and account-targeted disconnect.
+- `skills/tinyhat-google-workspace-app-manager/SKILL.md`: confirmed pinned gws binary manager; Hermes supplies operation guidance.
+- `skills/tinyhat-codex-auth/SKILL.md`: OpenAI Codex / ChatGPT subscription auth flow guidance.
+- `skills/tinyhat-plugin-update/SKILL.md`: installed plugin channel update guidance.
+- `skills/tinyhat-platform/SKILL.md`: Tinyhat-managed Hermes operating context.
+- `skills/tinyhat-credit/SKILL.md`: owner balance, recent transactions, the
+  Agent's current AI model budget, and adding an exact amount to that budget.
+- `skills/tinyhat-privacy/SKILL.md`: privacy and trust model answers for who-can-see-my-data questions.
+- `context.py`: small keyword-gated Hermes `pre_llm_call` context hook.
+- `.agents/skills/tinyhat-plugin-skill-authoring/SKILL.md`: maintainer
+  workflow for adding or changing plugin skills.
 
-That's it. The dense policy below is plumbing for the AI agents the
-maintainer runs under dedicated bot identities. You can skip it.
+## Checks
 
-## How this repo works — thin harness, fat skills
+Run these before committing:
 
-We dogfood Tinyhat's thesis on our own contribution plumbing: every
-non-trivial procedure is a **skill** under [`.agents/skills/`](.agents/skills).
-Each skill's frontmatter (`name`, `description`) loads eagerly so the
-resolver can route intent to it; the body loads only when the skill is
-invoked. That keeps the files in every turn's context tight
-(`AGENTS.md`, `CLAUDE.md`) and the procedural detail
-rich where it actually needs to be.
+```bash
+python3 scripts/validate_framework_package.py
+python3 -m unittest discover -s test -p "*.py"
+python3 -m compileall -q .
+```
 
-Product-facing skills that ship to OpenClaw live under [`skills/`](skills).
-Do not mix repo-local development skills with the packaged plugin skills.
+When adding or changing plugin skills, read
+`.agents/skills/tinyhat-plugin-skill-authoring/SKILL.md` first.
 
-Claude-facing adapters under [`.claude/skills`](.claude/skills) are
-symlinks back to `.agents/skills`, matching the Tinyloop parent repo's
-current pattern. When this repo is checked out under the Tinyloop
-monorepo at `platform_repos/plugins/tinyhat`, parent-aligned skills
-should read `../../../.agents/skills/<name>/SKILL.md` first and then
-apply the repo-specific override in this public repo. Set
-`TINYLOOP_PARENT_REPO` when working from a standalone clone.
+## Version Bumps
 
-Agents without native skill resolution (Cursor, Codex, anything reading
-`AGENTS.md` directly) should treat the skills index below as a directory
-and open the relevant `SKILL.md` before executing the operation.
+Follow `RELEASING.md` section **Version Bump Checklist** for every plugin
+version change. Update `VERSION`, all listed live manifests, package metadata, and
+adapter-test expectations in the same PR. Do not assume the loader manifest
+is the running-version source: `tinyhat_plugin_version` and the
+`/tinyhat-plugin-version` command report the `version` field from
+`hermes.plugin.json`.
 
-## Skills index — contribution operations
+Run the package validator, full unittest suite, and `compileall` before
+promoting a version. Read back `hermes.plugin.json` from each promoted channel
+to verify the live command will report the intended version.
 
-| Operation | Skill | When to invoke |
-|---|---|---|
-| Codex writeback | [`codex`](.agents/skills/codex/SKILL.md) | Before Codex writes GitHub comments, reviews, or PRs. |
-| Make a commit | [`commit`](.agents/skills/commit/SKILL.md) | Before every commit, especially the first on a fresh clone. Covers bot-identity preflight, signing, Conventional Commits. |
-| Pick tests | [`define-tests`](.agents/skills/define-tests/SKILL.md) | Before claiming verification or choosing a local test set. |
-| Open a pull request | [`open-pr`](.agents/skills/open-pr/SKILL.md) | After commits are on a branch, before `gh pr create`. Covers branch naming, PR template, review routing, no-self-merge. |
-| Review a pull request | [`review`](.agents/skills/review/SKILL.md) | Before posting a PR review from an agent identity. |
-| Cut a release | [`release`](.agents/skills/release/SKILL.md) | Reviewing or merging a release-please PR, smoke-testing a published release, or rolling one back. Covers the pre-1.0 versioning policy and the manual-release escape hatch. |
-| Onboard a new agent | [`add-agent`](.agents/skills/add-agent/SKILL.md) | Before a new coding agent touches this repo. Covers machine-user provisioning, SSH alias, identity-table row, `.gitignore` rules. |
-| Edit a skill | [`sharpen-skill`](.agents/skills/sharpen-skill/SKILL.md) | When adding or tightening repo-local development skills. |
-| Edit a guidance file | [`update-guidance`](.agents/skills/update-guidance/SKILL.md) | When changing `AGENTS.md`, `CLAUDE.md`, any `SKILL.md`, or `CLAUDE.local.md*`. Covers where each piece belongs, line budgets, anchor hygiene. |
-| Propose a roadmap change | [`propose-roadmap`](.agents/skills/propose-roadmap/SKILL.md) | When moving an item between `roadmap/` files, adding a new candidate, or flagging something for rejection. Covers PR format and the one-move-per-PR rule. |
+## Writing
 
-When a skill's `description` matches what you're about to do, invoke it
-instead of improvising. When in doubt, start with `update-guidance`.
-
-## Non-negotiables (agent-only)
-
-These apply to AI agents acting under a bot identity. Human
-contributors can ignore this section.
-
-- **Never commit as the maintainer.** Agents commit under a dedicated
-  machine-user identity with SSH signing, injected inline via `-c`
-  overrides on every `git commit`. The repo's local git config is
-  always the maintainer's identity; agents never set
-  `git config --local user.*` or signing fields. See the `commit`
-  skill for the full pattern.
-- **Never push to `main`.** Every change goes through a PR from a
-  branch named `<agent>/<short-topic>`.
-- **Agents never self-merge.** Only `CODEOWNERS` merges an agent PR.
-- **Never use `--no-verify` or `[skip ci]`** without the maintainer's
-  explicit OK. Never commit keys, tokens, or credentials. Never reuse
-  one agent's signing key on another agent.
-
-## Commit and versioning conventions
-
-- **Conventional Commits** for commit subjects: `<type>(<scope>): <subject>`,
-  imperative, <72 chars. Types: `feat`, `fix`, `docs`, `refactor`, `test`,
-  `chore`, `ci`, `build`. Breaking: `!` or `BREAKING CHANGE:` footer.
-  Strongly encouraged for everyone; strictly required for agent commits.
-- **Versioning:** [SemVer 2.0](https://semver.org), tags `vX.Y.Z`.
-  Maintainer creates tags on merged `main`. Pre-1.0, breaking changes
-  bump **minor**, not major.
-
-## Local override files
-
-`CLAUDE.local.md` (gitignored) holds internal maintainer context that
-must not ship publicly. Never echo its contents into committed files,
-commit messages, PR bodies, issues, or external systems.
-`CLAUDE.local.md.example` is a sanitized template and must not name
-private resources. External contributors can ignore both.
+Use simple public language. The README is part of the trust surface: it
+should explain what the plugin does, what it does not do, and why the
+runtime/plugin boundary exists.

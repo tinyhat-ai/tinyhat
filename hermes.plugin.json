@@ -1,0 +1,242 @@
+{
+  "schema": "tinyhat.framework-adapter.v1",
+  "version": "0.28.0",
+  "framework": {
+    "name": "hermes",
+    "minimum": "0.0.0"
+  },
+  "entrypoint": {
+    "manifest": "plugin.yaml",
+    "module": "__init__.py",
+    "register": "register"
+  },
+  "skills": [
+    {
+      "name": "hat-authoring",
+      "qualified_name": "tinyhat:hat-authoring",
+      "aliases": ["hat-authoring"],
+      "path": "skills/hat-authoring/SKILL.md",
+      "purpose": "Creates one-customer shareable hat shells and lists or inspects hats owned by this Computer's user."
+    },
+    {
+      "name": "tinyhat-hat-wearing",
+      "qualified_name": "tinyhat:tinyhat-hat-wearing",
+      "aliases": ["tinyhat-hat-wearing"],
+      "path": "skills/tinyhat-hat-wearing/SKILL.md",
+      "purpose": "Authorizes, installs, and resumes one private Hat on this agent."
+    },
+    {
+      "name": "tinyhat-onboarding-greeting",
+      "qualified_name": "tinyhat:tinyhat-onboarding-greeting",
+      "aliases": ["tinyhat-onboarding-greeting"],
+      "path": "skills/tinyhat-onboarding-greeting/SKILL.md",
+      "purpose": "Writes the agent's short first owner greeting after Tinyhat finishes Computer setup."
+    },
+    {
+      "name": "tinyhat-plugin-version",
+      "qualified_name": "tinyhat:tinyhat-plugin-version",
+      "aliases": ["tinyhat-plugin-version"],
+      "path": "skills/tinyhat-plugin-version/SKILL.md",
+      "purpose": "Reports the Tinyhat plugin version currently loaded by Hermes."
+    },
+    {
+      "name": "tinyhat-tell-joke",
+      "qualified_name": "tinyhat:tinyhat-tell-joke",
+      "aliases": ["tinyhat-tell-joke"],
+      "path": "skills/tinyhat-tell-joke/SKILL.md",
+      "purpose": "Simple wiring proof that a Hermes agent can discover Tinyhat plugin skills."
+    },
+    {
+      "name": "tinyhat-skill-catalog",
+      "qualified_name": "tinyhat:tinyhat-skill-catalog",
+      "aliases": ["tinyhat-skill-catalog"],
+      "path": "skills/tinyhat-skill-catalog/SKILL.md",
+      "purpose": "Lists Tinyhat plugin skills with qualified names and unqualified aliases."
+    },
+    {
+      "name": "tinyhat-skill-authoring",
+      "qualified_name": "tinyhat:tinyhat-skill-authoring",
+      "aliases": ["tinyhat-skill-authoring"],
+      "path": "skills/tinyhat-skill-authoring/SKILL.md",
+      "purpose": "Teaches agents to write focused portable skills with explicit trigger boundaries, progressive disclosure, and bounded length."
+    },
+    {
+      "name": "tinyhat-private-secret",
+      "qualified_name": "tinyhat:tinyhat-private-secret",
+      "aliases": ["tinyhat-private-secret"],
+      "path": "skills/tinyhat-private-secret/SKILL.md",
+      "purpose": "Starts a private browser-encrypted secret handoff to the assigned Computer."
+    },
+    {
+      "name": "tinyhat-slack",
+      "qualified_name": "tinyhat:tinyhat-slack",
+      "aliases": ["tinyhat-slack"],
+      "path": "skills/tinyhat-slack/SKILL.md",
+      "purpose": "Connects this Hermes agent to Slack through an Agent-view manifest and browser-encrypted local token handoff."
+    },
+    {
+      "name": "tinyhat-credentials",
+      "qualified_name": "tinyhat:tinyhat-credentials",
+      "aliases": ["tinyhat-credentials"],
+      "path": "skills/tinyhat-credentials/SKILL.md",
+      "purpose": "Lists value-blind credential metadata and starts confirmed Computer-side removal."
+    },
+    {
+      "name": "tinyhat-google-workspace",
+      "qualified_name": "tinyhat:tinyhat-google-workspace",
+      "aliases": ["tinyhat-google-workspace"],
+      "path": "skills/tinyhat-google-workspace/SKILL.md",
+      "purpose": "Connects Google identity, composes implemented access presets, or starts an account-targeted local disconnect ceremony."
+    },
+    {
+      "name": "tinyhat-google-workspace-app-manager",
+      "qualified_name": "tinyhat:tinyhat-google-workspace-app-manager",
+      "aliases": ["tinyhat-google-workspace-app-manager"],
+      "path": "skills/tinyhat-google-workspace-app-manager/SKILL.md",
+      "purpose": "Installs and verifies only the pinned Google Workspace CLI app after approval; Hermes supplies the native operation skill."
+    },
+    {
+      "name": "tinyhat-codex-auth",
+      "qualified_name": "tinyhat:tinyhat-codex-auth",
+      "aliases": ["tinyhat-codex-auth"],
+      "path": "skills/tinyhat-codex-auth/SKILL.md",
+      "purpose": "Explains the starter-credit funding model and starts Tinyhat's OpenAI Codex / ChatGPT subscription auth flow."
+    },
+    {
+      "name": "tinyhat-plugin-update",
+      "qualified_name": "tinyhat:tinyhat-plugin-update",
+      "aliases": ["tinyhat-plugin-update"],
+      "path": "skills/tinyhat-plugin-update/SKILL.md",
+      "purpose": "Checks and applies Tinyhat plugin channel updates through the runtime."
+    },
+    {
+      "name": "tinyhat-platform",
+      "qualified_name": "tinyhat:tinyhat-platform",
+      "aliases": ["tinyhat-platform"],
+      "path": "skills/tinyhat-platform/SKILL.md",
+      "purpose": "Explains Tinyhat-managed Hermes defaults for secrets, Codex auth, and platform boundaries."
+    },
+    {
+      "name": "tinyhat-credit",
+      "qualified_name": "tinyhat:tinyhat-credit",
+      "aliases": ["tinyhat-credit"],
+      "path": "skills/tinyhat-credit/SKILL.md",
+      "purpose": "Reads the owner's Tinyhat credit history, checks this Agent's current AI model budget, and adds an explicitly requested amount to that budget."
+    },
+    {
+      "name": "tinyhat-privacy",
+      "qualified_name": "tinyhat:tinyhat-privacy",
+      "aliases": ["tinyhat-privacy"],
+      "path": "skills/tinyhat-privacy/SKILL.md",
+      "purpose": "Explains Tinyhat's privacy and trust model: dedicated isolated Computers, no routine platform reading of Computer contents, policy-bound human access, and the private-Computer direction."
+    }
+  ],
+  "tools": [
+    {
+      "name": "tinyhat_plugin_version",
+      "handler": "tools.plugin_version",
+      "skill": "tinyhat-plugin-version"
+    },
+    {
+      "name": "tinyhat_get_platform_status",
+      "handler": "tools.get_platform_status",
+      "skill": "tinyhat-platform"
+    },
+    {
+      "name": "tinyhat_credit",
+      "handler": "tools.credit",
+      "skill": "tinyhat-credit"
+    },
+    {
+      "name": "tinyhat_model_budget",
+      "handler": "tools.model_budget",
+      "skill": "tinyhat-credit"
+    },
+    {
+      "name": "tinyhat_openrouter_credit_allocate",
+      "handler": "tools.openrouter_credit_allocate",
+      "skill": "tinyhat-credit"
+    },
+    {
+      "name": "tinyhat_hats",
+      "handler": "tools.hats",
+      "skill": "hat-authoring"
+    },
+    {
+      "name": "tinyhat_tell_joke",
+      "handler": "tools.tell_joke",
+      "skill": "tinyhat-tell-joke"
+    },
+    {
+      "name": "tinyhat_skill_catalog",
+      "handler": "tools.skill_catalog",
+      "skill": "tinyhat-skill-catalog"
+    },
+    {
+      "name": "tinyhat_private_secret_handoff",
+      "handler": "tools.private_secret_handoff",
+      "skill": "tinyhat-private-secret"
+    },
+    {
+      "name": "tinyhat_slack_connect",
+      "handler": "tools.slack_connect",
+      "skill": "tinyhat-slack"
+    },
+    {
+      "name": "tinyhat_slack_disconnect",
+      "handler": "tools.slack_disconnect",
+      "skill": "tinyhat-slack"
+    },
+    {
+      "name": "tinyhat_credentials",
+      "handler": "tools.credentials",
+      "skill": "tinyhat-credentials"
+    },
+    {
+      "name": "tinyhat_google_workspace",
+      "handler": "tools.google_workspace",
+      "skill": "tinyhat-google-workspace"
+    },
+    {
+      "name": "tinyhat_google_workspace_app",
+      "handler": "tools.google_workspace_app",
+      "skill": "tinyhat-google-workspace"
+    },
+    {
+      "name": "tinyhat_google_workspace_app_manager",
+      "handler": "tools.google_workspace_app_manager",
+      "skill": "tinyhat-google-workspace-app-manager"
+    },
+    {
+      "name": "tinyhat_codex_auth",
+      "handler": "tools.codex_auth",
+      "skill": "tinyhat-codex-auth"
+    },
+    {
+      "name": "tinyhat_plugin_update",
+      "handler": "tools.plugin_update",
+      "skill": "tinyhat-plugin-update"
+    }
+  ],
+  "commands": [
+    {
+      "name": "tinyhat-joke",
+      "tool": "tinyhat_tell_joke",
+      "purpose": "Human-visible slash-command smoke test for plugin loading."
+    },
+    {
+      "name": "tinyhat-plugin-version",
+      "tool": "tinyhat_plugin_version",
+      "purpose": "Human-visible proof of the Tinyhat plugin version loaded by Hermes."
+    },
+    {
+      "name": "tinyhat-secret",
+      "tool": "tinyhat_private_secret_handoff",
+      "purpose": "Human-visible test path for creating a private secret handoff."
+    }
+  ],
+  "release": {
+    "defaultChannel": "channels/lts",
+    "fastChannel": "channels/latest"
+  }
+}

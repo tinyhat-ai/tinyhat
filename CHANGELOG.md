@@ -1,238 +1,324 @@
 # Changelog
 
-All notable changes to Tinyhat are documented here. This file is
-maintained by [release-please](https://github.com/googleapis/release-please)
-— it reads Conventional Commit messages on `main` and produces a
-release PR with the next version bump + changelog entry.
-
-The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/)
-and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
-
-**Pre-1.0 policy:** we bump **minor** for new features and **patch**
-for fixes. Breaking changes stay in minor bumps until we explicitly
-ship `1.0.0`. Release-please is configured to honor this
-(`bump-minor-pre-major: true`, `bump-patch-for-minor-pre-major: true`).
+All notable changes to the Tinyhat plugin are documented here.
 
 ## Unreleased
 
-### Changed
-
-- Reset the package from the retired Claude Code skill-audit plugin into
-  the public Tinyhat OpenClaw platform plugin, with manifest, tools,
-  default skill, docs, roadmap, validation, and release metadata tracked
-  by [#93](https://github.com/tinyhat-ai/tinyhat/issues/93).
-
-## [0.5.2](https://github.com/tinyhat-ai/tinyhat/compare/v0.5.1...v0.5.2) (2026-06-21)
-
-
-### Bug Fixes
-
-* **plugin:** Restore subscription command contract ([b34dce6](https://github.com/tinyhat-ai/tinyhat/commit/b34dce675500ec2a9b76cbf730b7ed6e05b7742b))
-* **plugin:** Restore subscription command contract ([b611fbc](https://github.com/tinyhat-ai/tinyhat/commit/b611fbc18ad18634eb6a2d1ff6ff747488cfb923))
-
-## [0.5.1](https://github.com/tinyhat-ai/tinyhat/compare/v0.5.0...v0.5.1) (2026-06-13)
-
-
-### Bug Fixes
-
-* **plugin:** Add auth failure guidance ([#131](https://github.com/tinyhat-ai/tinyhat/issues/131)) ([9b9c9d7](https://github.com/tinyhat-ai/tinyhat/commit/9b9c9d7d1f4c262b89e07d1e90fe7042fb1f1c27))
-
-## [0.5.0](https://github.com/tinyhat-ai/tinyhat/compare/v0.4.5...v0.5.0) (2026-06-12)
-
-### Features
-
-* Declare the full capability manifest (tools, skills, framework range) and
-  cover it in the load beacon ([#128](https://github.com/tinyhat-ai/tinyhat/pull/128)).
-* Make plugin load failures loud and CI-covered
-  ([#125](https://github.com/tinyhat-ai/tinyhat/pull/125)).
-
-### Bug Fixes
-
-* Enforce the manifest tool contract and packaged skills tree in the load
-  check ([#125](https://github.com/tinyhat-ai/tinyhat/pull/125)).
-
-## [0.4.5](https://github.com/tinyhat-ai/tinyhat/compare/v0.4.4...v0.4.5) (2026-06-06)
-
-
-### Bug Fixes
-
-* **subscriptions:** Return JSON tool results ([d2acd9f](https://github.com/tinyhat-ai/tinyhat/commit/d2acd9fdc0f6029a4ed0ed7d472a32cf8e547b95))
-* **subscriptions:** Return JSON tool results ([f8aadf8](https://github.com/tinyhat-ai/tinyhat/commit/f8aadf806491d2410109cb8d7638a50e31c0f70a))
-* **subscriptions:** Wait through device-code startup ([0e44edb](https://github.com/tinyhat-ai/tinyhat/commit/0e44edbe7f7456bdeb2626ad935c685f508f1cc6))
-
-## [0.4.4](https://github.com/tinyhat-ai/tinyhat/compare/v0.4.3...v0.4.4) (2026-06-05)
-
-
-### Bug Fixes
-
-* **subscriptions:** Track current OpenAI provider ([8a91fe2](https://github.com/tinyhat-ai/tinyhat/commit/8a91fe24a460fbf1baa10895352a1c4624818783))
-* **subscriptions:** Track current OpenAI provider ([f2a1570](https://github.com/tinyhat-ai/tinyhat/commit/f2a157089469ab56891fcc357611638c5dad40be))
-
-## [0.4.3](https://github.com/tinyhat-ai/tinyhat/compare/v0.4.2...v0.4.3) (2026-06-01)
-
-
-### Bug Fixes
-
-* **release-catalog:** Publish another patch plugin release for production Software update retesting.
-
-## [0.4.2](https://github.com/tinyhat-ai/tinyhat/compare/v0.4.1...v0.4.2) (2026-06-01)
-
-
-### Bug Fixes
-
-* **release-catalog:** Publish another patch plugin release for production Software update testing.
-
-## [0.4.1](https://github.com/tinyhat-ai/tinyhat/compare/v0.4.0...v0.4.1) (2026-06-01)
-
-
-### Bug Fixes
-
-* **release-catalog:** Publish a patch plugin release for production Software update testing.
-
-## [0.4.0](https://github.com/tinyhat-ai/tinyhat/compare/v0.3.0...v0.4.0) (2026-06-01)
-
-
-### Features
-
-* **release-catalog:** Add a sample minor release for Tinyhat Software update testing.
-
-## [0.3.0](https://github.com/tinyhat-ai/tinyhat/compare/v0.2.2...v0.3.0) (2026-06-01)
-
-
-### Features
-
-* **skills:** Add software update guidance ([#111](https://github.com/tinyhat-ai/tinyhat/issues/111)) ([d9b6ce1](https://github.com/tinyhat-ai/tinyhat/commit/d9b6ce19d426e5308abad533493556909d60d723))
-
-## [0.2.2](https://github.com/tinyhat-ai/tinyhat/compare/v0.2.1...v0.2.2) (2026-05-29)
-
-
-### Bug Fixes
-
-* **skills:** Send the ChatGPT settings screenshot inline + split the device code into its own bare bubble (closes [#108](https://github.com/tinyhat-ai/tinyhat/issues/108)) ([#109](https://github.com/tinyhat-ai/tinyhat/issues/109)) ([b48b27c](https://github.com/tinyhat-ai/tinyhat/commit/b48b27ca8fc1d8528f6af4c319829f34d7302afe))
-
-## [0.2.1](https://github.com/tinyhat-ai/tinyhat/compare/v0.2.0...v0.2.1) (2026-05-29)
-
-
-### Features
-
-* **skills:** Add tinyhat-subscriptions for ChatGPT BYO device-code linking ([#106](https://github.com/tinyhat-ai/tinyhat/issues/106)) ([2aa19d6](https://github.com/tinyhat-ai/tinyhat/commit/2aa19d6dee57c9e78fef47d6ef664aa0af5d8a39))
-
-## [0.2.0](https://github.com/tinyhat-ai/tinyhat/compare/v0.1.8...v0.2.0) (2026-05-27)
-
-
-### Features
-
-* **plugin:** Reset as OpenClaw platform package ([#99](https://github.com/tinyhat-ai/tinyhat/issues/99)) ([1340ccb](https://github.com/tinyhat-ai/tinyhat/commit/1340ccb655954ee7056ab5f6897be755875fa6ea))
-* **skills:** Add authoring standard ([#102](https://github.com/tinyhat-ai/tinyhat/issues/102)) ([19a9294](https://github.com/tinyhat-ai/tinyhat/commit/19a92945e63b647384e98153217e6ddd08dda77c))
-* **skills:** Add default capability router ([#103](https://github.com/tinyhat-ai/tinyhat/issues/103)) ([f1878bc](https://github.com/tinyhat-ai/tinyhat/commit/f1878bceee5118d6c824472777ee63426bb691d2))
-
-
-### Bug Fixes
-
-* **plugin:** Keep Mini App URLs transport-only ([#104](https://github.com/tinyhat-ai/tinyhat/issues/104)) ([933588a](https://github.com/tinyhat-ai/tinyhat/commit/933588a30fefd6af4b216d8eec5f51c573279315))
-
-## [0.1.8](https://github.com/tinyhat-ai/tinyhat/compare/v0.1.7...v0.1.8) (2026-04-23)
-
-
-### Features
-
-* **skills:** Add review-changelog and wire into release flow ([#70](https://github.com/tinyhat-ai/tinyhat/issues/70)) ([6286ddf](https://github.com/tinyhat-ai/tinyhat/commit/6286ddfc229995fa75e3163f7cb6ab99b81c558d)), closes [#42](https://github.com/tinyhat-ai/tinyhat/issues/42)
-
-
-### Bug Fixes
-
-* **audit:** Direct agent to Bash heredoc for analysis JSON (closes [#39](https://github.com/tinyhat-ai/tinyhat/issues/39)) ([#75](https://github.com/tinyhat-ai/tinyhat/issues/75)) ([55b461a](https://github.com/tinyhat-ai/tinyhat/commit/55b461af95b855a31462f0e65a272d1f21e5515b))
-* **audit:** Heads-up note when regenerating a same-day report (closes [#37](https://github.com/tinyhat-ai/tinyhat/issues/37)) ([#69](https://github.com/tinyhat-ai/tinyhat/issues/69)) ([26719f0](https://github.com/tinyhat-ai/tinyhat/commit/26719f0897fb3b2eecf4b3c644453febb57aa1a1))
-* **audit:** Unbreak skill's load-time block + drop env-var prefix (closes [#63](https://github.com/tinyhat-ai/tinyhat/issues/63)) ([#67](https://github.com/tinyhat-ai/tinyhat/issues/67)) ([17b12cc](https://github.com/tinyhat-ai/tinyhat/commit/17b12cce57357bd2bfe57cd39df53137f97a2ec2))
-* **release:** Bump plugin.json version with every release (closes [#64](https://github.com/tinyhat-ai/tinyhat/issues/64)) ([#65](https://github.com/tinyhat-ai/tinyhat/issues/65)) ([4ec820a](https://github.com/tinyhat-ai/tinyhat/commit/4ec820a2b4d130dfa880ae1699cd3e81f4e2a540))
-* **report:** Archived reports link back to archive index correctly ([#68](https://github.com/tinyhat-ai/tinyhat/issues/68)) ([512de9d](https://github.com/tinyhat-ai/tinyhat/commit/512de9d88624dbfb583512c1b316fc5226209aed)), closes [#14](https://github.com/tinyhat-ai/tinyhat/issues/14)
-* **report:** Hero doughnut arcs now match their integer labels (closes [#71](https://github.com/tinyhat-ai/tinyhat/issues/71)) ([#76](https://github.com/tinyhat-ai/tinyhat/issues/76)) ([54addf9](https://github.com/tinyhat-ai/tinyhat/commit/54addf9461c71d0f576aa0d21bb95fe86c538282))
-* **snapshot:** Split gather output into compact + detail (closes [#38](https://github.com/tinyhat-ai/tinyhat/issues/38)) ([#72](https://github.com/tinyhat-ai/tinyhat/issues/72)) ([f015c72](https://github.com/tinyhat-ai/tinyhat/commit/f015c72e340e0057dbf1e7ce3b8cc2947ba2df15))
-
-## [0.1.7](https://github.com/tinyhat-ai/tinyhat/compare/v0.1.6...v0.1.7) (2026-04-23)
-
-
-### Features
-
-* **dev:** Add internal dev-reset skill for fresh first-run testing ([#59](https://github.com/tinyhat-ai/tinyhat/issues/59)) ([2bc7647](https://github.com/tinyhat-ai/tinyhat/commit/2bc7647e251d8232f1c404bdc90d3719c0481fdb))
-
-
-### Bug Fixes
-
-* **paths:** Forward CLAUDE_PLUGIN_DATA from skill body into python3 env ([#61](https://github.com/tinyhat-ai/tinyhat/issues/61)) ([1ecaccf](https://github.com/tinyhat-ai/tinyhat/commit/1ecaccf8dc4332b0544202db646a8c125d687ac2))
-
-## [0.1.6](https://github.com/tinyhat-ai/tinyhat/compare/v0.1.5...v0.1.6) (2026-04-23)
-
-
-### Bug Fixes
-
-* **paths:** Reconcile split-brain plugin-data homes (closes [#52](https://github.com/tinyhat-ai/tinyhat/issues/52)) ([#54](https://github.com/tinyhat-ai/tinyhat/issues/54)) ([685f4b9](https://github.com/tinyhat-ai/tinyhat/commit/685f4b93343e83d85007fe3e7809fdb045aefa86))
-
-## [0.1.5](https://github.com/tinyhat-ai/tinyhat/compare/v0.1.4...v0.1.5) (2026-04-23)
-
-
-### Bug Fixes
-
-* **audit:** Improve first-run report flow ([#49](https://github.com/tinyhat-ai/tinyhat/issues/49)) ([6e9f055](https://github.com/tinyhat-ai/tinyhat/commit/6e9f055748920ce36d49a1ae042a3949f3d598b2))
-
-## [0.1.4](https://github.com/tinyhat-ai/tinyhat/compare/v0.1.3...v0.1.4) (2026-04-23)
-
-
-### Features
-
-* **audit:** Chat summary + persisted JSONs instead of auto-opening HTML ([#45](https://github.com/tinyhat-ai/tinyhat/issues/45)) ([39471c4](https://github.com/tinyhat-ai/tinyhat/commit/39471c41718d2a5c7f6179cf85c70064e0a12830))
-
-## [0.1.3](https://github.com/tinyhat-ai/tinyhat/compare/v0.1.2...v0.1.3) (2026-04-23)
-
-
-### Features
-
-* **roadmap:** Add public roadmap + propose-roadmap skill (closes [#32](https://github.com/tinyhat-ai/tinyhat/issues/32)) ([#33](https://github.com/tinyhat-ai/tinyhat/issues/33)) ([d7bd122](https://github.com/tinyhat-ai/tinyhat/commit/d7bd1222bf64913a452c5061fc0e52d40d5cf5a3))
-
-
-### Bug Fixes
-
-* **skills:** Resolve bundled script paths via `${CLAUDE_SKILL_DIR}` so `/tinyhat:audit`, `/tinyhat:routine`, and `/tinyhat:history` work on every install, not just the maintainer's. `${CLAUDE_PLUGIN_ROOT}` is only set inside `!`-prefixed load-time blocks and was silently empty in the non-`!` Bash calls the agent actually ran, which broke `gather_snapshot.py` and friends with `No such file or directory` (closes [#36](https://github.com/tinyhat-ai/tinyhat/issues/36)) ([#41](https://github.com/tinyhat-ai/tinyhat/issues/41)) ([79163cd](https://github.com/tinyhat-ai/tinyhat/commit/79163cd44b304bb63a251f03c426c3283a0a1d98))
-
-## [0.1.2](https://github.com/tinyhat-ai/tinyhat/compare/v0.1.1...v0.1.2) (2026-04-23)
-
-
-### Bug Fixes
-
-* Add marketplace manifest so the plugin can be installed (closes [#11](https://github.com/tinyhat-ai/tinyhat/issues/11)) ([#12](https://github.com/tinyhat-ai/tinyhat/issues/12)) ([c0da383](https://github.com/tinyhat-ai/tinyhat/commit/c0da383f95bf50848d2b588f736647dd7d160ca0))
-
-## [0.1.1](https://github.com/tinyhat-ai/tinyhat/compare/v0.1.0...v0.1.1) (2026-04-23)
-
-
-### Features
-
-* V0 local scanner plugin + open-source scaffolding ([#2](https://github.com/tinyhat-ai/tinyhat/issues/2)) ([855ea2a](https://github.com/tinyhat-ai/tinyhat/commit/855ea2ad0aba048660c19d80ff02762bcd98d839))
-
-## [Unreleased]
-
-### Added
-
-- Initial v0 plugin scaffolding: `.claude-plugin/plugin.json`, four
-  skills under `skills/` (`audit`, `open`, `history`, `routine`),
-  three scripts under `scripts/` (`gather_snapshot.py`,
-  `render_report.py`, `routine.py`), self-contained HTML report with
-  pie charts, activity patterns, client-side filters for sessions
-  and tools, and a browsable archive index.
-- Adaptive daily refresh — at most one snapshot per local calendar
-  date, triggered opportunistically on skill load (no launchd, no
-  cron).
-- Archive retention (31 days) and an index page linking latest + every
-  archived snapshot.
-- Open-source contribution scaffolding: `CONTRIBUTING.md`,
-  `CODE_OF_CONDUCT.md`, `SECURITY.md`, PR template, issue templates,
-  CI workflow, release workflow (pinned pre-1.0), dependabot,
-  `.editorconfig`, `.gitattributes`, `pyproject.toml`, pre-commit
-  config.
-- Docs: `docs/user-flows.md`, `docs/artifacts.md`,
-  `docs/architecture.md`, `docs/local-development.md`.
+## 0.28.0 - 2026-08-17
 
 ### Changed
 
-- Reset from accidental `v1.0.0` (auto-released by an unconfigured
-  release-please run) back to pre-1.0 versioning. First public
-  release will be `0.1.0`.
+- Start `0.28.0` by teaching `tinyhat_credit` to preserve the safe Computer
+  name, exact charged time range, and hourly rate applied to each automatic
+  Computer usage charge. The credit skill explains these as **Computer usage**
+  in plain language and still removes internal ids, provider details, and
+  payment details. Deploy the matching platform Computer billing API before
+  plugin promotion.
+
+- Start `0.27.0` with `tinyhat_model_budget`, a read-only tool that reports
+  this Agent's current total AI model budget, remaining amount, and used
+  amount. The authenticated Computer chooses the assigned Agent; the tool
+  accepts no identity or key input and returns no API keys, hashes, labels, or
+  internal ids. The existing credit skill now answers model-budget questions
+  with short labels and keeps them separate from the owner's Tinyhat balance.
+  Deploy the matching platform read endpoint before plugin promotion.
+
+- Start `0.26.0` with `tinyhat_openrouter_credit_allocate`, the first explicit
+  Tinyhat credit-consumption action. An authenticated Computer can allocate an
+  exact user-requested amount to its assigned Agent's AI model budget;
+  the user's request is the authorization and the Agent does not ask for a
+  second confirmation. Runtime-derived identity and idempotency stay outside
+  model input, pending provider outcomes are never retried automatically, and
+  tool output contains no provider key, key hash, account identifier, or
+  management credential. Deploy the matching platform allocation endpoint
+  before plugin promotion.
+
+- Start `0.25.0` with the read-only `tinyhat_credit` tool and
+  `tinyhat:tinyhat-credit` skill. The authenticated Computer asks the matching
+  versioned platform API for its assigned owner's current Tinyhat credit and
+  at most ten newest ledger entries. The call accepts no identity or ledger
+  selector, strips provider/payment details from its output, and cannot add,
+  spend, reserve, transfer, correct, refund, or withdraw credit. Deploy the
+  matching platform ledger API before plugin promotion. Funding context now
+  routes current-balance questions to this tool while keeping included
+  platform funding distinct from the additions-only user ledger.
+
+- Bump the Hermes plugin package to `0.24.2` for the setup-only onboarding
+  greeting generated and delivered by the configured Hermes agent.
+
+- Add `tinyhat-onboarding-greeting`, a setup-only skill that helps a newly
+  configured agent introduce itself briefly in its own voice after Tinyhat
+  finishes Computer setup.
+
+- Bump the Hermes plugin package to `0.24.1` for fail-closed Hat retirement.
+  Retirement hides the Hat from owner and public discovery, preserves
+  installation history and already-installed consumers, and removes creator
+  package state only after the platform returns a complete retirement receipt.
+
+- Add private Hat consumption for new and existing agents. The consumer
+  Computer receives a one-repository read-only checkout, installs namespaced
+  skills, and requests an encrypted credential bundle. The platform
+  automatically dispatches one bounded runtime command to the Hat's registered
+  creator Computer; no creator chat or approval is required. The creator plugin
+  encrypts to the consumer public key and signs with its Hat-local private key;
+  the consumer verifies the registered creator public key before decrypting
+  locally. Pricing, access, payment, retries, and installation state stay
+  platform-owned.
+
+- Start `0.24.0` with direct private Hat repository authoring. New Hats live in
+  `tinyhat-ai`; the agent checks out a normal Computer-local Git clone and can
+  inspect, edit, and atomically sync explicit non-secret paths. The plugin sees
+  only safe repository results while public Hermes runtime `0.0.51` obtains a
+  one-hour GitHub App token constrained to one immutable repository through
+  Git's credential-helper pipe. Existing Tinyloophub Hats retain their original
+  mediated integration unchanged. Deploy the matching platform broker and
+  runtime before channel promotion.
+- Keep each Hat's marketplace overview current through a root `HAT.md`
+  capability description, skill frontmatter, and value-blind tool metadata.
+- Add the public `tinyhat:tinyhat-skill-authoring` playbook and require Hat
+  authoring to load it before writing a `SKILL.md`. Customer skills now follow
+  portable name and folder rules, explicit trigger and non-trigger boundaries,
+  progressive disclosure, and bounded context guidance.
+- Collect every credential defined by a Hat on one browser-encrypted Mini App
+  page. The Hat reuses one Computer-local key pair for the bundle, saves all
+  values atomically in its local store, supports reopening the form from the
+  Hat preview, and never restarts Hermes for these package-only credentials.
+- Retire one exact Hat only after the user explicitly confirms the canonical
+  handle. Retirement removes it from the owner's Hat list, its public page,
+  and new installations. The private repository is deleted from the Hat's
+  GitHub organization only after the provider acknowledges deletion; creator
+  Computer-local package state is removed; and platform and installation
+  history plus already-installed consumer agents and their local state are
+  preserved.
+- Start `0.23.0` with the first shareable-hats milestone. The new
+  `tinyhat:hat-authoring` skill and `tinyhat_hats` tool create an owner-scoped,
+  one-customer hat shell with a private platform-managed repository and
+  optional Telegram bot defaults, list up to 100 hats, and retrieve each
+  canonical handle and share URL. The matching public page verifies the
+  customer email and opens Telegram to create an agent that wears the hat;
+  agent can also update the public title, intended customer email, or
+  namespaced handle without recreating the Hat, create or update guarded
+  non-secret repo files, and manage Hat credential names through chat. Secret
+  values use the existing browser-encrypted handoff but terminate in a per-Hat
+  local file on the creator Computer; only value-blind metadata is committed
+  to the private Hat repo. This release
+  changes no runtime code and requires the matching platform API to be
+  deployed before plugin promotion.
+- Bump the Hermes plugin package to `0.21.20`; add an owner-confirmed Slack
+  disconnect tool. The platform sends the two-stage Telegram ceremony, and
+  a detached plugin worker revokes an active Slack bot token, removes the
+  complete local bundle, and asks the platform for the existing generic
+  healthy restart proof before the connection is marked disconnected. No new
+  runtime command is required.
+- Bump the Hermes plugin package to `0.21.19`; let the platform-owned Slack
+  checklist replace per-attempt Telegram notices. A predictable Slack
+  `missing_scope` response is now presented as setup step 4, with a safe link
+  to the validated app's Install App page and encrypted-detail reuse for the
+  final attempt. Deploy the matching Tinyloop platform before promotion.
+- Preserve the platform's safe terminal Google refresh result as a durable,
+  account-local `reauthorization_required` state. Status now identifies the
+  affected account without exposing credentials, repeat app and scheduled
+  runs stop before launching `gws` or retrying the refresh broker, and recovery
+  recommends `set_permissions` for the same account with its exact saved
+  scopes instead of adding a duplicate account with plain `connect`.
+- Bump the Hermes plugin package to `0.21.18`; let the Google access chooser
+  carry multiple preset selections into one normalized authorization request.
+  Combined Gmail, Calendar, and Drive choices now reach the existing
+  composable preset resolver instead of being reduced to one preset.
+- Bump the Hermes plugin package to `0.21.17`; add explicit Gmail read-only
+  and send-only presets, teach the agent to map ordinary language to the
+  narrowest preset, and route vague Google-access requests to a concise
+  Telegram Mini App chooser. A custom choice returns the user to Telegram so
+  the agent can ask what access they want in their own words. Exact Custom
+  requests are never approximated with a nearby preset, and the agent must
+  load the tool schema before its first connection call so it cannot probe
+  with an identity-only grant. Deploy the matching platform chooser before
+  promoting `channels/latest` and `channels/lts`.
+- Bump the Hermes plugin package to `0.21.16`; preserve the Slack app ID
+  embedded in the submitted app-level token so permission failures can link
+  directly to the correct app even when Slack omits `app_id` from `auth.test`.
+- Bump the Hermes plugin package to `0.21.15`; failed Slack setup notices now
+  link directly to the validated Slack app settings page and concisely guide
+  the owner to reinstall the app before retrying. Generated manifests now
+  include every scope used during setup, including `im:write`, so first-time
+  installs do not immediately need a permission update.
+- Bump the Hermes plugin package to `0.21.14`; stop blocking setup on the
+  optional Slack `users.info` display-name lookup, keep the Computer-local
+  private key worker alive after a failed Slack validation, and accept an
+  owner-edited retry through the same expiring encrypted handoff.
+- Include the funding model and make connecting the subscription an explicit
+  onboarding step
+  (relands the `0.21.10` funding work that missed the release channels). A new agent
+  starts on Tinyhat's included platform credits — a small starter credit
+  (about $10) so it works immediately — and the intended ongoing fund is the
+  user's own ChatGPT / Codex subscription connected through `/codex_auth`.
+  On the first conversation turn after setup or an in-place upgrade the
+  injected context adds a one-time funding-note directive ahead of the
+  context: a new user's onboarding reply presents connecting the
+  ChatGPT / Codex subscription as one of its onboarding steps (a
+  numbered or bulleted step when the reply lists steps, a standalone
+  step line otherwise, never a footnote), a clearly returning user gets
+  one brief line, and an already-connected subscription skips the note
+  silently. The claim is recorded with a durable per-Computer marker so
+  a later `/new` or `/reset` session does not re-arm it. The directive
+  is a first-message `[System note]` coordinated with Hermes's own
+  profile-build note, and the payload stays under Hermes's ~10k
+  hook-context spill cap (directive first, whole tail bullets dropped
+  when needed while bullets the first message matches through the same
+  routing phrases, terms, or intent matchers that inject the context —
+  privacy, funding, QA reporting — survive in source order) so the
+  note reaches the model inline; tool-owned native first
+  replies (the Codex auth prerequisite photo, a Connect Google button) or an
+  explicit connect request satisfy the step on their own. Agents check
+  `tinyhat_codex_auth` `action=status` before claiming a subscription is not
+  connected, never state a remaining credit balance they cannot see, and
+  answer how-is-this-paid-for / is-this-free / credits-ran-out questions
+  from the model. Funding routing is bounded: start-anchored
+  full-question grammar (optionally behind a polite modal wrapper —
+  "can you tell me what this costs?", "could you explain your
+  rates?") matches first; leading work commands are suppressed even
+  with a terminal question mark, and the modal frame suppresses the
+  remaining routes — broad funding fragments, the standalone word
+  billing, and a funding word bound to the agent/service — so generic
+  developer wording ("balance this binary tree", "can you rename
+  how_much_do_you_cost?", "could you list projects funded by NASA?")
+  does not inject.
+- Bump the Hermes plugin package to `0.21.12`; acknowledge encrypted Slack
+  detail receipt immediately in Telegram, report value-blind validation stages
+  and stable error codes to the platform, and require a successful owner-DM
+  welcome message before the connection is marked ready.
+- Add the `tinyhat:tinyhat-privacy`
+  skill and widen the `pre_llm_call` context so agents answer privacy and
+  data-access questions from the platform's real trust model instead of
+  guessing: each user gets a dedicated isolated Computer, conversations and
+  files are processed and stored on that Computer, and Tinyhat does not read
+  customer Computers' contents as part of routine operations — human access is
+  limited to what the user affirmatively requests or permits, what is needed
+  to investigate abuse, protect the service, or maintain security, and what
+  is required by law; anything else would violate Tinyhat's own Terms and
+  Privacy Policy (https://tinyhat.ai/terms, https://tinyhat.ai/privacy).
+  The skill keeps answers honest without comparisons (Tinyloop operates the
+  underlying infrastructure, so low-level technical access remains possible
+  today; private Computers are the direction that removes it) and forbids
+  speculating about named operators, enumerating internal access paths, or
+  claiming which internal dashboards or tools exist. Privacy routing is a
+  dedicated bilingual matcher: word-boundary phrases plus a bounded
+  subject+access rule in English and Persian, with Persian spelling
+  canonicalization (zero-width joiners, Arabic letter forms) — generic
+  developer wording such as "tail the application logs", "operator
+  precedence", "my database", or Persian "بلاگ" does not inject on its own.
+  Promotion gate: merge only after the matching Computer-wide access
+  commitments are live on https://tinyhat.ai/privacy and
+  https://tinyhat.ai/terms, re-verify those live pages, and only then
+  promote `channels/lts` and `channels/latest`.
+- Add `tinyhat_slack_connect`. The tool generates Hermes' current Slack
+  Agent-view manifest, removes its workspace-global slash commands and the
+  exact `commands` bot scope, sends the create-from-manifest guide in Telegram,
+  accepts the bot token, Socket Mode app token, and allowed member IDs as one
+  browser-encrypted bundle, validates and saves them on the Computer, and
+  leaves all Slack message handling to Hermes over Socket Mode. Direct env
+  writes resolve and verify Hermes' real Python runtime from its launcher or
+  project venv instead of accepting an unrelated system Python executable.
+  Detached handoff workers now also honor the platform's entry window, so the
+  Slack worker remains available for the advertised 30-minute setup period.
+  The Computer now opens the first allowed member's DM and saves it locally as
+  Hermes' Slack home channel, avoiding an unusable slash-command prompt.
+- Bump the Hermes plugin package to `0.21.8`; add `tinyhat_credentials` and
+  `tinyhat:tinyhat-credentials` for value-blind name/description discovery and
+  expiring two-stage Telegram removal. Confirmed deletion is executed by the
+  assigned Computer, never by the platform, and the same name can be added
+  again after local deletion succeeds.
+- Bump the Hermes plugin package to `0.21.7` and separate Tinyhat requestability
+  from Google verification state. All nine implemented Gmail, Calendar, and
+  Drive scopes can reach Google while verification is `preparing_submission`;
+  Google may show its unverified-app warning and the user decides. Unknown,
+  unimplemented, and legacy-only scopes still return `review_required` before
+  OAuth, and operation-level write confirmation remains unchanged. Merge this
+  plugin without moving channels, deploy the matching platform pin first, then
+  promote `channels/lts` and `channels/latest`. Teach agents the pinned raw
+  `gws` command shape explicitly: dotted method identifiers are for schema
+  lookup only, API execution uses split service/resource/method argv, and
+  request bodies use `--json` rather than `--params`.
+- Bump the Hermes plugin package to `0.21.6`; make a bare Google connection
+  identity-only; define five reviewed, composable Workspace access presets in a
+  packaged public scope manifest; limit Custom access to manifest-listed
+  scopes; and return `review_required` before Google for unknown or unreviewed
+  requests. Legacy `profile` values remain compatibility inputs. Merge this
+  plugin without promoting release channels; deploy the matching platform
+  enforcement before advancing `channels/lts` or `channels/latest`.
+- Bump the Hermes plugin package to `0.21.5`; make the recommended Google
+  Workspace connection useful for Gmail reading, composing, sending, and
+  inbox/draft/label management with `gmail.modify` (messages and threads cannot
+  bypass Trash for immediate permanent deletion), Calendar event management,
+  and read-only Drive; accept
+  bounded canonical Google-owned custom scope sets with a user-facing reason;
+  exact-allow Google's official legacy Calendar and Contacts feed scopes with
+  explicit disclosure of their full read/write and permanent-deletion power;
+  preserve exact legacy profiles; coordinate prepare URL and launch-ticket
+  validation with the backend's 32 KiB ceiling so maximum bounded custom scope
+  sets survive; and widen the guarded `gws` bridge to bounded Google service
+  namespaces while retaining operation-level write confirmation.
+- Bump the Hermes plugin package to `0.21.4` for portable, integrity-verified
+  `gws` execution from the verified file descriptor and clearer managed-install
+  guidance.
+- Bump the Hermes plugin package to `0.21.3` and expose the existing safe,
+  attested Computer platform-status endpoint as `tinyhat_get_platform_status`.
+- Bump the Hermes plugin package to `0.21.2` so Google connection buttons can
+  open the platform-authored Tinyhat preparation page before Google while
+  retaining direct-Google URL compatibility during rollout.
+- Bump the Hermes plugin package to `0.21.1` for Hermes-native Google
+  Workspace operation guidance, binary-only `gws` integrity checks, and
+  additive Calendar-event-write and combined Gmail/Calendar upgrades.
+- Bump the Hermes plugin package to `0.21.0` for platform-owned Google
+  Workspace OAuth, named Gmail-send permission upgrades, the bounded managed
+  `gws` bridge, and the Computer-local two-stage revoke flow.
+- Bump the fresh Hermes plugin package to `0.20.14` for the
+  private-secret handoff survivor/queued-gateway-restart fix.
+- Bump the fresh Hermes plugin package to `0.20.13`, add
+  `tinyhat_skill_catalog` for plugin-qualified skill discovery, and add
+  `tinyhat_plugin_update` so agents can check/apply stale installed plugin
+  channels through runtime commands instead of ad hoc shell snippets.
+- Stop restarting the Hermes gateway from the private-secret saver worker.
+  After a secret is saved, the worker registers env passthrough, sends one
+  honest Telegram notice, and claims the handoff with
+  `outcome="installed_restart_pending"`; the Tinyhat platform queues the
+  runtime's one-shot gateway restart and sends the final ready-or-failed
+  confirmation after that command settles. Workers still prefer transient
+  systemd survivor units (now defense in depth, not load-bearing) and fall
+  back to a detached process when `systemd-run` is missing or fails.
+  Deploy order: this plugin version requires a platform that queues the
+  gateway restart when it receives the claim — deploy the platform change
+  first, otherwise saved secrets do not reach a running gateway until a
+  manual heal.
+- Bump the fresh Hermes plugin package to `0.20.12` after tightening the
+  agent-facing tool schemas and self-correcting error payloads.
+- Register private-handoff secret names with the Tinyhat runtime's Hermes
+  terminal env helper after saving. The runtime records the saved name and
+  maintains Hermes local-terminal aliases so the secret is available to
+  exec/shell subprocesses after gateway reload (requires the alias-capable
+  runtime from tinyloophub/tinyhat--runtimes--hermes#68 or a later promoted
+  runtime release; best effort on older runtimes).
+- Add `tinyhat_codex_auth` so agents can send the ChatGPT device-code
+  prerequisite reminder and start the installed Codex auth flow directly.
+- Route natural-language Codex subscription requests to the screenshot
+  prerequisite helper by default, so the user sees the ChatGPT Settings >
+  Security visual guide and `/codex_auth` without duplicate text replies.
+- Teach the private secret skill and tool to use meaningful env-style names
+  such as `EXA_API_KEY` instead of generic placeholders like
+  `TINYHAT_SECRET`.
+- Restart the gateway after a private secret is saved, with a short Telegram
+  notice first, so the runtime can load the env value before the next message.
+- Add a repo-local Tinyhat plugin skill-authoring skill and expand the
+  public skill standard for future plugin capabilities.
+- Bump the fresh Hermes plugin package to `0.20.3` so managed Computers can
+  verify the Tinyhat plugin update flow from `0.20.2`.
+- Start the v0.20 Tinyhat plugin branch as a fresh Hermes-only package.
+- Remove the legacy plugin surface from this branch.
+- Add the first packaged skill, `tinyhat-tell-joke`, as an end-to-end
+  plugin wiring proof.
+- Make the first proof tool tolerate Hermes dispatcher metadata such as
+  `task_id`, so it works from the first live agent interaction.
+- Add `tinyhat-plugin-version` and `tinyhat_plugin_version` so a live
+  Hermes agent can report the plugin version it is actually running.
+- Document `channels/lts` and `channels/latest` as the install channels
+  used by Tinyhat-managed Hermes Computers.

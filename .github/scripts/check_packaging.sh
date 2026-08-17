@@ -1,6 +1,5 @@
 #!/usr/bin/env bash
-# Fails CI if repo-local development assets leak into the packaged
-# OpenClaw plugin surface.
+# Fails CI if legacy plugin surfaces leak into the fresh Hermes branch.
 
 set -euo pipefail
 
@@ -9,26 +8,27 @@ fail() {
   exit 1
 }
 
-[[ -f openclaw.plugin.json ]] || fail "openclaw.plugin.json is missing"
-[[ -f package.json ]] || fail "package.json is missing"
-[[ -f src/index.js ]] || fail "src/index.js is missing"
-[[ -d skills ]] || fail "skills/ is missing"
+[[ -f plugin.yaml ]] || fail "plugin.yaml is missing"
+[[ -f hermes.plugin.json ]] || fail "hermes.plugin.json is missing"
+[[ -f __init__.py ]] || fail "__init__.py is missing"
+[[ -f schemas.py ]] || fail "schemas.py is missing"
+[[ -f tools.py ]] || fail "tools.py is missing"
+[[ -d skills/tinyhat-tell-joke ]] || fail "tinyhat-tell-joke skill is missing"
 
-if [[ -e .claude-plugin ]]; then
-  fail ".claude-plugin/ must not exist in the OpenClaw plugin package"
+for forbidden in openclaw.plugin.json src .claude .agents; do
+  if [[ -e "$forbidden" ]]; then
+    fail "$forbidden must not exist in the fresh Hermes plugin branch"
+  fi
+done
+
+if find skills -mindepth 1 -maxdepth 1 -type d ! -name tinyhat-tell-joke | grep -q .; then
+  fail "only tinyhat-tell-joke may ship in this first branch"
 fi
 
-if find skills -maxdepth 2 -type f -name 'SKILL.md' | grep -q '.agents'; then
-  fail "packaged skills must live under skills/, not .agents/"
-fi
-
-if find skills -path '*/dev-reset/*' -o -name 'dev_reset.py' | grep -q .; then
-  fail "dev-reset assets must not be packaged"
-fi
-
-if grep -r -l -E 'gather_snapshot|render_report|tinyhat-snapshot|CLAUDE_PLUGIN_DATA|skill-audit' \
-  README.md openclaw.plugin.json package.json docs skills src 2>/dev/null; then
-  fail "packaged/public surfaces reference the retired audit plugin"
+if grep -R -n -E 'CLAUDE_PLUGIN_DATA|ChatGPT subscription|Mini App URL' \
+  README.md AGENTS.md CONTRIBUTING.md RELEASING.md docs skills plugin.yaml hermes.plugin.json \
+  __init__.py schemas.py tools.py test 2>/dev/null; then
+  fail "fresh public surfaces still reference legacy plugin concepts"
 fi
 
 echo "packaging-guard: ok"

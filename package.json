@@ -1,37 +1,44 @@
 {
   "name": "tinyhat",
-  "version": "0.5.2",
-  "description": "Tinyhat platform capabilities for managed OpenClaw Computers.",
-  "type": "module",
+  "version": "0.28.0",
+  "description": "Hermes plugin that teaches agents how to use Tinyhat platform capabilities.",
   "private": true,
   "files": [
-    "src",
+    "plugin.yaml",
+    "hermes.plugin.json",
+    "__init__.py",
+    "credit.py",
+    "platform.py",
+    "context.py",
+    "google_workspace_scope_manifest.json",
+    "google_workspace_scope_manifest.py",
+    "google_workspace.py",
+    "google_workspace_app.py",
+    "google_workspace_app_manager.py",
+    "hats.py",
+    "google_workspace_disconnect_worker.py",
+    "google_workspace_worker.py",
+    "secret_handoff.py",
+    "secret_handoff_worker.py",
+    "schemas.py",
+    "tool_errors.py",
+    "tools.py",
     "skills",
     "docs",
-    "openclaw.plugin.json",
     "README.md",
     "CHANGELOG.md",
     "LICENSE"
   ],
   "keywords": [
     "tinyhat",
-    "openclaw",
+    "hermes",
     "plugin",
-    "telegram-mini-app",
-    "computer-management",
+    "skills",
     "agent-platform"
   ],
   "repository": {
     "type": "git",
     "url": "https://github.com/tinyhat-ai/tinyhat.git"
   },
-  "license": "MIT",
-  "peerDependencies": {
-    "openclaw": ">=2026.6.1"
-  },
-  "openclaw": {
-    "extensions": [
-      "./src/index.js"
-    ]
-  }
+  "license": "MIT"
 }

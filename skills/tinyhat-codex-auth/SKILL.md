@@ -1,0 +1,195 @@
+---
+name: tinyhat-codex-auth
+description: Start Tinyhat's OpenAI Codex / ChatGPT subscription device-auth flow, and explain the funding model. Use when the user says things like "connect you to my ChatGPT account", "use my Codex subscription", "use my ChatGPT Plus/Pro/Team plan", "switch from platform credits", "use my own OpenAI paid access", or "connect OpenAI auth" — and when they ask how the agent is paid for, whether it is free, what the starter credits are, or what happens when credits run out.
+---
+
+# Tinyhat Codex Auth
+
+Use this when the user wants this Tinyhat-managed Hermes agent to use
+their OpenAI Codex / ChatGPT subscription instead of Tinyhat-funded
+platform credits.
+
+## Funding Model And The Onboarding Step
+
+A new agent starts on Tinyhat's included platform credits — a small
+starter credit (about $10). It exists so the agent works the moment it
+is created, not as the long-term fund. The intended ongoing fund is the
+user's own ChatGPT / Codex subscription, connected through the
+`/codex_auth` flow below. If the starter credit runs out before a
+subscription is connected, the agent cannot answer until funding is
+connected.
+
+The platform context shows a one-time funding note exactly once per
+Computer — on the first conversation turn after setup or an in-place
+upgrade. In a new user's onboarding reply, present connecting the
+subscription as **one of the onboarding steps** — a numbered or
+bulleted step when the reply lists getting-started steps, or a
+standalone step line of its own when it does not. For a clearly
+returning user (the Computer was upgraded mid-life), one brief
+standalone line is enough. Never demote it to a footnote, aside, or
+parenthetical, and skip it silently when a subscription is already
+connected. Example step: "Connect your ChatGPT/Codex subscription with
+/codex_auth — you're starting on a small included starter credit
+(about $10), and your own plan keeps me running after it."
+Rules for that step:
+
+- Present it once — not in every reply, and never as a nag. The
+  platform context tracks this with a durable per-Computer marker, so
+  a later /new or /reset session does not re-arm the step for a user
+  who already saw it.
+- Precedence: if the first reply is a tool-owned native response (for
+  example the Codex auth prerequisite photo or a Connect Google button),
+  or the user is already asking to connect their subscription, that flow
+  satisfies the step — do not add a separate text reply for it.
+- Never block or delay the user's actual request on it.
+- If unsure whether a subscription is already connected, check
+  `tinyhat_codex_auth` with `{"action": "status"}` before claiming it
+  is not connected.
+- Never estimate remaining included platform funding or exact spend. The
+  separate `tinyhat:tinyhat-credit` skill can show the user's credit balance
+  and recent transactions, including credit added to the AI model budget.
+- When the user says yes, start the flow below; do not re-explain the
+  funding model first.
+
+Do not ask a multiple-choice clarification for common wording like
+"connect my ChatGPT account" or "use my Codex subscription". Treat that
+as a request to start Tinyhat's Codex auth flow. Only clarify if the user
+explicitly asks for ChatGPT conversation history/data or for an OpenAI
+API key instead of subscription auth.
+
+## Default Flow: Screenshot, Then `/codex_auth`
+
+For common natural-language requests, call `tinyhat_codex_auth` once
+with:
+
+```json
+{"action": "prerequisite"}
+```
+
+This sends the screenshot that shows where the ChatGPT Security setting
+lives, with a short caption and the clickable `/codex_auth` command.
+After the tool call, do not send an extra normal chat reply. The photo
+caption is the user-facing reply.
+
+The tool caption uses copy like this. Keep `/codex_auth` on its own line
+so it is hard to miss:
+
+```text
+To use your Codex subscription here:
+
+1. Open chatgpt.com > Settings > Security.
+2. Turn on "Enable device code authorization for Codex".
+
+Then come back here and tap:
+
+/codex_auth
+```
+
+The tool sends this bundled screenshot with that caption:
+
+```text
+skills/tinyhat-codex-auth/assets/chatgpt-enable-device-code-for-codex.png
+```
+
+After this prerequisite tool returns, do not send a follow-up reply unless
+Telegram delivery failed and the tool explicitly says a reply is needed.
+Do not repeat the same link, and do not call the tool again.
+
+The user must do this on their side:
+
+1. Open `chatgpt.com`.
+2. Go to Settings.
+3. Open Security.
+4. Scroll to **Secure sign in with ChatGPT**.
+5. Turn on **Enable device code authorization for Codex**.
+
+Personal accounts can usually turn this on directly. Team, Business, and
+Enterprise accounts may require a workspace admin if the toggle is
+disabled.
+
+## Start Auth Only If The User Confirms In Chat
+
+Normally the user starts auth by tapping `/codex_auth` in the Telegram
+message. If instead the user replies in chat that the setting is already
+enabled and asks you to continue, call `tinyhat_codex_auth` with:
+
+```json
+{"action": "start", "confirmed": true}
+```
+
+Only this second call starts the installed auth helper that sends the
+OpenAI authorization button and copyable code.
+
+Let the tool's Telegram messages stand. Do not send a second link or a
+second code in your own reply.
+
+Tinyhat installs this Telegram auth flow during Computer setup:
+
+```text
+/codex_auth
+```
+
+The command sends an OpenAI authorization button to Telegram, sends the
+device code as a separate copyable message, waits for OpenAI to finish
+the device flow on this Computer, switches Hermes to Codex auth, and
+restarts the Telegram gateway so the next reply uses the new credential.
+
+If the `tinyhat_codex_auth` tool is unavailable, start the installed flow
+yourself only after the user confirms the ChatGPT setting is on. Prefer
+invoking the installed quick command directly if your interface supports
+that. Otherwise run the same installed runtime helper:
+
+```bash
+PYTHONPATH="${TINYHAT_RUNTIME_PREFIX:-/opt/tinyhat-hermes-runtime}:${PYTHONPATH:-}" \
+python3 -m hermes_runtime.telegram_codex_auth start
+```
+
+Only if both the quick command and runtime helper are unavailable should
+you tell the user to send `/codex_auth` manually.
+
+Keep your user-facing reply short. Do not tell the user to edit config
+files, run `hermes auth add ...`, paste `auth.json`, provide a refresh
+token, or create an OpenAI API key.
+
+## Message Contract
+
+- The Tinyhat auth helper sends the button and device code itself.
+- For the default flow, call `tinyhat_codex_auth` once with
+  `{"action": "prerequisite"}`. Let the screenshot caption stand.
+- Do not send an extra normal chat reply after the prerequisite tool.
+- Do not call `tinyhat_codex_auth` twice during the same request.
+- Do not start the helper until the user taps `/codex_auth` or explicitly
+  confirms in chat that the ChatGPT Security toggle is on.
+- Do not paste the raw auth URL or duplicate the device code unless the
+  helper explicitly reports that Telegram delivery failed.
+- The device code is copyable but temporary. It is not the OAuth token.
+- If the user says they signed in, call `tinyhat_codex_auth` with
+  `{"action": "status"}` to verify.
+- If they ask about remaining limits, call `tinyhat_codex_auth` with
+  `{"action": "limits"}`.
+- If the flow fails or seems stuck, call `tinyhat_codex_auth` with
+  `{"action": "log"}` and surface the bounded non-secret error. Do not
+  guess.
+
+## Helpful Copy
+
+The default screenshot caption should say:
+
+```text
+To use your Codex subscription here:
+
+1. Open chatgpt.com > Settings > Security.
+2. Turn on "Enable device code authorization for Codex".
+
+Then come back here and tap:
+
+/codex_auth
+```
+
+After the user confirms and the auth flow starts, a good short reply is:
+
+```text
+I started the OpenAI Codex sign-in flow. Tap the authorization button I
+sent above, then paste the code from the next message. I will switch to
+your Codex subscription when OpenAI finishes the sign-in.
+```
