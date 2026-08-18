@@ -19,6 +19,7 @@ REQUIRED_TOOLS = [
     "tinyhat_credit",
     "tinyhat_model_budget",
     "tinyhat_openrouter_credit_allocate",
+    "tinyhat_contact_details",
     "tinyhat_hats",
     "tinyhat_tell_joke",
     "tinyhat_skill_catalog",
@@ -54,6 +55,7 @@ REQUIRED_SKILLS = [
     "tinyhat-plugin-update",
     "tinyhat-platform",
     "tinyhat-credit",
+    "tinyhat-contact-details",
     "tinyhat-privacy",
 ]
 FORBIDDEN_PATHS = (
@@ -811,9 +813,7 @@ def validate_hermes_adapter(root: Path) -> None:
     expected_skill_paths = {
         "hat-authoring": "skills/hat-authoring/SKILL.md",
         "tinyhat-hat-wearing": "skills/tinyhat-hat-wearing/SKILL.md",
-        "tinyhat-onboarding-greeting": (
-            "skills/tinyhat-onboarding-greeting/SKILL.md"
-        ),
+        "tinyhat-onboarding-greeting": ("skills/tinyhat-onboarding-greeting/SKILL.md"),
         "tinyhat-plugin-version": "skills/tinyhat-plugin-version/SKILL.md",
         "tinyhat-tell-joke": "skills/tinyhat-tell-joke/SKILL.md",
         "tinyhat-skill-catalog": "skills/tinyhat-skill-catalog/SKILL.md",
@@ -829,6 +829,7 @@ def validate_hermes_adapter(root: Path) -> None:
         "tinyhat-plugin-update": "skills/tinyhat-plugin-update/SKILL.md",
         "tinyhat-platform": "skills/tinyhat-platform/SKILL.md",
         "tinyhat-credit": "skills/tinyhat-credit/SKILL.md",
+        "tinyhat-contact-details": "skills/tinyhat-contact-details/SKILL.md",
         "tinyhat-privacy": "skills/tinyhat-privacy/SKILL.md",
     }
     for skill in skills:

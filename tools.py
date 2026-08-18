@@ -9,10 +9,15 @@ from pathlib import Path
 from typing import Any
 from urllib import error, parse, request
 
+from .contact_details import contact_details as handle_contact_details
 from .credentials import credentials as handle_credentials
 from .credit import (
     allocate_openrouter_credit as handle_allocate_openrouter_credit,
+)
+from .credit import (
     credit_summary as handle_credit_summary,
+)
+from .credit import (
     model_budget as handle_model_budget,
 )
 from .google_workspace import google_workspace as handle_google_workspace
@@ -105,6 +110,11 @@ def openrouter_credit_allocate(
 ) -> str:
     """Add owner credit to the assigned Agent's AI model budget."""
     return handle_allocate_openrouter_credit(args, **kwargs)
+
+
+def contact_details(args: dict[str, Any] | None = None, **kwargs: Any) -> str:
+    """Return or assign the current Agent's managed phone and email."""
+    return handle_contact_details(args, **kwargs)
 
 
 def hats(args: dict[str, Any] | None = None, **kwargs: Any) -> str:

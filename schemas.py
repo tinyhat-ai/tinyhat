@@ -69,6 +69,19 @@ TINYHAT_OPENROUTER_CREDIT_ALLOCATE_SCHEMA = {
     "additionalProperties": False,
 }
 
+TINYHAT_CONTACT_DETAILS_SCHEMA = {
+    "type": "object",
+    "description": (
+        "Returns this authenticated Computer's assigned Agent phone number and "
+        "email address. If an enabled contact type is eligible but missing, "
+        "Tinyhat assigns it idempotently. It accepts no identity, contact, "
+        "inventory, provider-account, or API-key input."
+    ),
+    "properties": {},
+    "required": [],
+    "additionalProperties": False,
+}
+
 TINYHAT_HATS_SCHEMA = {
     "type": "object",
     "description": (

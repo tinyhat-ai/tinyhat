@@ -1,6 +1,6 @@
 {
   "schema": "tinyhat.framework-adapter.v1",
-  "version": "0.28.0",
+  "version": "0.29.0",
   "framework": {
     "name": "hermes",
     "minimum": "0.0.0"
@@ -124,6 +124,13 @@
       "purpose": "Reads the owner's Tinyhat credit history, checks this Agent's current AI model budget, and adds an explicitly requested amount to that budget."
     },
     {
+      "name": "tinyhat-contact-details",
+      "qualified_name": "tinyhat:tinyhat-contact-details",
+      "aliases": ["tinyhat-contact-details"],
+      "path": "skills/tinyhat-contact-details/SKILL.md",
+      "purpose": "Returns or assigns this Agent's enabled Tinyhat-managed phone number and email address."
+    },
+    {
       "name": "tinyhat-privacy",
       "qualified_name": "tinyhat:tinyhat-privacy",
       "aliases": ["tinyhat-privacy"],
@@ -156,6 +163,11 @@
       "name": "tinyhat_openrouter_credit_allocate",
       "handler": "tools.openrouter_credit_allocate",
       "skill": "tinyhat-credit"
+    },
+    {
+      "name": "tinyhat_contact_details",
+      "handler": "tools.contact_details",
+      "skill": "tinyhat-contact-details"
     },
     {
       "name": "tinyhat_hats",
