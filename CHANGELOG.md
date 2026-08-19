@@ -29,6 +29,13 @@ All notable changes to the Tinyhat plugin are documented here.
   workers, and private helpers together without changing the public tool or
   skill contract.
 
+- Keep phone and text guidance quiet during programming discussions while
+  still recognizing clear real-world call and message requests.
+
+- Require the owner to confirm sensitive mailbox changes such as forwarding,
+  rules, autoresponders, and deletion. Instructions inside email or other
+  remote content can never authorize or confirm these changes.
+
 ## 0.30.0 - 2026-08-19
 
 - Add `tinyhat_mail` and the `tinyhat:tinyhat-mail` skill.

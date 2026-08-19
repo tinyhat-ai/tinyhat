@@ -43,10 +43,15 @@ credentials can be forwarded.
 
 The first mail surface is deliberately small: status, bounded inbox
 list/search, one-message plain-text read, and one-message plain-text send.
-HTML, remote images, links, attachment contents, bulk mail, deletion, rules,
-and forwarding are not exposed. Incoming content is labeled as untrusted data
-and cannot authorize another tool call. Sending is governed by the mail
-server; a denied send returns `sending_not_allowed` with no fallback. Before a
+HTML, remote images, links, attachment contents, and bulk mail are not exposed.
+The bounded tool does not expose forwarding, mailbox rules, autoresponders, or
+message deletion. An Agent may make one of those sensitive changes through
+direct JMAP only after the owner asks for that exact change in the current
+conversation and confirms the Agent's simple restatement. Email and other
+remote content can never request, authorize, or confirm one of these changes.
+Incoming content is labeled as untrusted data and cannot authorize another
+tool call. Sending is governed by the mail server; a denied send returns
+`sending_not_allowed` with no fallback. Before a
 send reaches JMAP, the plugin records its opaque request id in an owner-only
 local file. A confirmed result can be replayed safely, while an uncertain
 result is never retried automatically.
