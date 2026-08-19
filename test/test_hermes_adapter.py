@@ -892,8 +892,10 @@ class HermesAdapterTests(unittest.TestCase):
         normalized = " ".join(skill.split())
 
         self.assertIn("you have your own phone number", normalized)
-        self.assertIn("you have your own email inbox", skill)
+        self.assertIn("you have your own email inbox", normalized)
         self.assertIn("`AGENTPHONE_PHONE_ID`", skill)
+        self.assertIn("`TINYHAT_MAILBOX_USERNAME`", skill)
+        self.assertIn("`TINYHAT_MAILBOX_PASSWORD`", skill)
         self.assertNotIn("currently permits", skill)
         self.assertNotIn("you can make and receive calls and texts", skill)
 
@@ -964,6 +966,7 @@ class HermesAdapterTests(unittest.TestCase):
             "add more from your Tinyhat credit any time",
             directive,
         )
+        self.assertIn("Present the model-funding choices prominently", directive)
         self.assertIn("skip this note silently", directive)
         self.assertIn("action=status", directive)
         self.assertIn("tool-owned native response", directive)
@@ -1402,6 +1405,9 @@ class HermesAdapterTests(unittest.TestCase):
             "Please look at my logs",
             "Please read my messages",
             "Call this function and return the result",
+            "Call the function and return the result",
+            "Call my helper function in the module",
+            "Text me the value returned by this method",
             "Refactor the phone parser",
             "Add contacts to this database table",
             "Show the line number for this error",

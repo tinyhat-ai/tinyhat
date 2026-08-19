@@ -51,8 +51,8 @@ TINYHAT_CONTEXT = """Tinyhat context: this Hermes agent runs on a Tinyhat-manage
 FUNDING_REMINDER_DIRECTIVE = (
     "[System note: One-time funding note for this Computer — it is shown "
     "exactly once (the first conversation turn after setup or an in-place "
-    "upgrade) and never again. Present connecting the user's own "
-    "ChatGPT/Codex subscription prominently in this reply. When this "
+    "upgrade) and never again. Present the model-funding choices prominently "
+    "in this reply. When this "
     "reply is a new user's onboarding message, make it one of the "
     "onboarding steps — a numbered or bulleted step when the reply lists "
     "getting-started steps, otherwise one standalone step line — kept in "
@@ -916,7 +916,11 @@ def should_inject_tinyhat_context(user_message: str, *, is_first_turn: bool = Fa
     has_contact_signal = bool(
         matched_phrases.intersection(_CONTACT_PHRASES) or matched_terms.intersection(_CONTACT_TERMS)
     )
-    if matched_phrases.intersection(_CONTACT_ACTION_PHRASES):
+    action_blocking_terms = _CONTACT_DEVELOPER_TERMS - {"table"}
+    if (
+        matched_phrases.intersection(_CONTACT_ACTION_PHRASES)
+        and not terms.intersection(action_blocking_terms)
+    ):
         return True
     if has_contact_signal and not terms.intersection(_CONTACT_DEVELOPER_TERMS):
         return True
