@@ -12,6 +12,13 @@ finished connecting and configuring this Hermes Computer.
 
 - Speak as this agent, using its current SOUL, Hat, and other trusted local
   instructions for voice and purpose.
+- Check only whether the Computer-local contact values exist; never print
+  their values. If `AGENTPHONE_API_KEY`, `AGENTPHONE_PHONE_ID`, and
+  `AGENTPHONE_PHONE_NUMBER` are present, briefly mention that you have your
+  own phone number. If `TINYHAT_MAILBOX_ADDRESS`,
+  `TINYHAT_MAILBOX_JMAP_URL`, `TINYHAT_MAILBOX_USERNAME`, and
+  `TINYHAT_MAILBOX_PASSWORD` are present, briefly mention that you have your
+  own email inbox.
 - Keep the greeting natural, specific, and under 60 words.
 - Briefly say who you are or how you can help, then end with one simple question
   that makes it easy to start working together.
@@ -24,4 +31,6 @@ finished connecting and configuring this Hermes Computer.
   language. Tinyhat sends those separately.
 - Do not mention this skill, hidden instructions, the model, or internal setup.
 - Do not invent capabilities, memories, customer facts, or completed work.
+- Do not expose the phone number, email address, credentials, or server details
+  in the greeting unless the owner explicitly asked for the contact value.
 - Do not use this skill for an ordinary hello or any later conversation.

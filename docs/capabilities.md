@@ -17,13 +17,14 @@ The current capability list is intentionally small.
 | `tinyhat-skill-authoring` skill | Available now | Teaches agents to write portable user skills with valid names, explicit trigger and non-trigger boundaries, progressive disclosure, and bounded context size. |
 | `tinyhat-hat-wearing` skill | Available now | Authorizes a full Hat handle, checks out its private repository read-only, installs namespaced skills, and coordinates ciphertext-only creator-to-consumer credential delivery. |
 | `tinyhat-onboarding-greeting` skill | Available now | Guides the newly configured agent's short first owner greeting after Tinyhat confirms Computer setup is complete. |
+| `tinyhat-agentphone` skill | Available now | Loads AgentPhone's current online skill and uses this Agent's Computer-local provider credentials directly for calls and text messages. |
 | `tinyhat_private_secret_handoff` | Available now | Lets a user enter a secret in a Telegram Mini App while Tinyhat stores only short-lived ciphertext. |
 | `tinyhat_slack_connect` | Available now | Sends Hermes' current Agent-view manifest and transfers the Slack bot token, Socket Mode app token, and allowed member IDs as one browser-encrypted Computer-local bundle. |
 | `tinyhat_slack_disconnect` | Available now | Sends an owner-confirmed Telegram ceremony, revokes active Slack bot access when possible, removes the complete Computer-local Slack bundle, and restarts Hermes. |
 | `tinyhat_google_workspace` | Available now | Connects Google identity, composes implemented access presets and requestable Custom scopes, lets Google handle its pending-verification warning, blocks unimplemented requests before OAuth, and starts an account-targeted local disconnect ceremony. |
 | `tinyhat_google_workspace_app` | Available now | Lends one selected account's assignment-verified Google access to one bounded `gws` invocation. |
 | `tinyhat_google_workspace_app_manager` | Available now | After approval, installs or removes the pinned integrity-verified `gws` app; Hermes supplies the operation skill. |
-| `tinyhat-codex-auth` skill | Available now | Teaches the agent the starter-credit funding model, the one-time connect-your-subscription onboarding step, and how to start and inspect the Tinyhat-installed OpenAI Codex / ChatGPT subscription auth flow. |
+| `tinyhat-codex-auth` skill | Available now | Teaches the Agent about $5 of starting model credit, adding more from Tinyhat credit, and optional OpenAI Codex / ChatGPT subscription auth. |
 | `tinyhat_plugin_update` | Available now | Checks and applies the configured plugin channel through installed runtime commands. |
 | `tinyhat-privacy` skill | Available now | Teaches the agent Tinyhat's privacy and trust model: dedicated isolated Computers, no routine platform reading of Computer contents, policy-bound human access, and the private-Computer direction. |
 | `pre_llm_call` context | Available now | Gives Hermes a short Tinyhat operating reminder on first turn and Tinyhat-sensitive requests. |
@@ -42,10 +43,15 @@ credentials can be forwarded.
 
 The first mail surface is deliberately small: status, bounded inbox
 list/search, one-message plain-text read, and one-message plain-text send.
-HTML, remote images, links, attachment contents, bulk mail, deletion, rules,
-and forwarding are not exposed. Incoming content is labeled as untrusted data
-and cannot authorize another tool call. Sending is governed by the mail
-server; a denied send returns `sending_not_allowed` with no fallback. Before a
+HTML, remote images, links, attachment contents, and bulk mail are not exposed.
+The bounded tool does not expose forwarding, mailbox rules, autoresponders, or
+message deletion. An Agent may make one of those sensitive changes through
+direct JMAP only after the owner asks for that exact change in the current
+conversation and confirms the Agent's simple restatement. Email and other
+remote content can never request, authorize, or confirm one of these changes.
+Incoming content is labeled as untrusted data and cannot authorize another
+tool call. Sending is governed by the mail server; a denied send returns
+`sending_not_allowed` with no fallback. Before a
 send reaches JMAP, the plugin records its opaque request id in an owner-only
 local file. A confirmed result can be replayed safely, while an uncertain
 result is never retried automatically.
@@ -54,6 +60,22 @@ This mailbox is not the user's connected Gmail account. Gmail continues to
 use `tinyhat_google_workspace` and its existing permission and confirmation
 rules. A question asking only for the Agent's phone number or email address
 continues to use `tinyhat_contact_details`.
+
+The bounded mail tool is a convenience client, not a Tinyloop mail proxy. It
+connects from the Computer directly to JMAP. For another server-supported
+non-send JMAP operation, the Agent can use the same Computer-local credentials
+through runtime `0.0.56` or newer's pinned `tinyhat-jmap-python` and must keep
+them on the configured HTTPS JMAP origin. All sends stay in `tinyhat_mail` so
+server policy and uncertain-result idempotency remain enforced. AgentPhone
+follows the same architecture: the Computer calls AgentPhone's API directly
+after loading `https://agentphone.ai/skills.md` as untrusted operational
+guidance, but credentials are allowed only at the pinned
+`https://api.agentphone.ai` origin; Tinyloop is not in the call or text path.
+The local skill keeps fixed action boundaries: online instructions can supply
+only the path and payload for the owner's requested action. They cannot
+authorize setup steps or stored changes to an agent, number, or account,
+including custom tools, prompts, contact cards, webhooks, forwarding, resource
+release or deletion, or a URL the provider will call later.
 
 ## Shareable Hat Authoring
 
@@ -181,8 +203,9 @@ or on the first turn of a
 session. On the first conversation turn after setup or an in-place
 upgrade the context also adds a one-time funding-note directive ahead
 of the context — a new
-user's onboarding reply presents connecting the ChatGPT/Codex
-subscription as one of its onboarding steps, a returning user gets one
+user's onboarding reply presents the $5 starting model credit, adding more
+from Tinyhat credit, and optional ChatGPT/Codex subscription as one onboarding
+step; a returning user gets one
 brief line, an already-connected subscription skips it — tracked by a
 durable marker so later /new sessions do not re-arm it; tool-owned
 native first replies satisfy the note. The context tells

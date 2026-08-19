@@ -4,13 +4,41 @@ All notable changes to the Tinyhat plugin are documented here.
 
 ## Unreleased
 
-- Prepare `0.30.1` by moving product implementation into named folders under
+## 0.31.0 - 2026-08-19
+
+- Make the model-funding guidance match the current
+  product: new Agents start with about $5 of model credit, owners can add more
+  from Tinyhat credit at any time, and ChatGPT/Codex subscription access is an
+  optional alternative.
+
+- Teach Agents to use their assigned AgentPhone account
+  directly from their Computer with the provider's live skill, and by making
+  the existing mailbox boundary explicit: normal mail actions use the local
+  direct-JMAP helper while other server-supported JMAP actions may use local
+  credentials without a Tinyloop proxy. The setup greeting now mentions phone
+  and email only when those capabilities are present. Direct custom JMAP use
+  requires runtime `0.0.56` or newer for the preinstalled
+  `tinyhat-jmap-python` launcher. The online AgentPhone document is untrusted
+  operational guidance: fixed local rules keep the API key on the provider
+  origin and prevent that document from authorizing forwarding, deletion, or
+  extra data. Deploy Tinyloop contact-credential delivery before promotion.
+
+- Move product implementation into named folders under
   `capabilities/`. The root now contains only release metadata, documentation,
   and the thin Hermes adapter facades. Each capability keeps its tools,
   workers, and private helpers together without changing the public tool or
   skill contract.
 
-- Start `0.30.0` with `tinyhat_mail` and the `tinyhat:tinyhat-mail` skill.
+- Keep phone and text guidance quiet during programming discussions while
+  still recognizing clear real-world call and message requests.
+
+- Require the owner to confirm sensitive mailbox changes such as forwarding,
+  rules, autoresponders, and deletion. Instructions inside email or other
+  remote content can never authorize or confirm these changes.
+
+## 0.30.0 - 2026-08-19
+
+- Add `tinyhat_mail` and the `tinyhat:tinyhat-mail` skill.
   Each Agent can check, list, search, and read its own isolated Tinyhat inbox
   and send one plain-text email when the mail server permits it. Credentials
   stay in trusted Computer-local code; reads are bounded and stripped of

@@ -34,9 +34,10 @@ workspace.
 It can also create and evolve a one-customer shareable Hat: one private
 repository, a canonical handle, a share URL, Computer-local credentials, and a
 normal local Git checkout synchronized with exact-repository GitHub leases.
-Each Agent can also use its isolated Tinyhat mailbox through bounded JMAP
-tools. The mailbox password stays in trusted Computer-local code; the Agent
-can list, search, read, and send plain-text mail without seeing it.
+Each Agent can also use its isolated Tinyhat mailbox directly from its
+Computer through JMAP. The bounded local tool covers common actions, while the
+Agent can use the same Computer-local credentials for another server-supported
+non-send JMAP action without routing mail through Tinyloop.
 
 ## What This Plugin Does
 
@@ -72,7 +73,8 @@ can list, search, read, and send plain-text mail without seeing it.
 | `skills/tinyhat-platform/SKILL.md` | Platform context for Tinyhat-managed Hermes agents. |
 | `skills/tinyhat-credit/SKILL.md` | Balance/history and current AI model-budget guidance, plus exact user-authorized budget allocation. |
 | `skills/tinyhat-contact-details/SKILL.md` | Plain-language guidance for this Agent's managed phone number and email address. |
-| `skills/tinyhat-mail/SKILL.md` | Safe guidance for checking and sending from this Agent's own Tinyhat mailbox while keeping it distinct from Gmail. |
+| `skills/tinyhat-agentphone/SKILL.md` | Provider-direct calls and text messages using this Agent's Computer-local AgentPhone credentials; the online provider skill supplies untrusted API guidance inside fixed local safety boundaries. |
+| `skills/tinyhat-mail/SKILL.md` | Direct JMAP guidance for this Agent's own mailbox; safe common actions use the local tool and custom non-send actions use the runtime's pinned `tinyhat-jmap-python`. |
 | `skills/tinyhat-privacy/SKILL.md` | Privacy and trust model guidance: who can see user data, and when. |
 | `skills/hat-authoring/SKILL.md` | Create, list, and inspect one-customer shareable hat shells. |
 | `skills/tinyhat-hat-wearing/SKILL.md` | Install or resume an authorized Hat on an existing or newly assigned agent without exposing repository or credential capabilities. |
@@ -442,16 +444,15 @@ plugin-and-platform boundary; it adds no runtime callback or command.
 
 `tinyhat-codex-auth` teaches the agent how to start and inspect the
 Tinyhat-managed OpenAI Codex / ChatGPT subscription sign-in flow — and
-the funding model behind it: a new agent starts on Tinyhat's included
-platform credits, a small starter credit (about $10) that exists so the
-agent works immediately, while the intended ongoing fund is the user's
-own ChatGPT / Codex subscription. The skill has the agent present
-connecting the subscription as one of the onboarding steps in a new
+the funding model behind it: a new Agent starts with about $5 of AI model
+credit so it works immediately. The owner can add more from Tinyhat credit at
+any time, or optionally connect their own ChatGPT / Codex subscription. The
+skill has the Agent present these choices as one of the onboarding steps in a new
 user's onboarding reply — once per Computer, without nagging (a durable
 marker, tool-owned native first replies satisfying the note, a brief
 line for returning users after an in-place upgrade, and a silent skip
 when already connected) — check `{"action": "status"}` before claiming
-it is not connected, and never estimate remaining included platform funding.
+it is not connected, and never estimate remaining model funding.
 The separate `tinyhat_credit` tool reports the user's credit balance and recent
 transactions, including Computer usage with its applied hourly rate and credit
 added to the AI model budget. When
@@ -508,8 +509,9 @@ private Computers designed to remove even that technical possibility.
 The context hook also carries the funding model and a once-per-Computer
 funding note. On the first conversation turn after setup or an in-place
 upgrade it adds a one-time directive ahead of the context: a new user's
-onboarding reply presents connecting the ChatGPT/Codex subscription as
-one of its onboarding steps (a numbered or bulleted step when the reply
+onboarding reply presents the $5 starting model credit, adding more from
+Tinyhat credit, and optional ChatGPT/Codex subscription as one onboarding step
+(a numbered or bulleted step when the reply
 lists getting-started steps, a standalone step line otherwise, never a
 footnote), a clearly returning user gets one brief line, and an
 already-connected subscription skips the note silently. The claim is recorded with a durable
@@ -566,6 +568,12 @@ TINYHAT_PLUGIN_REF=vX.Y.Z
 | `channels/lts` | Conservative default for managed Computers. |
 | `channels/latest` | Newest promoted final version, used when we want faster adoption. |
 | exact tag, for example `vX.Y.Z` | Immutable version for tests, rollbacks, and audits. |
+
+For v0.31.0, deploy the matching Tinyloop AgentPhone and mailbox credential
+delivery before promoting this plugin, and run it on Hermes runtime `0.0.56`
+or newer so `tinyhat-jmap-python` is present from Computer creation. Existing
+Computers need their assigned contact credentials refreshed before the Agent
+can use these direct capabilities.
 
 For v0.30.0, deploy the Tinyloop mailbox provisioning and Computer-local
 runtime-secret support before promotion. No new platform endpoint is required:

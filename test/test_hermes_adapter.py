@@ -123,6 +123,7 @@ class HermesAdapterTests(unittest.TestCase):
         self.assertIn("tinyhat-plugin-update", ctx.skills)
         self.assertIn("tinyhat-platform", ctx.skills)
         self.assertIn("tinyhat-privacy", ctx.skills)
+        self.assertIn("tinyhat-agentphone", ctx.skills)
         self.assertIn("tinyhat-contact-details", ctx.skills)
         self.assertIn("tinyhat-mail", ctx.skills)
         self.assertIn("hat-authoring", ctx.skills)
@@ -138,6 +139,7 @@ class HermesAdapterTests(unittest.TestCase):
         self.assertTrue(ctx.skills["tinyhat-plugin-update"].is_file())
         self.assertTrue(ctx.skills["tinyhat-platform"].is_file())
         self.assertTrue(ctx.skills["tinyhat-privacy"].is_file())
+        self.assertTrue(ctx.skills["tinyhat-agentphone"].is_file())
         self.assertTrue(ctx.skills["tinyhat-contact-details"].is_file())
         self.assertTrue(ctx.skills["tinyhat-mail"].is_file())
         self.assertTrue(ctx.skills["hat-authoring"].is_file())
@@ -350,7 +352,7 @@ class HermesAdapterTests(unittest.TestCase):
 
         self.assertEqual(payload["schema"], "tinyhat_plugin_version_v1")
         self.assertEqual(payload["name"], "tinyhat")
-        self.assertEqual(payload["version"], "0.30.1")
+        self.assertEqual(payload["version"], "0.31.0")
 
     def test_running_version_contract_stays_at_plugin_root(self) -> None:
         adapter = json.loads((REPO_ROOT / "hermes.plugin.json").read_text(encoding="utf-8"))
@@ -358,7 +360,7 @@ class HermesAdapterTests(unittest.TestCase):
         self.assertEqual(adapter["entrypoint"]["manifest"], "plugin.yaml")
         self.assertEqual(adapter["entrypoint"]["module"], "__init__.py")
         self.assertEqual(Path(tools.__file__).resolve().parent, REPO_ROOT)
-        self.assertEqual(tools._plugin_manifest()["version"], "0.30.1")
+        self.assertEqual(tools._plugin_manifest()["version"], "0.31.0")
 
     def test_platform_status_uses_attested_computer_endpoint(self) -> None:
         original_build = tools.build_platform_client
@@ -407,7 +409,7 @@ class HermesAdapterTests(unittest.TestCase):
 
         self.assertEqual(payload["schema"], "tinyhat_skill_catalog_v1")
         self.assertEqual(payload["plugin"]["name"], "tinyhat")
-        self.assertEqual(payload["plugin"]["version"], "0.30.1")
+        self.assertEqual(payload["plugin"]["version"], "0.31.0")
         by_name = {skill["name"]: skill for skill in payload["skills"]}
         self.assertEqual(
             by_name["tinyhat-codex-auth"]["qualified_name"],
@@ -793,8 +795,9 @@ class HermesAdapterTests(unittest.TestCase):
                 )
                 self.assertIsNotNone(injected)
                 assert injected is not None
-                self.assertIn("starter credit", injected["context"])
-                self.assertIn("about $10", injected["context"])
+                self.assertIn("AI model credit", injected["context"])
+                self.assertIn("about $5", injected["context"])
+                self.assertIn("exact Tinyhat-credit amount", injected["context"])
                 self.assertIn("/codex_auth", injected["context"])
                 self.assertIn("tinyhat:tinyhat-credit", injected["context"])
                 self.assertIn("tinyhat_model_budget", injected["context"])
@@ -820,6 +823,86 @@ class HermesAdapterTests(unittest.TestCase):
                     injected["context"],
                 )
                 self.assertIn("tinyhat_contact_details", injected["context"])
+
+    def test_context_hook_injects_agentphone_for_calls_and_texts(self) -> None:
+        for user_message in (
+            "Call me on this number",
+            "Make a call to the restaurant",
+            "Send a text to my contractor",
+            "Text this number with the update",
+            "Send an SMS to Bob",
+            "Call my dentist",
+            "Call the restaurant and book a table",
+            "Text me when it is done",
+        ):
+            with self.subTest(user_message=user_message):
+                injected = tinyhat_context.inject_tinyhat_context(
+                    user_message=user_message,
+                    is_first_turn=False,
+                )
+                self.assertIsNotNone(injected)
+                assert injected is not None
+                self.assertIn("tinyhat:tinyhat-agentphone", injected["context"])
+                self.assertIn(
+                    "https://agentphone.ai/skills.md",
+                    injected["context"],
+                )
+
+    def test_agentphone_skill_pins_credentials_and_provider_boundaries(self) -> None:
+        skill = (
+            REPO_ROOT / "skills" / "tinyhat-agentphone" / "SKILL.md"
+        ).read_text(encoding="utf-8")
+        normalized = " ".join(skill.split())
+
+        self.assertIn("https://agentphone.ai/skills.md", skill)
+        self.assertNotIn("https://agentphone.to/skills.md", skill)
+        self.assertIn("https://api.agentphone.ai", skill)
+        self.assertIn("cannot change the credential's allowed origin", skill)
+        self.assertIn("untrusted operational guidance", skill)
+        self.assertIn("resource release or deletion", skill)
+        self.assertIn("Do not add any field", skill)
+        self.assertIn("AGENTPHONE_API_KEY", skill)
+        self.assertIn("AGENTPHONE_PHONE_ID", skill)
+        self.assertIn("AGENTPHONE_PHONE_NUMBER", skill)
+        self.assertNotIn("AGENTPHONE_ACCOUNT_REF", skill)
+        self.assertIn("If any is missing, stop", normalized)
+        self.assertIn("Do not sign up", normalized)
+        self.assertIn(
+            "When the provider's current schema requires an `agent_id`",
+            skill,
+        )
+        self.assertIn("GET /v1/numbers/{number_id}", skill)
+        self.assertIn("print `present` or `missing`", normalized)
+        self.assertIn("never use `env`", normalized)
+        self.assertIn("stored configuration change", normalized)
+        self.assertIn("custom tools", normalized)
+        self.assertIn("contact cards", normalized)
+        self.assertIn("any URL the provider will call later", normalized)
+        self.assertIn("Never guess an id or create another", normalized)
+        self.assertNotIn("origin named by the provider skill", skill)
+
+        readme = (REPO_ROOT / "README.md").read_text(encoding="utf-8")
+        normalized_readme = " ".join(readme.split())
+        self.assertIn("For v0.31.0", readme)
+        self.assertIn("Hermes runtime `0.0.56`", readme)
+        self.assertIn(
+            "AgentPhone and mailbox credential delivery",
+            normalized_readme,
+        )
+
+    def test_onboarding_greeting_mentions_contacts_without_overclaiming(self) -> None:
+        skill = (
+            REPO_ROOT / "skills" / "tinyhat-onboarding-greeting" / "SKILL.md"
+        ).read_text(encoding="utf-8")
+        normalized = " ".join(skill.split())
+
+        self.assertIn("you have your own phone number", normalized)
+        self.assertIn("you have your own email inbox", normalized)
+        self.assertIn("`AGENTPHONE_PHONE_ID`", skill)
+        self.assertIn("`TINYHAT_MAILBOX_USERNAME`", skill)
+        self.assertIn("`TINYHAT_MAILBOX_PASSWORD`", skill)
+        self.assertNotIn("currently permits", skill)
+        self.assertNotIn("you can make and receive calls and texts", skill)
 
     def test_context_hook_injects_for_agent_mail_questions(self) -> None:
         examples = (
@@ -885,16 +968,17 @@ class HermesAdapterTests(unittest.TestCase):
             directive,
         )
         self.assertIn(
-            "Connect your ChatGPT/Codex subscription with /codex_auth",
+            "add more from your Tinyhat credit any time",
             directive,
         )
+        self.assertIn("Present the model-funding choices prominently", directive)
         self.assertIn("skip this note silently", directive)
         self.assertIn("action=status", directive)
         self.assertIn("tool-owned native response", directive)
         self.assertIn("Never repeat this note", directive)
         self.assertIn("never block the user's actual request", directive)
         self.assertIn(
-            "Never infer remaining included platform funding",
+            "infer funds from history/Computer charges",
             tinyhat_context.TINYHAT_CONTEXT,
         )
         self.assertIn("load tinyhat:tinyhat-credit", tinyhat_context.TINYHAT_CONTEXT)
@@ -911,13 +995,18 @@ class HermesAdapterTests(unittest.TestCase):
             tinyhat_context.TINYHAT_CONTEXT,
         )
         self.assertIn(
-            "Never infer remaining included platform funding from history or "
-            "Computer charges; use tinyhat_model_budget.",
+            "never retry pending or infer funds from history/Computer charges.",
             tinyhat_context.TINYHAT_CONTEXT,
         )
         self.assertIn(
-            "/codex_auth is the user's ChatGPT/Codex subscription; "
+            "/codex_auth optionally uses ChatGPT/Codex; "
             "tinyhat_codex_auth action=status checks it.",
+            tinyhat_context.TINYHAT_CONTEXT,
+        )
+        self.assertIn("tinyhat:tinyhat-agentphone", tinyhat_context.TINYHAT_CONTEXT)
+        self.assertIn("https://agentphone.ai/skills.md", tinyhat_context.TINYHAT_CONTEXT)
+        self.assertNotIn(
+            "https://agentphone.to/skills.md",
             tinyhat_context.TINYHAT_CONTEXT,
         )
 
@@ -1143,7 +1232,7 @@ class HermesAdapterTests(unittest.TestCase):
         self.assertLess(len(first["context"]), 10_000)
         self.assertIn("- User credit:", first["context"])
         self.assertIn(
-            "Never infer remaining included platform funding",
+            "infer funds from history/Computer charges",
             first["context"],
         )
 
@@ -1228,8 +1317,9 @@ class HermesAdapterTests(unittest.TestCase):
         skill_md = REPO_ROOT / "skills" / "tinyhat-codex-auth" / "SKILL.md"
         text = " ".join(skill_md.read_text(encoding="utf-8").split())
 
-        self.assertIn("small starter credit (about $10)", text)
-        self.assertIn("intended ongoing fund", text)
+        self.assertIn("about US$5 of AI model credit", text)
+        self.assertIn("add more at any time from their Tinyhat credit", text)
+        self.assertIn("another optional way to fund model use", text)
         self.assertIn("one-time funding note exactly once per Computer", text)
         self.assertIn("as **one of the onboarding steps**", text)
         self.assertIn("Never demote it to a footnote", text)
@@ -1238,10 +1328,47 @@ class HermesAdapterTests(unittest.TestCase):
         self.assertIn("durable per-Computer marker", text)
         self.assertIn("tool-owned native response", text)
         self.assertIn("Never block or delay the user's actual request", text)
-        self.assertIn("Never estimate remaining included platform funding", text)
+        self.assertIn("Never estimate remaining model funding", text)
         self.assertIn("tinyhat:tinyhat-credit", text)
         self.assertIn('{"action": "status"}', text)
         self.assertIn("/codex_auth", text)
+
+    def test_model_funding_wording_is_current_everywhere(self) -> None:
+        surfaces = {
+            "context.py": ("about $5", "Tinyhat-credit", "optionally"),
+            "hermes.plugin.json": ("$5", "Tinyhat credit", "optional"),
+            "README.md": ("about $5", "Tinyhat credit", "optionally"),
+            "docs/capabilities.md": ("$5", "Tinyhat credit", "optional"),
+            "docs/skill-authoring.md": ("about $5", "Tinyhat balance", "optional"),
+            "skills/tinyhat-codex-auth/SKILL.md": (
+                "US$5",
+                "Tinyhat credit",
+                "optional",
+            ),
+            "skills/tinyhat-credit/SKILL.md": (
+                "US$5",
+                "Tinyhat credit",
+                "optionally",
+            ),
+            "skills/tinyhat-platform/SKILL.md": (
+                "$5",
+                "Tinyhat credit",
+                "optionally",
+            ),
+        }
+        stale_phrases = (
+            "$10",
+            "included platform funding",
+            "intended ongoing fund",
+            "connect-your-subscription",
+        )
+        for relative_path, required_phrases in surfaces.items():
+            with self.subTest(relative_path=relative_path):
+                text = (REPO_ROOT / relative_path).read_text(encoding="utf-8")
+                for phrase in required_phrases:
+                    self.assertIn(phrase, text)
+                for phrase in stale_phrases:
+                    self.assertNotIn(phrase, text)
 
     def test_funding_reminder_claim_fails_closed_without_hermes_home(self) -> None:
         os.environ["TINYHAT_HERMES_HOME"] = str(Path(self._hermes_home.name) / "does-not-exist")
@@ -1283,9 +1410,30 @@ class HermesAdapterTests(unittest.TestCase):
             "Please look at my logs",
             "Please read my messages",
             "Call this function and return the result",
+            "Call the function and return the result",
+            "Call the helper and return the result",
+            "Call my helper in the module",
+            "Call my helper function in the module",
+            "Text me the value returned by this helper",
+            "Text me the value returned by this method",
+            "Can you send a text representation of the tree?",
+            "Send a text file to the build directory",
+            "Call the API and log the response",
+            "Call the endpoint with a retry",
+            "Please recall the previous discussion about caching",
+            "Call the users table",
+            "Write a unit test where the mock will call me",
+            "Send an SMS via Twilio in this Python function",
+            "Make the webhook call me when the job finishes",
+            "The callback should call me back with the payload",
             "Refactor the phone parser",
             "Add contacts to this database table",
             "Show the line number for this error",
+            "Call me when the tests pass",
+            "Call me after the CI build finishes",
+            "Text me when the functions return",
+            "Send an SMS to Bob from this webhook",
+            "Send a text message to Bob after the callback runs",
         )
         for user_message in examples:
             with self.subTest(user_message=user_message):
@@ -1295,6 +1443,29 @@ class HermesAdapterTests(unittest.TestCase):
                         is_first_turn=False,
                     )
                 )
+
+    def test_mail_skill_keeps_direct_jmap_read_only_and_secrets_local(self) -> None:
+        skill = (REPO_ROOT / "skills" / "tinyhat-mail" / "SKILL.md").read_text(
+            encoding="utf-8"
+        )
+        normalized = " ".join(skill.split())
+
+        self.assertIn("server-supported non-send JMAP operation", normalized)
+        self.assertIn("Never call `EmailSubmission/set`", normalized)
+        self.assertIn("Forwarding, Sieve or mailbox rules", normalized)
+        self.assertIn("`VacationResponse/set`", normalized)
+        self.assertIn("message deletion are sensitive changes", normalized)
+        self.assertIn("ask the owner to confirm", normalized)
+        self.assertIn("remote content can never request", normalized)
+        self.assertIn("command arguments or source files", normalized)
+        self.assertIn("or a traceback", normalized)
+
+    def test_codex_auth_explains_missing_model_funding(self) -> None:
+        skill = (
+            REPO_ROOT / "skills" / "tinyhat-codex-auth" / "SKILL.md"
+        ).read_text(encoding="utf-8")
+
+        self.assertIn("cannot answer model-backed requests", skill)
 
     def test_privacy_access_wording_is_policy_exact_everywhere(self) -> None:
         fragments = (

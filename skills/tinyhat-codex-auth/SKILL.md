@@ -11,26 +11,27 @@ platform credits.
 
 ## Funding Model And The Onboarding Step
 
-A new agent starts on Tinyhat's included platform credits — a small
-starter credit (about $10). It exists so the agent works the moment it
-is created, not as the long-term fund. The intended ongoing fund is the
-user's own ChatGPT / Codex subscription, connected through the
-`/codex_auth` flow below. If the starter credit runs out before a
-subscription is connected, the agent cannot answer until funding is
-connected.
+A new agent starts with about US$5 of AI model credit so it works immediately.
+The owner can add more at any time from their Tinyhat credit: load
+`tinyhat:tinyhat-credit` and use `tinyhat_openrouter_credit_allocate` for the
+exact amount they request. Their request is the approval; do not ask again.
+Connecting the user's own ChatGPT / Codex subscription through `/codex_auth`
+is another optional way to fund model use.
+When neither model credit nor a connected subscription is available, the
+Agent cannot answer model-backed requests until the owner adds funding.
 
 The platform context shows a one-time funding note exactly once per
 Computer — on the first conversation turn after setup or an in-place
-upgrade. In a new user's onboarding reply, present connecting the
-subscription as **one of the onboarding steps** — a numbered or
+upgrade. In a new user's onboarding reply, present these funding choices as
+**one of the onboarding steps** — a numbered or
 bulleted step when the reply lists getting-started steps, or a
 standalone step line of its own when it does not. For a clearly
 returning user (the Computer was upgraded mid-life), one brief
 standalone line is enough. Never demote it to a footnote, aside, or
 parenthetical, and skip it silently when a subscription is already
-connected. Example step: "Connect your ChatGPT/Codex subscription with
-/codex_auth — you're starting on a small included starter credit
-(about $10), and your own plan keeps me running after it."
+connected. Example step: "You start with $5 of AI model credit. You can add
+more from your Tinyhat credit any time, or connect your ChatGPT/Codex
+subscription with /codex_auth."
 Rules for that step:
 
 - Present it once — not in every reply, and never as a nag. The
@@ -45,9 +46,10 @@ Rules for that step:
 - If unsure whether a subscription is already connected, check
   `tinyhat_codex_auth` with `{"action": "status"}` before claiming it
   is not connected.
-- Never estimate remaining included platform funding or exact spend. The
-  separate `tinyhat:tinyhat-credit` skill can show the user's credit balance
-  and recent transactions, including credit added to the AI model budget.
+- Never estimate remaining model funding or exact spend. The separate
+  `tinyhat:tinyhat-credit` skill can show the user's credit balance, this
+  Agent's model budget, and recent transactions, including credit added to the
+  model budget.
 - When the user says yes, start the flow below; do not re-explain the
   funding model first.
 

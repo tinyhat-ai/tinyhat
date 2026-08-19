@@ -28,9 +28,11 @@ row, or contact record.
 
 The returned phone number and email address belong to this Agent, not to the
 owner. Use them as the Agent's public contact details. To check or send mail
-after the email address is available, load `tinyhat:tinyhat-mail`. Only claim
-that a call or text was placed when a separate phone tool actually confirms
-it; knowing the phone number alone does not perform an outbound action.
+after the email address is available, load `tinyhat:tinyhat-mail`. To call or
+text, load `tinyhat:tinyhat-agentphone` and follow the current AgentPhone
+provider skill. Only claim that a call or text was placed when AgentPhone
+actually confirms it; knowing the phone number alone does not perform an
+outbound action.
 
 ## Boundaries
 
