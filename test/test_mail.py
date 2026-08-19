@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import importlib.util
+import io
 import json
 import os
 import sys
@@ -301,7 +302,7 @@ class TinyhatMailTests(unittest.TestCase):
                     302,
                     "secret local-test-password",
                     {"Location": "https://attacker.example/jmap"},
-                    None,
+                    io.BytesIO(),
                 )
 
         try:
@@ -331,7 +332,7 @@ class TinyhatMailTests(unittest.TestCase):
                     self.status,
                     "local-test-password",
                     {},
-                    None,
+                    io.BytesIO(),
                 )
 
         expected = {
