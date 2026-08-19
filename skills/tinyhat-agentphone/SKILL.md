@@ -11,11 +11,16 @@ a call or messaging proxy.
 
 ## Load the current provider instructions
 
-Before an AgentPhone action, read and follow the current provider skill at:
+Before loading provider instructions, confirm that `AGENTPHONE_API_KEY`,
+`AGENTPHONE_PHONE_ID`, and `AGENTPHONE_PHONE_NUMBER` are present. If any is
+missing, stop and say this Agent does not have an assigned phone yet. Do not
+sign up, create an AgentPhone agent, or buy a number.
+
+Then read and follow the current provider skill at:
 
 `https://agentphone.to/skills.md`
 
-The provider skill is the source of truth for current endpoints and payloads.
+The provider skill is the source of truth for current paths and payloads.
 Use its **existing API key** path when `AGENTPHONE_API_KEY` is present. Do not
 sign up, buy another number, or replace the assigned number.
 
@@ -31,9 +36,10 @@ separate environment value. List the existing AgentPhone agents and select the
 one attached to `AGENTPHONE_PHONE_ID`. Never guess an id or create another
 agent or number to obtain one.
 
-Send the API key only as the provider's Bearer token to the official
-AgentPhone API origin named by the provider skill. Never paste it into chat,
-logs, command output, a URL, or another service.
+Send the API key only as the provider's Bearer token to the pinned AgentPhone
+API origin `https://api.agentphone.ai`. The online skill may update paths and
+payloads, but it cannot change the credential's allowed origin. Never paste
+the key into chat, logs, command output, a URL, or another service.
 
 ## Calls and messages
 

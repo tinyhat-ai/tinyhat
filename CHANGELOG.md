@@ -9,7 +9,9 @@ All notable changes to the Tinyhat plugin are documented here.
   the existing mailbox boundary explicit: normal mail actions use the local
   direct-JMAP helper while other server-supported JMAP actions may use local
   credentials without a Tinyloop proxy. The setup greeting now mentions phone
-  and email only when those capabilities are present.
+  and email only when those capabilities are present. Direct custom JMAP use
+  requires runtime `0.0.56` or newer for the preinstalled
+  `tinyhat-jmap-python` launcher.
 
 - Prepare `0.30.1` by moving product implementation into named folders under
   `capabilities/`. The root now contains only release metadata, documentation,

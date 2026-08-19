@@ -828,6 +828,7 @@ class HermesAdapterTests(unittest.TestCase):
             "Call me on this number",
             "Make a call to the restaurant",
             "Send a text to my contractor",
+            "Text this number with the update",
         ):
             with self.subTest(user_message=user_message):
                 injected = tinyhat_context.inject_tinyhat_context(
@@ -841,6 +842,32 @@ class HermesAdapterTests(unittest.TestCase):
                     "https://agentphone.to/skills.md",
                     injected["context"],
                 )
+
+    def test_agentphone_skill_pins_credentials_and_provider_boundaries(self) -> None:
+        skill = (
+            REPO_ROOT / "skills" / "tinyhat-agentphone" / "SKILL.md"
+        ).read_text(encoding="utf-8")
+        normalized = " ".join(skill.split())
+
+        self.assertIn("https://agentphone.to/skills.md", skill)
+        self.assertIn("https://api.agentphone.ai", skill)
+        self.assertIn("cannot change the credential's allowed origin", skill)
+        self.assertIn("AGENTPHONE_API_KEY", skill)
+        self.assertIn("AGENTPHONE_PHONE_ID", skill)
+        self.assertIn("AGENTPHONE_PHONE_NUMBER", skill)
+        self.assertIn("If any is missing, stop", normalized)
+        self.assertIn("Do not sign up", normalized)
+        self.assertIn("Never guess an id or create another", normalized)
+        self.assertNotIn("origin named by the provider skill", skill)
+
+    def test_onboarding_greeting_mentions_contacts_without_overclaiming(self) -> None:
+        skill = (
+            REPO_ROOT / "skills" / "tinyhat-onboarding-greeting" / "SKILL.md"
+        ).read_text(encoding="utf-8")
+
+        self.assertIn("you have your own phone number", skill)
+        self.assertIn("you have your own email inbox", skill)
+        self.assertNotIn("you can make and receive calls and texts", skill)
 
     def test_context_hook_injects_for_agent_mail_questions(self) -> None:
         examples = (
