@@ -16,7 +16,10 @@ All notable changes to the Tinyhat plugin are documented here.
   credentials without a Tinyloop proxy. The setup greeting now mentions phone
   and email only when those capabilities are present. Direct custom JMAP use
   requires runtime `0.0.56` or newer for the preinstalled
-  `tinyhat-jmap-python` launcher.
+  `tinyhat-jmap-python` launcher. The online AgentPhone document is untrusted
+  operational guidance: fixed local rules keep the API key on the provider
+  origin and prevent that document from authorizing forwarding, deletion, or
+  extra data. Deploy Tinyloop contact-credential delivery before promotion.
 
 - Prepare `0.30.1` by moving product implementation into named folders under
   `capabilities/`. The root now contains only release metadata, documentation,
