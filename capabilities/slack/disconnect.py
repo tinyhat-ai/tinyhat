@@ -14,6 +14,8 @@ from urllib import error, request
 
 from ..secrets.handoff import WORKER_SYSTEMD_ENV_KEYS
 
+PLUGIN_ROOT = Path(__file__).resolve().parents[2]
+WORKER_CWD = PLUGIN_ROOT.parent
 SCHEMA = "tinyhat_plugin_slack_disconnect_v1"
 SLACK_AUTH_REVOKE_URL = "https://slack.com/api/auth.revoke"
 SLACK_ENV_NAMES = (
@@ -189,7 +191,7 @@ def start_slack_disconnect_worker(state: dict[str, Any]) -> None:
         raise RuntimeError("Platform did not return a complete disconnect request.")
     package_dir = Path(__file__).resolve().parent
     env = os.environ.copy()
-    pythonpath = str(package_dir.parent)
+    pythonpath = str(WORKER_CWD)
     if env.get("PYTHONPATH"):
         pythonpath = f"{pythonpath}{os.pathsep}{env['PYTHONPATH']}"
     env["PYTHONPATH"] = pythonpath
@@ -219,7 +221,7 @@ def start_slack_disconnect_worker(state: dict[str, Any]) -> None:
         try:
             completed = subprocess.run(
                 [*command, *args],
-                cwd=str(package_dir.parent),
+                cwd=str(WORKER_CWD),
                 capture_output=True,
                 text=True,
                 timeout=15,
@@ -231,7 +233,7 @@ def start_slack_disconnect_worker(state: dict[str, Any]) -> None:
             return
     subprocess.Popen(
         args,
-        cwd=str(package_dir.parent),
+        cwd=str(WORKER_CWD),
         env=env,
         stdin=subprocess.DEVNULL,
         stdout=subprocess.DEVNULL,

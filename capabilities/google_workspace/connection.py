@@ -53,6 +53,8 @@ from .scope_manifest import (
     resolve_scope_request,
 )
 
+PLUGIN_ROOT = Path(__file__).resolve().parents[2]
+WORKER_CWD = PLUGIN_ROOT.parent
 GOOGLE_WORKSPACE_ACTIONS = (
     "connect",
     "choose_permissions",
@@ -1881,7 +1883,7 @@ def _start_permission_chooser_worker_with_systemd(
     try:
         completed = subprocess.run(
             systemd_command,
-            cwd=str(package_dir.parent),
+            cwd=str(WORKER_CWD),
             capture_output=True,
             text=True,
             timeout=15,
@@ -1899,7 +1901,7 @@ def _start_permission_chooser_worker_process(
 ) -> None:
     package_dir = Path(__file__).resolve().parent
     env = os.environ.copy()
-    pythonpath = str(package_dir.parent)
+    pythonpath = str(WORKER_CWD)
     if env.get("PYTHONPATH"):
         pythonpath = f"{pythonpath}{os.pathsep}{env['PYTHONPATH']}"
     env["PYTHONPATH"] = pythonpath
@@ -1918,7 +1920,7 @@ def _start_permission_chooser_worker_process(
         if not started_with_systemd:
             subprocess.Popen(
                 command,
-                cwd=str(package_dir.parent),
+                cwd=str(WORKER_CWD),
                 env=env,
                 stdin=subprocess.DEVNULL,
                 stdout=subprocess.DEVNULL,
@@ -2902,7 +2904,7 @@ def _remove_active_disconnect_marker_if_matches(
 def _start_disconnect_worker_process(*, intent_id: str, state_path: Path) -> None:
     package_dir = Path(__file__).resolve().parent
     env = os.environ.copy()
-    pythonpath = str(package_dir.parent)
+    pythonpath = str(WORKER_CWD)
     if env.get("PYTHONPATH"):
         pythonpath = f"{pythonpath}{os.pathsep}{env['PYTHONPATH']}"
     env["PYTHONPATH"] = pythonpath
@@ -2921,7 +2923,7 @@ def _start_disconnect_worker_process(*, intent_id: str, state_path: Path) -> Non
         if not started_with_systemd:
             subprocess.Popen(
                 command,
-                cwd=str(package_dir.parent),
+                cwd=str(WORKER_CWD),
                 env=env,
                 stdin=subprocess.DEVNULL,
                 stdout=subprocess.DEVNULL,
@@ -2963,7 +2965,7 @@ def _start_disconnect_worker_with_systemd(
     try:
         completed = subprocess.run(
             systemd_command,
-            cwd=str(package_dir.parent),
+            cwd=str(WORKER_CWD),
             capture_output=True,
             text=True,
             timeout=15,
@@ -3427,7 +3429,7 @@ def _start_worker_process(
     _write_active_handoff_marker(handoff_id=handoff_id, owner_token=owner_token)
     package_dir = Path(__file__).resolve().parent
     env = os.environ.copy()
-    pythonpath = str(package_dir.parent)
+    pythonpath = str(WORKER_CWD)
     if env.get("PYTHONPATH"):
         pythonpath = f"{pythonpath}{os.pathsep}{env['PYTHONPATH']}"
     env["PYTHONPATH"] = pythonpath
@@ -3652,7 +3654,7 @@ def _start_worker_with_systemd(
     try:
         completed = subprocess.run(
             command,
-            cwd=str(package_dir.parent),
+            cwd=str(WORKER_CWD),
             capture_output=True,
             text=True,
             timeout=15,
@@ -3676,7 +3678,7 @@ def _start_worker_with_popen(
             key_path=key_path,
             package_dir=package_dir,
         ),
-        cwd=str(package_dir.parent),
+        cwd=str(WORKER_CWD),
         env=env,
         stdin=subprocess.DEVNULL,
         stdout=subprocess.DEVNULL,

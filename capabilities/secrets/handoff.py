@@ -38,6 +38,8 @@ from ..hats.secrets import (
     verify_authenticated_hat_secret_envelope,
 )
 
+PLUGIN_ROOT = Path(__file__).resolve().parents[2]
+WORKER_CWD = PLUGIN_ROOT.parent
 KEY_ALGORITHM = "RSA-OAEP-256"
 DEFAULT_EXPIRES_IN_SECONDS = 300
 MAX_EXPIRES_IN_SECONDS = 30 * 60
@@ -398,7 +400,7 @@ def _start_worker_process(
     worker_key_path = key_path or _write_private_key_file(handoff_id, private_key_pem)
     package_dir = Path(__file__).resolve().parent
     env = os.environ.copy()
-    pythonpath = str(package_dir.parent)
+    pythonpath = str(WORKER_CWD)
     if env.get("PYTHONPATH"):
         pythonpath = f"{pythonpath}{os.pathsep}{env['PYTHONPATH']}"
     env["PYTHONPATH"] = pythonpath
@@ -486,7 +488,7 @@ def _start_worker_with_systemd(  # noqa: PLR0913 - explicit worker boundary inpu
     try:
         completed = subprocess.run(
             command,
-            cwd=str(package_dir.parent),
+            cwd=str(WORKER_CWD),
             capture_output=True,
             text=True,
             timeout=15,
@@ -539,7 +541,7 @@ def _start_worker_with_popen(  # noqa: PLR0913 - mirrors the systemd worker inpu
         command.append("--persistent")
     subprocess.Popen(
         command,
-        cwd=str(package_dir.parent),
+        cwd=str(WORKER_CWD),
         env=env,
         stdin=subprocess.DEVNULL,
         stdout=subprocess.DEVNULL,

@@ -687,6 +687,12 @@ class GoogleWorkspaceTests(unittest.TestCase):
                 )
 
             popen.assert_called_once()
+            expected_worker_cwd = Path(workspace.__file__).resolve().parents[3]
+            self.assertEqual(popen.call_args.kwargs["cwd"], str(expected_worker_cwd))
+            self.assertEqual(
+                popen.call_args.kwargs["env"]["PYTHONPATH"].split(os.pathsep)[0],
+                str(expected_worker_cwd),
+            )
             self.assertTrue((state_path.parent / "ready.json").exists())
 
     def test_permission_chooser_worker_starts_one_combined_google_request(self) -> None:

@@ -1835,6 +1835,25 @@ class HermesAdapterTests(unittest.TestCase):
         self.assertIn("two-stage Slack disconnect", payload["agent_instruction"])
         self.assertEqual(worker_calls[0]["removal_id"], "scr_slack")
 
+    def test_slack_disconnect_worker_uses_plugin_parent_for_pythonpath(self) -> None:
+        state = {
+            "handoff_id": "sh_slack",
+            "removal_id": "scr_slack",
+            "expires_at": "2026-07-31T20:00:00Z",
+        }
+        with (
+            mock.patch.object(slack_disconnect.shutil, "which", return_value=None),
+            mock.patch.object(slack_disconnect.subprocess, "Popen") as popen,
+        ):
+            slack_disconnect.start_slack_disconnect_worker(state)
+
+        expected_worker_cwd = Path(slack_disconnect.__file__).resolve().parents[3]
+        self.assertEqual(popen.call_args.kwargs["cwd"], str(expected_worker_cwd))
+        self.assertEqual(
+            popen.call_args.kwargs["env"]["PYTHONPATH"].split(os.pathsep)[0],
+            str(expected_worker_cwd),
+        )
+
     def test_slack_disconnect_revokes_then_removes_complete_bundle(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             env_path = Path(tmp) / ".env"
@@ -3245,6 +3264,8 @@ class HermesAdapterTests(unittest.TestCase):
         self.assertIn("--setenv=TINYHAT_LOCAL_DEV_TOKEN=dev-token", args)
         self.assertIn("--expires-in-seconds", args)
         self.assertIn(str(30 * 60), args)
+        expected_worker_cwd = Path(secret_handoff.__file__).resolve().parents[3]
+        self.assertEqual(commands[0]["cwd"], str(expected_worker_cwd))
 
     def test_private_secret_worker_systemd_failure_falls_back_to_popen(self) -> None:
         original_which = secret_handoff.shutil.which
@@ -3300,6 +3321,12 @@ class HermesAdapterTests(unittest.TestCase):
         self.assertIn("sh_test", worker_args)
         self.assertIn("--expires-in-seconds", worker_args)
         self.assertIn(str(30 * 60), worker_args)
+        expected_worker_cwd = Path(secret_handoff.__file__).resolve().parents[3]
+        self.assertEqual(popen_calls[0]["cwd"], str(expected_worker_cwd))
+        self.assertEqual(
+            popen_calls[0]["env"]["PYTHONPATH"].split(os.pathsep)[0],
+            str(expected_worker_cwd),
+        )
         self.assertIn("falling back to a detached process", stderr.getvalue())
         self.assertIn("Failed to start transient service unit", stderr.getvalue())
 
