@@ -429,20 +429,50 @@ _CONTACT_TERMS = frozenset(
 )
 _CONTACT_DEVELOPER_TERMS = frozenset(
     (
+        "api",
+        "apis",
+        "build",
+        "builds",
         "callback",
+        "callbacks",
+        "ci",
         "class",
+        "classes",
         "code",
         "column",
+        "columns",
         "database",
+        "databases",
+        "endpoint",
+        "endpoints",
         "field",
+        "fields",
         "function",
+        "functions",
+        "job",
+        "jobs",
         "method",
+        "methods",
+        "mock",
+        "mocks",
+        "module",
+        "modules",
         "parser",
+        "parsers",
+        "payload",
+        "payloads",
+        "pipeline",
+        "pipelines",
         "schema",
+        "schemas",
         "table",
+        "tables",
         "test",
+        "tests",
         "variable",
+        "variables",
         "webhook",
+        "webhooks",
     )
 )
 _CONTACT_ACTION_TARGET = (
@@ -453,19 +483,19 @@ _CONTACT_ACTION_TARGET = (
 _CONTACT_ACTION_PATTERNS_WEAK = tuple(
     re.compile(pattern)
     for pattern in (
-        r"\bcall (?:me|you)\b",
-        r"\bsend an? sms\b",
+        r"\bcan (?:people|someone|anyone) call you\b",
+        r"\bsend an? sms to\b",
+        r"\bsend an? text (?:message )?to\b",
+        r"\btext me(?:\s+(?:when|after|once|later|tomorrow|tonight|at)\b|\s*[.!?]*$)",
     )
 )
 _CONTACT_ACTION_PATTERNS_TARGETED = tuple(
     re.compile(pattern)
     for pattern in (
+        r"\bcall (?:me|you)\s+(?:on|at|using)\s+(?:this|the|my)\s+(?:phone\s+)?number\b",
         r"\btext this number\b",
-        r"\bsend an? text message\b",
-        r"\bsend an? text to\b",
         rf"\b(?:call|text) (?:my|the) {_CONTACT_ACTION_TARGET}\b",
         rf"\bmake an? call to (?:my|the) {_CONTACT_ACTION_TARGET}\b",
-        r"\btext me(?:\s+(?:when|after|once|later|tomorrow|tonight|at)\b|\s*[.!?]*$)",
         r"^(?:please\s+)?make an? call\s*[.!?]*$",
     )
 )

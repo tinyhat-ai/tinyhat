@@ -1429,6 +1429,11 @@ class HermesAdapterTests(unittest.TestCase):
             "Refactor the phone parser",
             "Add contacts to this database table",
             "Show the line number for this error",
+            "Call me when the tests pass",
+            "Call me after the CI build finishes",
+            "Text me when the functions return",
+            "Send an SMS to Bob from this webhook",
+            "Send a text message to Bob after the callback runs",
         )
         for user_message in examples:
             with self.subTest(user_message=user_message):
