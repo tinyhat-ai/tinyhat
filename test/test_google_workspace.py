@@ -687,7 +687,7 @@ class GoogleWorkspaceTests(unittest.TestCase):
                 )
 
             popen.assert_called_once()
-            expected_worker_cwd = Path(workspace.__file__).resolve().parents[3]
+            expected_worker_cwd = PARENT
             self.assertEqual(popen.call_args.kwargs["cwd"], str(expected_worker_cwd))
             self.assertEqual(
                 popen.call_args.kwargs["env"]["PYTHONPATH"].split(os.pathsep)[0],

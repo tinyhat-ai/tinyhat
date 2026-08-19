@@ -1847,7 +1847,7 @@ class HermesAdapterTests(unittest.TestCase):
         ):
             slack_disconnect.start_slack_disconnect_worker(state)
 
-        expected_worker_cwd = Path(slack_disconnect.__file__).resolve().parents[3]
+        expected_worker_cwd = PARENT
         self.assertEqual(popen.call_args.kwargs["cwd"], str(expected_worker_cwd))
         self.assertEqual(
             popen.call_args.kwargs["env"]["PYTHONPATH"].split(os.pathsep)[0],
@@ -3264,7 +3264,7 @@ class HermesAdapterTests(unittest.TestCase):
         self.assertIn("--setenv=TINYHAT_LOCAL_DEV_TOKEN=dev-token", args)
         self.assertIn("--expires-in-seconds", args)
         self.assertIn(str(30 * 60), args)
-        expected_worker_cwd = Path(secret_handoff.__file__).resolve().parents[3]
+        expected_worker_cwd = PARENT
         self.assertEqual(commands[0]["cwd"], str(expected_worker_cwd))
 
     def test_private_secret_worker_systemd_failure_falls_back_to_popen(self) -> None:
@@ -3321,7 +3321,7 @@ class HermesAdapterTests(unittest.TestCase):
         self.assertIn("sh_test", worker_args)
         self.assertIn("--expires-in-seconds", worker_args)
         self.assertIn(str(30 * 60), worker_args)
-        expected_worker_cwd = Path(secret_handoff.__file__).resolve().parents[3]
+        expected_worker_cwd = PARENT
         self.assertEqual(popen_calls[0]["cwd"], str(expected_worker_cwd))
         self.assertEqual(
             popen_calls[0]["env"]["PYTHONPATH"].split(os.pathsep)[0],

@@ -772,11 +772,13 @@ def validate_hermes_adapter(root: Path) -> None:
         "capabilities/google_workspace/app.py",
         "capabilities/google_workspace/app_manager.py",
         "capabilities/google_workspace/disconnect_worker.py",
+        "capabilities/google_workspace/permission_chooser_worker.py",
         "capabilities/google_workspace/worker.py",
         "capabilities/hats/tool.py",
         "capabilities/secrets/handoff.py",
         "capabilities/secrets/handoff_worker.py",
         "capabilities/slack/connection.py",
+        "capabilities/slack/disconnect.py",
         "capabilities/slack/disconnect_worker.py",
     ):
         require((root / rel).is_file(), f"{rel} is missing")
