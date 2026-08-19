@@ -19,6 +19,8 @@ It needs no user confirmation and accepts no identity or contact input.
 - `not_available`, `not_assigned`, or `unavailable`: say it is not available
   yet.
 - `error`: say Tinyhat could not set up the phone number right now.
+- If the whole tool call fails, say Tinyhat could not check the contact details
+  right now and offer to try again. Do not name the internal error.
 
 Keep the answer short. Say **phone number** and **email address**. Do not use
 internal words such as inventory, credential, provider account, assignment

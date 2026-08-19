@@ -564,6 +564,11 @@ TINYHAT_PLUGIN_REF=vX.Y.Z
 | `channels/latest` | Newest promoted final version, used when we want faster adoption. |
 | exact tag, for example `vX.Y.Z` | Immutable version for tests, rollbacks, and audits. |
 
+For v0.29.0, deploy the matching Tinyloop managed-contact API before promoting
+`channels/latest` and `channels/lts`. The plugin asks the platform for this
+Agent's assigned phone number and email address and returns only those safe
+values.
+
 For v0.28.0, deploy the matching Tinyloop Computer usage billing API before
 promoting `channels/latest` and `channels/lts`. The credit summary then gives
 the Agent a safe Computer name, exact charged time range, and the applied
