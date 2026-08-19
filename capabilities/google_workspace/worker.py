@@ -10,19 +10,20 @@ import types
 from pathlib import Path
 
 if __package__ in {None, ""}:
-    package_dir = Path(__file__).resolve().parent
-    parent_dir = package_dir.parent
+    plugin_root = Path(__file__).resolve().parents[2]
+    parent_dir = plugin_root.parent
     if str(parent_dir) not in sys.path:
         sys.path.insert(0, str(parent_dir))
     package = sys.modules.get("tinyhat")
     if package is None:
         package = types.ModuleType("tinyhat")
-        package.__file__ = str(package_dir / "__init__.py")
-        package.__path__ = [str(package_dir)]  # type: ignore[attr-defined]
+        package.__file__ = str(plugin_root / "__init__.py")
+        package.__path__ = [str(plugin_root)]  # type: ignore[attr-defined]
         sys.modules["tinyhat"] = package
-    __package__ = "tinyhat"
+    __package__ = "tinyhat.capabilities.google_workspace"
 
-from .google_workspace import (
+from ...platform import build_platform_client
+from .connection import (
     GoogleWorkspaceError,
     GoogleWorkspaceWorkerHandoff,
     _claim_superseded,
@@ -38,7 +39,6 @@ from .google_workspace import (
     _validated_connection_id,
     _validated_handoff_id,
 )
-from .platform import build_platform_client
 
 GENERATION_MIN_LENGTH = 32
 GENERATION_MAX_LENGTH = 256

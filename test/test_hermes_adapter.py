@@ -35,17 +35,13 @@ else:
     import tinyhat
 
 from tinyhat import context as tinyhat_context  # noqa: E402
-from tinyhat import (  # noqa: E402
-    credentials,
-    platform,
-    schemas,
-    secret_handoff,
-    secret_handoff_worker,
-    slack_connection,
-    slack_disconnect,
-    slack_disconnect_worker,
-    tools,
-)
+from tinyhat import platform, schemas, tools  # noqa: E402
+from tinyhat.capabilities.secrets import credentials  # noqa: E402
+from tinyhat.capabilities.secrets import handoff as secret_handoff  # noqa: E402
+from tinyhat.capabilities.secrets import handoff_worker as secret_handoff_worker  # noqa: E402
+from tinyhat.capabilities.slack import connection as slack_connection  # noqa: E402
+from tinyhat.capabilities.slack import disconnect as slack_disconnect  # noqa: E402
+from tinyhat.capabilities.slack import disconnect_worker as slack_disconnect_worker  # noqa: E402
 
 
 class FakeHermesContext:
@@ -336,11 +332,9 @@ class HermesAdapterTests(unittest.TestCase):
                 )
                 self.assertIn("platform and installation history", surface)
                 self.assertIn("already-installed consumer agents", surface)
-                self.assertIsNone(
-                    re.search(r"\bpermanent(?:ly)?\b", surface, re.IGNORECASE)
-                )
+                self.assertIsNone(re.search(r"\bpermanent(?:ly)?\b", surface, re.IGNORECASE))
 
-        executable_instruction_source = (REPO_ROOT / "hats.py").read_text(
+        executable_instruction_source = (REPO_ROOT / "capabilities" / "hats" / "tool.py").read_text(
             encoding="utf-8"
         )
         self.assertIsNone(
@@ -356,7 +350,15 @@ class HermesAdapterTests(unittest.TestCase):
 
         self.assertEqual(payload["schema"], "tinyhat_plugin_version_v1")
         self.assertEqual(payload["name"], "tinyhat")
-        self.assertEqual(payload["version"], "0.30.0")
+        self.assertEqual(payload["version"], "0.30.1")
+
+    def test_running_version_contract_stays_at_plugin_root(self) -> None:
+        adapter = json.loads((REPO_ROOT / "hermes.plugin.json").read_text(encoding="utf-8"))
+
+        self.assertEqual(adapter["entrypoint"]["manifest"], "plugin.yaml")
+        self.assertEqual(adapter["entrypoint"]["module"], "__init__.py")
+        self.assertEqual(Path(tools.__file__).resolve().parent, REPO_ROOT)
+        self.assertEqual(tools._plugin_manifest()["version"], "0.30.1")
 
     def test_platform_status_uses_attested_computer_endpoint(self) -> None:
         original_build = tools.build_platform_client
@@ -405,7 +407,7 @@ class HermesAdapterTests(unittest.TestCase):
 
         self.assertEqual(payload["schema"], "tinyhat_skill_catalog_v1")
         self.assertEqual(payload["plugin"]["name"], "tinyhat")
-        self.assertEqual(payload["plugin"]["version"], "0.30.0")
+        self.assertEqual(payload["plugin"]["version"], "0.30.1")
         by_name = {skill["name"]: skill for skill in payload["skills"]}
         self.assertEqual(
             by_name["tinyhat-codex-auth"]["qualified_name"],
@@ -3293,7 +3295,7 @@ class HermesAdapterTests(unittest.TestCase):
         self.assertIn("systemd-run", run_calls[0][0])
         self.assertEqual(len(popen_calls), 1)
         worker_args = popen_calls[0]["args"]
-        self.assertTrue(str(worker_args[1]).endswith("secret_handoff_worker.py"))
+        self.assertTrue(str(worker_args[1]).endswith("handoff_worker.py"))
         self.assertIn("--handoff-id", worker_args)
         self.assertIn("sh_test", worker_args)
         self.assertIn("--expires-in-seconds", worker_args)
@@ -3524,7 +3526,7 @@ class HermesAdapterTests(unittest.TestCase):
         result = subprocess.run(
             [
                 sys.executable,
-                str(REPO_ROOT / "secret_handoff_worker.py"),
+                str(REPO_ROOT / "capabilities" / "secrets" / "handoff_worker.py"),
                 "--help",
             ],
             cwd="/tmp",
@@ -3708,13 +3710,14 @@ path.chmod(0o600)
                         "-c",
                         (
                             "import os; "
-                            "from tinyhat.secret_handoff import _set_hermes_secret; "
+                            "from tinyhat.capabilities.secrets.handoff "
+                            "import _set_hermes_secret; "
                             "_set_hermes_secret('EXA_API_KEY', 'test-secret-value'); "
                             "print('set' if os.environ.get('EXA_API_KEY') "
                             "== 'test-secret-value' else 'missing')"
                         ),
                     ],
-                    cwd="/tmp",
+                    cwd=temp_root,
                     env=worker_env,
                     capture_output=True,
                     text=True,
@@ -3790,14 +3793,15 @@ path.chmod(0o600)
                         "-c",
                         (
                             "import os; "
-                            "from tinyhat.secret_handoff import _set_hermes_secret; "
+                            "from tinyhat.capabilities.secrets.handoff "
+                            "import _set_hermes_secret; "
                             "_set_hermes_secret('STRIPE_SECRET_KEY', "
                             "'test-secret-value'); "
                             "print('set' if os.environ.get('STRIPE_SECRET_KEY') "
                             "== 'test-secret-value' else 'missing')"
                         ),
                     ],
-                    cwd="/tmp",
+                    cwd=temp_root,
                     env=worker_env,
                     capture_output=True,
                     text=True,

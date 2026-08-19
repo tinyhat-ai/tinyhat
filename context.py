@@ -7,7 +7,9 @@ import re
 from pathlib import Path
 from typing import Any
 
-from .google_workspace import remove_credentials_if_assignment_changed_for_context
+from .capabilities.google_workspace.connection import (
+    remove_credentials_if_assignment_changed_for_context,
+)
 
 ONBOARDING_GREETING_TURN_ENV = "TINYHAT_ONBOARDING_GREETING_TURN"
 
@@ -436,8 +438,7 @@ _FUNDING_QUESTION_CORES = (
     r"how much do you cost",
     r"what (?:it|this|you) costs?",
     r"how much (?:you|it|this) costs?",
-    r"(?:what (?:are|is) |what's )?your "
-    r"(?:price|prices|pricing|rates?|fees?|costs?|plans?)",
+    r"(?:what (?:are|is) |what's )?your " r"(?:price|prices|pricing|rates?|fees?|costs?|plans?)",
 )
 _FUNDING_QUESTION_PATTERNS_PRECISE = tuple(
     re.compile(_FUNDING_POLITE_PREFIX + core + r"\s*\??$") for core in _FUNDING_QUESTION_CORES
@@ -802,8 +803,7 @@ def _is_imperative_frame(normalized: str) -> bool:
 # messages?" asks ABOUT access, while "can you read my messages" asks
 # to perform it. Only reporting verbs qualify.
 _ENGLISH_MODAL_INQUIRY = re.compile(
-    r"(?<!\w)(?:can|could|would|will) you (?:please )?"
-    r"(?:tell|explain|describe|clarify)(?!\w)"
+    r"(?<!\w)(?:can|could|would|will) you (?:please )?" r"(?:tell|explain|describe|clarify)(?!\w)"
 )
 
 
@@ -877,8 +877,7 @@ def should_inject_tinyhat_context(user_message: str, *, is_first_turn: bool = Fa
     terms = set(re.findall(r"[a-z0-9]+", normalized_for_terms))
     matched_terms = terms.intersection(_CONTEXT_TERMS)
     has_contact_signal = bool(
-        matched_phrases.intersection(_CONTACT_PHRASES)
-        or matched_terms.intersection(_CONTACT_TERMS)
+        matched_phrases.intersection(_CONTACT_PHRASES) or matched_terms.intersection(_CONTACT_TERMS)
     )
     if has_contact_signal and not terms.intersection(_CONTACT_DEVELOPER_TERMS):
         return True

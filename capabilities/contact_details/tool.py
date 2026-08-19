@@ -5,8 +5,8 @@ from __future__ import annotations
 import json
 from typing import Any
 
-from .platform import PlatformError, build_platform_client, computer_api_path
-from .tool_errors import tool_error_json
+from ...platform import PlatformError, build_platform_client, computer_api_path
+from ...tool_errors import tool_error_json
 
 PHONE_STATUSES = {
     "assigned",

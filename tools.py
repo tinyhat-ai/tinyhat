@@ -9,23 +9,34 @@ from pathlib import Path
 from typing import Any
 from urllib import error, parse, request
 
-from .contact_details import contact_details as handle_contact_details
-from .credentials import credentials as handle_credentials
-from .credit import (
+from .capabilities.contact_details.tool import contact_details as handle_contact_details
+from .capabilities.credit.tool import (
     allocate_openrouter_credit as handle_allocate_openrouter_credit,
+)
+from .capabilities.credit.tool import (
     credit_summary as handle_credit_summary,
+)
+from .capabilities.credit.tool import (
     model_budget as handle_model_budget,
 )
-from .google_workspace import google_workspace as handle_google_workspace
-from .google_workspace_app import google_workspace_app as handle_google_workspace_app
-from .google_workspace_app_manager import (
+from .capabilities.google_workspace.app import (
+    google_workspace_app as handle_google_workspace_app,
+)
+from .capabilities.google_workspace.app_manager import (
     google_workspace_app_manager as handle_google_workspace_app_manager,
 )
-from .hats import hats as handle_hats
-from .mail import tinyhat_mail as handle_mail
+from .capabilities.google_workspace.connection import (
+    google_workspace as handle_google_workspace,
+)
+from .capabilities.hats.tool import hats as handle_hats
+from .capabilities.mail.tool import tinyhat_mail as handle_mail
+from .capabilities.secrets.credentials import credentials as handle_credentials
+from .capabilities.secrets.handoff import start_private_secret_handoff
+from .capabilities.slack.connection import (
+    start_slack_connection,
+    start_slack_disconnect,
+)
 from .platform import PlatformError, build_platform_client, computer_api_path
-from .secret_handoff import start_private_secret_handoff
-from .slack_connection import start_slack_connection, start_slack_disconnect
 from .tool_errors import tool_error_json
 
 CODEX_AUTH_SCREENSHOT = (
@@ -227,9 +238,7 @@ def google_workspace_app(args: dict[str, Any] | None = None, **kwargs: Any) -> s
     return handle_google_workspace_app(args, **kwargs)
 
 
-def google_workspace_app_manager(
-    args: dict[str, Any] | None = None, **kwargs: Any
-) -> str:
+def google_workspace_app_manager(args: dict[str, Any] | None = None, **kwargs: Any) -> str:
     """Manage the pinned gws app; Hermes supplies operation guidance."""
     return handle_google_workspace_app_manager(args, **kwargs)
 
@@ -301,8 +310,7 @@ def codex_auth(args: dict[str, Any] | None = None, **_: Any) -> str:
             "chat_response_required": False,
             "prerequisite": prerequisite,
             "next_user_action": (
-                "After enabling the ChatGPT setting, the user taps /codex_auth "
-                "in Telegram."
+                "After enabling the ChatGPT setting, the user taps /codex_auth " "in Telegram."
             ),
             "agent_instruction": (
                 "The user-facing Telegram message has already been sent. Do not "
@@ -387,10 +395,7 @@ def plugin_update(args: dict[str, Any] | None = None, **_: Any) -> str:
             "action": "update",
             "status": "ok"
             if update["ok"]
-            and (
-                not restart["requested"]
-                or (restart["stop"]["ok"] and restart["start"]["ok"])
-            )
+            and (not restart["requested"] or (restart["stop"]["ok"] and restart["start"]["ok"]))
             else "failed",
             "update": update,
             "restart_gateway": restart,
@@ -480,7 +485,7 @@ def _run_runtime_json_command(kind: str, *, timeout_seconds: int = 60) -> dict[s
     command_json = json.dumps({"kind": kind, "spec": {}})
     script = (
         'PYTHONPATH="${TINYHAT_RUNTIME_PREFIX:-/opt/tinyhat-hermes-runtime}:'
-        '${PYTHONPATH:-}" python3 - <<\'PY\'\n'
+        "${PYTHONPATH:-}\" python3 - <<'PY'\n"
         "import asyncio\n"
         "import json\n"
         "from types import SimpleNamespace\n"
@@ -582,11 +587,7 @@ def _telegram_env_values() -> dict[str, str]:
 
 def _parse_env_value(raw: str) -> str:
     value = raw.strip()
-    if (
-        len(value) >= 2
-        and value[0] == value[-1]
-        and value.startswith(("'", '"'))
-    ):
+    if len(value) >= 2 and value[0] == value[-1] and value.startswith(("'", '"')):
         value = value[1:-1]
     return value.replace('\\"', '"').replace("\\\\", "\\")
 
@@ -634,11 +635,11 @@ def _telegram_send_photo(
             'Content-Disposition: form-data; name="photo"; '
             f'filename="{photo_path.name}"\r\n'
             "Content-Type: image/png\r\n\r\n"
-        ).encode("utf-8")
+        ).encode()
         + photo
         + b"\r\n",
     ]
-    parts.append(f"--{boundary}--\r\n".encode("utf-8"))
+    parts.append(f"--{boundary}--\r\n".encode())
     return _telegram_post(
         token=token,
         method="sendPhoto",
@@ -649,15 +650,11 @@ def _telegram_send_photo(
 
 def _multipart_field(boundary: str, name: str, value: str) -> bytes:
     return (
-        f"--{boundary}\r\n"
-        f'Content-Disposition: form-data; name="{name}"\r\n\r\n'
-        f"{value}\r\n"
-    ).encode("utf-8")
+        f"--{boundary}\r\n" f'Content-Disposition: form-data; name="{name}"\r\n\r\n' f"{value}\r\n"
+    ).encode()
 
 
-def _telegram_post(
-    *, token: str, method: str, body: bytes, content_type: str
-) -> dict[str, Any]:
+def _telegram_post(*, token: str, method: str, body: bytes, content_type: str) -> dict[str, Any]:
     req = request.Request(
         f"https://api.telegram.org/bot{token}/{method}",
         data=body,

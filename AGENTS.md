@@ -19,13 +19,17 @@ This repository is the public Tinyhat plugin package. `main` is Hermes-only.
 - `plugin.yaml`: Hermes manifest.
 - `__init__.py`: Hermes registration entrypoint.
 - `hermes.plugin.json`: Tinyhat adapter metadata.
-- `tools.py`, `schemas.py`, `platform.py`, `secret_handoff.py`,
-  `google_workspace.py`, `google_workspace_app.py`, and
-  `google_workspace_app_manager.py`: tiny public tool surface.
-- `contact_details.py` and `mail.py`: the Agent's assigned phone/email identity
-  and private Tinyhat mailbox tools.
-- `google_workspace_worker.py` and `google_workspace_disconnect_worker.py`:
-  detached owner-bound connection and disconnect workers.
+- `tools.py`, `schemas.py`, `platform.py`, and `context.py`: thin adapter and
+  shared-platform facades kept at the root because Hermes loads them directly.
+- `capabilities/`: product behavior grouped by user-facing capability. Keep
+  workers and private helpers inside the capability that owns them; do not add
+  new feature implementation files to the repository root.
+- `capabilities/google_workspace/`: Google connection, permission, app, and
+  detached worker flows.
+- `capabilities/hats/`, `capabilities/secrets/`, and `capabilities/slack/`:
+  larger multi-file capabilities with their helpers kept together.
+- `capabilities/contact_details/`, `capabilities/credit/`, and
+  `capabilities/mail/`: focused Agent identity, funding, and mailbox tools.
 - `skills/tinyhat-tell-joke/SKILL.md`: deterministic joke proof.
 - `skills/tinyhat-plugin-version/SKILL.md`: live plugin version proof.
 - `skills/tinyhat-onboarding-greeting/SKILL.md`: one-shot first owner greeting after Computer setup.

@@ -246,9 +246,9 @@ Google Cloud project, OAuth client, secret, or server access. Bare connect asks
 for the identity baseline only: `openid`, `email`, and `profile`.
 
 The Computer creates a fresh RSA keypair for every attempt. The packaged
-`google_workspace_scope_manifest.json` and its dependency-free loader are the
-public source of truth for scopes, presets, normalization, user copy, and the
-request state of each OAuth client. The contract uses schema
+`capabilities/google_workspace/scope_manifest.json` and its dependency-free
+loader are the public source of truth for scopes, presets, normalization, user
+copy, and the request state of each OAuth client. The contract uses schema
 `tinyhat_google_workspace_scope_manifest_v1` and manifest version `1.1.0`.
 Seven composable presets cover common jobs:
 

@@ -9,8 +9,8 @@ import subprocess
 from typing import Any
 from urllib import error, parse, request
 
-from .platform import build_platform_client, computer_api_path
-from .secret_handoff import (
+from ...platform import build_platform_client, computer_api_path
+from ..secrets.handoff import (
     HANDOFF_OUTCOME_RESTART_PENDING,
     KEY_ALGORITHM,
     SecretHandoffError,
@@ -21,7 +21,7 @@ from .secret_handoff import (
     _set_hermes_secret,
     _start_worker_process,
 )
-from .slack_disconnect import start_slack_disconnect_worker
+from .disconnect import start_slack_disconnect_worker
 
 SLACK_CONNECTION_SECRET_NAME = "SLACK_CONNECTION"
 SLACK_CONNECTION_EXPIRES_IN_SECONDS = 30 * 60
@@ -201,9 +201,7 @@ def _ensure_connection_scopes(manifest: dict[str, Any]) -> None:
             public_message="I could not generate a complete Slack app manifest.",
         )
     normalized = [
-        str(scope).strip()
-        for scope in bot_scopes
-        if isinstance(scope, str) and str(scope).strip()
+        str(scope).strip() for scope in bot_scopes if isinstance(scope, str) and str(scope).strip()
     ]
     for scope in REQUIRED_CONNECTION_BOT_SCOPES:
         if scope not in normalized:
@@ -439,19 +437,14 @@ def _open_slack_home_channel(bundle: dict[str, str]) -> str:
         stage="owner_dm",
     )
     channel = result.get("channel")
-    channel_id = (
-        str(channel.get("id") or "").strip().upper()
-        if isinstance(channel, dict)
-        else ""
-    )
+    channel_id = str(channel.get("id") or "").strip().upper() if isinstance(channel, dict) else ""
     if not channel_id.startswith("D") or not SLACK_ID_RE.fullmatch(channel_id):
         raise SlackConnectionError(
             "Slack did not return the owner's direct-message channel.",
             stage="owner_dm",
             code="invalid_response",
             public_message=(
-                "Slack accepted the tokens but could not open the owner's "
-                "direct message."
+                "Slack accepted the tokens but could not open the owner's " "direct message."
             ),
         )
     return channel_id
@@ -472,9 +465,7 @@ def _validate_slack_credentials(bundle: dict[str, str]) -> dict[str, Any]:
     app_id = str(auth.get("app_id") or "").strip().upper()
     if not SLACK_ID_RE.fullmatch(app_id):
         app_id = _app_id_from_app_token(bundle["app_token"]) or ""
-    app_name = str(
-        auth.get("app_name") or auth.get("user") or "Tinyhat Agent"
-    ).strip()[:80]
+    app_name = str(auth.get("app_name") or auth.get("user") or "Tinyhat Agent").strip()[:80]
     bot_id = str(auth.get("bot_id") or "").strip().upper()
     if not SLACK_ID_RE.fullmatch(app_id) and SLACK_ID_RE.fullmatch(bot_id):
         try:
@@ -495,9 +486,7 @@ def _validate_slack_credentials(bundle: dict[str, str]) -> dict[str, Any]:
             "Slack did not return the workspace identifier.",
             stage="app_identity",
             code="identity_missing",
-            public_message=(
-                "Slack accepted the tokens but did not identify the workspace."
-            ),
+            public_message=("Slack accepted the tokens but did not identify the workspace."),
         )
     metadata = {
         "provider": "slack",
@@ -536,9 +525,7 @@ def _slack_api_call(
             f"Slack API validation failed for {method}.",
             stage=stage,
             code="network_error",
-            public_message=(
-                "Slack could not be reached from this Computer. Please retry."
-            ),
+            public_message=("Slack could not be reached from this Computer. Please retry."),
         ) from exc
     if not isinstance(payload, dict) or payload.get("ok") is not True:
         error_name = (
@@ -546,32 +533,27 @@ def _slack_api_call(
             if isinstance(payload, dict)
             else "invalid_response"
         )
-        safe_error_code = (
-            error_name if error_name in SAFE_SLACK_ERROR_CODES else "slack_rejected"
-        )
+        safe_error_code = error_name if error_name in SAFE_SLACK_ERROR_CODES else "slack_rejected"
         raise SlackConnectionError(
             f"Slack rejected {method}: {error_name[:80]}.",
             stage=stage,
             code=safe_error_code,
-            public_message=(
-                _slack_failure_message(stage, safe_error_code)
-            ),
+            public_message=(_slack_failure_message(stage, safe_error_code)),
         )
     return payload
 
 
 def _slack_failure_message(stage: str, code: str) -> str:
     if code == "missing_scope":
-        return (
-            "Reinstall the app once to apply the manifest permissions, then "
-            "finish setup."
-        )
+        return "Reinstall the app once to apply the manifest permissions, then " "finish setup."
     if stage == "bot_auth":
         return "Slack did not accept the bot token. Copy the xoxb token and retry."
     if stage == "socket_mode":
         return "Slack did not accept the Socket Mode app token. Copy the xapp token and retry."
     if stage == "member_lookup":
-        return "Slack could not find an allowed member ID. Copy it from the member profile and retry."
+        return (
+            "Slack could not find an allowed member ID. Copy it from the member profile and retry."
+        )
     if stage == "owner_dm":
         return "Slack could not open the owner's direct message."
     if stage == "greeting":

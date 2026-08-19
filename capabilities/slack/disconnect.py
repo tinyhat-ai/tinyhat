@@ -12,7 +12,7 @@ from pathlib import Path
 from typing import Any
 from urllib import error, request
 
-from .secret_handoff import WORKER_SYSTEMD_ENV_KEYS
+from ..secrets.handoff import WORKER_SYSTEMD_ENV_KEYS
 
 SCHEMA = "tinyhat_plugin_slack_disconnect_v1"
 SLACK_AUTH_REVOKE_URL = "https://slack.com/api/auth.revoke"
@@ -74,14 +74,14 @@ def _runtime_helpers() -> tuple[Any, Any, Any, Any]:
     runtime_prefix = os.getenv("TINYHAT_RUNTIME_PREFIX", "/opt/tinyhat-hermes-runtime").strip()
     if runtime_prefix and runtime_prefix not in sys.path:
         sys.path.insert(0, runtime_prefix)
-    from hermes_runtime.runtime_env import (  # noqa: PLC0415
+    from hermes_runtime.runtime_env import (
         env_file_candidates,
         read_env_values,
     )
-    from hermes_runtime.terminal_env_passthrough import (  # noqa: PLC0415
+    from hermes_runtime.terminal_env_passthrough import (
         sync_terminal_env_passthrough,
     )
-    from hermes_runtime.terminal_secret_aliases import (  # noqa: PLC0415
+    from hermes_runtime.terminal_secret_aliases import (
         force_alias_name,
     )
 
@@ -195,7 +195,7 @@ def start_slack_disconnect_worker(state: dict[str, Any]) -> None:
     env["PYTHONPATH"] = pythonpath
     args = [
         sys.executable,
-        str(package_dir / "slack_disconnect_worker.py"),
+        str(package_dir / "disconnect_worker.py"),
         "--handoff-id",
         handoff_id,
         "--removal-id",

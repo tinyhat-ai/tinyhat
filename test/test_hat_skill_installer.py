@@ -11,8 +11,11 @@ from unittest import mock
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(REPO_ROOT.parent))
+from package_support import load_local_tinyhat  # noqa: E402
 
-from tinyhat import hat_skill_installer  # noqa: E402
+load_local_tinyhat(REPO_ROOT)
+
+from tinyhat.capabilities.hats import skill_installer as hat_skill_installer  # noqa: E402
 
 
 class HatSkillInstallerTests(unittest.TestCase):
@@ -64,9 +67,7 @@ class HatSkillInstallerTests(unittest.TestCase):
                 mock.patch.object(Path, "home", return_value=root / "home"),
                 self.assertRaises(hat_skill_installer.HatSkillInstallError),
             ):
-                hat_skill_installer.install_hat_skills(
-                    "acme/hats/research", str(checkout)
-                )
+                hat_skill_installer.install_hat_skills("acme/hats/research", str(checkout))
 
     def test_later_copy_failure_preserves_every_active_skill(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
@@ -77,17 +78,13 @@ class HatSkillInstallerTests(unittest.TestCase):
             for name in ("alpha", "bravo"):
                 source = checkout / "skills" / name
                 source.mkdir(parents=True)
-                (source / "SKILL.md").write_text(
-                    f"old-{name}", encoding="utf-8"
-                )
+                (source / "SKILL.md").write_text(f"old-{name}", encoding="utf-8")
 
             with (
                 mock.patch.dict(os.environ, {"HERMES_SKILLS_ROOT": str(skills_root)}),
                 mock.patch.object(Path, "home", return_value=home),
             ):
-                first = hat_skill_installer.install_hat_skills(
-                    "acme/hats/research", str(checkout)
-                )
+                first = hat_skill_installer.install_hat_skills("acme/hats/research", str(checkout))
                 targets = [skills_root / name for name in first["installed_names"]]
                 for name in ("alpha", "bravo"):
                     (checkout / "skills" / name / "SKILL.md").write_text(
@@ -111,14 +108,11 @@ class HatSkillInstallerTests(unittest.TestCase):
                     ),
                     self.assertRaises(OSError),
                 ):
-                    hat_skill_installer.install_hat_skills(
-                        "acme/hats/research", str(checkout)
-                    )
+                    hat_skill_installer.install_hat_skills("acme/hats/research", str(checkout))
 
             self.assertEqual(
                 sorted(
-                    target.joinpath("SKILL.md").read_text(encoding="utf-8")
-                    for target in targets
+                    target.joinpath("SKILL.md").read_text(encoding="utf-8") for target in targets
                 ),
                 ["old-alpha", "old-bravo"],
             )

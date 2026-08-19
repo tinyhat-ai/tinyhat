@@ -8,8 +8,8 @@ import os
 import re
 from typing import Any
 
-from .platform import PlatformError, build_platform_client, computer_api_path
-from .tool_errors import tool_error_json
+from ...platform import PlatformError, build_platform_client, computer_api_path
+from ...tool_errors import tool_error_json
 
 MAX_RECENT_TRANSACTIONS = 10
 MIN_OPENROUTER_ALLOCATION_CENTS = 100
@@ -40,9 +40,7 @@ def model_budget(args: dict[str, Any] | None = None, **_: Any) -> str:
     _ = args
     try:
         client, platform_auth = build_platform_client()
-        payload = client.get_json(
-            computer_api_path(platform_auth, "credit/v1/model-budget")
-        )
+        payload = client.get_json(computer_api_path(platform_auth, "credit/v1/model-budget"))
         safe_payload = _safe_model_budget_payload(payload)
     except PlatformError as exc:
         return _model_budget_error(exc)
@@ -119,12 +117,10 @@ def allocate_openrouter_credit(
 def _allocation_idempotency_key(task_id: Any, amount_cents: int) -> str:
     """Derive a value-blind replay key from runtime metadata, never model input."""
     runtime_request = (
-        task_id.strip()
-        if isinstance(task_id, str) and task_id.strip()
-        else os.urandom(16).hex()
+        task_id.strip() if isinstance(task_id, str) and task_id.strip() else os.urandom(16).hex()
     )
     digest = hashlib.sha256(
-        f"tinyhat-openrouter-credit:{runtime_request}:{amount_cents}".encode("utf-8")
+        f"tinyhat-openrouter-credit:{runtime_request}:{amount_cents}".encode()
     ).hexdigest()
     return f"plugin_{digest}"
 
@@ -150,12 +146,8 @@ def _safe_openrouter_allocation_payload(
         raise ValueError("allocation amount does not match request")
     if not isinstance(currency, str) or not currency.strip():
         raise ValueError("invalid allocation currency")
-    if (
-        openrouter_limit_cents is not None
-        and (
-            isinstance(openrouter_limit_cents, bool)
-            or not isinstance(openrouter_limit_cents, int)
-        )
+    if openrouter_limit_cents is not None and (
+        isinstance(openrouter_limit_cents, bool) or not isinstance(openrouter_limit_cents, int)
     ):
         raise ValueError("invalid provider limit")
     if not isinstance(created_at, str) or not created_at.strip():
@@ -220,11 +212,7 @@ def _safe_model_budget_payload(payload: dict[str, Any]) -> dict[str, Any]:
     used_cents = payload.get("used_cents")
     currency = payload.get("currency")
     checked_at = payload.get("checked_at")
-    if (
-        isinstance(limit_cents, bool)
-        or not isinstance(limit_cents, int)
-        or limit_cents < 0
-    ):
+    if isinstance(limit_cents, bool) or not isinstance(limit_cents, int) or limit_cents < 0:
         raise ValueError("invalid model budget limit")
     for value in (remaining_cents, used_cents):
         if value is not None and (

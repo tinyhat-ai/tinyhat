@@ -12,19 +12,20 @@ from datetime import datetime
 from pathlib import Path
 
 if __package__ in {None, ""}:
-    package_dir = Path(__file__).resolve().parent
-    parent_dir = package_dir.parent
+    plugin_root = Path(__file__).resolve().parents[2]
+    parent_dir = plugin_root.parent
     if str(parent_dir) not in sys.path:
         sys.path.insert(0, str(parent_dir))
     package = sys.modules.get("tinyhat")
     if package is None:
         package = types.ModuleType("tinyhat")
-        package.__file__ = str(package_dir / "__init__.py")
-        package.__path__ = [str(package_dir)]  # type: ignore[attr-defined]
+        package.__file__ = str(plugin_root / "__init__.py")
+        package.__path__ = [str(plugin_root)]  # type: ignore[attr-defined]
         sys.modules["tinyhat"] = package
-    __package__ = "tinyhat"
+    __package__ = "tinyhat.capabilities.google_workspace"
 
-from .google_workspace import (
+from ...platform import build_platform_client, computer_api_path
+from .connection import (
     DISCONNECT_OWNER_TOKEN_RE,
     GOOGLE_CONNECTION_ID_RE,
     GOOGLE_WORKSPACE_PERMISSION_CHOOSERS_SUFFIX,
@@ -37,7 +38,6 @@ from .google_workspace import (
     _validated_permission_chooser_id,
     _write_permission_chooser_worker_ready,
 )
-from .platform import build_platform_client, computer_api_path
 
 WORKER_SCHEMA = "tinyhat_google_workspace_permission_chooser_worker_v1"
 
@@ -57,23 +57,16 @@ def _selection_ids(result: dict[str, object]) -> tuple[str, ...]:
             for item in raw_selection_ids
         )
     ):
-        raise GoogleWorkspaceError(
-            "Google access chooser returned an invalid selection."
-        )
+        raise GoogleWorkspaceError("Google access chooser returned an invalid selection.")
     selection_ids = tuple(raw_selection_ids)
     if len(selection_ids) != len(set(selection_ids)):
-        raise GoogleWorkspaceError(
-            "Google access chooser returned duplicate selections."
-        )
+        raise GoogleWorkspaceError("Google access chooser returned duplicate selections.")
     if selection_ids == ("identity_only",):
         return selection_ids
     if "identity_only" in selection_ids or any(
-        selection_id not in GOOGLE_WORKSPACE_PRESETS
-        for selection_id in selection_ids
+        selection_id not in GOOGLE_WORKSPACE_PRESETS for selection_id in selection_ids
     ):
-        raise GoogleWorkspaceError(
-            "Google access chooser returned an invalid selection."
-        )
+        raise GoogleWorkspaceError("Google access chooser returned an invalid selection.")
     return selection_ids
 
 
@@ -91,8 +84,7 @@ def _load_state(*, chooser_id: str, state_path: Path) -> dict[str, object]:
         raise GoogleWorkspaceError("Google access chooser owner is invalid.")
     account_id = value.get("account_id")
     if account_id is not None and (
-        not isinstance(account_id, str)
-        or GOOGLE_CONNECTION_ID_RE.fullmatch(account_id) is None
+        not isinstance(account_id, str) or GOOGLE_CONNECTION_ID_RE.fullmatch(account_id) is None
     ):
         raise GoogleWorkspaceError("Google access chooser account is invalid.")
     expires_at = str(value.get("expires_at") or "")

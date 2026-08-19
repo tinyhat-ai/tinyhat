@@ -10,8 +10,11 @@ from unittest import mock
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(REPO_ROOT.parent))
+from package_support import load_local_tinyhat  # noqa: E402
 
-from tinyhat import hats as hats_module  # noqa: E402
+load_local_tinyhat(REPO_ROOT)
+
+from tinyhat.capabilities.hats import tool as hats_module  # noqa: E402
 
 
 class FakePlatformClient:
@@ -52,9 +55,7 @@ class HatToolTests(unittest.TestCase):
         class NoHatClient(FakePlatformClient):
             def get_json(self, path: str) -> dict[str, object]:
                 self.get_paths.append(path)
-                raise hats_module.PlatformError(
-                    "No active Hat installation.", status_code=404
-                )
+                raise hats_module.PlatformError("No active Hat installation.", status_code=404)
 
         client = NoHatClient()
         with mock.patch.object(
@@ -62,9 +63,7 @@ class HatToolTests(unittest.TestCase):
             "build_platform_client",
             return_value=(client, "local_dev"),
         ):
-            result = json.loads(
-                hats_module.hats({"action": "resume_installation"})
-            )
+            result = json.loads(hats_module.hats({"action": "resume_installation"}))
 
         self.assertEqual(result["status"], "none")
         self.assertFalse(result["installation_started"])
@@ -121,9 +120,7 @@ class HatToolTests(unittest.TestCase):
             ) as credentials,
         ):
             result = json.loads(
-                hats_module.hats(
-                    {"action": "wear", "identifier": "acme/hats/research"}
-                )
+                hats_module.hats({"action": "wear", "identifier": "acme/hats/research"})
             )
 
         repository.assert_called_once_with(
@@ -161,9 +158,7 @@ class HatToolTests(unittest.TestCase):
                 )
             )
 
-        repository.assert_called_once_with(
-            {"action": "checkout", "identifier": "forecasting"}
-        )
+        repository.assert_called_once_with({"action": "checkout", "identifier": "forecasting"})
         platform.assert_not_called()
         self.assertFalse(result["credential_persisted"])
         self.assertIn("clean Git remote", result["agent_instruction"])
@@ -266,11 +261,7 @@ class HatToolTests(unittest.TestCase):
             return_value=(client, "gcloud"),
         ):
             json.loads(hats_module.hats({"action": "list"}))
-            json.loads(
-                hats_module.hats(
-                    {"action": "get", "identifier": "acme/hats/field-sales"}
-                )
-            )
+            json.loads(hats_module.hats({"action": "get", "identifier": "acme/hats/field-sales"}))
 
         self.assertEqual(
             client.get_paths,
@@ -281,9 +272,7 @@ class HatToolTests(unittest.TestCase):
         )
 
     def test_create_missing_customer_email_is_self_correcting(self) -> None:
-        result = json.loads(
-            hats_module.hats({"action": "create", "name": "Trade Show Sales"})
-        )
+        result = json.loads(hats_module.hats({"action": "create", "name": "Trade Show Sales"}))
 
         self.assertEqual(result["schema"], "tinyhat_tool_error_v1")
         self.assertEqual(result["error"], "missing_required_parameter")
@@ -668,9 +657,7 @@ class HatToolTests(unittest.TestCase):
         )
         self.assertEqual(
             client.delete_paths,
-            [
-                "/hapi/v1/computers/local-dev/hats/v1/retire?identifier=acme%2Fhats%2Fforecasting"
-            ],
+            ["/hapi/v1/computers/local-dev/hats/v1/retire?identifier=acme%2Fhats%2Fforecasting"],
         )
         self.assertEqual(
             delete_local.call_args_list,
@@ -799,9 +786,7 @@ class HatToolTests(unittest.TestCase):
         self.assertIn("HTTP 404", result["message"])
         self.assertEqual(
             client.delete_paths,
-            [
-                "/hapi/v1/computers/local-dev/hats/v1/retire?identifier=acme%2Fhats%2Fforecasting"
-            ],
+            ["/hapi/v1/computers/local-dev/hats/v1/retire?identifier=acme%2Fhats%2Fforecasting"],
         )
         delete_local.assert_not_called()
         delete_checkout.assert_not_called()

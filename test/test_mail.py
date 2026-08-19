@@ -28,7 +28,7 @@ if REPO_ROOT.name != "tinyhat":
     sys.modules["tinyhat"] = package
     spec.loader.exec_module(package)
 
-from tinyhat import mail  # noqa: E402
+from tinyhat.capabilities.mail import tool as mail  # noqa: E402
 
 
 class FakeSession:

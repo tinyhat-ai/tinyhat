@@ -34,8 +34,8 @@ if REPO_ROOT.name != "tinyhat":
 else:
     import tinyhat  # type: ignore[no-redef]
 
-from tinyhat import google_workspace_app_manager as manager  # noqa: E402
 from tinyhat import schemas, tools  # noqa: E402
+from tinyhat.capabilities.google_workspace import app_manager as manager  # noqa: E402
 
 
 def sha(value: bytes) -> str:
