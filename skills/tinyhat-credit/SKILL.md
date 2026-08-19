@@ -12,7 +12,7 @@ Add credit to this Agent's AI model budget with
 
 New Agents start with about US$5 of model credit. The owner can use their
 Tinyhat credit to add more at any time by asking for an exact amount. They can
-also choose to connect their ChatGPT/Codex subscription with `/codex_auth`.
+optionally connect their ChatGPT/Codex subscription with `/codex_auth`.
 
 ## What the tool returns
 

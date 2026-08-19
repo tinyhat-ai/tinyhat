@@ -452,7 +452,7 @@ user's onboarding reply — once per Computer, without nagging (a durable
 marker, tool-owned native first replies satisfying the note, a brief
 line for returning users after an in-place upgrade, and a silent skip
 when already connected) — check `{"action": "status"}` before claiming
-it is not connected, and never estimate remaining included platform funding.
+it is not connected, and never estimate remaining model funding.
 The separate `tinyhat_credit` tool reports the user's credit balance and recent
 transactions, including Computer usage with its applied hourly rate and credit
 added to the AI model budget. When
@@ -509,8 +509,9 @@ private Computers designed to remove even that technical possibility.
 The context hook also carries the funding model and a once-per-Computer
 funding note. On the first conversation turn after setup or an in-place
 upgrade it adds a one-time directive ahead of the context: a new user's
-onboarding reply presents connecting the ChatGPT/Codex subscription as
-one of its onboarding steps (a numbered or bulleted step when the reply
+onboarding reply presents the $5 starting model credit, adding more from
+Tinyhat credit, and optional ChatGPT/Codex subscription as one onboarding step
+(a numbered or bulleted step when the reply
 lists getting-started steps, a standalone step line otherwise, never a
 footnote), a clearly returning user gets one brief line, and an
 already-connected subscription skips the note silently. The claim is recorded with a durable

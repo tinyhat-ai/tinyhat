@@ -797,7 +797,7 @@ class HermesAdapterTests(unittest.TestCase):
                 assert injected is not None
                 self.assertIn("AI model credit", injected["context"])
                 self.assertIn("about $5", injected["context"])
-                self.assertIn("add an exact amount", injected["context"])
+                self.assertIn("exact Tinyhat-credit amount", injected["context"])
                 self.assertIn("/codex_auth", injected["context"])
                 self.assertIn("tinyhat:tinyhat-credit", injected["context"])
                 self.assertIn("tinyhat_model_budget", injected["context"])
@@ -943,7 +943,7 @@ class HermesAdapterTests(unittest.TestCase):
         self.assertIn("Never repeat this note", directive)
         self.assertIn("never block the user's actual request", directive)
         self.assertIn(
-            "Never infer model funds",
+            "infer funds from history/Computer charges",
             tinyhat_context.TINYHAT_CONTEXT,
         )
         self.assertIn("load tinyhat:tinyhat-credit", tinyhat_context.TINYHAT_CONTEXT)
@@ -960,11 +960,11 @@ class HermesAdapterTests(unittest.TestCase):
             tinyhat_context.TINYHAT_CONTEXT,
         )
         self.assertIn(
-            "Never infer model funds from history/Computer charges.",
+            "never retry pending or infer funds from history/Computer charges.",
             tinyhat_context.TINYHAT_CONTEXT,
         )
         self.assertIn(
-            "/codex_auth optionally uses their ChatGPT/Codex subscription; "
+            "/codex_auth optionally uses ChatGPT/Codex; "
             "tinyhat_codex_auth action=status checks it.",
             tinyhat_context.TINYHAT_CONTEXT,
         )
@@ -1193,7 +1193,7 @@ class HermesAdapterTests(unittest.TestCase):
         self.assertLess(len(first["context"]), 10_000)
         self.assertIn("- User credit:", first["context"])
         self.assertIn(
-            "Never infer model funds",
+            "infer funds from history/Computer charges",
             first["context"],
         )
 
@@ -1293,6 +1293,43 @@ class HermesAdapterTests(unittest.TestCase):
         self.assertIn("tinyhat:tinyhat-credit", text)
         self.assertIn('{"action": "status"}', text)
         self.assertIn("/codex_auth", text)
+
+    def test_model_funding_wording_is_current_everywhere(self) -> None:
+        surfaces = {
+            "context.py": ("about $5", "Tinyhat-credit", "optionally"),
+            "hermes.plugin.json": ("$5", "Tinyhat credit", "optional"),
+            "README.md": ("about $5", "Tinyhat credit", "optionally"),
+            "docs/capabilities.md": ("$5", "Tinyhat credit", "optional"),
+            "docs/skill-authoring.md": ("about $5", "Tinyhat balance", "optional"),
+            "skills/tinyhat-codex-auth/SKILL.md": (
+                "US$5",
+                "Tinyhat credit",
+                "optional",
+            ),
+            "skills/tinyhat-credit/SKILL.md": (
+                "US$5",
+                "Tinyhat credit",
+                "optionally",
+            ),
+            "skills/tinyhat-platform/SKILL.md": (
+                "$5",
+                "Tinyhat credit",
+                "optionally",
+            ),
+        }
+        stale_phrases = (
+            "$10",
+            "included platform funding",
+            "intended ongoing fund",
+            "connect-your-subscription",
+        )
+        for relative_path, required_phrases in surfaces.items():
+            with self.subTest(relative_path=relative_path):
+                text = (REPO_ROOT / relative_path).read_text(encoding="utf-8")
+                for phrase in required_phrases:
+                    self.assertIn(phrase, text)
+                for phrase in stale_phrases:
+                    self.assertNotIn(phrase, text)
 
     def test_funding_reminder_claim_fails_closed_without_hermes_home(self) -> None:
         os.environ["TINYHAT_HERMES_HOME"] = str(Path(self._hermes_home.name) / "does-not-exist")

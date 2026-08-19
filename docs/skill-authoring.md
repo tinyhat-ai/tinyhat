@@ -267,7 +267,7 @@ marker: a new user's onboarding reply presents the funding choices as one of
 the onboarding steps, a returning user gets one
 brief line, and an already-connected subscription skips it. Tool-owned
 native first replies satisfy it, and the agent must never estimate remaining
-included platform funding. The separate `tinyhat:tinyhat-credit` skill shows
+model funding. The separate `tinyhat:tinyhat-credit` skill shows
 the user's balance and recent transactions, reads this Agent's current total,
 remaining, and used AI model budget, and can add an exact amount to that budget
 when the user asks.
