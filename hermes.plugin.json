@@ -1,6 +1,6 @@
 {
   "schema": "tinyhat.framework-adapter.v1",
-  "version": "0.31.1",
+  "version": "0.31.0",
   "framework": {
     "name": "hermes",
     "minimum": "0.0.0"

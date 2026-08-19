@@ -4,7 +4,7 @@ All notable changes to the Tinyhat plugin are documented here.
 
 ## Unreleased
 
-## 0.31.1 - 2026-08-19
+## 0.31.0 - 2026-08-19
 
 - Make the model-funding guidance match the current
   product: new Agents start with about $5 of model credit, owners can add more
