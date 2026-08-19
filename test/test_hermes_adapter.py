@@ -352,7 +352,7 @@ class HermesAdapterTests(unittest.TestCase):
 
         self.assertEqual(payload["schema"], "tinyhat_plugin_version_v1")
         self.assertEqual(payload["name"], "tinyhat")
-        self.assertEqual(payload["version"], "0.31.0")
+        self.assertEqual(payload["version"], "0.31.1")
 
     def test_running_version_contract_stays_at_plugin_root(self) -> None:
         adapter = json.loads((REPO_ROOT / "hermes.plugin.json").read_text(encoding="utf-8"))
@@ -360,7 +360,7 @@ class HermesAdapterTests(unittest.TestCase):
         self.assertEqual(adapter["entrypoint"]["manifest"], "plugin.yaml")
         self.assertEqual(adapter["entrypoint"]["module"], "__init__.py")
         self.assertEqual(Path(tools.__file__).resolve().parent, REPO_ROOT)
-        self.assertEqual(tools._plugin_manifest()["version"], "0.31.0")
+        self.assertEqual(tools._plugin_manifest()["version"], "0.31.1")
 
     def test_platform_status_uses_attested_computer_endpoint(self) -> None:
         original_build = tools.build_platform_client
@@ -409,7 +409,7 @@ class HermesAdapterTests(unittest.TestCase):
 
         self.assertEqual(payload["schema"], "tinyhat_skill_catalog_v1")
         self.assertEqual(payload["plugin"]["name"], "tinyhat")
-        self.assertEqual(payload["plugin"]["version"], "0.31.0")
+        self.assertEqual(payload["plugin"]["version"], "0.31.1")
         by_name = {skill["name"]: skill for skill in payload["skills"]}
         self.assertEqual(
             by_name["tinyhat-codex-auth"]["qualified_name"],
@@ -795,8 +795,9 @@ class HermesAdapterTests(unittest.TestCase):
                 )
                 self.assertIsNotNone(injected)
                 assert injected is not None
-                self.assertIn("starter credit", injected["context"])
-                self.assertIn("about $10", injected["context"])
+                self.assertIn("AI model credit", injected["context"])
+                self.assertIn("about $5", injected["context"])
+                self.assertIn("add an exact amount", injected["context"])
                 self.assertIn("/codex_auth", injected["context"])
                 self.assertIn("tinyhat:tinyhat-credit", injected["context"])
                 self.assertIn("tinyhat_model_budget", injected["context"])
@@ -933,7 +934,7 @@ class HermesAdapterTests(unittest.TestCase):
             directive,
         )
         self.assertIn(
-            "Connect your ChatGPT/Codex subscription with /codex_auth",
+            "add more from your Tinyhat credit any time",
             directive,
         )
         self.assertIn("skip this note silently", directive)
@@ -942,7 +943,7 @@ class HermesAdapterTests(unittest.TestCase):
         self.assertIn("Never repeat this note", directive)
         self.assertIn("never block the user's actual request", directive)
         self.assertIn(
-            "Never infer remaining included platform funding",
+            "Never infer model funds",
             tinyhat_context.TINYHAT_CONTEXT,
         )
         self.assertIn("load tinyhat:tinyhat-credit", tinyhat_context.TINYHAT_CONTEXT)
@@ -959,12 +960,11 @@ class HermesAdapterTests(unittest.TestCase):
             tinyhat_context.TINYHAT_CONTEXT,
         )
         self.assertIn(
-            "Never infer remaining included platform funding from history or "
-            "Computer charges; use tinyhat_model_budget.",
+            "Never infer model funds from history/Computer charges.",
             tinyhat_context.TINYHAT_CONTEXT,
         )
         self.assertIn(
-            "/codex_auth is the user's ChatGPT/Codex subscription; "
+            "/codex_auth optionally uses their ChatGPT/Codex subscription; "
             "tinyhat_codex_auth action=status checks it.",
             tinyhat_context.TINYHAT_CONTEXT,
         )
@@ -1193,7 +1193,7 @@ class HermesAdapterTests(unittest.TestCase):
         self.assertLess(len(first["context"]), 10_000)
         self.assertIn("- User credit:", first["context"])
         self.assertIn(
-            "Never infer remaining included platform funding",
+            "Never infer model funds",
             first["context"],
         )
 
@@ -1278,8 +1278,9 @@ class HermesAdapterTests(unittest.TestCase):
         skill_md = REPO_ROOT / "skills" / "tinyhat-codex-auth" / "SKILL.md"
         text = " ".join(skill_md.read_text(encoding="utf-8").split())
 
-        self.assertIn("small starter credit (about $10)", text)
-        self.assertIn("intended ongoing fund", text)
+        self.assertIn("about US$5 of AI model credit", text)
+        self.assertIn("add more at any time from their Tinyhat credit", text)
+        self.assertIn("another optional way to fund model use", text)
         self.assertIn("one-time funding note exactly once per Computer", text)
         self.assertIn("as **one of the onboarding steps**", text)
         self.assertIn("Never demote it to a footnote", text)
@@ -1288,7 +1289,7 @@ class HermesAdapterTests(unittest.TestCase):
         self.assertIn("durable per-Computer marker", text)
         self.assertIn("tool-owned native response", text)
         self.assertIn("Never block or delay the user's actual request", text)
-        self.assertIn("Never estimate remaining included platform funding", text)
+        self.assertIn("Never estimate remaining model funding", text)
         self.assertIn("tinyhat:tinyhat-credit", text)
         self.assertIn('{"action": "status"}', text)
         self.assertIn("/codex_auth", text)

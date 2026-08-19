@@ -444,11 +444,10 @@ plugin-and-platform boundary; it adds no runtime callback or command.
 
 `tinyhat-codex-auth` teaches the agent how to start and inspect the
 Tinyhat-managed OpenAI Codex / ChatGPT subscription sign-in flow — and
-the funding model behind it: a new agent starts on Tinyhat's included
-platform credits, a small starter credit (about $10) that exists so the
-agent works immediately, while the intended ongoing fund is the user's
-own ChatGPT / Codex subscription. The skill has the agent present
-connecting the subscription as one of the onboarding steps in a new
+the funding model behind it: a new Agent starts with about $5 of AI model
+credit so it works immediately. The owner can add more from Tinyhat credit at
+any time, or optionally connect their own ChatGPT / Codex subscription. The
+skill has the Agent present these choices as one of the onboarding steps in a new
 user's onboarding reply — once per Computer, without nagging (a durable
 marker, tool-owned native first replies satisfying the note, a brief
 line for returning users after an in-place upgrade, and a silent skip
