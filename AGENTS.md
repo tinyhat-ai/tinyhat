@@ -48,8 +48,12 @@ This repository is the public Tinyhat plugin package. `main` is Hermes-only.
   Agent's current AI model budget, and adding an exact amount to that budget.
 - `skills/tinyhat-contact-details/SKILL.md`: the Agent's assigned phone number
   and email address.
+- `skills/tinyhat-agentphone/SKILL.md`: direct AgentPhone calls and text
+  messages with Computer-local credentials and fixed safety boundaries around
+  the provider's online instructions.
 - `skills/tinyhat-mail/SKILL.md`: safe access to the Agent's private Tinyhat
-  inbox and controlled plain-text sending when enabled.
+  inbox, controlled plain-text sending when enabled, and bounded direct JMAP
+  access for other non-send mailbox actions.
 - `skills/tinyhat-privacy/SKILL.md`: privacy and trust model answers for who-can-see-my-data questions.
 - `context.py`: small keyword-gated Hermes `pre_llm_call` context hook.
 - `.agents/skills/tinyhat-plugin-skill-authoring/SKILL.md`: maintainer

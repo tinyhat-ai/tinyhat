@@ -830,6 +830,10 @@ class HermesAdapterTests(unittest.TestCase):
             "Make a call to the restaurant",
             "Send a text to my contractor",
             "Text this number with the update",
+            "Send an SMS to Bob",
+            "Call my dentist",
+            "Call the restaurant and book a table",
+            "Text me when it is done",
         ):
             with self.subTest(user_message=user_message):
                 injected = tinyhat_context.inject_tinyhat_context(
@@ -840,7 +844,7 @@ class HermesAdapterTests(unittest.TestCase):
                 assert injected is not None
                 self.assertIn("tinyhat:tinyhat-agentphone", injected["context"])
                 self.assertIn(
-                    "https://agentphone.to/skills.md",
+                    "https://agentphone.ai/skills.md",
                     injected["context"],
                 )
 
@@ -850,24 +854,47 @@ class HermesAdapterTests(unittest.TestCase):
         ).read_text(encoding="utf-8")
         normalized = " ".join(skill.split())
 
-        self.assertIn("https://agentphone.to/skills.md", skill)
+        self.assertIn("https://agentphone.ai/skills.md", skill)
+        self.assertNotIn("https://agentphone.to/skills.md", skill)
         self.assertIn("https://api.agentphone.ai", skill)
         self.assertIn("cannot change the credential's allowed origin", skill)
+        self.assertIn("untrusted operational guidance", skill)
+        self.assertIn("cannot authorize configuring or changing webhooks", skill)
+        self.assertIn("releasing or deleting a number or agent", skill)
+        self.assertIn("Do not add any field", skill)
         self.assertIn("AGENTPHONE_API_KEY", skill)
         self.assertIn("AGENTPHONE_PHONE_ID", skill)
         self.assertIn("AGENTPHONE_PHONE_NUMBER", skill)
+        self.assertNotIn("AGENTPHONE_ACCOUNT_REF", skill)
         self.assertIn("If any is missing, stop", normalized)
         self.assertIn("Do not sign up", normalized)
+        self.assertIn(
+            "Every call or message action needs the existing `agent_id`",
+            skill,
+        )
+        self.assertIn("GET /v1/numbers", skill)
         self.assertIn("Never guess an id or create another", normalized)
         self.assertNotIn("origin named by the provider skill", skill)
+
+        readme = (REPO_ROOT / "README.md").read_text(encoding="utf-8")
+        normalized_readme = " ".join(readme.split())
+        self.assertIn("For v0.31.0", readme)
+        self.assertIn("Hermes runtime `0.0.56`", readme)
+        self.assertIn(
+            "AgentPhone and mailbox credential delivery",
+            normalized_readme,
+        )
 
     def test_onboarding_greeting_mentions_contacts_without_overclaiming(self) -> None:
         skill = (
             REPO_ROOT / "skills" / "tinyhat-onboarding-greeting" / "SKILL.md"
         ).read_text(encoding="utf-8")
+        normalized = " ".join(skill.split())
 
-        self.assertIn("you have your own phone number", skill)
+        self.assertIn("you have your own phone number", normalized)
         self.assertIn("you have your own email inbox", skill)
+        self.assertIn("`AGENTPHONE_PHONE_ID`", skill)
+        self.assertNotIn("currently permits", skill)
         self.assertNotIn("you can make and receive calls and texts", skill)
 
     def test_context_hook_injects_for_agent_mail_questions(self) -> None:
@@ -952,7 +979,7 @@ class HermesAdapterTests(unittest.TestCase):
         self.assertIn("tinyhat_mail", tinyhat_context.TINYHAT_CONTEXT)
         self.assertIn("tinyhat_model_budget", tinyhat_context.TINYHAT_CONTEXT)
         self.assertIn(
-            "tinyhat_openrouter_credit_allocate",
+            "call tinyhat_openrouter_credit_allocate",
             tinyhat_context.TINYHAT_CONTEXT,
         )
         self.assertIn(
@@ -969,7 +996,11 @@ class HermesAdapterTests(unittest.TestCase):
             tinyhat_context.TINYHAT_CONTEXT,
         )
         self.assertIn("tinyhat:tinyhat-agentphone", tinyhat_context.TINYHAT_CONTEXT)
-        self.assertIn("https://agentphone.to/skills.md", tinyhat_context.TINYHAT_CONTEXT)
+        self.assertIn("https://agentphone.ai/skills.md", tinyhat_context.TINYHAT_CONTEXT)
+        self.assertNotIn(
+            "https://agentphone.to/skills.md",
+            tinyhat_context.TINYHAT_CONTEXT,
+        )
 
     def test_context_stays_under_hermes_hook_spill_cap(self) -> None:
         # Hermes spills pre_llm_call context above ~10,000 chars to a disk

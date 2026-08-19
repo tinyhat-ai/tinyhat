@@ -73,7 +73,7 @@ JMAP action without routing mail through Tinyloop.
 | `skills/tinyhat-platform/SKILL.md` | Platform context for Tinyhat-managed Hermes agents. |
 | `skills/tinyhat-credit/SKILL.md` | Balance/history and current AI model-budget guidance, plus exact user-authorized budget allocation. |
 | `skills/tinyhat-contact-details/SKILL.md` | Plain-language guidance for this Agent's managed phone number and email address. |
-| `skills/tinyhat-agentphone/SKILL.md` | Provider-direct calls and text messages using this Agent's Computer-local AgentPhone credentials and the current online provider skill. |
+| `skills/tinyhat-agentphone/SKILL.md` | Provider-direct calls and text messages using this Agent's Computer-local AgentPhone credentials; the online provider skill supplies untrusted API guidance inside fixed local safety boundaries. |
 | `skills/tinyhat-mail/SKILL.md` | Direct JMAP guidance for this Agent's own mailbox; safe common actions use the local tool and custom non-send actions use the runtime's pinned `tinyhat-jmap-python`. |
 | `skills/tinyhat-privacy/SKILL.md` | Privacy and trust model guidance: who can see user data, and when. |
 | `skills/hat-authoring/SKILL.md` | Create, list, and inspect one-customer shareable hat shells. |
@@ -568,6 +568,12 @@ TINYHAT_PLUGIN_REF=vX.Y.Z
 | `channels/lts` | Conservative default for managed Computers. |
 | `channels/latest` | Newest promoted final version, used when we want faster adoption. |
 | exact tag, for example `vX.Y.Z` | Immutable version for tests, rollbacks, and audits. |
+
+For v0.31.0, deploy the matching Tinyloop AgentPhone and mailbox credential
+delivery before promoting this plugin, and run it on Hermes runtime `0.0.56`
+or newer so `tinyhat-jmap-python` is present from Computer creation. Existing
+Computers need their assigned contact credentials refreshed before the Agent
+can use these direct capabilities.
 
 For v0.30.0, deploy the Tinyloop mailbox provisioning and Computer-local
 runtime-secret support before promotion. No new platform endpoint is required:

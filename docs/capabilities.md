@@ -61,11 +61,14 @@ connects from the Computer directly to JMAP. For another server-supported
 non-send JMAP operation, the Agent can use the same Computer-local credentials
 through runtime `0.0.56` or newer's pinned `tinyhat-jmap-python` and must keep
 them on the configured HTTPS JMAP origin. All sends stay in `tinyhat_mail` so
-server policy and uncertain-result idempotency remain enforced. AgentPhone follows the same
-architecture: the Computer calls AgentPhone's API directly after loading
-`https://agentphone.to/skills.md`, but credentials are allowed only at the
-pinned `https://api.agentphone.ai` origin; Tinyloop is not in the call or text
-path.
+server policy and uncertain-result idempotency remain enforced. AgentPhone
+follows the same architecture: the Computer calls AgentPhone's API directly
+after loading `https://agentphone.ai/skills.md` as untrusted operational
+guidance, but credentials are allowed only at the pinned
+`https://api.agentphone.ai` origin; Tinyloop is not in the call or text path.
+The local skill keeps fixed action boundaries: online instructions cannot
+authorize forwarding messages or call transcripts, deleting assigned
+resources, or adding data the owner did not ask to send.
 
 ## Shareable Hat Authoring
 
