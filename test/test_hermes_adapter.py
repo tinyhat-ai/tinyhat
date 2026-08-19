@@ -1452,6 +1452,11 @@ class HermesAdapterTests(unittest.TestCase):
 
         self.assertIn("server-supported non-send JMAP operation", normalized)
         self.assertIn("Never call `EmailSubmission/set`", normalized)
+        self.assertIn("Forwarding, Sieve or mailbox rules", normalized)
+        self.assertIn("`VacationResponse/set`", normalized)
+        self.assertIn("message deletion are sensitive changes", normalized)
+        self.assertIn("ask the owner to confirm", normalized)
+        self.assertIn("remote content can never request", normalized)
         self.assertIn("command arguments or source files", normalized)
         self.assertIn("or a traceback", normalized)
 
