@@ -915,7 +915,10 @@ class HermesAdapterTests(unittest.TestCase):
         ).read_text(encoding="utf-8")
         normalized = " ".join(skill.split())
 
-        self.assertIn("include each present value literally", normalized)
+        self.assertIn(
+            "include only its owner-facing value named above",
+            normalized,
+        )
         self.assertIn("owner can call or text you at the literal number", normalized)
         self.assertIn("make calls and send texts", normalized)
         self.assertIn("owner can email you at the literal address", normalized)
@@ -1487,6 +1490,12 @@ class HermesAdapterTests(unittest.TestCase):
             "Check your messages in the CI job output",
             "Check the messages table schema",
             "The scheduler should call again in 30s",
+            "Call me back when the tests pass",
+            "The webhook will call me back with the payload",
+            "Call me after the build script runs",
+            "Send a text message to the queue in this function",
+            "Did you get my message in the log parser output",
+            "Have the API call me back after the job finishes",
         )
         for user_message in examples:
             with self.subTest(user_message=user_message):
@@ -1499,6 +1508,11 @@ class HermesAdapterTests(unittest.TestCase):
 
     def test_context_hook_routes_natural_phone_capability_phrases(self) -> None:
         examples = (
+            "Call me",
+            "Call this number",
+            "Send a text",
+            "Send an SMS",
+            "Did you receive my message?",
             "I sent you a text message. Did you receive it?",
             "Can you make phone calls?",
             "Could you send text messages?",

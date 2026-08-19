@@ -524,12 +524,16 @@ _CONTACT_ACTION_TARGET = (
 _CONTACT_ACTION_PATTERNS_WEAK = tuple(
     re.compile(pattern)
     for pattern in (
+        r"\bcall me(?:\s+(?:back|when|after|once|later|tomorrow|tonight|at)\b|\s*[.!?]*$)",
+        r"\bcall this (?:phone )?number\s*[.!?]*$",
+        r"\bsend an? (?:text(?: message)?|sms)\s*[.!?]*$",
         r"\bsend an? sms to\b",
         r"\bsend an? text (?:message )?to\b",
         r"\btext me(?:\s+(?:when|after|once|later|tomorrow|tonight|at)\b|\s*[.!?]*$)",
         r"\b(?:try\s+)?(?:make|making|place|placing)\s+(?:a\s+)?phone call(?:\s+again)?\b",
         r"\bcall again\b",
         r"\b(?:did|do|have) you (?:receive|received|gotten|get) my text(?: message)?\b",
+        r"\b(?:did|do|have) you (?:receive|received|gotten|get) my message\b",
         r"\b(?:i|we) sent you (?:a|the) text(?: message)?\b.*\b(?:did|do|have) you (?:receive|received|get|gotten) it\b",
         r"\bcheck (?:your|the) (?:texts|text messages)\b",
         r"\b(?:can|could) you (?:make|place|receive) (?:phone )?calls?\b",

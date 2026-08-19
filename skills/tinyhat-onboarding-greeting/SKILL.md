@@ -21,8 +21,9 @@ finished connecting and configuring this Hermes Computer.
   `TINYHAT_MAILBOX_USERNAME`, and `TINYHAT_MAILBOX_PASSWORD`. Read and include
   only the owner-facing email address. Never read or expose the mailbox
   username, mailbox password, or JMAP URL.
-- For each complete bundle, include each present value literally, but only
-  after its capability passes the presence check above.
+- For each complete bundle, include only its owner-facing value named above —
+  the phone number or email address — literally. Never include another bundle
+  value.
 - Only when the complete phone bundle is present, say simply that the owner can
   call or text you at the literal number and that you can also make calls and
   send texts when asked. Do not merely say that you “have a phone.”
