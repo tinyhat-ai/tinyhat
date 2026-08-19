@@ -19,18 +19,14 @@ from pathlib import Path, PurePosixPath
 from typing import Any
 from urllib import parse, request
 
-from .tool_errors import tool_error_json
+from ...tool_errors import tool_error_json
 
 MANAGER_SCHEMA = "tinyhat_google_workspace_app_manager_v1"
 MANIFEST_SCHEMA = "tinyhat_google_workspace_app_install_v1"
 MANAGER_ACTIONS = ("status", "install", "uninstall")
 PINNED_GWS_VERSION = "0.22.5"
-PINNED_ARCHIVE_SHA256 = (
-    "de78ecdbd2f1a84cca0063a7ecbc440240fc14b6ebccbb17f4646b792a8c5c1f"
-)
-PINNED_BINARY_SHA256 = (
-    "ab59c4bab4e7848740ba8cc3ef186152dab90121c45835b49bd1bf2a5c259b86"
-)
+PINNED_ARCHIVE_SHA256 = "de78ecdbd2f1a84cca0063a7ecbc440240fc14b6ebccbb17f4646b792a8c5c1f"
+PINNED_BINARY_SHA256 = "ab59c4bab4e7848740ba8cc3ef186152dab90121c45835b49bd1bf2a5c259b86"
 PINNED_ARCHIVE_URL = (
     "https://github.com/googleworkspace/cli/releases/download/v0.22.5/"
     "google-workspace-cli-x86_64-unknown-linux-gnu.tar.gz"
@@ -39,12 +35,8 @@ PINNED_AARCH64_ARCHIVE_URL = (
     "https://github.com/googleworkspace/cli/releases/download/v0.22.5/"
     "google-workspace-cli-aarch64-unknown-linux-gnu.tar.gz"
 )
-PINNED_AARCH64_ARCHIVE_SHA256 = (
-    "94490295d9580e1e88574e715a0a162991747d12d62f8c7b8dcc8268b6c1cea0"
-)
-PINNED_AARCH64_BINARY_SHA256 = (
-    "b68337faf1436fb2b3a287207cd57fef784a20fb4ab4f2429e51c4e0cfa0b50b"
-)
+PINNED_AARCH64_ARCHIVE_SHA256 = "94490295d9580e1e88574e715a0a162991747d12d62f8c7b8dcc8268b6c1cea0"
+PINNED_AARCH64_BINARY_SHA256 = "b68337faf1436fb2b3a287207cd57fef784a20fb4ab4f2429e51c4e0cfa0b50b"
 # Retained only so manifests written by plugin 0.21.0 remain trusted and can be
 # retired safely. New installs manage the executable only and reuse Hermes's
 # bundled ``google-workspace`` skill for operation guidance.
@@ -56,17 +48,15 @@ PINNED_OFFICIAL_SKILLS = {
     "gws-gmail-send": "5002f29ed58e3f14b826d4eadd917dd5f3e7f3ec8c6cbad7c61e4f340be519aa",
     "gws-drive": "d37fad56bb9547d2e169bfd04fbf1f4a377281456765c6243f092f32c973cdac",
 }
-TINYHAT_SHARED_SKILL_SHA256 = (
-    "9679052ece7c05ff3f05fb5f00c0437b460fade67631b60f279e445f5b5fd63e"
-)
+TINYHAT_SHARED_SKILL_SHA256 = "9679052ece7c05ff3f05fb5f00c0437b460fade67631b60f279e445f5b5fd63e"
 INSTALL_ROOT = Path("/opt/tinyhat")
 BINARY_PATH = INSTALL_ROOT / "bin" / "gws"
 STATE_DIR = INSTALL_ROOT / "state"
 MANIFEST_PATH = STATE_DIR / "google-workspace-app.json"
 QUARANTINE_DIR = INSTALL_ROOT / "quarantine"
-HERMES_SKILLS_ROOT = Path(
-    os.environ.get("TINYHAT_HERMES_HOME", str(Path.home() / ".hermes"))
-) / "skills"
+HERMES_SKILLS_ROOT = (
+    Path(os.environ.get("TINYHAT_HERMES_HOME", str(Path.home() / ".hermes"))) / "skills"
+)
 TRUSTED_HERMES_HOMES = (Path("/root/.hermes"),)
 DOWNLOAD_TIMEOUT_SECONDS = 30
 MAX_ARCHIVE_BYTES = 32 * 1024 * 1024
@@ -238,10 +228,7 @@ def _require_supported_host() -> GwsReleaseArtifact:
             "The managed Google Workspace app must be installed by the Computer service as root.",
         )
     configured_home = HERMES_SKILLS_ROOT.parent
-    if (
-        not configured_home.is_absolute()
-        or configured_home not in TRUSTED_HERMES_HOMES
-    ):
+    if not configured_home.is_absolute() or configured_home not in TRUSTED_HERMES_HOMES:
         raise GoogleWorkspaceAppManagerError(
             "unsafe_path",
             "The managed Google Workspace app requires a trusted Hermes home.",
@@ -360,9 +347,7 @@ def _managed_app_status_locked(artifact: GwsReleaseArtifact) -> dict[str, Any]:
             "managed": False,
             "version": PINNED_GWS_VERSION,
             "architecture": artifact.architecture,
-            "unmanaged_components_present": (
-                BINARY_PATH.exists() or BINARY_PATH.is_symlink()
-            ),
+            "unmanaged_components_present": (BINARY_PATH.exists() or BINARY_PATH.is_symlink()),
         }
     records = _validate_manifest(manifest, artifact=artifact)
     component_status = {
@@ -372,9 +357,7 @@ def _managed_app_status_locked(artifact: GwsReleaseArtifact) -> dict[str, Any]:
     binary_ready = component_status.get("gws", False)
     legacy_components = sorted(component for component in records if component != "gws")
     legacy_changed = sorted(
-        component
-        for component in legacy_components
-        if not component_status.get(component, False)
+        component for component in legacy_components if not component_status.get(component, False)
     )
     return {
         "schema": MANAGER_SCHEMA,
@@ -403,14 +386,10 @@ def _install_managed_app_locked(artifact: GwsReleaseArtifact) -> dict[str, Any]:
     _require_sha256(archive, artifact.archive_sha256, label="gws release archive")
     binary = _extract_gws_binary(archive)
     _require_sha256(binary, artifact.binary_sha256, label="extracted gws binary")
-    payloads = [
-        ManagedPayload("gws", BINARY_PATH, binary, 0o755, artifact.archive_url)
-    ]
+    payloads = [ManagedPayload("gws", BINARY_PATH, binary, 0o755, artifact.archive_url)]
 
     existing = _read_manifest(optional=True)
-    records = (
-        _validate_manifest(existing, artifact=artifact) if existing is not None else {}
-    )
+    records = _validate_manifest(existing, artifact=artifact) if existing is not None else {}
     _preflight_install(
         payloads,
         {"gws": records["gws"]} if "gws" in records else {},
@@ -796,10 +775,7 @@ def _adopt_complete_staged_manifest(artifact: GwsReleaseArtifact) -> bool:
             records = _validate_manifest(value, artifact=artifact)
         except GoogleWorkspaceAppManagerError:
             continue
-        if all(
-            _file_matches_record(Path(record["path"]), record)
-            for record in records.values()
-        ):
+        if all(_file_matches_record(Path(record["path"]), record) for record in records.values()):
             os.replace(staged, MANIFEST_PATH)
             _fsync_directory(STATE_DIR)
             return True
@@ -821,11 +797,7 @@ def _remove_valid_manifest_stages(artifact: GwsReleaseArtifact) -> None:
 def _transaction_files(target: Path, kind: str) -> list[Path]:
     prefix = f".{target.name}.tinyhat-{kind}-"
     try:
-        return sorted(
-            path
-            for path in target.parent.iterdir()
-            if path.name.startswith(prefix)
-        )
+        return sorted(path for path in target.parent.iterdir() if path.name.startswith(prefix))
     except OSError:
         return []
 
@@ -890,9 +862,8 @@ def _preflight_install(
                 "A managed Google Workspace component was modified; Tinyhat preserved it.",
             )
     for item in payloads:
-        if (
-            item.component not in existing_records
-            and (item.path.exists() or item.path.is_symlink())
+        if item.component not in existing_records and (
+            item.path.exists() or item.path.is_symlink()
         ):
             raise GoogleWorkspaceAppManagerError(
                 "unmanaged_component",
@@ -1149,9 +1120,7 @@ def _expected_manifest_records_for_release(
         raise GoogleWorkspaceAppManagerError(
             "managed_state_invalid", "The managed gws release record is invalid."
         )
-    skill_base_url = (
-        f"https://raw.githubusercontent.com/googleworkspace/cli/v{version}/skills"
-    )
+    skill_base_url = f"https://raw.githubusercontent.com/googleworkspace/cli/v{version}/skills"
     for name, expected_hash in skills.items():
         component = f"skill:{name}"
         records[component] = {

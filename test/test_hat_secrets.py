@@ -13,8 +13,13 @@ from unittest import mock
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(REPO_ROOT.parent))
+from package_support import load_local_tinyhat  # noqa: E402
 
-from tinyhat import hat_secrets, secret_handoff, secret_handoff_worker  # noqa: E402
+load_local_tinyhat(REPO_ROOT)
+
+from tinyhat.capabilities.hats import secrets as hat_secrets  # noqa: E402
+from tinyhat.capabilities.secrets import handoff as secret_handoff  # noqa: E402
+from tinyhat.capabilities.secrets import handoff_worker as secret_handoff_worker  # noqa: E402
 
 
 class HatSecretStoreTests(unittest.TestCase):

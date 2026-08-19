@@ -68,8 +68,8 @@ FORBIDDEN_PATHS = (
 )
 FORBIDDEN_TEXT = ("CLAUDE_PLUGIN_DATA",)
 
-GOOGLE_SCOPE_MANIFEST_PATH = "google_workspace_scope_manifest.json"
-GOOGLE_SCOPE_MANIFEST_LOADER_PATH = "google_workspace_scope_manifest.py"
+GOOGLE_SCOPE_MANIFEST_PATH = "capabilities/google_workspace/scope_manifest.json"
+GOOGLE_SCOPE_MANIFEST_LOADER_PATH = "capabilities/google_workspace/scope_manifest.py"
 GOOGLE_SCOPE_MANIFEST_SCHEMA = "tinyhat_google_workspace_scope_manifest_v1"
 GOOGLE_IDENTITY_BUNDLE_ID = "google_workspace_identity_v1"
 GOOGLE_CUSTOM_BUNDLE_ID = "google_workspace_custom_v1"
@@ -148,7 +148,7 @@ GOOGLE_DRIVE_FILE_COPY_PATHS = (
     GOOGLE_SCOPE_MANIFEST_PATH,
     "README.md",
     "schemas.py",
-    "google_workspace.py",
+    "capabilities/google_workspace/connection.py",
     "docs/capabilities.md",
     "docs/runtime-boundary.md",
     "docs/skill-authoring.md",
@@ -661,6 +661,7 @@ def validate_google_scope_manifest(root: Path) -> None:  # noqa: PLR0912, PLR091
     claim_paths = {
         *(root / rel for rel in GOOGLE_MANIFEST_DOC_PATHS),
         *root.glob("*.py"),
+        *(root / "capabilities").rglob("*.py"),
     }
     for claim_path in sorted(claim_paths):
         rel = claim_path.relative_to(root).as_posix()
@@ -761,22 +762,33 @@ def validate_hermes_adapter(root: Path) -> None:
         "schemas.py",
         "tools.py",
         "platform.py",
+        "capabilities/__init__.py",
+        "capabilities/contact_details/tool.py",
+        "capabilities/credit/tool.py",
+        "capabilities/mail/tool.py",
         GOOGLE_SCOPE_MANIFEST_PATH,
         GOOGLE_SCOPE_MANIFEST_LOADER_PATH,
-        "google_workspace.py",
-        "google_workspace_app.py",
-        "google_workspace_app_manager.py",
-        "google_workspace_disconnect_worker.py",
-        "google_workspace_worker.py",
-        "secret_handoff.py",
-        "secret_handoff_worker.py",
+        "capabilities/google_workspace/connection.py",
+        "capabilities/google_workspace/app.py",
+        "capabilities/google_workspace/app_manager.py",
+        "capabilities/google_workspace/disconnect_worker.py",
+        "capabilities/google_workspace/permission_chooser_worker.py",
+        "capabilities/google_workspace/worker.py",
+        "capabilities/hats/tool.py",
+        "capabilities/secrets/handoff.py",
+        "capabilities/secrets/handoff_worker.py",
+        "capabilities/slack/connection.py",
+        "capabilities/slack/disconnect.py",
+        "capabilities/slack/disconnect_worker.py",
     ):
         require((root / rel).is_file(), f"{rel} is missing")
 
     package_files = package.get("files")
     require(isinstance(package_files, list), "package.json files must be a list")
-    for rel in (GOOGLE_SCOPE_MANIFEST_PATH, GOOGLE_SCOPE_MANIFEST_LOADER_PATH):
-        require(rel in package_files, f"package.json files must include {rel}")
+    require(
+        "capabilities" in package_files,
+        "package.json files must include the capabilities directory",
+    )
 
     codex_screenshot = (
         root
@@ -807,6 +819,12 @@ def validate_hermes_adapter(root: Path) -> None:
     source = (root / "__init__.py").read_text(encoding="utf-8")
     for phrase in ("ctx.register_tool", "ctx.register_skill", "ctx.register_command"):
         require(phrase in source, f"__init__.py missing {phrase}")
+
+    tools_source = (root / "tools.py").read_text(encoding="utf-8")
+    require(
+        'Path(__file__).resolve().parent / "hermes.plugin.json"' in tools_source,
+        "the running plugin version must keep reading hermes.plugin.json from the plugin root",
+    )
 
     skills = hermes.get("skills")
     require(isinstance(skills, list), "hermes.plugin.json skills must be a list")
@@ -889,17 +907,7 @@ def validate_fresh_surface(root: Path) -> None:
         root / "__init__.py",
         root / "platform.py",
         root / "context.py",
-        root / "credit.py",
-        root / GOOGLE_SCOPE_MANIFEST_PATH,
-        root / GOOGLE_SCOPE_MANIFEST_LOADER_PATH,
-        root / "google_workspace.py",
-        root / "google_workspace_app.py",
-        root / "google_workspace_app_manager.py",
-        root / "google_workspace_disconnect_worker.py",
-        root / "google_workspace_worker.py",
-        root / "hats.py",
-        root / "secret_handoff.py",
-        root / "secret_handoff_worker.py",
+        root / "capabilities",
         root / "schemas.py",
         root / "tools.py",
     ]
@@ -1115,9 +1123,9 @@ def validate_docs(root: Path) -> None:
 
 
 def validate_google_workspace_contract(root: Path) -> None:
-    text = (root / "google_workspace.py").read_text(encoding="utf-8")
+    text = (root / "capabilities/google_workspace/connection.py").read_text(encoding="utf-8")
     required = (
-        "from .google_workspace_scope_manifest import (",
+        "from .scope_manifest import (",
         "GOOGLE_WORKSPACE_PRESETS = tuple(PRESET_ORDER)",
         "GOOGLE_LEGACY_PROFILE_CONFIGS = {",
         "legacy_profile=True",
@@ -1175,7 +1183,7 @@ def validate_google_workspace_contract(root: Path) -> None:
     for phrase in forbidden:
         require(phrase not in text, f"google_workspace.py retained forbidden contract: {phrase}")
 
-    app_text = (root / "google_workspace_app.py").read_text(encoding="utf-8")
+    app_text = (root / "capabilities/google_workspace/app.py").read_text(encoding="utf-8")
     for phrase in (
         'APP_NAME = "gws"',
         "load_verified_google_workspace_credentials",
@@ -1206,7 +1214,9 @@ def validate_google_workspace_contract(root: Path) -> None:
             f"google_workspace_app.py retained forbidden contract: {phrase}",
         )
 
-    manager_text = (root / "google_workspace_app_manager.py").read_text(encoding="utf-8")
+    manager_text = (root / "capabilities/google_workspace/app_manager.py").read_text(
+        encoding="utf-8"
+    )
     for phrase in (
         'PINNED_GWS_VERSION = "0.22.5"',
         '"de78ecdbd2f1a84cca0063a7ecbc440240fc14b6ebccbb17f4646b792a8c5c1f"',

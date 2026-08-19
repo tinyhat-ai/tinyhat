@@ -35,13 +35,16 @@ else:
     import tinyhat  # type: ignore[no-redef]
 
 from tinyhat import context as tinyhat_context  # noqa: E402
-from tinyhat import google_workspace as workspace  # noqa: E402
-from tinyhat import (  # noqa: E402
-    google_workspace_disconnect_worker,
-    google_workspace_permission_chooser_worker,
-    google_workspace_worker,
-    schemas,
-    tools,
+from tinyhat import schemas, tools  # noqa: E402
+from tinyhat.capabilities.google_workspace import connection as workspace  # noqa: E402
+from tinyhat.capabilities.google_workspace import (  # noqa: E402
+    disconnect_worker as google_workspace_disconnect_worker,
+)
+from tinyhat.capabilities.google_workspace import (  # noqa: E402
+    permission_chooser_worker as google_workspace_permission_chooser_worker,
+)
+from tinyhat.capabilities.google_workspace import (  # noqa: E402
+    worker as google_workspace_worker,
 )
 
 REAL_PREFLIGHT_CONNECTION_REQUEST = workspace._preflight_connection_request
@@ -645,7 +648,7 @@ class GoogleWorkspaceTests(unittest.TestCase):
             self.assertIn(owner_token, state_path.read_text(encoding="utf-8"))
             self.assertNotIn(owner_token, " ".join(command))
             self.assertIn(
-                "google_workspace_permission_chooser_worker.py",
+                "permission_chooser_worker.py",
                 command[1],
             )
 
@@ -684,6 +687,12 @@ class GoogleWorkspaceTests(unittest.TestCase):
                 )
 
             popen.assert_called_once()
+            expected_worker_cwd = PARENT
+            self.assertEqual(popen.call_args.kwargs["cwd"], str(expected_worker_cwd))
+            self.assertEqual(
+                popen.call_args.kwargs["env"]["PYTHONPATH"].split(os.pathsep)[0],
+                str(expected_worker_cwd),
+            )
             self.assertTrue((state_path.parent / "ready.json").exists())
 
     def test_permission_chooser_worker_starts_one_combined_google_request(self) -> None:
@@ -781,11 +790,7 @@ class GoogleWorkspaceTests(unittest.TestCase):
                 "https://www.googleapis.com/auth/drive.readonly",
             ],
         )
-        self.assertTrue(
-            client.posts[-1][0].endswith(
-                f"/permission-choosers/{chooser_id}/complete"
-            )
-        )
+        self.assertTrue(client.posts[-1][0].endswith(f"/permission-choosers/{chooser_id}/complete"))
         self.assertEqual(
             client.posts[-1][1],
             {"owner_token": owner_token, "outcome": "completed"},
@@ -5402,7 +5407,7 @@ class GoogleWorkspaceTests(unittest.TestCase):
             self.assertEqual(stat.S_IMODE(state_path.stat().st_mode), 0o600)
             self.assertIn(intent.owner_token, state_path.read_text(encoding="utf-8"))
             self.assertNotIn(intent.owner_token, " ".join(command))
-            self.assertIn("google_workspace_disconnect_worker.py", command[1])
+            self.assertIn("disconnect_worker.py", command[1])
 
     def test_disconnect_process_start_waits_for_worker_readiness(self) -> None:
         client = DisconnectClient()
@@ -6269,8 +6274,8 @@ class GoogleWorkspaceTests(unittest.TestCase):
 
     def test_package_sources_do_not_reference_runtime_feature_changes(self) -> None:
         package_sources = [
-            REPO_ROOT / "google_workspace.py",
-            REPO_ROOT / "google_workspace_worker.py",
+            REPO_ROOT / "capabilities" / "google_workspace" / "connection.py",
+            REPO_ROOT / "capabilities" / "google_workspace" / "worker.py",
             REPO_ROOT / "tools.py",
             REPO_ROOT / "context.py",
         ]

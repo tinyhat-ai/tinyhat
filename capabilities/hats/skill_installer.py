@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import fcntl
 import hashlib
 import json
 import os
@@ -12,9 +13,7 @@ from contextlib import contextmanager, suppress
 from pathlib import Path
 from typing import Any
 
-import fcntl
-
-from .hat_secrets import normalize_hat_handle
+from .secrets import normalize_hat_handle
 
 MAX_SKILLS = 50
 MAX_FILES_PER_SKILL = 200

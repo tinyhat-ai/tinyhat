@@ -14,7 +14,7 @@ from pathlib import Path
 from typing import Any
 from urllib import error, parse, request
 
-from .tool_errors import tool_error_json
+from ...tool_errors import tool_error_json
 
 CORE_CAPABILITY = "urn:ietf:params:jmap:core"
 MAIL_CAPABILITY = "urn:ietf:params:jmap:mail"

@@ -48,17 +48,15 @@ can list, search, read, and send plain-text mail without seeing it.
 | `__init__.py` | Hermes registration entrypoint. |
 | `hermes.plugin.json` | Tinyhat metadata for the Hermes adapter, skill, command, and release channels. |
 | `context.py` | Small Hermes `pre_llm_call` context hook for Tinyhat-sensitive turns. |
-| `tools.py` / `schemas.py` | Tinyhat tools: plugin version, safe platform status, user credit, current AI model budget, explicit budget allocation, Agent contacts and private mail, shareable hats, joke proof, skill catalog, private secret handoff and removal, Slack connection, Google identity connection, Codex auth setup/status helpers, and plugin update helper. |
-| `credit.py` | Safe owner balance/history and Agent model-budget projections, plus explicit allocation to this Agent's AI model budget. |
-| `contact_details.py` | Safe, idempotent access to this Agent's Tinyhat-managed phone number and email address. |
-| `mail.py` | Bounded JMAP access to this Agent's isolated Tinyhat inbox, with local-only credentials, untrusted-content sanitization, governed sending, and durable retry protection. |
-| `hats.py` / `hat_repository.py` | Owner-scoped Hat lifecycle plus the value-blind bridge to Computer-local Git checkout and sync. |
-| `slack_connection.py` | Hermes manifest generation plus Computer-local Slack token validation and installation. |
-| `credentials.py` | Value-blind credential name/description discovery and platform-owned, expiring Telegram removal confirmation. |
-| `google_workspace.py` / `google_workspace_worker.py` | Platform-authored Google OAuth handoff, multi-account local custody, manifest-governed access selection, assignment-safe status, and targeted disconnect. |
-| `google_workspace_scope_manifest.json` / `google_workspace_scope_manifest.py` | Versioned public Google scope contract and dependency-free loader. |
-| `google_workspace_app.py` | Account-selected credential bridge to the manifest-verified, root-owned managed `gws` app. |
-| `google_workspace_app_manager.py` | Confirmed install/status/uninstall for pinned official `gws` Linux artifacts. |
+| `tools.py` / `schemas.py` | Thin Hermes tool and schema facades. Product behavior lives under `capabilities/`. |
+| `capabilities/README.md` | Capability ownership map and rule for adding new product behavior. |
+| `capabilities/contact_details/` | Safe, idempotent access to this Agent's managed phone number and email address. |
+| `capabilities/credit/` | Owner balance/history and Agent model-budget operations. |
+| `capabilities/mail/` | Bounded JMAP mailbox access with local-only credentials and safe retry behavior. |
+| `capabilities/hats/` | Owner-scoped Hat lifecycle, repositories, skills, transfers, and private values. |
+| `capabilities/secrets/` | Value-blind credential discovery and encrypted private handoff. |
+| `capabilities/slack/` | Computer-local Slack connection and disconnect flows. |
+| `capabilities/google_workspace/` | Google OAuth, account custody, permission selection, managed `gws`, and detached workers. |
 | `skills/tinyhat-tell-joke/SKILL.md` | Deterministic joke proof. |
 | `skills/tinyhat-plugin-version/SKILL.md` | Live plugin version proof. |
 | `skills/tinyhat-skill-catalog/SKILL.md` | Skill discovery guidance for plugin-qualified Tinyhat skill names. |
@@ -274,7 +272,7 @@ Each connect without `account_id` adds an account while preserving the others.
 The Computer creates a fresh RSA keypair and asks the
 platform for identity only: `openid`, `email`, and `profile`. Workspace data
 access is explicit and comes from the versioned
-`google_workspace_scope_manifest.json` contract (schema
+`capabilities/google_workspace/scope_manifest.json` contract (schema
 `tinyhat_google_workspace_scope_manifest_v1`, manifest version `1.1.0`). It
 defines these composable presets:
 

@@ -10,7 +10,7 @@ from pathlib import Path
 from types import MappingProxyType
 from typing import Any
 
-MANIFEST_PATH = Path(__file__).with_name("google_workspace_scope_manifest.json")
+MANIFEST_PATH = Path(__file__).with_name("scope_manifest.json")
 MANIFEST_SCHEMA = "tinyhat_google_workspace_scope_manifest_v1"
 _EXPECTED_IDENTITY_BUNDLE_ID = "google_workspace_identity_v1"
 CUSTOM_BUNDLE_ID = "google_workspace_custom_v1"

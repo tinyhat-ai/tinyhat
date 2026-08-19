@@ -4,13 +4,13 @@ from __future__ import annotations
 
 from typing import Any
 
-from .hat_secrets import (
+from ...platform import PlatformError, build_platform_client, computer_api_path
+from .secrets import (
     create_authenticated_hat_secret_envelope,
     credential_names_fingerprint_sha256,
     normalize_hat_handle,
     normalize_secret_name,
 )
-from .platform import PlatformError, build_platform_client, computer_api_path
 
 RESULT_SCHEMA = "tinyhat_hat_credential_transfer_result_v1"
 

@@ -1,0 +1,1 @@
+"""Managed Agent contact details."""

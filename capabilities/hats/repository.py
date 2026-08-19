@@ -14,9 +14,7 @@ class HatRepositoryRuntimeError(RuntimeError):
     """The local runtime could not complete a Hat repository action."""
 
 
-_CAMEL_CASE_BOUNDARY = re.compile(
-    r"(?<=[a-z0-9])(?=[A-Z])|(?<=[A-Z])(?=[A-Z][a-z])"
-)
+_CAMEL_CASE_BOUNDARY = re.compile(r"(?<=[a-z0-9])(?=[A-Z])|(?<=[A-Z])(?=[A-Z][a-z])")
 _NON_ALPHANUMERIC = re.compile(r"[^a-zA-Z0-9]+")
 _CREDENTIAL_SEGMENTS = {
     "auth",
@@ -45,8 +43,7 @@ _ACTION_REQUIRED_FIELDS = {
         "head_sha",
     },
     "status": _COMMON_RESULT_FIELDS | {"changed_paths", "clean", "head_sha"},
-    "sync": _COMMON_RESULT_FIELDS
-    | {"changed", "head_sha", "pushed", "synced_paths"},
+    "sync": _COMMON_RESULT_FIELDS | {"changed", "head_sha", "pushed", "synced_paths"},
     "reset": _COMMON_RESULT_FIELDS
     | {
         "credential_helper_removed",
@@ -60,11 +57,7 @@ _ACTION_OPTIONAL_FIELDS = {"sync": {"credential_persisted"}}
 
 def _is_credential_field_name(key: object) -> bool:
     expanded = _CAMEL_CASE_BOUNDARY.sub("_", str(key))
-    segments = tuple(
-        segment.casefold()
-        for segment in _NON_ALPHANUMERIC.split(expanded)
-        if segment
-    )
+    segments = tuple(segment.casefold() for segment in _NON_ALPHANUMERIC.split(expanded) if segment)
     if not segments:
         return False
     if segments in {
@@ -74,10 +67,7 @@ def _is_credential_field_name(key: object) -> bool:
         return False
     if _CREDENTIAL_SEGMENTS.intersection(segments):
         return True
-    return any(
-        pair in {("api", "key"), ("private", "key")}
-        for pair in zip(segments, segments[1:])
-    )
+    return any(pair in {("api", "key"), ("private", "key")} for pair in zip(segments, segments[1:]))
 
 
 def _contains_credential_field(value: Any) -> bool:
@@ -129,15 +119,9 @@ def _matches_runtime_result_contract(  # noqa: PLR0911 - explicit fail-closed co
         "removed",
     }
     list_fields = {"changed_paths", "synced_paths"}
-    if any(
-        field in result and not isinstance(result[field], str)
-        for field in string_fields
-    ):
+    if any(field in result and not isinstance(result[field], str) for field in string_fields):
         return False
-    if any(
-        field in result and not isinstance(result[field], bool)
-        for field in boolean_fields
-    ):
+    if any(field in result and not isinstance(result[field], bool) for field in boolean_fields):
         return False
     if any(
         field in result
@@ -152,15 +136,11 @@ def _matches_runtime_result_contract(  # noqa: PLR0911 - explicit fail-closed co
         return False
     residual_expiry = result.get("residual_access_expires_at")
     return not (
-        action == "reset"
-        and residual_expiry is not None
-        and not isinstance(residual_expiry, str)
+        action == "reset" and residual_expiry is not None and not isinstance(residual_expiry, str)
     )
 
 
-def run_hat_repository(
-    payload: dict[str, Any], *, timeout_seconds: int = 180
-) -> dict[str, Any]:
+def run_hat_repository(payload: dict[str, Any], *, timeout_seconds: int = 180) -> dict[str, Any]:
     """Run the token-safe local Git workflow without returning a credential."""
 
     requested_action = str(payload.get("action") or "").strip().casefold()
@@ -170,8 +150,7 @@ def run_hat_repository(
             not isinstance(repository, dict)
             or set(repository) != {"owner", "name", "url"}
             or any(
-                not isinstance(repository.get(field), str)
-                or not repository[field].strip()
+                not isinstance(repository.get(field), str) or not repository[field].strip()
                 for field in ("owner", "name", "url")
             )
         ):
@@ -179,15 +158,11 @@ def run_hat_repository(
                 "Trusted repository metadata is required for local deletion."
             )
 
-    runtime_prefix = (
-        os.getenv("TINYHAT_RUNTIME_PREFIX") or "/opt/tinyhat-hermes-runtime"
-    ).strip()
+    runtime_prefix = (os.getenv("TINYHAT_RUNTIME_PREFIX") or "/opt/tinyhat-hermes-runtime").strip()
     env = dict(os.environ)
     existing_python_path = env.get("PYTHONPATH", "").strip()
     env["PYTHONPATH"] = (
-        f"{runtime_prefix}:{existing_python_path}"
-        if existing_python_path
-        else runtime_prefix
+        f"{runtime_prefix}:{existing_python_path}" if existing_python_path else runtime_prefix
     )
     try:
         process = subprocess.run(
@@ -215,27 +190,18 @@ def run_hat_repository(
         )
     if process.returncode != 0 or result.get("status") == "error":
         message = str(result.get("message") or "").strip()
-        raise HatRepositoryRuntimeError(
-            message or "The Hat repository operation failed."
-        )
+        raise HatRepositoryRuntimeError(message or "The Hat repository operation failed.")
     if result.get("action") != requested_action:
-        raise HatRepositoryRuntimeError(
-            "The runtime returned a mismatched repository action."
-        )
-    if requested_action == "delete_local" and result.get("hat_handle") != str(
-        payload.get("identifier") or ""
-    ).strip():
-        raise HatRepositoryRuntimeError(
-            "The runtime returned a mismatched Hat checkout."
-        )
+        raise HatRepositoryRuntimeError("The runtime returned a mismatched repository action.")
+    if (
+        requested_action == "delete_local"
+        and result.get("hat_handle") != str(payload.get("identifier") or "").strip()
+    ):
+        raise HatRepositoryRuntimeError("The runtime returned a mismatched Hat checkout.")
     # The runtime contract is value-blind. Fail closed if a future runtime
     # accidentally puts a credential-shaped field in plugin-visible output.
-    if _contains_credential_field(result) or not _matches_runtime_result_contract(
-        result
-    ):
-        raise HatRepositoryRuntimeError(
-            "The runtime returned unsafe repository helper output."
-        )
+    if _contains_credential_field(result) or not _matches_runtime_result_contract(result):
+        raise HatRepositoryRuntimeError("The runtime returned unsafe repository helper output.")
     return result
 
 

@@ -18,7 +18,10 @@ from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any
 
-from .google_workspace import (
+from ...platform import build_platform_client
+from ...tool_errors import tool_error_json
+from .app_manager import PINNED_GWS_VERSION
+from .connection import (
     GOOGLE_TOKEN_VALUE_MAX_LENGTH,
     GoogleWorkspaceAccountSelectionRequired,
     GoogleWorkspaceAuthorizationRenewalRequired,
@@ -34,9 +37,6 @@ from .google_workspace import (
     load_verified_google_workspace_credentials,
     refresh_verified_google_workspace_credentials,
 )
-from .google_workspace_app_manager import PINNED_GWS_VERSION
-from .platform import build_platform_client
-from .tool_errors import tool_error_json
 
 APP_NAME = "gws"
 RESULT_SCHEMA = "tinyhat_google_workspace_app_v1"
@@ -311,9 +311,7 @@ def google_workspace_app(args: dict[str, Any] | None = None, **_: Any) -> str:
             argv=argv,
             effect=effect,
             account_id=account_id,
-            expected_credential_generation=(
-                credential_generation if effect == "write" else None
-            ),
+            expected_credential_generation=(credential_generation if effect == "write" else None),
         )
     except GoogleWorkspaceAppAccountSelectionRequired as exc:
         result = {
@@ -475,9 +473,7 @@ def _resolve_write_account(account_id: str | None) -> tuple[str, str]:
         ) from exc
 
     try:
-        selected_account_id = _validated_connection_id(
-            credentials.get("tinyhat_connection_id")
-        )
+        selected_account_id = _validated_connection_id(credentials.get("tinyhat_connection_id"))
     except GoogleWorkspaceError as exc:
         raise GoogleWorkspaceAppError(
             "not_connected",
@@ -627,10 +623,11 @@ def _access_token_needs_refresh(
 def _open_trusted_gws_binary():
     """Hold the manager's verified executable fd and shared lock through execution."""
     try:
-        from .google_workspace_app_manager import (  # noqa: PLC0415
+        from .app_manager import (
             GoogleWorkspaceAppManagerError,
             verified_managed_gws_binary,
         )
+
         with verified_managed_gws_binary() as binary:
             yield binary
             return
@@ -652,9 +649,7 @@ def _invoke_with_assignment_guard(
 ) -> AppProcessResult:
     """Serialize local lifecycle changes and discard output after reassignment."""
     with _lifecycle_lock():
-        selected_account_id = account_id or str(
-            credentials.get("tinyhat_connection_id") or ""
-        )
+        selected_account_id = account_id or str(credentials.get("tinyhat_connection_id") or "")
         current = _read_credentials(selected_account_id or None)
         if current is None or not _same_credential_generation(current, credentials):
             raise GoogleWorkspaceAppError(
@@ -703,9 +698,7 @@ def _invoke_with_assignment_guard(
             ) from exc
 
 
-def _same_credential_generation(
-    current: dict[str, Any], expected: dict[str, Any]
-) -> bool:
+def _same_credential_generation(current: dict[str, Any], expected: dict[str, Any]) -> bool:
     for field in (
         "tinyhat_connection_id",
         "client_id",

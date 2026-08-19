@@ -30,7 +30,7 @@ if REPO_ROOT.name != "tinyhat":
     sys.modules["tinyhat"] = tinyhat
     spec.loader.exec_module(tinyhat)
 
-from tinyhat import google_workspace_scope_manifest as manifest  # noqa: E402
+from tinyhat.capabilities.google_workspace import scope_manifest as manifest  # noqa: E402
 
 VALIDATOR_SPEC = importlib.util.spec_from_file_location(
     "tinyhat_validate_framework_package",
@@ -206,7 +206,7 @@ class GoogleWorkspaceScopeManifestTests(unittest.TestCase):
                 copied_root,
                 ignore=shutil.ignore_patterns(".git", "__pycache__", "*.pyc"),
             )
-            workspace_path = copied_root / "google_workspace.py"
+            workspace_path = copied_root / "capabilities" / "google_workspace" / "connection.py"
             workspace_path.write_text(
                 workspace_path.read_text(encoding="utf-8")
                 + '\nGOOGLE_UNDECLARED_SCOPE = f"{GOOGLE_SCOPE_PREFIX}contacts.readonly"\n',

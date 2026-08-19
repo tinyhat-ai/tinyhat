@@ -37,7 +37,9 @@ if REPO_ROOT.name != "tinyhat":
 else:
     import tinyhat  # type: ignore[no-redef]
 
-from tinyhat import google_workspace, google_workspace_app, schemas, tools  # noqa: E402
+from tinyhat import schemas, tools  # noqa: E402
+from tinyhat.capabilities.google_workspace import app as google_workspace_app  # noqa: E402
+from tinyhat.capabilities.google_workspace import connection as google_workspace  # noqa: E402
 
 
 def fake_open_binary(path: str, *, fd: int | None = None):

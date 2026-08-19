@@ -19,7 +19,14 @@ from pathlib import Path
 from typing import Any
 from urllib.parse import urlencode
 
-from .hat_secrets import (
+from ...platform import (
+    PlatformClient,
+    PlatformError,
+    build_platform_client,
+    computer_api_path,
+)
+from ...tool_errors import tool_error_json
+from ..hats.secrets import (
     HatSecretStoreError,
     credential_names_fingerprint_sha256,
     ensure_hat_key_pair,
@@ -30,14 +37,9 @@ from .hat_secrets import (
     set_hat_secrets,
     verify_authenticated_hat_secret_envelope,
 )
-from .platform import (
-    PlatformClient,
-    PlatformError,
-    build_platform_client,
-    computer_api_path,
-)
-from .tool_errors import tool_error_json
 
+PLUGIN_ROOT = Path(__file__).resolve().parents[2]
+WORKER_CWD = PLUGIN_ROOT.parent
 KEY_ALGORITHM = "RSA-OAEP-256"
 DEFAULT_EXPIRES_IN_SECONDS = 300
 MAX_EXPIRES_IN_SECONDS = 30 * 60
@@ -398,7 +400,7 @@ def _start_worker_process(
     worker_key_path = key_path or _write_private_key_file(handoff_id, private_key_pem)
     package_dir = Path(__file__).resolve().parent
     env = os.environ.copy()
-    pythonpath = str(package_dir.parent)
+    pythonpath = str(WORKER_CWD)
     if env.get("PYTHONPATH"):
         pythonpath = f"{pythonpath}{os.pathsep}{env['PYTHONPATH']}"
     env["PYTHONPATH"] = pythonpath
@@ -470,7 +472,7 @@ def _start_worker_with_systemd(  # noqa: PLR0913 - explicit worker boundary inpu
     command.extend(
         [
             sys.executable,
-            str(package_dir / "secret_handoff_worker.py"),
+            str(package_dir / "handoff_worker.py"),
             "--handoff-id",
             handoff_id,
             "--key-path",
@@ -486,7 +488,7 @@ def _start_worker_with_systemd(  # noqa: PLR0913 - explicit worker boundary inpu
     try:
         completed = subprocess.run(
             command,
-            cwd=str(package_dir.parent),
+            cwd=str(WORKER_CWD),
             capture_output=True,
             text=True,
             timeout=15,
@@ -525,7 +527,7 @@ def _start_worker_with_popen(  # noqa: PLR0913 - mirrors the systemd worker inpu
     # systemd-run above is defense in depth, not load-bearing.
     command = [
         sys.executable,
-        str(package_dir / "secret_handoff_worker.py"),
+        str(package_dir / "handoff_worker.py"),
         "--handoff-id",
         handoff_id,
         "--key-path",
@@ -539,7 +541,7 @@ def _start_worker_with_popen(  # noqa: PLR0913 - mirrors the systemd worker inpu
         command.append("--persistent")
     subprocess.Popen(
         command,
-        cwd=str(package_dir.parent),
+        cwd=str(WORKER_CWD),
         env=env,
         stdin=subprocess.DEVNULL,
         stdout=subprocess.DEVNULL,
@@ -636,7 +638,7 @@ def _install_submitted_secret(  # noqa: PLR0913 - generic, Slack, and Hat instal
     hat_handle: str | None = None,
 ) -> bool:
     if state.get("handoff_kind") == "slack_connection":
-        from .slack_connection import install_submitted_slack_connection
+        from ..slack.connection import install_submitted_slack_connection
 
         return install_submitted_slack_connection(
             client=client,
@@ -1065,16 +1067,14 @@ def _register_terminal_env_secret(secret_name: str) -> dict[str, Any]:
 
 def _send_secret_available_notice(secret_name: str) -> dict[str, Any]:
     return _send_secret_notice(
-        (
-            f"{secret_name} is saved. The platform is refreshing my Telegram "
-            "gateway now — I will confirm when it is ready."
-        )
+        f"{secret_name} is saved. The platform is refreshing my Telegram "
+        "gateway now — I will confirm when it is ready."
     )
 
 
 def _send_secret_notice(text: str) -> dict[str, Any]:
     try:
-        from .tools import _telegram_credentials, _telegram_send_message
+        from ...tools import _telegram_credentials, _telegram_send_message
 
         token, chat_id = _telegram_credentials()
         sent = _telegram_send_message(

@@ -28,7 +28,15 @@ from pathlib import Path
 from typing import Any
 from urllib import parse
 
-from .google_workspace_scope_manifest import (
+from ...platform import (
+    PlatformClient,
+    PlatformError,
+    build_platform_client,
+    computer_api_path,
+)
+from ...tool_errors import tool_error_json
+from ..secrets.handoff import KEY_ALGORITHM, _decrypt_ciphertext, _generate_key_pair
+from .scope_manifest import (
     CLIENT_POLICIES_BY_ID,
     COMPATIBILITY_SCOPE_DISCLOSURES_BY_URL,
     IDENTITY_BUNDLE_ID,
@@ -44,15 +52,9 @@ from .google_workspace_scope_manifest import (
     normalize_scope_urls,
     resolve_scope_request,
 )
-from .platform import (
-    PlatformClient,
-    PlatformError,
-    build_platform_client,
-    computer_api_path,
-)
-from .secret_handoff import KEY_ALGORITHM, _decrypt_ciphertext, _generate_key_pair
-from .tool_errors import tool_error_json
 
+PLUGIN_ROOT = Path(__file__).resolve().parents[2]
+WORKER_CWD = PLUGIN_ROOT.parent
 GOOGLE_WORKSPACE_ACTIONS = (
     "connect",
     "choose_permissions",
@@ -88,9 +90,7 @@ GOOGLE_WORKSPACE_API_SUFFIX = "google-workspace-oauth/v1"
 GOOGLE_WORKSPACE_PREFLIGHT_SUFFIX = f"{GOOGLE_WORKSPACE_API_SUFFIX}/preflight"
 GOOGLE_WORKSPACE_CONNECTIONS_SUFFIX = f"{GOOGLE_WORKSPACE_API_SUFFIX}/connections"
 GOOGLE_WORKSPACE_DISCONNECT_INTENTS_SUFFIX = f"{GOOGLE_WORKSPACE_API_SUFFIX}/disconnect-intents"
-GOOGLE_WORKSPACE_PERMISSION_CHOOSERS_SUFFIX = (
-    f"{GOOGLE_WORKSPACE_API_SUFFIX}/permission-choosers"
-)
+GOOGLE_WORKSPACE_PERMISSION_CHOOSERS_SUFFIX = f"{GOOGLE_WORKSPACE_API_SUFFIX}/permission-choosers"
 GOOGLE_TOKEN_URI = "https://oauth2.googleapis.com/token"
 GOOGLE_WORKSPACE_PROFILE_RECOMMENDED = "workspace_recommended"
 GOOGLE_WORKSPACE_PROFILE_CUSTOM = "workspace_custom"
@@ -276,8 +276,7 @@ GOOGLE_REFRESH_CORRELATION_ID_RE = re.compile(r"^gwr_[A-Za-z0-9_-]{8,60}$")
 GOOGLE_PERMISSION_CHOOSER_ID_RE = re.compile(r"^gwp_[A-Za-z0-9_-]{20,80}$")
 GOOGLE_LAUNCH_TICKET_MAX_LENGTH = 32 * 1024
 GOOGLE_LAUNCH_TICKET_RE = re.compile(
-    rf"^gwol1\.[1-9][0-9]{{0,9}}\."
-    rf"[A-Za-z0-9_-]{{32,{GOOGLE_LAUNCH_TICKET_MAX_LENGTH}}}$"
+    rf"^gwol1\.[1-9][0-9]{{0,9}}\." rf"[A-Za-z0-9_-]{{32,{GOOGLE_LAUNCH_TICKET_MAX_LENGTH}}}$"
 )
 DISCONNECT_OWNER_TOKEN_RE = re.compile(r"^[A-Za-z0-9_-]{32,256}$")
 DISCONNECT_GENERATION_RE = re.compile(r"^[0-9a-f]{64}$")
@@ -1793,7 +1792,7 @@ def _permission_chooser_worker_command(
 ) -> list[str]:
     return [
         sys.executable,
-        str(package_dir / "google_workspace_permission_chooser_worker.py"),
+        str(package_dir / "permission_chooser_worker.py"),
         "--chooser-id",
         _validated_permission_chooser_id(chooser_id),
         "--state-path",
@@ -1853,9 +1852,7 @@ def _wait_for_permission_chooser_worker_ready(
             time.sleep(PERMISSION_CHOOSER_WORKER_READY_POLL_SECONDS)
             continue
         if ready != expected:
-            raise GoogleWorkspaceError(
-                "Google access chooser worker readiness is invalid."
-            )
+            raise GoogleWorkspaceError("Google access chooser worker readiness is invalid.")
         return
     raise GoogleWorkspaceError("Google access chooser worker did not become ready.")
 
@@ -1886,7 +1883,7 @@ def _start_permission_chooser_worker_with_systemd(
     try:
         completed = subprocess.run(
             systemd_command,
-            cwd=str(package_dir.parent),
+            cwd=str(WORKER_CWD),
             capture_output=True,
             text=True,
             timeout=15,
@@ -1904,7 +1901,7 @@ def _start_permission_chooser_worker_process(
 ) -> None:
     package_dir = Path(__file__).resolve().parent
     env = os.environ.copy()
-    pythonpath = str(package_dir.parent)
+    pythonpath = str(WORKER_CWD)
     if env.get("PYTHONPATH"):
         pythonpath = f"{pythonpath}{os.pathsep}{env['PYTHONPATH']}"
     env["PYTHONPATH"] = pythonpath
@@ -1923,7 +1920,7 @@ def _start_permission_chooser_worker_process(
         if not started_with_systemd:
             subprocess.Popen(
                 command,
-                cwd=str(package_dir.parent),
+                cwd=str(WORKER_CWD),
                 env=env,
                 stdin=subprocess.DEVNULL,
                 stdout=subprocess.DEVNULL,
@@ -1937,23 +1934,18 @@ def _start_permission_chooser_worker_process(
         )
     except Exception as exc:
         _cleanup_permission_chooser_worker_state(state_path)
-        raise GoogleWorkspaceError(
-            "Could not start the Google access chooser worker."
-        ) from exc
+        raise GoogleWorkspaceError("Could not start the Google access chooser worker.") from exc
 
 
 def _send_permission_chooser_button(url: str) -> dict[str, bool]:
     try:
-        from .tools import _telegram_credentials, _telegram_send_message  # noqa: PLC0415
+        from ...tools import _telegram_credentials, _telegram_send_message
 
         token, chat_id = _telegram_credentials()
         sent = _telegram_send_message(
             token=token,
             chat_id=chat_id,
-            text=(
-                "Choose what this Computer should be allowed to do with your "
-                "Google account."
-            ),
+            text=("Choose what this Computer should be allowed to do with your " "Google account."),
             reply_markup={
                 "inline_keyboard": [
                     [
@@ -1973,7 +1965,7 @@ def _send_permission_chooser_button(url: str) -> dict[str, bool]:
 
 def _start_permission_chooser(*, account_id: str | None) -> dict[str, Any]:
     """Send a Mini App chooser while keeping OAuth execution on the Computer."""
-    from .tools import _telegram_credentials  # noqa: PLC0415
+    from ...tools import _telegram_credentials
 
     _token, chat_id = _telegram_credentials()
     try:
@@ -2005,9 +1997,7 @@ def _start_permission_chooser(*, account_id: str | None) -> dict[str, Any]:
     try:
         parsed_expiry = datetime.fromisoformat(expires_at.replace("Z", "+00:00"))
     except ValueError as exc:
-        raise GoogleWorkspaceError(
-            "Platform returned an invalid Google access chooser."
-        ) from exc
+        raise GoogleWorkspaceError("Platform returned an invalid Google access chooser.") from exc
     if parsed_expiry.tzinfo is None or parsed_expiry.utcoffset() is None:
         raise GoogleWorkspaceError("Platform returned an invalid Google access chooser.")
     mini_app_url = _validated_permission_chooser_url(
@@ -2126,7 +2116,7 @@ def _send_google_connect_button(
     )
     try:
         # Lazy import avoids the tools -> google_workspace registration cycle.
-        from .tools import _telegram_credentials, _telegram_send_message  # noqa: PLC0415
+        from ...tools import _telegram_credentials, _telegram_send_message
 
         token, chat_id = _telegram_credentials()
         sent = _telegram_send_message(
@@ -2213,7 +2203,7 @@ DISCONNECT_INTENT_TERMINAL_STATUSES = frozenset(
 
 def _trusted_telegram_user_id() -> int:
     """Return the Computer's configured private-chat user id, never its bot token."""
-    from .tools import _telegram_credentials  # noqa: PLC0415
+    from ...tools import _telegram_credentials
 
     _bot_token, chat_id = _telegram_credentials()
     try:
@@ -2914,7 +2904,7 @@ def _remove_active_disconnect_marker_if_matches(
 def _start_disconnect_worker_process(*, intent_id: str, state_path: Path) -> None:
     package_dir = Path(__file__).resolve().parent
     env = os.environ.copy()
-    pythonpath = str(package_dir.parent)
+    pythonpath = str(WORKER_CWD)
     if env.get("PYTHONPATH"):
         pythonpath = f"{pythonpath}{os.pathsep}{env['PYTHONPATH']}"
     env["PYTHONPATH"] = pythonpath
@@ -2933,7 +2923,7 @@ def _start_disconnect_worker_process(*, intent_id: str, state_path: Path) -> Non
         if not started_with_systemd:
             subprocess.Popen(
                 command,
-                cwd=str(package_dir.parent),
+                cwd=str(WORKER_CWD),
                 env=env,
                 stdin=subprocess.DEVNULL,
                 stdout=subprocess.DEVNULL,
@@ -2975,7 +2965,7 @@ def _start_disconnect_worker_with_systemd(
     try:
         completed = subprocess.run(
             systemd_command,
-            cwd=str(package_dir.parent),
+            cwd=str(WORKER_CWD),
             capture_output=True,
             text=True,
             timeout=15,
@@ -2994,7 +2984,7 @@ def _disconnect_worker_command(
 ) -> list[str]:
     return [
         sys.executable,
-        str(package_dir / "google_workspace_disconnect_worker.py"),
+        str(package_dir / "disconnect_worker.py"),
         "--intent-id",
         intent_id,
         "--state-path",
@@ -3439,7 +3429,7 @@ def _start_worker_process(
     _write_active_handoff_marker(handoff_id=handoff_id, owner_token=owner_token)
     package_dir = Path(__file__).resolve().parent
     env = os.environ.copy()
-    pythonpath = str(package_dir.parent)
+    pythonpath = str(WORKER_CWD)
     if env.get("PYTHONPATH"):
         pythonpath = f"{pythonpath}{os.pathsep}{env['PYTHONPATH']}"
     env["PYTHONPATH"] = pythonpath
@@ -3664,7 +3654,7 @@ def _start_worker_with_systemd(
     try:
         completed = subprocess.run(
             command,
-            cwd=str(package_dir.parent),
+            cwd=str(WORKER_CWD),
             capture_output=True,
             text=True,
             timeout=15,
@@ -3688,7 +3678,7 @@ def _start_worker_with_popen(
             key_path=key_path,
             package_dir=package_dir,
         ),
-        cwd=str(package_dir.parent),
+        cwd=str(WORKER_CWD),
         env=env,
         stdin=subprocess.DEVNULL,
         stdout=subprocess.DEVNULL,
@@ -3701,7 +3691,7 @@ def _start_worker_with_popen(
 def _worker_command(*, handoff_id: str, key_path: Path, package_dir: Path) -> list[str]:
     return [
         sys.executable,
-        str(package_dir / "google_workspace_worker.py"),
+        str(package_dir / "worker.py"),
         "--handoff-id",
         handoff_id,
         "--key-path",
@@ -3953,7 +3943,7 @@ def _send_google_workspace_notice(terminal_state: str) -> dict[str, bool]:
         return {"sent": False, "ok": False}
     try:
         # Import lazily because tools imports this module for tool registration.
-        from .tools import _telegram_credentials, _telegram_send_message  # noqa: PLC0415
+        from ...tools import _telegram_credentials, _telegram_send_message
 
         token, chat_id = _telegram_credentials()
         sent = _telegram_send_message(

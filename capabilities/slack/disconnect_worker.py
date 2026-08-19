@@ -14,20 +14,20 @@ from pathlib import Path
 from typing import TextIO
 
 if __package__ in {None, ""}:
-    package_dir = Path(__file__).resolve().parent
-    parent_dir = package_dir.parent
+    plugin_root = Path(__file__).resolve().parents[2]
+    parent_dir = plugin_root.parent
     if str(parent_dir) not in sys.path:
         sys.path.insert(0, str(parent_dir))
     package = sys.modules.get("tinyhat")
     if package is None:
         package = types.ModuleType("tinyhat")
-        package.__file__ = str(package_dir / "__init__.py")
-        package.__path__ = [str(package_dir)]  # type: ignore[attr-defined]
+        package.__file__ = str(plugin_root / "__init__.py")
+        package.__path__ = [str(plugin_root)]  # type: ignore[attr-defined]
         sys.modules["tinyhat"] = package
-    __package__ = "tinyhat"
+    __package__ = "tinyhat.capabilities.slack"
 
-from .platform import PlatformError, build_platform_client, computer_api_path
-from .slack_disconnect import SCHEMA, disconnect_slack_locally
+from ...platform import PlatformError, build_platform_client, computer_api_path
+from .disconnect import SCHEMA, disconnect_slack_locally
 
 TERMINAL_STATUSES = frozenset({"removed", "cancelled", "expired", "failed", "superseded"})
 STATE_DIR = Path.home() / ".tinyhat" / "slack-disconnect-workers"

@@ -1,0 +1,1 @@
+"""Private Tinyhat mailbox access."""

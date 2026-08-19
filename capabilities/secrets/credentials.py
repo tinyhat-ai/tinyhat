@@ -6,8 +6,8 @@ import json
 from typing import Any
 from urllib.parse import quote, urlencode
 
-from .platform import PlatformError, build_platform_client, computer_api_path
-from .tool_errors import tool_error_json
+from ...platform import PlatformError, build_platform_client, computer_api_path
+from ...tool_errors import tool_error_json
 
 ACTIONS = ("list", "remove")
 

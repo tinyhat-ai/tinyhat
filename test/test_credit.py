@@ -10,8 +10,12 @@ from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(REPO_ROOT.parent))
+from package_support import load_local_tinyhat  # noqa: E402
 
-from tinyhat import credit, platform  # noqa: E402
+load_local_tinyhat(REPO_ROOT)
+
+from tinyhat import platform  # noqa: E402
+from tinyhat.capabilities.credit import tool as credit  # noqa: E402
 from tinyhat.platform import PlatformError  # noqa: E402
 
 
@@ -70,9 +74,7 @@ class CreditToolTests(unittest.TestCase):
         self.assertEqual(platform_auth, "gcloud")
 
     def test_skill_is_native_hermes_without_legacy_fallback(self) -> None:
-        skill = (REPO_ROOT / "skills" / "tinyhat-credit" / "SKILL.md").read_text(
-            encoding="utf-8"
-        )
+        skill = (REPO_ROOT / "skills" / "tinyhat-credit" / "SKILL.md").read_text(encoding="utf-8")
 
         self.assertNotIn("OpenClaw", skill)
         self.assertNotIn("OPENCLAW_STATE_DIR", skill)
@@ -212,7 +214,7 @@ class CreditToolTests(unittest.TestCase):
                             "period_ended_at": "2026-08-15T21:30:00Z",
                             "hourly_rate_microusd": 100_000,
                             "machine_type": "must-not-leak",
-                        }
+                        },
                     ],
                     "stripe_customer_id": "must-not-leak",
                 }
@@ -336,6 +338,7 @@ class CreditToolTests(unittest.TestCase):
     def test_returns_value_blind_error_when_platform_is_unavailable(self) -> None:
         original_build = credit.build_platform_client
         try:
+
             def fail() -> tuple[object, str]:
                 raise PlatformError("credit route unavailable", status_code=503)
 
@@ -427,9 +430,7 @@ class CreditToolTests(unittest.TestCase):
 
         try:
             credit.build_platform_client = lambda: (FakeClient(), "local_dev")
-            payload = json.loads(
-                credit.allocate_openrouter_credit({"amount_cents": 100})
-            )
+            payload = json.loads(credit.allocate_openrouter_credit({"amount_cents": 100}))
         finally:
             credit.build_platform_client = original_build
 
@@ -441,12 +442,8 @@ class CreditToolTests(unittest.TestCase):
 
     def test_allocation_requires_an_exact_minimum_amount(self) -> None:
         missing = json.loads(credit.allocate_openrouter_credit({}))
-        too_small = json.loads(
-            credit.allocate_openrouter_credit({"amount_cents": 99})
-        )
-        fractional = json.loads(
-            credit.allocate_openrouter_credit({"amount_cents": 500.5})
-        )
+        too_small = json.loads(credit.allocate_openrouter_credit({"amount_cents": 99}))
+        fractional = json.loads(credit.allocate_openrouter_credit({"amount_cents": 500.5}))
 
         self.assertEqual(missing["error"], "missing_required_parameter")
         self.assertEqual(missing["missing"], ["amount_cents"])
@@ -465,9 +462,7 @@ class CreditToolTests(unittest.TestCase):
 
         try:
             credit.build_platform_client = fail
-            payload = json.loads(
-                credit.allocate_openrouter_credit({"amount_cents": 500})
-            )
+            payload = json.loads(credit.allocate_openrouter_credit({"amount_cents": 500}))
         finally:
             credit.build_platform_client = original_build
 
@@ -497,9 +492,7 @@ class CreditToolTests(unittest.TestCase):
 
         try:
             credit.build_platform_client = lambda: (FakeClient(), "gcloud")
-            result = json.loads(
-                credit.allocate_openrouter_credit({"amount_cents": 500})
-            )
+            result = json.loads(credit.allocate_openrouter_credit({"amount_cents": 500}))
         finally:
             credit.build_platform_client = original_build
 

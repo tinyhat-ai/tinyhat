@@ -9,8 +9,11 @@ from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(REPO_ROOT.parent))
+from package_support import load_local_tinyhat  # noqa: E402
 
-from tinyhat import contact_details  # noqa: E402
+load_local_tinyhat(REPO_ROOT)
+
+from tinyhat.capabilities.contact_details import tool as contact_details  # noqa: E402
 from tinyhat.platform import PlatformError  # noqa: E402
 
 

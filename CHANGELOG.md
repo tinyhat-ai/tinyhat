@@ -4,6 +4,12 @@ All notable changes to the Tinyhat plugin are documented here.
 
 ## Unreleased
 
+- Prepare `0.30.1` by moving product implementation into named folders under
+  `capabilities/`. The root now contains only release metadata, documentation,
+  and the thin Hermes adapter facades. Each capability keeps its tools,
+  workers, and private helpers together without changing the public tool or
+  skill contract.
+
 - Start `0.30.0` with `tinyhat_mail` and the `tinyhat:tinyhat-mail` skill.
   Each Agent can check, list, search, and read its own isolated Tinyhat inbox
   and send one plain-text email when the mail server permits it. Credentials

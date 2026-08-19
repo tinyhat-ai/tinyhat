@@ -7,8 +7,15 @@ import time
 from typing import Any
 from urllib.parse import urlencode
 
-from .hat_repository import HatRepositoryRuntimeError, run_hat_repository
-from .hat_secrets import (
+from ...platform import PlatformError, build_platform_client, computer_api_path
+from ...tool_errors import tool_error_json
+from ..secrets.handoff import (
+    SecretHandoffError,
+    start_hat_credentials_handoff,
+    start_hat_installation_credentials,
+)
+from .repository import HatRepositoryRuntimeError, run_hat_repository
+from .secrets import (
     HatSecretStoreError,
     delete_hat_secret_store,
     list_hat_secret_names,
@@ -16,14 +23,7 @@ from .hat_secrets import (
     remove_hat_secret,
     rename_hat_secret_store,
 )
-from .hat_skill_installer import HatSkillInstallError, install_hat_skills
-from .platform import PlatformError, build_platform_client, computer_api_path
-from .secret_handoff import (
-    SecretHandoffError,
-    start_hat_credentials_handoff,
-    start_hat_installation_credentials,
-)
-from .tool_errors import tool_error_json
+from .skill_installer import HatSkillInstallError, install_hat_skills
 
 ACTIONS = (
     "create",
@@ -339,9 +339,7 @@ def hats(  # noqa: PLR0911, PLR0912, PLR0915 - one public tool dispatches bounde
                     except HatSecretStoreError as exc:
                         secret_cleanup_errors.append(str(exc))
                     else:
-                        secret_store_removed = (
-                            bool(local_result["removed"]) or secret_store_removed
-                        )
+                        secret_store_removed = bool(local_result["removed"]) or secret_store_removed
             result["local_store_removed"] = secret_store_removed
             if secret_cleanup_errors:
                 result["local_cleanup_error"] = "; ".join(secret_cleanup_errors)

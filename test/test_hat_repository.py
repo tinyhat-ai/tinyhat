@@ -11,8 +11,11 @@ from unittest import mock
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(REPO_ROOT.parent))
+from package_support import load_local_tinyhat  # noqa: E402
 
-from tinyhat import hat_repository
+load_local_tinyhat(REPO_ROOT)
+
+from tinyhat.capabilities.hats import repository as hat_repository
 
 
 class HatRepositoryBridgeTests(unittest.TestCase):
@@ -206,9 +209,7 @@ class HatRepositoryBridgeTests(unittest.TestCase):
             return_value=completed,
         ):
             self.assertEqual(
-                hat_repository.run_hat_repository(
-                    {"action": "checkout", "identifier": "demo"}
-                ),
+                hat_repository.run_hat_repository({"action": "checkout", "identifier": "demo"}),
                 runtime_result,
             )
 
@@ -242,9 +243,7 @@ class HatRepositoryBridgeTests(unittest.TestCase):
             return_value=completed,
         ):
             with self.assertRaises(hat_repository.HatRepositoryRuntimeError):
-                hat_repository.run_hat_repository(
-                    {"action": "reset", "identifier": "demo"}
-                )
+                hat_repository.run_hat_repository({"action": "reset", "identifier": "demo"})
 
     def test_rejects_delete_result_for_a_different_hat(self) -> None:
         runtime_result = self._delete_local_result()
@@ -264,9 +263,7 @@ class HatRepositoryBridgeTests(unittest.TestCase):
                 hat_repository.HatRepositoryRuntimeError,
                 "mismatched Hat checkout",
             ):
-                hat_repository.run_hat_repository(
-                    self._delete_local_payload()
-                )
+                hat_repository.run_hat_repository(self._delete_local_payload())
 
     def _assert_runtime_output_rejected(self, output: object) -> None:
         completed = subprocess.CompletedProcess(
@@ -281,9 +278,7 @@ class HatRepositoryBridgeTests(unittest.TestCase):
             return_value=completed,
         ):
             with self.assertRaises(hat_repository.HatRepositoryRuntimeError):
-                hat_repository.run_hat_repository(
-                    {"action": "checkout", "identifier": "demo"}
-                )
+                hat_repository.run_hat_repository({"action": "checkout", "identifier": "demo"})
 
 
 if __name__ == "__main__":
