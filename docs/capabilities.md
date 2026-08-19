@@ -57,11 +57,15 @@ rules. A question asking only for the Agent's phone number or email address
 continues to use `tinyhat_contact_details`.
 
 The bounded mail tool is a convenience client, not a Tinyloop mail proxy. It
-connects from the Computer directly to JMAP. For another server-supported JMAP
-operation, the Agent can use the same Computer-local credentials directly and
-must keep them on the configured JMAP origin. AgentPhone follows the same
+connects from the Computer directly to JMAP. For another server-supported
+non-send JMAP operation, the Agent can use the same Computer-local credentials
+through runtime `0.0.56` or newer's pinned `tinyhat-jmap-python` and must keep
+them on the configured HTTPS JMAP origin. All sends stay in `tinyhat_mail` so
+server policy and uncertain-result idempotency remain enforced. AgentPhone follows the same
 architecture: the Computer calls AgentPhone's API directly after loading
-`https://agentphone.to/skills.md`; Tinyloop is not in the call or text path.
+`https://agentphone.to/skills.md`, but credentials are allowed only at the
+pinned `https://api.agentphone.ai` origin; Tinyloop is not in the call or text
+path.
 
 ## Shareable Hat Authoring
 

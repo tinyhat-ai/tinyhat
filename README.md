@@ -74,7 +74,7 @@ JMAP action without routing mail through Tinyloop.
 | `skills/tinyhat-credit/SKILL.md` | Balance/history and current AI model-budget guidance, plus exact user-authorized budget allocation. |
 | `skills/tinyhat-contact-details/SKILL.md` | Plain-language guidance for this Agent's managed phone number and email address. |
 | `skills/tinyhat-agentphone/SKILL.md` | Provider-direct calls and text messages using this Agent's Computer-local AgentPhone credentials and the current online provider skill. |
-| `skills/tinyhat-mail/SKILL.md` | Safe guidance for checking and sending from this Agent's own Tinyhat mailbox while keeping it distinct from Gmail. |
+| `skills/tinyhat-mail/SKILL.md` | Direct JMAP guidance for this Agent's own mailbox; safe common actions use the local tool and custom non-send actions use the runtime's pinned `tinyhat-jmap-python`. |
 | `skills/tinyhat-privacy/SKILL.md` | Privacy and trust model guidance: who can see user data, and when. |
 | `skills/hat-authoring/SKILL.md` | Create, list, and inspect one-customer shareable hat shells. |
 | `skills/tinyhat-hat-wearing/SKILL.md` | Install or resume an authorized Hat on an existing or newly assigned agent without exposing repository or credential capabilities. |

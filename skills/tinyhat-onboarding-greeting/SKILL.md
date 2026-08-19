@@ -14,7 +14,7 @@ finished connecting and configuring this Hermes Computer.
   instructions for voice and purpose.
 - Check only whether the Computer-local contact values exist; never print
   their values. If `AGENTPHONE_API_KEY` and `AGENTPHONE_PHONE_NUMBER` are
-  present, briefly mention that you can make and receive calls and texts. If
+  present, briefly mention that you have your own phone number. If
   `TINYHAT_MAILBOX_ADDRESS` and `TINYHAT_MAILBOX_JMAP_URL` are present,
   briefly mention that you have your own email inbox. Mention sending mail
   only when the JMAP server currently permits it.

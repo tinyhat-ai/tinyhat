@@ -111,6 +111,7 @@ _ROUTE_SIGNAL_BULLET_HINTS = {
     "call me": "- Agent contacts:",
     "make a call": "- Agent contacts:",
     "send a text": "- Agent contacts:",
+    "text this number": "- Agent contacts:",
     "tinyhat inbox": "- Agent contacts:",
     "tinyhat mailbox": "- Agent contacts:",
     "your email": "- Agent contacts:",
@@ -337,6 +338,7 @@ _CONTEXT_PHRASES = (
     "call me",
     "make a call",
     "send a text",
+    "text this number",
 )
 
 _CONTEXT_TERMS = (
@@ -390,6 +392,7 @@ _CONTACT_PHRASES = frozenset(
         "call me",
         "make a call",
         "send a text",
+        "text this number",
         "tinyhat inbox",
         "tinyhat mailbox",
         "your email",
