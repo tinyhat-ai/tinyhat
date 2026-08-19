@@ -443,6 +443,25 @@ _CONTACT_DEVELOPER_TERMS = frozenset(
         "variable",
     )
 )
+_CONTACT_ACTION_TARGET = (
+    r"(?:contractor|dentist|doctor|restaurant|pharmacy|clinic|hotel|"
+    r"mechanic|plumber|electrician|lawyer|accountant|barber|salon|"
+    r"friend|mother|father|mom|dad|wife|husband|partner)"
+)
+_CONTACT_ACTION_PATTERNS = tuple(
+    re.compile(pattern)
+    for pattern in (
+        r"\bcall (?:me|you)\b",
+        r"\btext this number\b",
+        r"\bsend an? sms\b",
+        r"\bsend an? text message\b",
+        r"\bsend an? text to\b",
+        rf"\b(?:call|text) (?:my|the) {_CONTACT_ACTION_TARGET}\b",
+        rf"\bmake an? call to (?:my|the) {_CONTACT_ACTION_TARGET}\b",
+        r"\btext me(?:\s+(?:when|after|once|later|tomorrow|tonight|at)\b|\s*[.!?]*$)",
+        r"^(?:please\s+)?make an? call\s*[.!?]*$",
+    )
+)
 
 # Funding routing binds funding wording to the funding question itself.
 # Command frames are suppressed first; then an end-anchored question
@@ -897,6 +916,12 @@ def _normalize_message(user_message: str) -> str:
     return re.sub(r"[_-]+", " ", _normalize_message_raw(user_message))
 
 
+def _matches_contact_action_intent(normalized: str) -> bool:
+    """Match phone actions with a concrete recipient or message signal."""
+
+    return any(pattern.search(normalized) for pattern in _CONTACT_ACTION_PATTERNS)
+
+
 def should_inject_tinyhat_context(user_message: str, *, is_first_turn: bool = False) -> bool:
     """Return whether this turn benefits from Tinyhat operating context."""
     if is_first_turn:
@@ -913,14 +938,12 @@ def should_inject_tinyhat_context(user_message: str, *, is_first_turn: bool = Fa
     }
     terms = set(re.findall(r"[a-z0-9]+", normalized_for_terms))
     matched_terms = terms.intersection(_CONTEXT_TERMS)
+    matched_contact_phrases = matched_phrases.intersection(_CONTACT_PHRASES)
     has_contact_signal = bool(
-        matched_phrases.intersection(_CONTACT_PHRASES) or matched_terms.intersection(_CONTACT_TERMS)
+        matched_contact_phrases.difference(_CONTACT_ACTION_PHRASES)
+        or matched_terms.intersection(_CONTACT_TERMS)
     )
-    action_blocking_terms = _CONTACT_DEVELOPER_TERMS - {"table"}
-    if (
-        matched_phrases.intersection(_CONTACT_ACTION_PHRASES)
-        and not terms.intersection(action_blocking_terms)
-    ):
+    if _matches_contact_action_intent(normalized_for_terms):
         return True
     if has_contact_signal and not terms.intersection(_CONTACT_DEVELOPER_TERMS):
         return True
