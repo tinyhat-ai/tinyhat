@@ -49,12 +49,19 @@ class MailboxError(Exception):
         self.message = message
 
 
-class _RejectRedirects(request.HTTPRedirectHandler):
+class _SameOriginDiscoveryRedirects(request.HTTPRedirectHandler):
     def redirect_request(self, req, fp, code, msg, headers, newurl):  # noqa: PLR0913
-        _ = (req, fp, code, msg, headers, newurl)
+        resolved_url = parse.urljoin(req.full_url, newurl)
+        try:
+            same_origin = _origin(req.full_url) == _origin(resolved_url)
+        except MailboxError:
+            same_origin = False
+        if req.get_method() != "GET" or not same_origin:
+            return None
+        return super().redirect_request(req, fp, code, msg, headers, resolved_url)
 
 
-_HTTP_OPENER = request.build_opener(_RejectRedirects())
+_HTTP_OPENER = request.build_opener(_SameOriginDiscoveryRedirects())
 
 
 @dataclass(frozen=True)

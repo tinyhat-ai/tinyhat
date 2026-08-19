@@ -287,6 +287,54 @@ class TinyhatMailTests(unittest.TestCase):
         self.assertEqual(caught.exception.name, "mailbox_redirect_blocked")
         self.assertNotIn("secret", caught.exception.message.lower())
 
+    def test_discovery_redirect_allows_only_same_origin_get(self) -> None:
+        handler = mail._SameOriginDiscoveryRedirects()
+        source = "https://mail.tinyhat.ai/.well-known/jmap"
+        get_request = mail.request.Request(
+            source,
+            headers={"Authorization": "Basic local-test-value"},
+            method="GET",
+        )
+
+        redirected = handler.redirect_request(
+            get_request,
+            None,
+            307,
+            "Temporary Redirect",
+            {},
+            "/jmap/session",
+        )
+        cross_origin = handler.redirect_request(
+            get_request,
+            None,
+            307,
+            "Temporary Redirect",
+            {},
+            "https://attacker.example/jmap/session",
+        )
+        post_request = mail.request.Request(
+            "https://mail.tinyhat.ai/jmap",
+            data=b"{}",
+            method="POST",
+        )
+        redirected_post = handler.redirect_request(
+            post_request,
+            None,
+            307,
+            "Temporary Redirect",
+            {},
+            "/jmap-api",
+        )
+
+        self.assertIsNotNone(redirected)
+        self.assertEqual(redirected.full_url, "https://mail.tinyhat.ai/jmap/session")
+        self.assertEqual(
+            redirected.get_header("Authorization"),
+            "Basic local-test-value",
+        )
+        self.assertIsNone(cross_origin)
+        self.assertIsNone(redirected_post)
+
     def test_missing_credentials_return_no_secret_names_or_values(self) -> None:
         os.environ.pop("TINYHAT_MAILBOX_PASSWORD")
         payload = json.loads(mail.tinyhat_mail({"action": "status"}))
