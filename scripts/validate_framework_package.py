@@ -813,7 +813,7 @@ def validate_hermes_adapter(root: Path) -> None:
     expected_skill_paths = {
         "hat-authoring": "skills/hat-authoring/SKILL.md",
         "tinyhat-hat-wearing": "skills/tinyhat-hat-wearing/SKILL.md",
-        "tinyhat-onboarding-greeting": ("skills/tinyhat-onboarding-greeting/SKILL.md"),
+        "tinyhat-onboarding-greeting": "skills/tinyhat-onboarding-greeting/SKILL.md",
         "tinyhat-plugin-version": "skills/tinyhat-plugin-version/SKILL.md",
         "tinyhat-tell-joke": "skills/tinyhat-tell-joke/SKILL.md",
         "tinyhat-skill-catalog": "skills/tinyhat-skill-catalog/SKILL.md",
