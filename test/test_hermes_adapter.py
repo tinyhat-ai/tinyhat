@@ -851,6 +851,17 @@ class HermesAdapterTests(unittest.TestCase):
                 self.assertIn("AGENTPHONE_API_KEY", injected["context"])
                 self.assertIn("use the shell", injected["context"])
 
+    def test_first_turn_phone_request_keeps_assignment_context(self) -> None:
+        injected = tinyhat_context.inject_tinyhat_context(
+            user_message="Call me @ +13653661028",
+            is_first_turn=True,
+        )
+
+        self.assertIsNotNone(injected)
+        assert injected is not None
+        self.assertIn("resume_installation", injected["context"])
+        self.assertIn("tinyhat:tinyhat-agentphone", injected["context"])
+
     def test_agentphone_skill_pins_credentials_and_provider_boundaries(self) -> None:
         skill = (
             REPO_ROOT / "skills" / "tinyhat-agentphone" / "SKILL.md"
@@ -905,13 +916,22 @@ class HermesAdapterTests(unittest.TestCase):
         normalized = " ".join(skill.split())
 
         self.assertIn("include each present value literally", normalized)
-        self.assertIn("owner can call or text that number", normalized)
+        self.assertIn("owner can call or text you at the literal number", normalized)
         self.assertIn("make calls and send texts", normalized)
-        self.assertIn("owner can email that address", normalized)
+        self.assertIn("owner can email you at the literal address", normalized)
         self.assertIn("receive and read those messages", normalized)
         self.assertIn("Do not imply that outgoing Tinyhat email is available", normalized)
         self.assertIn("`AGENTPHONE_PHONE_NUMBER`", skill)
         self.assertIn("`TINYHAT_MAILBOX_ADDRESS`", skill)
+        self.assertIn("`AGENTPHONE_API_KEY`", skill)
+        self.assertIn("`AGENTPHONE_PHONE_ID`", skill)
+        self.assertIn("`TINYHAT_MAILBOX_JMAP_URL`", skill)
+        self.assertIn("`TINYHAT_MAILBOX_USERNAME`", skill)
+        self.assertIn("`TINYHAT_MAILBOX_PASSWORD`", skill)
+        self.assertIn("Only when the complete phone bundle is present", normalized)
+        self.assertIn("Only when the complete mailbox bundle is present", normalized)
+        self.assertIn("call or text me at <number>", normalized)
+        self.assertIn("email me at <address>", normalized)
         self.assertIn("Never read or expose the API key", normalized)
         self.assertIn("mailbox password", normalized)
         self.assertNotIn("currently permits", skill)
@@ -1458,6 +1478,15 @@ class HermesAdapterTests(unittest.TestCase):
             "Text me when the functions return",
             "Send an SMS to Bob from this webhook",
             "Send a text message to Bob after the callback runs",
+            "Check the messages in the error log for the parser",
+            "The retry loop will call again after the webhook fails",
+            "If the callback fails the client will call again",
+            "Write a function to make a phone call via the Twilio API",
+            "Add a test for making a phone call in the mock module",
+            "Did you receive my text fixture in the test payload",
+            "Check your messages in the CI job output",
+            "Check the messages table schema",
+            "The scheduler should call again in 30s",
         )
         for user_message in examples:
             with self.subTest(user_message=user_message):
@@ -1467,6 +1496,23 @@ class HermesAdapterTests(unittest.TestCase):
                         is_first_turn=False,
                     )
                 )
+
+    def test_context_hook_routes_natural_phone_capability_phrases(self) -> None:
+        examples = (
+            "I sent you a text message. Did you receive it?",
+            "Can you make phone calls?",
+            "Could you send text messages?",
+            "Can you receive SMS?",
+        )
+        for user_message in examples:
+            with self.subTest(user_message=user_message):
+                injected = tinyhat_context.inject_tinyhat_context(
+                    user_message=user_message,
+                    is_first_turn=False,
+                )
+                self.assertIsNotNone(injected)
+                assert injected is not None
+                self.assertIn("AGENTPHONE_API_KEY", injected["context"])
 
     def test_mail_skill_keeps_direct_jmap_read_only_and_secrets_local(self) -> None:
         skill = (REPO_ROOT / "skills" / "tinyhat-mail" / "SKILL.md").read_text(

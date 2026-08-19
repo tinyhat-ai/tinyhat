@@ -1,6 +1,6 @@
 ---
 name: tinyhat-agentphone
-description: Use when the owner says "call me," "call this number," "call again," "send a text/SMS," "did you receive my text," or asks this Agent to make, review, or check calls and text messages with its assigned phone. Not for merely showing the number, another Agent, or software-development questions about phone APIs.
+description: Use when the owner says "call me," "call this number," "call again," "send a text/SMS," "I sent you a text, did you receive it?," asks whether this Agent can call or text, or asks it to make, review, or check calls and texts with its assigned phone. Not for merely showing the number, another Agent, or software-development questions about phone APIs.
 ---
 
 # AgentPhone
