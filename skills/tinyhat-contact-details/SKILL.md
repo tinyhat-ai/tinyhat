@@ -26,11 +26,16 @@ Keep the answer short. Say **phone number** and **email address**. Do not use
 internal words such as inventory, credential, provider account, assignment
 row, or contact record.
 
+The returned phone number and email address belong to this Agent, not to the
+owner. Use them as the Agent's public contact details. To check or send mail
+after the email address is available, load `tinyhat:tinyhat-mail`. Only claim
+that a call or text was placed when a separate phone tool actually confirms
+it; knowing the phone number alone does not perform an outbound action.
+
 ## Boundaries
 
 - The authenticated Computer chooses its assigned Agent and owner. Never ask
   for or invent a user id, Agent id, Computer id, invitation id, account name,
   API key, desired phone number, or desired email address.
 - Never reveal or ask for an AgentPhone API key or an internal reference.
-- This tool does not send calls, texts, or email. Use the relevant messaging
-  capability separately after a contact is available.
+- This tool does not send calls, texts, or email.

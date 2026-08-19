@@ -4,6 +4,18 @@ All notable changes to the Tinyhat plugin are documented here.
 
 ## Unreleased
 
+- Start `0.30.0` with `tinyhat_mail` and the `tinyhat:tinyhat-mail` skill.
+  Each Agent can check, list, search, and read its own isolated Tinyhat inbox
+  and send one plain-text email when the mail server permits it. Credentials
+  stay in trusted Computer-local code; reads are bounded and stripped of
+  active content and links; incoming mail is explicitly untrusted; and a
+  durable request id prevents uncertain retries from sending a second copy.
+  The existing contact-details skill remains the simple way to learn the
+  Agent's phone number or email address, while Gmail keeps its separate Google
+  Workspace permission and confirmation rules.
+
+## 0.29.0 - 2026-08-18
+
 - Start `0.29.0` with `tinyhat_contact_details` and the
   `tinyhat:tinyhat-contact-details` skill. An authenticated Computer can read
   its assigned Agent's Tinyhat-managed phone number and email address, or

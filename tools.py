@@ -22,6 +22,7 @@ from .google_workspace_app_manager import (
     google_workspace_app_manager as handle_google_workspace_app_manager,
 )
 from .hats import hats as handle_hats
+from .mail import tinyhat_mail as handle_mail
 from .platform import PlatformError, build_platform_client, computer_api_path
 from .secret_handoff import start_private_secret_handoff
 from .slack_connection import start_slack_connection, start_slack_disconnect
@@ -111,6 +112,11 @@ def openrouter_credit_allocate(
 def contact_details(args: dict[str, Any] | None = None, **kwargs: Any) -> str:
     """Return or assign the current Agent's managed phone and email."""
     return handle_contact_details(args, **kwargs)
+
+
+def mail(args: dict[str, Any] | None = None, **kwargs: Any) -> str:
+    """Use the current Agent's private Tinyhat mailbox."""
+    return handle_mail(args, **kwargs)
 
 
 def hats(args: dict[str, Any] | None = None, **kwargs: Any) -> str:
