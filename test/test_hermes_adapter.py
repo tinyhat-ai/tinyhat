@@ -101,6 +101,7 @@ class HermesAdapterTests(unittest.TestCase):
         self.assertIn("tinyhat_model_budget", ctx.tools)
         self.assertIn("tinyhat_openrouter_credit_allocate", ctx.tools)
         self.assertIn("tinyhat_contact_details", ctx.tools)
+        self.assertIn("tinyhat_mail", ctx.tools)
         self.assertIn("tinyhat_hats", ctx.tools)
         self.assertIn("tinyhat_tell_joke", ctx.tools)
         self.assertIn("tinyhat_skill_catalog", ctx.tools)
@@ -127,6 +128,7 @@ class HermesAdapterTests(unittest.TestCase):
         self.assertIn("tinyhat-platform", ctx.skills)
         self.assertIn("tinyhat-privacy", ctx.skills)
         self.assertIn("tinyhat-contact-details", ctx.skills)
+        self.assertIn("tinyhat-mail", ctx.skills)
         self.assertIn("hat-authoring", ctx.skills)
         self.assertTrue(ctx.skills["tinyhat-plugin-version"].is_file())
         self.assertTrue(ctx.skills["tinyhat-tell-joke"].is_file())
@@ -141,6 +143,7 @@ class HermesAdapterTests(unittest.TestCase):
         self.assertTrue(ctx.skills["tinyhat-platform"].is_file())
         self.assertTrue(ctx.skills["tinyhat-privacy"].is_file())
         self.assertTrue(ctx.skills["tinyhat-contact-details"].is_file())
+        self.assertTrue(ctx.skills["tinyhat-mail"].is_file())
         self.assertTrue(ctx.skills["hat-authoring"].is_file())
 
     def test_registered_commands_match_telegram_dispatch_names(self) -> None:
@@ -177,6 +180,21 @@ class HermesAdapterTests(unittest.TestCase):
         self.assertEqual(contact_schema["properties"], {})
         self.assertEqual(contact_schema["required"], [])
         self.assertFalse(contact_schema["additionalProperties"])
+        mail_schema = schemas.TINYHAT_MAIL_SCHEMA
+        self.assertEqual(mail_schema["required"], ["action"])
+        self.assertEqual(
+            mail_schema["properties"]["action"]["enum"],
+            ["status", "list", "search", "read", "send"],
+        )
+        self.assertNotIn("username", mail_schema["properties"])
+        self.assertNotIn("password", mail_schema["properties"])
+        self.assertNotIn("server_url", mail_schema["properties"])
+        for recipient_field in ("to", "cc", "bcc"):
+            self.assertEqual(
+                mail_schema["properties"][recipient_field]["items"]["maxLength"],
+                254,
+            )
+        self.assertFalse(mail_schema["additionalProperties"])
         hats_schema = schemas.TINYHAT_HATS_SCHEMA
         self.assertEqual(hats_schema["required"], ["action"])
         self.assertEqual(
@@ -338,7 +356,7 @@ class HermesAdapterTests(unittest.TestCase):
 
         self.assertEqual(payload["schema"], "tinyhat_plugin_version_v1")
         self.assertEqual(payload["name"], "tinyhat")
-        self.assertEqual(payload["version"], "0.29.0")
+        self.assertEqual(payload["version"], "0.30.0")
 
     def test_platform_status_uses_attested_computer_endpoint(self) -> None:
         original_build = tools.build_platform_client
@@ -387,7 +405,7 @@ class HermesAdapterTests(unittest.TestCase):
 
         self.assertEqual(payload["schema"], "tinyhat_skill_catalog_v1")
         self.assertEqual(payload["plugin"]["name"], "tinyhat")
-        self.assertEqual(payload["plugin"]["version"], "0.29.0")
+        self.assertEqual(payload["plugin"]["version"], "0.30.0")
         by_name = {skill["name"]: skill for skill in payload["skills"]}
         self.assertEqual(
             by_name["tinyhat-codex-auth"]["qualified_name"],
@@ -801,6 +819,37 @@ class HermesAdapterTests(unittest.TestCase):
                 )
                 self.assertIn("tinyhat_contact_details", injected["context"])
 
+    def test_context_hook_injects_for_agent_mail_questions(self) -> None:
+        examples = (
+            "What is your Tinyhat inbox status?",
+            "Read your emails",
+            "Search your mailbox for the forecast",
+            "Send an email from your Tinyhat address",
+        )
+        for user_message in examples:
+            with self.subTest(user_message=user_message):
+                injected = tinyhat_context.inject_tinyhat_context(
+                    user_message=user_message,
+                    is_first_turn=False,
+                )
+                self.assertIsNotNone(injected)
+                assert injected is not None
+                self.assertIn("tinyhat:tinyhat-mail", injected["context"])
+                self.assertIn("tinyhat_mail", injected["context"])
+
+    def test_context_hook_does_not_treat_email_code_as_agent_mail(self) -> None:
+        for user_message in (
+            "Write a test for the inbox parser",
+            "Add a database column for email",
+        ):
+            with self.subTest(user_message=user_message):
+                self.assertIsNone(
+                    tinyhat_context.inject_tinyhat_context(
+                        user_message=user_message,
+                        is_first_turn=False,
+                    )
+                )
+
     def test_context_states_funding_reminder_rules(self) -> None:
         directive = tinyhat_context.FUNDING_REMINDER_DIRECTIVE
         self.assertTrue(directive.startswith("[System note:"))
@@ -847,10 +896,9 @@ class HermesAdapterTests(unittest.TestCase):
             tinyhat_context.TINYHAT_CONTEXT,
         )
         self.assertIn("load tinyhat:tinyhat-credit", tinyhat_context.TINYHAT_CONTEXT)
-        self.assertIn(
-            "load tinyhat:tinyhat-contact-details",
-            tinyhat_context.TINYHAT_CONTEXT,
-        )
+        self.assertIn("tinyhat:tinyhat-contact-details", tinyhat_context.TINYHAT_CONTEXT)
+        self.assertIn("tinyhat:tinyhat-mail", tinyhat_context.TINYHAT_CONTEXT)
+        self.assertIn("tinyhat_mail", tinyhat_context.TINYHAT_CONTEXT)
         self.assertIn("tinyhat_model_budget", tinyhat_context.TINYHAT_CONTEXT)
         self.assertIn(
             "call tinyhat_openrouter_credit_allocate",

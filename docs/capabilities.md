@@ -10,6 +10,7 @@ The current capability list is intentionally small.
 | `tinyhat_model_budget` | Platform API required | Reads this Agent's current total AI model budget, remaining amount, and used amount. It cannot change the budget. |
 | `tinyhat_openrouter_credit_allocate` | Platform API required | Adds an exact amount of the owner's credit to this Agent's model budget. |
 | `tinyhat_contact_details` | Platform API required | Returns this Agent's managed phone number and email address, and idempotently assigns missing contacts when the platform enables them. It accepts no identity, contact, or credential input. |
+| `tinyhat_mail` | Computer-local mailbox required | Checks, lists, searches, and reads this Agent's isolated Tinyhat inbox and sends one plain-text email when server policy permits it. It never accepts or returns mailbox credentials, server addresses, or account ids. Reads are bounded and sanitized; send retries use a durable request id. |
 | `tinyhat_hats` | Available now | Creates, lists, inspects, renames, and retires one-customer Hats; checks out and syncs private repositories through Computer-scoped GitHub leases; and manages value-blind Hat credentials. Retirement hides a Hat from owner/public/new-install surfaces and deletes creator package state while preserving platform and installation history and already-installed consumer agents. Authorized installation transfers are dispatched automatically to the registered creator Computer, signed there, and decrypted only by the consumer Computer. |
 | `tinyhat_tell_joke` | Available now | Proves Hermes loaded the Tinyhat plugin and can call a plugin tool. |
 | `tinyhat_skill_catalog` | Available now | Lists Tinyhat plugin skills with `tinyhat:<skill>` qualified names and unqualified aliases. |
@@ -29,6 +30,30 @@ The current capability list is intentionally small.
 
 Each capability should be visible in this document, represented by a small
 tool or skill, and covered by validation.
+
+## Private Agent Mail
+
+`tinyhat_mail` reads the mailbox values already supplied to the assigned
+Computer. The model supplies only an action and safe message fields; it cannot
+select a mailbox, server, account, or credential. Every call discovers the
+current JMAP session over HTTPS, so a rotated password is used on the next
+call. Discovery redirects and cross-origin API endpoints are rejected before
+credentials can be forwarded.
+
+The first mail surface is deliberately small: status, bounded inbox
+list/search, one-message plain-text read, and one-message plain-text send.
+HTML, remote images, links, attachment contents, bulk mail, deletion, rules,
+and forwarding are not exposed. Incoming content is labeled as untrusted data
+and cannot authorize another tool call. Sending is governed by the mail
+server; a denied send returns `sending_not_allowed` with no fallback. Before a
+send reaches JMAP, the plugin records its opaque request id in an owner-only
+local file. A confirmed result can be replayed safely, while an uncertain
+result is never retried automatically.
+
+This mailbox is not the user's connected Gmail account. Gmail continues to
+use `tinyhat_google_workspace` and its existing permission and confirmation
+rules. A question asking only for the Agent's phone number or email address
+continues to use `tinyhat_contact_details`.
 
 ## Shareable Hat Authoring
 

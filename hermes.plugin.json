@@ -1,6 +1,6 @@
 {
   "schema": "tinyhat.framework-adapter.v1",
-  "version": "0.29.0",
+  "version": "0.30.0",
   "framework": {
     "name": "hermes",
     "minimum": "0.0.0"
@@ -131,6 +131,13 @@
       "purpose": "Returns or assigns this Agent's enabled Tinyhat-managed phone number and email address."
     },
     {
+      "name": "tinyhat-mail",
+      "qualified_name": "tinyhat:tinyhat-mail",
+      "aliases": ["tinyhat-mail"],
+      "path": "skills/tinyhat-mail/SKILL.md",
+      "purpose": "Checks, searches, and reads this Agent's private Tinyhat inbox and sends governed plain-text email without exposing mailbox credentials."
+    },
+    {
       "name": "tinyhat-privacy",
       "qualified_name": "tinyhat:tinyhat-privacy",
       "aliases": ["tinyhat-privacy"],
@@ -168,6 +175,11 @@
       "name": "tinyhat_contact_details",
       "handler": "tools.contact_details",
       "skill": "tinyhat-contact-details"
+    },
+    {
+      "name": "tinyhat_mail",
+      "handler": "tools.mail",
+      "skill": "tinyhat-mail"
     },
     {
       "name": "tinyhat_hats",

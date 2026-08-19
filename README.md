@@ -34,6 +34,9 @@ workspace.
 It can also create and evolve a one-customer shareable Hat: one private
 repository, a canonical handle, a share URL, Computer-local credentials, and a
 normal local Git checkout synchronized with exact-repository GitHub leases.
+Each Agent can also use its isolated Tinyhat mailbox through bounded JMAP
+tools. The mailbox password stays in trusted Computer-local code; the Agent
+can list, search, read, and send plain-text mail without seeing it.
 
 ## What This Plugin Does
 
@@ -45,9 +48,10 @@ normal local Git checkout synchronized with exact-repository GitHub leases.
 | `__init__.py` | Hermes registration entrypoint. |
 | `hermes.plugin.json` | Tinyhat metadata for the Hermes adapter, skill, command, and release channels. |
 | `context.py` | Small Hermes `pre_llm_call` context hook for Tinyhat-sensitive turns. |
-| `tools.py` / `schemas.py` | Tinyhat tools: plugin version, safe platform status, user credit, current AI model budget, explicit budget allocation, shareable hats, joke proof, skill catalog, private secret handoff and removal, Slack connection, Google identity connection, Codex auth setup/status helpers, and plugin update helper. |
+| `tools.py` / `schemas.py` | Tinyhat tools: plugin version, safe platform status, user credit, current AI model budget, explicit budget allocation, Agent contacts and private mail, shareable hats, joke proof, skill catalog, private secret handoff and removal, Slack connection, Google identity connection, Codex auth setup/status helpers, and plugin update helper. |
 | `credit.py` | Safe owner balance/history and Agent model-budget projections, plus explicit allocation to this Agent's AI model budget. |
 | `contact_details.py` | Safe, idempotent access to this Agent's Tinyhat-managed phone number and email address. |
+| `mail.py` | Bounded JMAP access to this Agent's isolated Tinyhat inbox, with local-only credentials, untrusted-content sanitization, governed sending, and durable retry protection. |
 | `hats.py` / `hat_repository.py` | Owner-scoped Hat lifecycle plus the value-blind bridge to Computer-local Git checkout and sync. |
 | `slack_connection.py` | Hermes manifest generation plus Computer-local Slack token validation and installation. |
 | `credentials.py` | Value-blind credential name/description discovery and platform-owned, expiring Telegram removal confirmation. |
@@ -70,6 +74,7 @@ normal local Git checkout synchronized with exact-repository GitHub leases.
 | `skills/tinyhat-platform/SKILL.md` | Platform context for Tinyhat-managed Hermes agents. |
 | `skills/tinyhat-credit/SKILL.md` | Balance/history and current AI model-budget guidance, plus exact user-authorized budget allocation. |
 | `skills/tinyhat-contact-details/SKILL.md` | Plain-language guidance for this Agent's managed phone number and email address. |
+| `skills/tinyhat-mail/SKILL.md` | Safe guidance for checking and sending from this Agent's own Tinyhat mailbox while keeping it distinct from Gmail. |
 | `skills/tinyhat-privacy/SKILL.md` | Privacy and trust model guidance: who can see user data, and when. |
 | `skills/hat-authoring/SKILL.md` | Create, list, and inspect one-customer shareable hat shells. |
 | `skills/tinyhat-hat-wearing/SKILL.md` | Install or resume an authorized Hat on an existing or newly assigned agent without exposing repository or credential capabilities. |
@@ -563,6 +568,12 @@ TINYHAT_PLUGIN_REF=vX.Y.Z
 | `channels/lts` | Conservative default for managed Computers. |
 | `channels/latest` | Newest promoted final version, used when we want faster adoption. |
 | exact tag, for example `vX.Y.Z` | Immutable version for tests, rollbacks, and audits. |
+
+For v0.30.0, deploy the Tinyloop mailbox provisioning and Computer-local
+runtime-secret support before promotion. No new platform endpoint is required:
+the plugin uses the assigned mailbox's existing JMAP discovery URL and local
+credentials. Verify that server sending policy is enabled only for Agents that
+should send mail.
 
 For v0.29.0, deploy the matching Tinyloop managed-contact API before promoting
 `channels/latest` and `channels/lts`. The plugin asks the platform for this

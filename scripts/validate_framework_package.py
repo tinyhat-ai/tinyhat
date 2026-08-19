@@ -20,6 +20,7 @@ REQUIRED_TOOLS = [
     "tinyhat_model_budget",
     "tinyhat_openrouter_credit_allocate",
     "tinyhat_contact_details",
+    "tinyhat_mail",
     "tinyhat_hats",
     "tinyhat_tell_joke",
     "tinyhat_skill_catalog",
@@ -56,6 +57,7 @@ REQUIRED_SKILLS = [
     "tinyhat-platform",
     "tinyhat-credit",
     "tinyhat-contact-details",
+    "tinyhat-mail",
     "tinyhat-privacy",
 ]
 FORBIDDEN_PATHS = (
@@ -830,6 +832,7 @@ def validate_hermes_adapter(root: Path) -> None:
         "tinyhat-platform": "skills/tinyhat-platform/SKILL.md",
         "tinyhat-credit": "skills/tinyhat-credit/SKILL.md",
         "tinyhat-contact-details": "skills/tinyhat-contact-details/SKILL.md",
+        "tinyhat-mail": "skills/tinyhat-mail/SKILL.md",
         "tinyhat-privacy": "skills/tinyhat-privacy/SKILL.md",
     }
     for skill in skills:

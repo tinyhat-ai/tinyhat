@@ -22,6 +22,8 @@ This repository is the public Tinyhat plugin package. `main` is Hermes-only.
 - `tools.py`, `schemas.py`, `platform.py`, `secret_handoff.py`,
   `google_workspace.py`, `google_workspace_app.py`, and
   `google_workspace_app_manager.py`: tiny public tool surface.
+- `contact_details.py` and `mail.py`: the Agent's assigned phone/email identity
+  and private Tinyhat mailbox tools.
 - `google_workspace_worker.py` and `google_workspace_disconnect_worker.py`:
   detached owner-bound connection and disconnect workers.
 - `skills/tinyhat-tell-joke/SKILL.md`: deterministic joke proof.
@@ -40,6 +42,10 @@ This repository is the public Tinyhat plugin package. `main` is Hermes-only.
 - `skills/tinyhat-platform/SKILL.md`: Tinyhat-managed Hermes operating context.
 - `skills/tinyhat-credit/SKILL.md`: owner balance, recent transactions, the
   Agent's current AI model budget, and adding an exact amount to that budget.
+- `skills/tinyhat-contact-details/SKILL.md`: the Agent's assigned phone number
+  and email address.
+- `skills/tinyhat-mail/SKILL.md`: safe access to the Agent's private Tinyhat
+  inbox and controlled plain-text sending when enabled.
 - `skills/tinyhat-privacy/SKILL.md`: privacy and trust model answers for who-can-see-my-data questions.
 - `context.py`: small keyword-gated Hermes `pre_llm_call` context hook.
 - `.agents/skills/tinyhat-plugin-skill-authoring/SKILL.md`: maintainer
