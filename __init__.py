@@ -77,6 +77,12 @@ def register(ctx: Any) -> None:
         handler=tools.openrouter_credit_allocate,
     )
     ctx.register_tool(
+        name="tinyhat_contact_details",
+        toolset="tinyhat",
+        schema=schemas.TINYHAT_CONTACT_DETAILS_SCHEMA,
+        handler=tools.contact_details,
+    )
+    ctx.register_tool(
         name="tinyhat_hats",
         toolset="tinyhat",
         schema=schemas.TINYHAT_HATS_SCHEMA,

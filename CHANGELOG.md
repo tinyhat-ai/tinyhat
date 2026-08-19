@@ -4,6 +4,14 @@ All notable changes to the Tinyhat plugin are documented here.
 
 ## Unreleased
 
+- Start `0.29.0` with `tinyhat_contact_details` and the
+  `tinyhat:tinyhat-contact-details` skill. An authenticated Computer can read
+  its assigned Agent's Tinyhat-managed phone number and email address, or
+  idempotently request missing contacts when the platform feature is enabled.
+  The tool accepts no identity or contact inputs and strips API keys,
+  inventory references, provider accounts, user ids, Agent ids, Computer ids,
+  and invitation ids. Deploy the matching platform API before promotion.
+
 ## 0.28.0 - 2026-08-17
 
 ### Changed

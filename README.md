@@ -47,6 +47,7 @@ normal local Git checkout synchronized with exact-repository GitHub leases.
 | `context.py` | Small Hermes `pre_llm_call` context hook for Tinyhat-sensitive turns. |
 | `tools.py` / `schemas.py` | Tinyhat tools: plugin version, safe platform status, user credit, current AI model budget, explicit budget allocation, shareable hats, joke proof, skill catalog, private secret handoff and removal, Slack connection, Google identity connection, Codex auth setup/status helpers, and plugin update helper. |
 | `credit.py` | Safe owner balance/history and Agent model-budget projections, plus explicit allocation to this Agent's AI model budget. |
+| `contact_details.py` | Safe, idempotent access to this Agent's Tinyhat-managed phone number and email address. |
 | `hats.py` / `hat_repository.py` | Owner-scoped Hat lifecycle plus the value-blind bridge to Computer-local Git checkout and sync. |
 | `slack_connection.py` | Hermes manifest generation plus Computer-local Slack token validation and installation. |
 | `credentials.py` | Value-blind credential name/description discovery and platform-owned, expiring Telegram removal confirmation. |
@@ -68,6 +69,7 @@ normal local Git checkout synchronized with exact-repository GitHub leases.
 | `skills/tinyhat-onboarding-greeting/SKILL.md` | One-shot guidance for the agent's first owner greeting after Computer setup finishes. |
 | `skills/tinyhat-platform/SKILL.md` | Platform context for Tinyhat-managed Hermes agents. |
 | `skills/tinyhat-credit/SKILL.md` | Balance/history and current AI model-budget guidance, plus exact user-authorized budget allocation. |
+| `skills/tinyhat-contact-details/SKILL.md` | Plain-language guidance for this Agent's managed phone number and email address. |
 | `skills/tinyhat-privacy/SKILL.md` | Privacy and trust model guidance: who can see user data, and when. |
 | `skills/hat-authoring/SKILL.md` | Create, list, and inspect one-customer shareable hat shells. |
 | `skills/tinyhat-hat-wearing/SKILL.md` | Install or resume an authorized Hat on an existing or newly assigned agent without exposing repository or credential capabilities. |
@@ -561,6 +563,11 @@ TINYHAT_PLUGIN_REF=vX.Y.Z
 | `channels/lts` | Conservative default for managed Computers. |
 | `channels/latest` | Newest promoted final version, used when we want faster adoption. |
 | exact tag, for example `vX.Y.Z` | Immutable version for tests, rollbacks, and audits. |
+
+For v0.29.0, deploy the matching Tinyloop managed-contact API before promoting
+`channels/latest` and `channels/lts`. The plugin asks the platform for this
+Agent's assigned phone number and email address and returns only those safe
+values.
 
 For v0.28.0, deploy the matching Tinyloop Computer usage billing API before
 promoting `channels/latest` and `channels/lts`. The credit summary then gives
