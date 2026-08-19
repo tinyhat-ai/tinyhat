@@ -356,6 +356,26 @@ class TinyhatMailTests(unittest.TestCase):
         finally:
             mail._HTTP_OPENER = original
 
+    def test_http_error_without_a_response_stream_still_maps_safely(self) -> None:
+        original = mail._HTTP_OPENER
+
+        class MissingStreamOpener:
+            def open(self, req, timeout):
+                raise error.HTTPError(req.full_url, 401, "rejected", {}, None)
+
+        try:
+            mail._HTTP_OPENER = MissingStreamOpener()
+            with self.assertRaises(mail.MailboxError) as caught:
+                mail._http_json(
+                    "https://mail.tinyhat.ai/jmap",
+                    authorization="Basic secret-value",
+                    payload=None,
+                )
+        finally:
+            mail._HTTP_OPENER = original
+
+        self.assertEqual(caught.exception.name, "mailbox_unauthorized")
+
     def test_oversized_http_response_is_rejected(self) -> None:
         original = mail._HTTP_OPENER
 
@@ -556,6 +576,66 @@ class TinyhatMailTests(unittest.TestCase):
         )
         self.assertEqual(payload["next_position"], 3)
 
+    def test_list_keeps_pagination_when_total_is_missing(self) -> None:
+        class NoTotalSession(FakeSession):
+            def call(self, method_calls, *, sending=False):
+                response = super().call(method_calls, sending=sending)
+                if method_calls[0][0] == "Email/query":
+                    response["methodResponses"][0][1].pop("total")
+                return response
+
+        payload = mail._list_messages(
+            NoTotalSession(),
+            {"limit": 1, "position": 5},
+            action="list",
+        )
+
+        self.assertIsNone(payload["total"])
+        self.assertEqual(payload["next_position"], 6)
+
+    def test_list_trims_hostile_summaries_and_returns_the_next_position(self) -> None:
+        long_address = f"{'a' * 64}@{'b' * 63}.{'c' * 63}.{'d' * 59}"
+        addresses = [
+            {"name": "N" * 80, "email": long_address} for _ in range(mail.MAX_DISPLAYED_ADDRESSES)
+        ]
+
+        class LargeListSession(FakeSession):
+            def call(self, method_calls, *, sending=False):
+                if method_calls[0][0] == "Email/query":
+                    ids = [f"email-{index}" for index in range(mail.MAX_LIMIT)]
+                    return {
+                        "methodResponses": [
+                            ["Email/query", {"ids": ids, "total": len(ids)}, "query"],
+                            [
+                                "Email/get",
+                                {
+                                    "list": [
+                                        {
+                                            "id": email_id,
+                                            "from": addresses,
+                                            "subject": "S" * 200,
+                                            "preview": "P" * 300,
+                                        }
+                                        for email_id in ids
+                                    ]
+                                },
+                                "messages",
+                            ],
+                        ]
+                    }
+                return super().call(method_calls, sending=sending)
+
+        payload = mail._list_messages(
+            LargeListSession(),
+            {"limit": mail.MAX_LIMIT},
+            action="list",
+        )
+
+        self.assertGreater(len(payload["messages"]), 0)
+        self.assertLess(len(payload["messages"]), mail.MAX_LIMIT)
+        self.assertEqual(payload["next_position"], len(payload["messages"]))
+        self.assertLessEqual(len(mail._serialize_payload(payload)), mail.MAX_TOOL_OUTPUT_CHARS)
+
     def test_address_fields_and_whole_tool_output_are_bounded(self) -> None:
         addresses = [
             {
@@ -582,6 +662,17 @@ class TinyhatMailTests(unittest.TestCase):
         with self.assertRaises(mail.MailboxError) as caught:
             mail._serialize_payload(oversized)
         self.assertEqual(caught.exception.name, "mail_result_too_large")
+
+    def test_unparseable_sender_is_counted_as_omitted(self) -> None:
+        shown, omitted = mail._addresses(
+            [
+                {"email": '"odd name"@example.com'},
+                *[{"email": f"valid-{index}@example.com"} for index in range(5)],
+            ]
+        )
+
+        self.assertEqual(len(shown), mail.MAX_DISPLAYED_ADDRESSES)
+        self.assertEqual(omitted, 3)
 
     def test_search_requires_query_and_caps_limit(self) -> None:
         session = FakeSession()
@@ -679,6 +770,24 @@ class TinyhatMailTests(unittest.TestCase):
         self.assertEqual(second["status"], "sent")
         self.assertTrue(second["idempotent_replay"])
         self.assertEqual(session.submissions, 1)
+        self.assertEqual(len(session.calls), 2)
+
+    def test_sent_replay_survives_a_later_sending_policy_change(self) -> None:
+        session = FakeSession()
+        args = {
+            "to": ["owner@example.com"],
+            "subject": "Already sent",
+            "body": "One copy.",
+            "idempotency_key": "send-policy-change-001",
+        }
+        first = mail._send_message(session, mail._mailbox_config(), args)
+        session.account_capabilities = frozenset({mail.MAIL_CAPABILITY})
+        second = mail._send_message(session, mail._mailbox_config(), args)
+
+        self.assertEqual(first["status"], "sent")
+        self.assertEqual(second["status"], "sent")
+        self.assertTrue(second["idempotent_replay"])
+        self.assertEqual(len(session.calls), 2)
 
     def test_reused_request_id_cannot_describe_a_different_email(self) -> None:
         session = FakeSession()
@@ -767,6 +876,39 @@ class TinyhatMailTests(unittest.TestCase):
         self.assertEqual(session.submissions, 1)
         state = json.loads(mail._state_path(args["idempotency_key"]).read_text())
         self.assertEqual(state["status"], "failed")
+
+    def test_partial_server_failure_remains_unknown_and_is_not_retried(self) -> None:
+        class PartialFailureSession(FakeSession):
+            def call(self, method_calls, *, sending=False):
+                if method_calls[0][0] == "Email/set":
+                    self.submissions += 1
+                    return {
+                        "methodResponses": [
+                            [
+                                "Email/set",
+                                {"created": {"mail": {"id": "draft"}}},
+                                "create",
+                            ],
+                            ["error", {"type": "serverPartialFail"}, "submit"],
+                        ]
+                    }
+                return super().call(method_calls, sending=sending)
+
+        session = PartialFailureSession()
+        args = {
+            "to": ["owner@example.com"],
+            "subject": "Uncertain",
+            "body": "Do not duplicate.",
+            "idempotency_key": "send-partial-failure-001",
+        }
+        for _ in range(2):
+            with self.assertRaises(mail.MailboxError) as caught:
+                mail._send_message(session, mail._mailbox_config(), args)
+            self.assertEqual(caught.exception.name, "send_status_unknown")
+
+        self.assertEqual(session.submissions, 1)
+        state = json.loads(mail._state_path(args["idempotency_key"]).read_text())
+        self.assertEqual(state["status"], "pending")
 
     def test_send_denied_by_capability_is_stable_and_makes_no_calls(self) -> None:
         session = FakeSession(sending=False)

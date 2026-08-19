@@ -189,6 +189,11 @@ class HermesAdapterTests(unittest.TestCase):
         self.assertNotIn("username", mail_schema["properties"])
         self.assertNotIn("password", mail_schema["properties"])
         self.assertNotIn("server_url", mail_schema["properties"])
+        for recipient_field in ("to", "cc", "bcc"):
+            self.assertEqual(
+                mail_schema["properties"][recipient_field]["items"]["maxLength"],
+                254,
+            )
         self.assertFalse(mail_schema["additionalProperties"])
         hats_schema = schemas.TINYHAT_HATS_SCHEMA
         self.assertEqual(hats_schema["required"], ["action"])

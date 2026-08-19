@@ -128,19 +128,19 @@ TINYHAT_MAIL_SCHEMA = {
             "type": "array",
             "minItems": 1,
             "maxItems": 20,
-            "items": {"type": "string", "minLength": 3, "maxLength": 320},
+            "items": {"type": "string", "minLength": 3, "maxLength": 254},
             "description": "Required recipient email addresses for action=send.",
         },
         "cc": {
             "type": "array",
             "maxItems": 20,
-            "items": {"type": "string", "minLength": 3, "maxLength": 320},
+            "items": {"type": "string", "minLength": 3, "maxLength": 254},
             "description": "Optional copy recipients for action=send.",
         },
         "bcc": {
             "type": "array",
             "maxItems": 20,
-            "items": {"type": "string", "minLength": 3, "maxLength": 320},
+            "items": {"type": "string", "minLength": 3, "maxLength": 254},
             "description": "Optional hidden-copy recipients for action=send.",
         },
         "subject": {
