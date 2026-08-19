@@ -853,15 +853,21 @@ class HermesAdapterTests(unittest.TestCase):
         )
         self.assertIn("tinyhat_model_budget", tinyhat_context.TINYHAT_CONTEXT)
         self.assertIn(
-            "call tinyhat_openrouter_credit_allocate immediately",
+            "call tinyhat_openrouter_credit_allocate",
             tinyhat_context.TINYHAT_CONTEXT,
         )
         self.assertIn(
-            "do not ask for a second confirmation",
+            "no second confirmation",
             tinyhat_context.TINYHAT_CONTEXT,
         )
         self.assertIn(
-            "check tinyhat_codex_auth with action=status",
+            "Never infer remaining included platform funding from history or "
+            "Computer charges; use tinyhat_model_budget.",
+            tinyhat_context.TINYHAT_CONTEXT,
+        )
+        self.assertIn(
+            "/codex_auth is the user's ChatGPT/Codex subscription; "
+            "tinyhat_codex_auth action=status checks it.",
             tinyhat_context.TINYHAT_CONTEXT,
         )
 
