@@ -12,7 +12,8 @@ All notable changes to the Tinyhat plugin are documented here.
   durable request id prevents uncertain retries from sending a second copy.
   The existing contact-details skill remains the simple way to learn the
   Agent's phone number or email address, while Gmail keeps its separate Google
-  Workspace permission and confirmation rules.
+  Workspace permission and confirmation rules. Mail-related coding requests
+  no longer activate the Agent-mail guidance.
 
 ## 0.29.0 - 2026-08-18
 

@@ -370,9 +370,6 @@ _CONTEXT_TERMS = (
     "phones",
     "contact",
     "contacts",
-    "email",
-    "emails",
-    "inbox",
     "mailbox",
 )
 

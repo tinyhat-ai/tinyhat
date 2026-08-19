@@ -832,6 +832,19 @@ class HermesAdapterTests(unittest.TestCase):
                 self.assertIn("tinyhat:tinyhat-mail", injected["context"])
                 self.assertIn("tinyhat_mail", injected["context"])
 
+    def test_context_hook_does_not_treat_email_code_as_agent_mail(self) -> None:
+        for user_message in (
+            "Write a test for the inbox parser",
+            "Add a database column for email",
+        ):
+            with self.subTest(user_message=user_message):
+                self.assertIsNone(
+                    tinyhat_context.inject_tinyhat_context(
+                        user_message=user_message,
+                        is_first_turn=False,
+                    )
+                )
+
     def test_context_states_funding_reminder_rules(self) -> None:
         directive = tinyhat_context.FUNDING_REMINDER_DIRECTIVE
         self.assertTrue(directive.startswith("[System note:"))

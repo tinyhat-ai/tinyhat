@@ -79,7 +79,17 @@ class FakeSession:
                             ]
                         },
                         "identities",
-                    ]
+                    ],
+                    [
+                        "Mailbox/get",
+                        {
+                            "list": [
+                                {"id": "drafts-1", "role": "drafts"},
+                                {"id": "sent-1", "role": "sent"},
+                            ]
+                        },
+                        "mailboxes",
+                    ],
                 ]
             }
         if name == "Email/query":
@@ -240,6 +250,18 @@ class TinyhatMailTests(unittest.TestCase):
         self.assertNotEqual(authorizations[0], authorizations[1])
         self.assertNotIn("password", json.dumps(authorizations))
 
+    def test_mailbox_credentials_are_redacted_from_object_reprs(self) -> None:
+        config = mail._mailbox_config()
+        session = mail.JmapSession(
+            api_url="https://mail.tinyhat.ai/jmap/",
+            authorization=config.authorization,
+            account_id="account-1",
+            account_capabilities=frozenset({mail.MAIL_CAPABILITY}),
+        )
+
+        self.assertNotIn("local-test-password", repr(config))
+        self.assertNotIn(config.authorization, repr(session))
+
     def test_discovery_rejects_cross_origin_api_without_forwarding_auth(self) -> None:
         original = mail._http_json
 
@@ -259,6 +281,15 @@ class TinyhatMailTests(unittest.TestCase):
             mail._http_json = original
 
         self.assertEqual(caught.exception.name, "mailbox_origin_mismatch")
+
+    def test_invalid_port_returns_a_stable_mailbox_error(self) -> None:
+        with self.assertRaises(mail.MailboxError) as caught:
+            mail._validate_same_origin(
+                "https://mail.tinyhat.ai/.well-known/jmap",
+                "https://mail.tinyhat.ai:999999/jmap",
+            )
+
+        self.assertEqual(caught.exception.name, "invalid_mailbox_url")
 
     def test_http_redirect_is_blocked_without_exposing_credentials(self) -> None:
         original = mail._HTTP_OPENER
@@ -286,6 +317,110 @@ class TinyhatMailTests(unittest.TestCase):
 
         self.assertEqual(caught.exception.name, "mailbox_redirect_blocked")
         self.assertNotIn("secret", caught.exception.message.lower())
+
+    def test_http_status_errors_are_stable_and_secret_free(self) -> None:
+        original = mail._HTTP_OPENER
+
+        class FailingOpener:
+            def __init__(self, status):
+                self.status = status
+
+            def open(self, req, timeout):
+                raise error.HTTPError(
+                    req.full_url,
+                    self.status,
+                    "local-test-password",
+                    {},
+                    None,
+                )
+
+        expected = {
+            401: "mailbox_unauthorized",
+            403: "mailbox_unauthorized",
+            429: "mailbox_rate_limited",
+            503: "mail_unavailable",
+        }
+        try:
+            for status, error_name in expected.items():
+                with self.subTest(status=status):
+                    mail._HTTP_OPENER = FailingOpener(status)
+                    with self.assertRaises(mail.MailboxError) as caught:
+                        mail._http_json(
+                            "https://mail.tinyhat.ai/jmap",
+                            authorization="Basic secret-value",
+                            payload=None,
+                        )
+                    self.assertEqual(caught.exception.name, error_name)
+                    self.assertNotIn("password", caught.exception.message.lower())
+        finally:
+            mail._HTTP_OPENER = original
+
+    def test_oversized_http_response_is_rejected(self) -> None:
+        original = mail._HTTP_OPENER
+
+        class LargeResponse:
+            def __enter__(self):
+                return self
+
+            def __exit__(self, *args):
+                return False
+
+            def geturl(self):
+                return "https://mail.tinyhat.ai/jmap"
+
+            def read(self, maximum):
+                self.maximum = maximum
+                return b"x" * maximum
+
+        class LargeResponseOpener:
+            def open(self, req, timeout):
+                return LargeResponse()
+
+        try:
+            mail._HTTP_OPENER = LargeResponseOpener()
+            with self.assertRaises(mail.MailboxError) as caught:
+                mail._http_json(
+                    "https://mail.tinyhat.ai/jmap",
+                    authorization="Basic secret-value",
+                    payload=None,
+                )
+        finally:
+            mail._HTTP_OPENER = original
+
+        self.assertEqual(caught.exception.name, "mailbox_response_too_large")
+
+    def test_malformed_http_response_is_rejected(self) -> None:
+        original = mail._HTTP_OPENER
+
+        class MalformedResponse:
+            def __enter__(self):
+                return self
+
+            def __exit__(self, *args):
+                return False
+
+            def geturl(self):
+                return "https://mail.tinyhat.ai/jmap"
+
+            def read(self, maximum):
+                return b"not-json"
+
+        class MalformedResponseOpener:
+            def open(self, req, timeout):
+                return MalformedResponse()
+
+        try:
+            mail._HTTP_OPENER = MalformedResponseOpener()
+            with self.assertRaises(mail.MailboxError) as caught:
+                mail._http_json(
+                    "https://mail.tinyhat.ai/jmap",
+                    authorization="Basic secret-value",
+                    payload=None,
+                )
+        finally:
+            mail._HTTP_OPENER = original
+
+        self.assertEqual(caught.exception.name, "invalid_mailbox_response")
 
     def test_discovery_redirect_allows_only_same_origin_get(self) -> None:
         handler = mail._SameOriginDiscoveryRedirects()
@@ -373,6 +508,80 @@ class TinyhatMailTests(unittest.TestCase):
         query = session.calls[1][0][0][1]
         self.assertEqual(query["position"], 10)
 
+    def test_list_follows_query_order_and_advances_past_missing_messages(self) -> None:
+        class ReorderedSession(FakeSession):
+            def call(self, method_calls, *, sending=False):
+                if method_calls[0][0] == "Email/query":
+                    return {
+                        "methodResponses": [
+                            [
+                                "Email/query",
+                                {"ids": ["newest", "deleted", "oldest"], "total": 6},
+                                "query",
+                            ],
+                            [
+                                "Email/get",
+                                {
+                                    "list": [
+                                        {
+                                            "id": "oldest",
+                                            "receivedAt": "2026-08-18T08:00:00Z",
+                                            "from": [],
+                                            "subject": "Oldest",
+                                        },
+                                        {
+                                            "id": "newest",
+                                            "receivedAt": "2026-08-18T10:00:00Z",
+                                            "from": [],
+                                            "subject": "Newest",
+                                        },
+                                    ]
+                                },
+                                "messages",
+                            ],
+                        ]
+                    }
+                return super().call(method_calls, sending=sending)
+
+        payload = mail._list_messages(
+            ReorderedSession(),
+            {"limit": 3, "position": 0},
+            action="list",
+        )
+
+        self.assertEqual(
+            [message["email_id"] for message in payload["messages"]],
+            ["newest", "oldest"],
+        )
+        self.assertEqual(payload["next_position"], 3)
+
+    def test_address_fields_and_whole_tool_output_are_bounded(self) -> None:
+        addresses = [
+            {
+                "name": "N" * 120,
+                "email": f"person-{index}-{'a' * 50}@example.com",
+            }
+            for index in range(40)
+        ]
+        summary = mail._message_summary(
+            {
+                "id": "email-1",
+                "from": addresses,
+                "subject": "S" * 300,
+                "preview": "P" * 500,
+            }
+        )
+
+        self.assertEqual(len(summary["from"]), mail.MAX_DISPLAYED_ADDRESSES)
+        self.assertEqual(summary["from_omitted"], 37)
+        serialized = mail._serialize_payload({"messages": [summary] * mail.MAX_LIMIT})
+        self.assertLessEqual(len(serialized), mail.MAX_TOOL_OUTPUT_CHARS)
+
+        oversized = {"future_field": "x" * (mail.MAX_TOOL_OUTPUT_CHARS + 1)}
+        with self.assertRaises(mail.MailboxError) as caught:
+            mail._serialize_payload(oversized)
+        self.assertEqual(caught.exception.name, "mail_result_too_large")
+
     def test_search_requires_query_and_caps_limit(self) -> None:
         session = FakeSession()
         with self.assertRaises(mail.MailboxError) as missing:
@@ -415,6 +624,43 @@ class TinyhatMailTests(unittest.TestCase):
         self.assertNotIn("local-test-password", serialized)
         self.assertNotIn("identity-1", serialized)
         self.assertNotIn("submission-1", serialized)
+        self.assertEqual([call[0][0][0] for call in session.calls], ["Identity/get", "Email/set"])
+
+    def test_recipient_validation_normalizes_brackets_and_rejects_markup(self) -> None:
+        self.assertEqual(mail._email_address("<owner@example.com>"), "owner@example.com")
+        for address in ("a<script>@b.co", "a@b..co"):
+            with self.subTest(address=address):
+                with self.assertRaises(mail.MailboxError) as caught:
+                    mail._email_address(address)
+                self.assertEqual(caught.exception.name, "invalid_email_address")
+
+    def test_subject_rejects_header_newlines_but_body_allows_plain_text_lines(self) -> None:
+        session = FakeSession()
+        with self.assertRaises(mail.MailboxError) as caught:
+            mail._send_message(
+                session,
+                mail._mailbox_config(),
+                {
+                    "to": ["owner@example.com"],
+                    "subject": "Hello\r\nBcc: attacker@example.com",
+                    "body": "Safe body",
+                    "idempotency_key": "send-invalid-subject-001",
+                },
+            )
+        self.assertEqual(caught.exception.name, "invalid_input")
+        self.assertEqual(session.calls, [])
+
+        payload = mail._send_message(
+            session,
+            mail._mailbox_config(),
+            {
+                "to": ["owner@example.com"],
+                "subject": "Two lines",
+                "body": "First line\nSecond line",
+                "idempotency_key": "send-multiline-body-001",
+            },
+        )
+        self.assertEqual(payload["status"], "sent")
 
     def test_send_replay_returns_same_result_without_duplicate_submission(self) -> None:
         session = FakeSession()
@@ -482,6 +728,44 @@ class TinyhatMailTests(unittest.TestCase):
 
         self.assertEqual(payload["error"], "sending_not_allowed")
         self.assertEqual(session.submissions, 1)
+
+    def test_definitive_send_failure_replays_the_same_failure(self) -> None:
+        class RejectedSession(FakeSession):
+            def call(self, method_calls, *, sending=False):
+                if method_calls[0][0] == "Email/set":
+                    self.submissions += 1
+                    return {
+                        "methodResponses": [
+                            [
+                                "Email/set",
+                                {"notCreated": {"mail": {"type": "invalidProperties"}}},
+                                "create",
+                            ],
+                            [
+                                "EmailSubmission/set",
+                                {"notCreated": {"submission": {"type": "invalidProperties"}}},
+                                "submit",
+                            ],
+                        ]
+                    }
+                return super().call(method_calls, sending=sending)
+
+        session = RejectedSession()
+        args = {
+            "to": ["owner@example.com"],
+            "subject": "Rejected",
+            "body": "Not sent.",
+            "idempotency_key": "send-rejected-001",
+        }
+        first = mail._send_message(session, mail._mailbox_config(), args)
+        second = mail._send_message(session, mail._mailbox_config(), args)
+
+        self.assertEqual(first["error"], "mail_operation_failed")
+        self.assertEqual(second["error"], "mail_operation_failed")
+        self.assertTrue(second["idempotent_replay"])
+        self.assertEqual(session.submissions, 1)
+        state = json.loads(mail._state_path(args["idempotency_key"]).read_text())
+        self.assertEqual(state["status"], "failed")
 
     def test_send_denied_by_capability_is_stable_and_makes_no_calls(self) -> None:
         session = FakeSession(sending=False)
