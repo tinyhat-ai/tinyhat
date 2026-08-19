@@ -26,7 +26,7 @@ TINYHAT_CONTEXT = """Tinyhat context: this Hermes agent runs on a Tinyhat-manage
 - When the user asks to connect ChatGPT, OpenAI, Codex, ChatGPT Plus/Pro/Team, a paid ChatGPT account, their Codex subscription, or to stop using Tinyhat/platform credits, load tinyhat:tinyhat-codex-auth and call tinyhat_codex_auth once with action=prerequisite. That sends the ChatGPT Settings > Security screenshot and /codex_auth instruction on its own line. Do not send an extra text reply after that tool call. Do not ask a multiple-choice clarification unless they explicitly ask for ChatGPT history/data or an OpenAI API key.
 - For OpenAI Codex auth status, recent auth output, or usage limits, prefer tinyhat_codex_auth with action=status, action=log, or action=limits. The auth flow sends the Telegram button and copyable device code after the ChatGPT Security setting is confirmed; do not ask for auth.json, refresh tokens, passwords, or raw OAuth tokens.
 - User credit: load tinyhat:tinyhat-credit. tinyhat_credit shows owner balance/history; tinyhat_model_budget shows Agent budget. Keep them separate. Top-ups stay in the bot's Mini App. For an exact amount, call tinyhat_openrouter_credit_allocate immediately; do not ask for a second confirmation. If missing, ask only for the amount. Never retry pending. A starter credit of about $10 is included. Never infer remaining included platform funding from history; check tinyhat_codex_auth with action=status when unsure.
-- Agent contacts: for this Agent's phone number or tinyhat.ai email, load tinyhat:tinyhat-contact-details and call tinyhat_contact_details without confirmation or inputs. Never mention inventory, credentials, provider accounts, or API keys.
+- Agent contacts: for phone or tinyhat.ai email, load tinyhat:tinyhat-contact-details; call tinyhat_contact_details without confirmation or input. Never mention inventory, accounts, credentials, or keys.
 - If skill_view or skills_list omits Tinyhat plugin skills, call tinyhat_skill_catalog and retry with qualified names such as tinyhat:tinyhat-codex-auth.
 - If this Computer reports update_available=true or target_ref_changed for the Tinyhat plugin, load tinyhat:tinyhat-plugin-update and use tinyhat_plugin_update with action=status before applying updates. Only call action=update after the user/operator asks to update, and use restart_gateway=true when the live Telegram gateway should reload the new plugin commands.
 - For Tinyhat QA or Slack-style bug reports that mention words like restart, reload, update, or gateway, do not use terminal/curl just to post the text. Use a native Slack/reporting tool if available, or return the report in chat.
@@ -102,6 +102,9 @@ _ROUTE_SIGNAL_BULLET_HINTS = {
     "bug report": "- For Tinyhat QA or Slack-style bug reports",
     "slack report": "- For Tinyhat QA or Slack-style bug reports",
     "plugin update": "- If this Computer reports update_available",
+    "phone number": "- Agent contacts:",
+    "contact details": "- Agent contacts:",
+    "call you": "- Agent contacts:",
 }
 
 _ROUTE_TERM_BULLET_HINTS = {
@@ -109,6 +112,10 @@ _ROUTE_TERM_BULLET_HINTS = {
     "surveillance": "- For privacy, security, or data-access questions",
     "privacy": "- For privacy, security, or data-access questions",
     "credits": "- Funding model:",
+    "phone": "- Agent contacts:",
+    "phones": "- Agent contacts:",
+    "contact": "- Agent contacts:",
+    "contacts": "- Agent contacts:",
 }
 
 
@@ -309,6 +316,9 @@ _CONTEXT_PHRASES = (
     "start codex sign-in",
     "start codex sign in",
     "secure sign in",
+    "phone number",
+    "contact details",
+    "call you",
 )
 
 _CONTEXT_TERMS = (
@@ -347,6 +357,29 @@ _CONTEXT_TERMS = (
     "privacy",
     "gdpr",
     "surveillance",
+    "phone",
+    "phones",
+    "contact",
+    "contacts",
+)
+
+_CONTACT_PHRASES = frozenset(("phone number", "contact details", "call you"))
+_CONTACT_TERMS = frozenset(("phone", "phones", "contact", "contacts"))
+_CONTACT_DEVELOPER_TERMS = frozenset(
+    (
+        "class",
+        "code",
+        "column",
+        "database",
+        "field",
+        "function",
+        "method",
+        "parser",
+        "schema",
+        "table",
+        "test",
+        "variable",
+    )
 )
 
 # Funding routing binds funding wording to the funding question itself.
@@ -813,10 +846,22 @@ def should_inject_tinyhat_context(user_message: str, *, is_first_turn: bool = Fa
     for mark in _ZERO_WIDTH_MARKS:
         normalized = normalized.replace(mark, "")
     normalized_for_terms = re.sub(r"[_-]+", " ", normalized)
-    if any(phrase in normalized or phrase in normalized_for_terms for phrase in _CONTEXT_PHRASES):
-        return True
+    matched_phrases = {
+        phrase
+        for phrase in _CONTEXT_PHRASES
+        if phrase in normalized or phrase in normalized_for_terms
+    }
     terms = set(re.findall(r"[a-z0-9]+", normalized_for_terms))
-    if any(term in terms for term in _CONTEXT_TERMS):
+    matched_terms = terms.intersection(_CONTEXT_TERMS)
+    has_contact_signal = bool(
+        matched_phrases.intersection(_CONTACT_PHRASES)
+        or matched_terms.intersection(_CONTACT_TERMS)
+    )
+    if has_contact_signal and not terms.intersection(_CONTACT_DEVELOPER_TERMS):
+        return True
+    if matched_phrases.difference(_CONTACT_PHRASES):
+        return True
+    if matched_terms.difference(_CONTACT_TERMS):
         return True
     if _matches_funding_intent(normalized_for_terms):
         return True

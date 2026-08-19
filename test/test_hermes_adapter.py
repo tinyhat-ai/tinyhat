@@ -173,6 +173,10 @@ class HermesAdapterTests(unittest.TestCase):
         self.assertNotIn("key_hash", allocation_schema["properties"])
         self.assertNotIn("idempotency_key", allocation_schema["properties"])
         self.assertFalse(allocation_schema["additionalProperties"])
+        contact_schema = schemas.TINYHAT_CONTACT_DETAILS_SCHEMA
+        self.assertEqual(contact_schema["properties"], {})
+        self.assertEqual(contact_schema["required"], [])
+        self.assertFalse(contact_schema["additionalProperties"])
         hats_schema = schemas.TINYHAT_HATS_SCHEMA
         self.assertEqual(hats_schema["required"], ["action"])
         self.assertEqual(
@@ -775,6 +779,28 @@ class HermesAdapterTests(unittest.TestCase):
                 self.assertIn("tinyhat:tinyhat-credit", injected["context"])
                 self.assertIn("tinyhat_model_budget", injected["context"])
 
+    def test_context_hook_injects_for_agent_contact_questions(self) -> None:
+        examples = (
+            "What's your phone number?",
+            "Do you have a phone?",
+            "Give me your contact details",
+            "Can people call you?",
+            "What contacts do you have?",
+        )
+        for user_message in examples:
+            with self.subTest(user_message=user_message):
+                injected = tinyhat_context.inject_tinyhat_context(
+                    user_message=user_message,
+                    is_first_turn=False,
+                )
+                self.assertIsNotNone(injected)
+                assert injected is not None
+                self.assertIn(
+                    "tinyhat:tinyhat-contact-details",
+                    injected["context"],
+                )
+                self.assertIn("tinyhat_contact_details", injected["context"])
+
     def test_context_states_funding_reminder_rules(self) -> None:
         directive = tinyhat_context.FUNDING_REMINDER_DIRECTIVE
         self.assertTrue(directive.startswith("[System note:"))
@@ -1200,6 +1226,10 @@ class HermesAdapterTests(unittest.TestCase):
             "پیام من را بخوان",
             "Please look at my logs",
             "Please read my messages",
+            "Call this function and return the result",
+            "Refactor the phone parser",
+            "Add contacts to this database table",
+            "Show the line number for this error",
         )
         for user_message in examples:
             with self.subTest(user_message=user_message):
