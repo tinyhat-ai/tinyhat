@@ -429,6 +429,7 @@ _CONTACT_TERMS = frozenset(
 )
 _CONTACT_DEVELOPER_TERMS = frozenset(
     (
+        "callback",
         "class",
         "code",
         "column",
@@ -441,6 +442,7 @@ _CONTACT_DEVELOPER_TERMS = frozenset(
         "table",
         "test",
         "variable",
+        "webhook",
     )
 )
 _CONTACT_ACTION_TARGET = (
@@ -448,12 +450,17 @@ _CONTACT_ACTION_TARGET = (
     r"mechanic|plumber|electrician|lawyer|accountant|barber|salon|"
     r"friend|mother|father|mom|dad|wife|husband|partner)"
 )
-_CONTACT_ACTION_PATTERNS = tuple(
+_CONTACT_ACTION_PATTERNS_WEAK = tuple(
     re.compile(pattern)
     for pattern in (
         r"\bcall (?:me|you)\b",
-        r"\btext this number\b",
         r"\bsend an? sms\b",
+    )
+)
+_CONTACT_ACTION_PATTERNS_TARGETED = tuple(
+    re.compile(pattern)
+    for pattern in (
+        r"\btext this number\b",
         r"\bsend an? text message\b",
         r"\bsend an? text to\b",
         rf"\b(?:call|text) (?:my|the) {_CONTACT_ACTION_TARGET}\b",
@@ -916,10 +923,18 @@ def _normalize_message(user_message: str) -> str:
     return re.sub(r"[_-]+", " ", _normalize_message_raw(user_message))
 
 
-def _matches_contact_action_intent(normalized: str) -> bool:
+def _matches_contact_action_intent(
+    normalized: str,
+    *,
+    has_developer_terms: bool,
+) -> bool:
     """Match phone actions with a concrete recipient or message signal."""
 
-    return any(pattern.search(normalized) for pattern in _CONTACT_ACTION_PATTERNS)
+    if any(pattern.search(normalized) for pattern in _CONTACT_ACTION_PATTERNS_TARGETED):
+        return True
+    return not has_developer_terms and any(
+        pattern.search(normalized) for pattern in _CONTACT_ACTION_PATTERNS_WEAK
+    )
 
 
 def should_inject_tinyhat_context(user_message: str, *, is_first_turn: bool = False) -> bool:
@@ -943,9 +958,13 @@ def should_inject_tinyhat_context(user_message: str, *, is_first_turn: bool = Fa
         matched_contact_phrases.difference(_CONTACT_ACTION_PHRASES)
         or matched_terms.intersection(_CONTACT_TERMS)
     )
-    if _matches_contact_action_intent(normalized_for_terms):
+    has_developer_terms = bool(terms.intersection(_CONTACT_DEVELOPER_TERMS))
+    if _matches_contact_action_intent(
+        normalized_for_terms,
+        has_developer_terms=has_developer_terms,
+    ):
         return True
-    if has_contact_signal and not terms.intersection(_CONTACT_DEVELOPER_TERMS):
+    if has_contact_signal and not has_developer_terms:
         return True
     if matched_phrases.difference(_CONTACT_PHRASES):
         return True
