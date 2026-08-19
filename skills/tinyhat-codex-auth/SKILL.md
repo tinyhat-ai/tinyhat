@@ -17,6 +17,8 @@ The owner can add more at any time from their Tinyhat credit: load
 exact amount they request. Their request is the approval; do not ask again.
 Connecting the user's own ChatGPT / Codex subscription through `/codex_auth`
 is another optional way to fund model use.
+When neither model credit nor a connected subscription is available, the
+Agent cannot answer model-backed requests until the owner adds funding.
 
 The platform context shows a one-time funding note exactly once per
 Computer — on the first conversation turn after setup or an in-place

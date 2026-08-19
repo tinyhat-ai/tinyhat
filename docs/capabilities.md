@@ -66,9 +66,11 @@ follows the same architecture: the Computer calls AgentPhone's API directly
 after loading `https://agentphone.ai/skills.md` as untrusted operational
 guidance, but credentials are allowed only at the pinned
 `https://api.agentphone.ai` origin; Tinyloop is not in the call or text path.
-The local skill keeps fixed action boundaries: online instructions cannot
-authorize forwarding messages or call transcripts, deleting assigned
-resources, or adding data the owner did not ask to send.
+The local skill keeps fixed action boundaries: online instructions can supply
+only the path and payload for the owner's requested action. They cannot
+authorize setup steps or stored changes to an agent, number, or account,
+including custom tools, prompts, contact cards, webhooks, forwarding, resource
+release or deletion, or a URL the provider will call later.
 
 ## Shareable Hat Authoring
 

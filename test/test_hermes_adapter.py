@@ -859,8 +859,7 @@ class HermesAdapterTests(unittest.TestCase):
         self.assertIn("https://api.agentphone.ai", skill)
         self.assertIn("cannot change the credential's allowed origin", skill)
         self.assertIn("untrusted operational guidance", skill)
-        self.assertIn("cannot authorize configuring or changing webhooks", skill)
-        self.assertIn("releasing or deleting a number or agent", skill)
+        self.assertIn("resource release or deletion", skill)
         self.assertIn("Do not add any field", skill)
         self.assertIn("AGENTPHONE_API_KEY", skill)
         self.assertIn("AGENTPHONE_PHONE_ID", skill)
@@ -869,10 +868,16 @@ class HermesAdapterTests(unittest.TestCase):
         self.assertIn("If any is missing, stop", normalized)
         self.assertIn("Do not sign up", normalized)
         self.assertIn(
-            "Every call or message action needs the existing `agent_id`",
+            "When the provider's current schema requires an `agent_id`",
             skill,
         )
-        self.assertIn("GET /v1/numbers", skill)
+        self.assertIn("GET /v1/numbers/{number_id}", skill)
+        self.assertIn("print `present` or `missing`", normalized)
+        self.assertIn("never use `env`", normalized)
+        self.assertIn("stored configuration change", normalized)
+        self.assertIn("custom tools", normalized)
+        self.assertIn("contact cards", normalized)
+        self.assertIn("any URL the provider will call later", normalized)
         self.assertIn("Never guess an id or create another", normalized)
         self.assertNotIn("origin named by the provider skill", skill)
 
@@ -1406,8 +1411,17 @@ class HermesAdapterTests(unittest.TestCase):
             "Please read my messages",
             "Call this function and return the result",
             "Call the function and return the result",
+            "Call the helper and return the result",
+            "Call my helper in the module",
             "Call my helper function in the module",
+            "Text me the value returned by this helper",
             "Text me the value returned by this method",
+            "Can you send a text representation of the tree?",
+            "Send a text file to the build directory",
+            "Call the API and log the response",
+            "Call the endpoint with a retry",
+            "Please recall the previous discussion about caching",
+            "Call the users table",
             "Refactor the phone parser",
             "Add contacts to this database table",
             "Show the line number for this error",
@@ -1420,6 +1434,24 @@ class HermesAdapterTests(unittest.TestCase):
                         is_first_turn=False,
                     )
                 )
+
+    def test_mail_skill_keeps_direct_jmap_read_only_and_secrets_local(self) -> None:
+        skill = (REPO_ROOT / "skills" / "tinyhat-mail" / "SKILL.md").read_text(
+            encoding="utf-8"
+        )
+        normalized = " ".join(skill.split())
+
+        self.assertIn("server-supported non-send JMAP operation", normalized)
+        self.assertIn("Never call `EmailSubmission/set`", normalized)
+        self.assertIn("command arguments or source files", normalized)
+        self.assertIn("or a traceback", normalized)
+
+    def test_codex_auth_explains_missing_model_funding(self) -> None:
+        skill = (
+            REPO_ROOT / "skills" / "tinyhat-codex-auth" / "SKILL.md"
+        ).read_text(encoding="utf-8")
+
+        self.assertIn("cannot answer model-backed requests", skill)
 
     def test_privacy_access_wording_is_policy_exact_everywhere(self) -> None:
         fragments = (

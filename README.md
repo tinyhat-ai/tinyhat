@@ -37,7 +37,7 @@ normal local Git checkout synchronized with exact-repository GitHub leases.
 Each Agent can also use its isolated Tinyhat mailbox directly from its
 Computer through JMAP. The bounded local tool covers common actions, while the
 Agent can use the same Computer-local credentials for another server-supported
-JMAP action without routing mail through Tinyloop.
+non-send JMAP action without routing mail through Tinyloop.
 
 ## What This Plugin Does
 
