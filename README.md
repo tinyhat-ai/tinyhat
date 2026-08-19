@@ -34,9 +34,10 @@ workspace.
 It can also create and evolve a one-customer shareable Hat: one private
 repository, a canonical handle, a share URL, Computer-local credentials, and a
 normal local Git checkout synchronized with exact-repository GitHub leases.
-Each Agent can also use its isolated Tinyhat mailbox through bounded JMAP
-tools. The mailbox password stays in trusted Computer-local code; the Agent
-can list, search, read, and send plain-text mail without seeing it.
+Each Agent can also use its isolated Tinyhat mailbox directly from its
+Computer through JMAP. The bounded local tool covers common actions, while the
+Agent can use the same Computer-local credentials for another server-supported
+JMAP action without routing mail through Tinyloop.
 
 ## What This Plugin Does
 
@@ -72,6 +73,7 @@ can list, search, read, and send plain-text mail without seeing it.
 | `skills/tinyhat-platform/SKILL.md` | Platform context for Tinyhat-managed Hermes agents. |
 | `skills/tinyhat-credit/SKILL.md` | Balance/history and current AI model-budget guidance, plus exact user-authorized budget allocation. |
 | `skills/tinyhat-contact-details/SKILL.md` | Plain-language guidance for this Agent's managed phone number and email address. |
+| `skills/tinyhat-agentphone/SKILL.md` | Provider-direct calls and text messages using this Agent's Computer-local AgentPhone credentials and the current online provider skill. |
 | `skills/tinyhat-mail/SKILL.md` | Safe guidance for checking and sending from this Agent's own Tinyhat mailbox while keeping it distinct from Gmail. |
 | `skills/tinyhat-privacy/SKILL.md` | Privacy and trust model guidance: who can see user data, and when. |
 | `skills/hat-authoring/SKILL.md` | Create, list, and inspect one-customer shareable hat shells. |

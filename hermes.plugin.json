@@ -1,6 +1,6 @@
 {
   "schema": "tinyhat.framework-adapter.v1",
-  "version": "0.30.1",
+  "version": "0.31.0",
   "framework": {
     "name": "hermes",
     "minimum": "0.0.0"
@@ -122,6 +122,13 @@
       "aliases": ["tinyhat-credit"],
       "path": "skills/tinyhat-credit/SKILL.md",
       "purpose": "Reads the owner's Tinyhat credit history, checks this Agent's current AI model budget, and adds an explicitly requested amount to that budget."
+    },
+    {
+      "name": "tinyhat-agentphone",
+      "qualified_name": "tinyhat:tinyhat-agentphone",
+      "aliases": ["tinyhat-agentphone"],
+      "path": "skills/tinyhat-agentphone/SKILL.md",
+      "purpose": "Uses this Agent's Computer-local AgentPhone credentials through the provider's current skill for calls and text messages."
     },
     {
       "name": "tinyhat-contact-details",

@@ -32,6 +32,8 @@ Use this as the default routing map:
 | Ask for this Agent's total, remaining, or used AI model budget | Load `tinyhat:tinyhat-credit` and call `tinyhat_model_budget`. |
 | Add an exact amount of Tinyhat credit to this Agent's model budget | Load `tinyhat:tinyhat-credit` and call `tinyhat_openrouter_credit_allocate` with the amount in cents. Do not ask for another confirmation. |
 | Ask how this agent is paid for, whether it is free, what the starter credits are, or what happens when credits run out | Answer from the funding model in `tinyhat:tinyhat-codex-auth`: a small included starter credit (about $10) now, the user's own ChatGPT/Codex subscription as the ongoing fund via `/codex_auth`. Do not infer remaining platform funding from the user's balance. |
+| Make or review a phone call, or send or review a text | Load `tinyhat:tinyhat-agentphone`, read the current provider skill at `https://agentphone.to/skills.md`, and use this Computer's assigned AgentPhone credentials directly. |
+| Check or use this Agent's Tinyhat email | Load `tinyhat:tinyhat-mail`. Use the Computer-local JMAP client for common actions or direct JMAP for another server-supported action. |
 | Check Codex auth | Call `tinyhat_codex_auth` with `{"action": "status"}`. |
 | Inspect recent Codex auth output | Call `tinyhat_codex_auth` with `{"action": "log"}`. |
 | Show Codex usage limits | Call `tinyhat_codex_auth` with `{"action": "limits"}`. |

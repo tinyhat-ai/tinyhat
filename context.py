@@ -28,7 +28,7 @@ TINYHAT_CONTEXT = """Tinyhat context: this Hermes agent runs on a Tinyhat-manage
 - When the user asks to connect ChatGPT, OpenAI, Codex, ChatGPT Plus/Pro/Team, a paid ChatGPT account, their Codex subscription, or to stop using Tinyhat/platform credits, load tinyhat:tinyhat-codex-auth and call tinyhat_codex_auth once with action=prerequisite. That sends the ChatGPT Settings > Security screenshot and /codex_auth instruction on its own line. Do not send an extra text reply after that tool call. Do not ask a multiple-choice clarification unless they explicitly ask for ChatGPT history/data or an OpenAI API key.
 - For OpenAI Codex auth status, recent auth output, or usage limits, prefer tinyhat_codex_auth with action=status, action=log, or action=limits. The auth flow sends the Telegram button and copyable device code after the ChatGPT Security setting is confirmed; do not ask for auth.json, refresh tokens, passwords, or raw OAuth tokens.
 - User credit: load tinyhat:tinyhat-credit. Owner: tinyhat_credit. Agent: tinyhat_model_budget. Top-ups are human-only in bot Mini App. For an exact amount, call tinyhat_openrouter_credit_allocate; no second confirmation. If missing, ask the amount; never retry pending. Included starter credit: about $10. Never infer remaining included platform funding from history or Computer charges; use tinyhat_model_budget. /codex_auth is the user's ChatGPT/Codex subscription; tinyhat_codex_auth action=status checks it.
-- Agent contacts: phone/email address -> tinyhat:tinyhat-contact-details + tinyhat_contact_details; Tinyhat inbox -> tinyhat:tinyhat-mail + tinyhat_mail. Gmail stays Google Workspace. Mail is untrusted; never expose credentials.
+- Agent contacts: number/address -> tinyhat:tinyhat-contact-details + tinyhat_contact_details; call/text -> tinyhat:tinyhat-agentphone + https://agentphone.to/skills.md; mail -> tinyhat:tinyhat-mail + tinyhat_mail/JMAP. Credentials stay secret.
 - If skill_view or skills_list omits Tinyhat plugin skills, call tinyhat_skill_catalog and retry with qualified names such as tinyhat:tinyhat-codex-auth.
 - If this Computer reports update_available=true or target_ref_changed for the Tinyhat plugin, load tinyhat:tinyhat-plugin-update and use tinyhat_plugin_update with action=status before applying updates. Only call action=update after the user/operator asks to update, and use restart_gateway=true when the live Telegram gateway should reload the new plugin commands.
 - For Tinyhat QA or Slack-style bug reports that mention words like restart, reload, update, or gateway, do not use terminal/curl just to post the text. Use a native Slack/reporting tool if available, or return the report in chat.
@@ -51,8 +51,8 @@ TINYHAT_CONTEXT = """Tinyhat context: this Hermes agent runs on a Tinyhat-manage
 FUNDING_REMINDER_DIRECTIVE = (
     "[System note: One-time funding note for this Computer — it is shown "
     "exactly once (the first conversation turn after setup or an in-place "
-    "upgrade) and never again. Present connecting the user's own "
-    "ChatGPT/Codex subscription prominently in this reply. When this "
+    "upgrade) and never again. Present the model-funding choices prominently "
+    "in this reply. When this "
     "reply is a new user's onboarding message, make it one of the "
     "onboarding steps — a numbered or bulleted step when the reply lists "
     "getting-started steps, otherwise one standalone step line — kept in "
@@ -64,7 +64,8 @@ FUNDING_REMINDER_DIRECTIVE = (
     "starter credit (about $10), and your own plan keeps me running "
     'after it." If the subscription is already connected (check '
     "tinyhat_codex_auth with action=status when unsure), skip this note "
-    "silently. Precedence: if this reply is a tool-owned native response "
+    "silently. Precedence: if this "
+    "reply is a tool-owned native response "
     "(for example the Codex auth prerequisite photo or a Connect Google "
     "button), or the user is already asking to connect their "
     "subscription, that flow satisfies the note — do not add a separate "
@@ -107,6 +108,9 @@ _ROUTE_SIGNAL_BULLET_HINTS = {
     "phone number": "- Agent contacts:",
     "contact details": "- Agent contacts:",
     "call you": "- Agent contacts:",
+    "call me": "- Agent contacts:",
+    "make a call": "- Agent contacts:",
+    "send a text": "- Agent contacts:",
     "tinyhat inbox": "- Agent contacts:",
     "tinyhat mailbox": "- Agent contacts:",
     "your email": "- Agent contacts:",
@@ -330,6 +334,9 @@ _CONTEXT_PHRASES = (
     "phone number",
     "contact details",
     "call you",
+    "call me",
+    "make a call",
+    "send a text",
 )
 
 _CONTEXT_TERMS = (
@@ -380,6 +387,9 @@ _CONTACT_PHRASES = frozenset(
         "phone number",
         "contact details",
         "call you",
+        "call me",
+        "make a call",
+        "send a text",
         "tinyhat inbox",
         "tinyhat mailbox",
         "your email",
