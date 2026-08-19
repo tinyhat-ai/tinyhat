@@ -1,13 +1,18 @@
 ---
 name: tinyhat-agentphone
-description: Use when the owner asks this Agent to make or review phone calls, send or review text messages, or use its assigned AgentPhone number. Not for the owner's personal phone, another Agent, or merely showing this Agent's number.
+description: Use when the owner says "call me," "call this number," "call again," "send a text/SMS," "did you receive my text," or asks this Agent to make, review, or check calls and text messages with its assigned phone. Not for merely showing the number, another Agent, or software-development questions about phone APIs.
 ---
 
 # AgentPhone
 
 This Computer already receives this Agent's AgentPhone credentials when a
 phone is assigned. Use AgentPhone directly from this Computer. Tinyhat is not
-a call or messaging proxy.
+a call or messaging proxy. This is a usable phone capability, not merely a
+contact number. There is no separate named AgentPhone tool to wait for: use
+the Computer's shell, local credentials, and the provider instructions below.
+
+Do not say calling or text messaging is unavailable until you have loaded this
+skill and checked whether the three required local values are present.
 
 ## Load the current provider instructions
 

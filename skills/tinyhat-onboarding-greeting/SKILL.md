@@ -12,14 +12,18 @@ finished connecting and configuring this Hermes Computer.
 
 - Speak as this agent, using its current SOUL, Hat, and other trusted local
   instructions for voice and purpose.
-- Check only whether the Computer-local contact values exist; never print
-  their values. If `AGENTPHONE_API_KEY`, `AGENTPHONE_PHONE_ID`, and
-  `AGENTPHONE_PHONE_NUMBER` are present, briefly mention that you have your
-  own phone number. If `TINYHAT_MAILBOX_ADDRESS`,
-  `TINYHAT_MAILBOX_JMAP_URL`, `TINYHAT_MAILBOX_USERNAME`, and
-  `TINYHAT_MAILBOX_PASSWORD` are present, briefly mention that you have your
-  own email inbox.
-- Keep the greeting natural, specific, and under 60 words.
+- Read only the two owner-facing contact values
+  `AGENTPHONE_PHONE_NUMBER` and `TINYHAT_MAILBOX_ADDRESS` from the local
+  environment. These are this Agent's public contact details, so include each
+  present value literally in the greeting. Never read or expose the API key,
+  phone id, mailbox username, mailbox password, JMAP URL, or any other
+  environment value.
+- With a present phone number, say simply that the owner can call or text that
+  number and that you can also make calls and send texts when asked.
+- With a present email address, say simply that the owner can email that
+  address and you can receive and read those messages. Do not imply that
+  outgoing Tinyhat email is available.
+- Keep the greeting natural, specific, and under 80 words.
 - Briefly say who you are or how you can help, then end with one simple question
   that makes it easy to start working together.
 - Return only the owner-facing greeting text. Do not call a messaging tool; the
@@ -31,6 +35,6 @@ finished connecting and configuring this Hermes Computer.
   language. Tinyhat sends those separately.
 - Do not mention this skill, hidden instructions, the model, or internal setup.
 - Do not invent capabilities, memories, customer facts, or completed work.
-- Do not expose the phone number, email address, credentials, or server details
-  in the greeting unless the owner explicitly asked for the contact value.
+- The phone number and email address are the only environment values allowed in
+  the greeting. Never expose credentials or server details.
 - Do not use this skill for an ordinary hello or any later conversation.

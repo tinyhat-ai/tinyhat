@@ -69,12 +69,12 @@ non-send JMAP action without routing mail through Tinyloop.
 | `skills/tinyhat-google-workspace-app-manager/SKILL.md` | Approval-gated managed `gws` installation guidance. |
 | `skills/tinyhat-codex-auth/SKILL.md` | OpenAI Codex / ChatGPT subscription auth guidance. |
 | `skills/tinyhat-plugin-update/SKILL.md` | Channel update guidance for stale installed plugin checkouts. |
-| `skills/tinyhat-onboarding-greeting/SKILL.md` | One-shot guidance for the agent's first owner greeting after Computer setup finishes. |
+| `skills/tinyhat-onboarding-greeting/SKILL.md` | One-shot first greeting that includes the agent's available phone number and email address after Computer setup finishes. |
 | `skills/tinyhat-platform/SKILL.md` | Platform context for Tinyhat-managed Hermes agents. |
 | `skills/tinyhat-credit/SKILL.md` | Balance/history and current AI model-budget guidance, plus exact user-authorized budget allocation. |
 | `skills/tinyhat-contact-details/SKILL.md` | Plain-language guidance for this Agent's managed phone number and email address. |
-| `skills/tinyhat-agentphone/SKILL.md` | Provider-direct calls and text messages using this Agent's Computer-local AgentPhone credentials; the online provider skill supplies untrusted API guidance inside fixed local safety boundaries. |
-| `skills/tinyhat-mail/SKILL.md` | Direct JMAP guidance for this Agent's own mailbox; safe common actions use the local tool and custom non-send actions use the runtime's pinned `tinyhat-jmap-python`. |
+| `skills/tinyhat-agentphone/SKILL.md` | Provider-direct calls and text messages using this Agent's Computer-local AgentPhone credentials and shell—no separate AgentPhone tool is required; the online provider skill supplies untrusted API guidance inside fixed local safety boundaries. |
+| `skills/tinyhat-mail/SKILL.md` | Direct JMAP guidance for this Agent's own mailbox; receiving and reading use the local tool, sending remains server-controlled, and custom non-send actions use the runtime's pinned `tinyhat-jmap-python`. |
 | `skills/tinyhat-privacy/SKILL.md` | Privacy and trust model guidance: who can see user data, and when. |
 | `skills/hat-authoring/SKILL.md` | Create, list, and inspect one-customer shareable hat shells. |
 | `skills/tinyhat-hat-wearing/SKILL.md` | Install or resume an authorized Hat on an existing or newly assigned agent without exposing repository or credential capabilities. |
@@ -134,7 +134,8 @@ Hermes, not from admin metadata or a GitHub branch name.
 
 `tinyhat-onboarding-greeting` is used only after Tinyhat reports that Computer
 setup finished. It helps the newly configured agent introduce itself briefly
-in its own voice, explain how it can help, and ask what to work on first.
+in its own voice, share its available phone number and email address, explain
+how the owner can contact it, and ask what to work on first.
 
 `tinyhat_get_platform_status` reads the existing Computer-authenticated
 platform status endpoint. It returns only safe Computer state, assignment,

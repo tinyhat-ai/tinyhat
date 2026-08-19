@@ -4,6 +4,18 @@ All notable changes to the Tinyhat plugin are documented here.
 
 ## Unreleased
 
+## 0.31.1 - 2026-08-19
+
+- Make everyday requests such as “call me,” “call again,” “send a text,” and
+  “did you receive my message?” reliably activate the Agent's direct phone or
+  inbox guidance. The phone guidance now makes clear that no separate tool is
+  needed: the Agent uses its own Computer-local credentials and shell.
+
+- Include the Agent's actual phone number and email address in its first
+  greeting when present. The greeting explains that the phone supports calls
+  and texts and that the inbox can receive mail, while keeping API keys,
+  mailbox passwords, and server details private.
+
 ## 0.31.0 - 2026-08-19
 
 - Make the model-funding guidance match the current
