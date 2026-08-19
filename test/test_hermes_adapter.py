@@ -123,6 +123,7 @@ class HermesAdapterTests(unittest.TestCase):
         self.assertIn("tinyhat-plugin-update", ctx.skills)
         self.assertIn("tinyhat-platform", ctx.skills)
         self.assertIn("tinyhat-privacy", ctx.skills)
+        self.assertIn("tinyhat-agentphone", ctx.skills)
         self.assertIn("tinyhat-contact-details", ctx.skills)
         self.assertIn("tinyhat-mail", ctx.skills)
         self.assertIn("hat-authoring", ctx.skills)
@@ -138,6 +139,7 @@ class HermesAdapterTests(unittest.TestCase):
         self.assertTrue(ctx.skills["tinyhat-plugin-update"].is_file())
         self.assertTrue(ctx.skills["tinyhat-platform"].is_file())
         self.assertTrue(ctx.skills["tinyhat-privacy"].is_file())
+        self.assertTrue(ctx.skills["tinyhat-agentphone"].is_file())
         self.assertTrue(ctx.skills["tinyhat-contact-details"].is_file())
         self.assertTrue(ctx.skills["tinyhat-mail"].is_file())
         self.assertTrue(ctx.skills["hat-authoring"].is_file())
@@ -350,7 +352,7 @@ class HermesAdapterTests(unittest.TestCase):
 
         self.assertEqual(payload["schema"], "tinyhat_plugin_version_v1")
         self.assertEqual(payload["name"], "tinyhat")
-        self.assertEqual(payload["version"], "0.30.1")
+        self.assertEqual(payload["version"], "0.31.0")
 
     def test_running_version_contract_stays_at_plugin_root(self) -> None:
         adapter = json.loads((REPO_ROOT / "hermes.plugin.json").read_text(encoding="utf-8"))
@@ -358,7 +360,7 @@ class HermesAdapterTests(unittest.TestCase):
         self.assertEqual(adapter["entrypoint"]["manifest"], "plugin.yaml")
         self.assertEqual(adapter["entrypoint"]["module"], "__init__.py")
         self.assertEqual(Path(tools.__file__).resolve().parent, REPO_ROOT)
-        self.assertEqual(tools._plugin_manifest()["version"], "0.30.1")
+        self.assertEqual(tools._plugin_manifest()["version"], "0.31.0")
 
     def test_platform_status_uses_attested_computer_endpoint(self) -> None:
         original_build = tools.build_platform_client
@@ -407,7 +409,7 @@ class HermesAdapterTests(unittest.TestCase):
 
         self.assertEqual(payload["schema"], "tinyhat_skill_catalog_v1")
         self.assertEqual(payload["plugin"]["name"], "tinyhat")
-        self.assertEqual(payload["plugin"]["version"], "0.30.1")
+        self.assertEqual(payload["plugin"]["version"], "0.31.0")
         by_name = {skill["name"]: skill for skill in payload["skills"]}
         self.assertEqual(
             by_name["tinyhat-codex-auth"]["qualified_name"],
@@ -821,6 +823,25 @@ class HermesAdapterTests(unittest.TestCase):
                 )
                 self.assertIn("tinyhat_contact_details", injected["context"])
 
+    def test_context_hook_injects_agentphone_for_calls_and_texts(self) -> None:
+        for user_message in (
+            "Call me on this number",
+            "Make a call to the restaurant",
+            "Send a text to my contractor",
+        ):
+            with self.subTest(user_message=user_message):
+                injected = tinyhat_context.inject_tinyhat_context(
+                    user_message=user_message,
+                    is_first_turn=False,
+                )
+                self.assertIsNotNone(injected)
+                assert injected is not None
+                self.assertIn("tinyhat:tinyhat-agentphone", injected["context"])
+                self.assertIn(
+                    "https://agentphone.to/skills.md",
+                    injected["context"],
+                )
+
     def test_context_hook_injects_for_agent_mail_questions(self) -> None:
         examples = (
             "What is your Tinyhat inbox status?",
@@ -903,7 +924,7 @@ class HermesAdapterTests(unittest.TestCase):
         self.assertIn("tinyhat_mail", tinyhat_context.TINYHAT_CONTEXT)
         self.assertIn("tinyhat_model_budget", tinyhat_context.TINYHAT_CONTEXT)
         self.assertIn(
-            "call tinyhat_openrouter_credit_allocate",
+            "tinyhat_openrouter_credit_allocate",
             tinyhat_context.TINYHAT_CONTEXT,
         )
         self.assertIn(
@@ -920,6 +941,8 @@ class HermesAdapterTests(unittest.TestCase):
             "tinyhat_codex_auth action=status checks it.",
             tinyhat_context.TINYHAT_CONTEXT,
         )
+        self.assertIn("tinyhat:tinyhat-agentphone", tinyhat_context.TINYHAT_CONTEXT)
+        self.assertIn("https://agentphone.to/skills.md", tinyhat_context.TINYHAT_CONTEXT)
 
     def test_context_stays_under_hermes_hook_spill_cap(self) -> None:
         # Hermes spills pre_llm_call context above ~10,000 chars to a disk

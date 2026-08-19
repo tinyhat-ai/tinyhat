@@ -4,6 +4,13 @@ All notable changes to the Tinyhat plugin are documented here.
 
 ## Unreleased
 
+- Start `0.31.0` by teaching Agents to use their assigned AgentPhone account
+  directly from their Computer with the provider's live skill, and by making
+  the existing mailbox boundary explicit: normal mail actions use the local
+  direct-JMAP helper while other server-supported JMAP actions may use local
+  credentials without a Tinyloop proxy. The setup greeting now mentions phone
+  and email only when those capabilities are present.
+
 - Prepare `0.30.1` by moving product implementation into named folders under
   `capabilities/`. The root now contains only release metadata, documentation,
   and the thin Hermes adapter facades. Each capability keeps its tools,

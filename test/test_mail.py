@@ -956,7 +956,9 @@ class TinyhatMailTests(unittest.TestCase):
         self.assertIn("Do not add a second confirmation", " ".join(skill.split()))
         self.assertIn("tinyhat:tinyhat-google-workspace", skill)
         self.assertIn("tinyhat:tinyhat-contact-details", skill)
-        self.assertNotIn("TINYHAT_MAILBOX_PASSWORD", skill)
+        self.assertIn("TINYHAT_MAILBOX_PASSWORD", skill)
+        self.assertIn("Never print", skill)
+        self.assertIn("https://jmap.io/", skill)
 
 
 if __name__ == "__main__":

@@ -17,6 +17,7 @@ The current capability list is intentionally small.
 | `tinyhat-skill-authoring` skill | Available now | Teaches agents to write portable user skills with valid names, explicit trigger and non-trigger boundaries, progressive disclosure, and bounded context size. |
 | `tinyhat-hat-wearing` skill | Available now | Authorizes a full Hat handle, checks out its private repository read-only, installs namespaced skills, and coordinates ciphertext-only creator-to-consumer credential delivery. |
 | `tinyhat-onboarding-greeting` skill | Available now | Guides the newly configured agent's short first owner greeting after Tinyhat confirms Computer setup is complete. |
+| `tinyhat-agentphone` skill | Available now | Loads AgentPhone's current online skill and uses this Agent's Computer-local provider credentials directly for calls and text messages. |
 | `tinyhat_private_secret_handoff` | Available now | Lets a user enter a secret in a Telegram Mini App while Tinyhat stores only short-lived ciphertext. |
 | `tinyhat_slack_connect` | Available now | Sends Hermes' current Agent-view manifest and transfers the Slack bot token, Socket Mode app token, and allowed member IDs as one browser-encrypted Computer-local bundle. |
 | `tinyhat_slack_disconnect` | Available now | Sends an owner-confirmed Telegram ceremony, revokes active Slack bot access when possible, removes the complete Computer-local Slack bundle, and restarts Hermes. |
@@ -54,6 +55,13 @@ This mailbox is not the user's connected Gmail account. Gmail continues to
 use `tinyhat_google_workspace` and its existing permission and confirmation
 rules. A question asking only for the Agent's phone number or email address
 continues to use `tinyhat_contact_details`.
+
+The bounded mail tool is a convenience client, not a Tinyloop mail proxy. It
+connects from the Computer directly to JMAP. For another server-supported JMAP
+operation, the Agent can use the same Computer-local credentials directly and
+must keep them on the configured JMAP origin. AgentPhone follows the same
+architecture: the Computer calls AgentPhone's API directly after loading
+`https://agentphone.to/skills.md`; Tinyloop is not in the call or text path.
 
 ## Shareable Hat Authoring
 
