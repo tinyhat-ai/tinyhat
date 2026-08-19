@@ -10,6 +10,10 @@ Read this Agent's current AI model budget with `tinyhat_model_budget`.
 Add credit to this Agent's AI model budget with
 `tinyhat_openrouter_credit_allocate`.
 
+New Agents start with about US$5 of model credit. The owner can use their
+Tinyhat credit to add more at any time by asking for an exact amount. They can
+optionally connect their ChatGPT/Codex subscription with `/codex_auth`.
+
 ## What the tool returns
 
 - `balance_cents`: current available Tinyhat credit in integer cents.

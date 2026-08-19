@@ -4,6 +4,11 @@ All notable changes to the Tinyhat plugin are documented here.
 
 ## Unreleased
 
+- Prepare `0.31.1` by making the model-funding guidance match the current
+  product: new Agents start with about $5 of model credit, owners can add more
+  from Tinyhat credit at any time, and ChatGPT/Codex subscription access is an
+  optional alternative.
+
 - Start `0.31.0` by teaching Agents to use their assigned AgentPhone account
   directly from their Computer with the provider's live skill, and by making
   the existing mailbox boundary explicit: normal mail actions use the local

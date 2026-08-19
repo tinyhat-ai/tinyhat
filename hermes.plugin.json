@@ -1,6 +1,6 @@
 {
   "schema": "tinyhat.framework-adapter.v1",
-  "version": "0.31.0",
+  "version": "0.31.1",
   "framework": {
     "name": "hermes",
     "minimum": "0.0.0"
@@ -100,7 +100,7 @@
       "qualified_name": "tinyhat:tinyhat-codex-auth",
       "aliases": ["tinyhat-codex-auth"],
       "path": "skills/tinyhat-codex-auth/SKILL.md",
-      "purpose": "Explains the starter-credit funding model and starts Tinyhat's OpenAI Codex / ChatGPT subscription auth flow."
+      "purpose": "Explains the $5 starting model credit, adding more from Tinyhat credit, and optional OpenAI Codex / ChatGPT subscription auth."
     },
     {
       "name": "tinyhat-plugin-update",
