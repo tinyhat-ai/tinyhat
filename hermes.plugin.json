@@ -1,6 +1,6 @@
 {
   "schema": "tinyhat.framework-adapter.v1",
-  "version": "0.31.0",
+  "version": "0.31.1",
   "framework": {
     "name": "hermes",
     "minimum": "0.0.0"
@@ -30,7 +30,7 @@
       "qualified_name": "tinyhat:tinyhat-onboarding-greeting",
       "aliases": ["tinyhat-onboarding-greeting"],
       "path": "skills/tinyhat-onboarding-greeting/SKILL.md",
-      "purpose": "Writes the agent's short first owner greeting after Tinyhat finishes Computer setup."
+      "purpose": "Writes the agent's short first owner greeting with its available phone and email contact methods after Tinyhat finishes Computer setup."
     },
     {
       "name": "tinyhat-plugin-version",
@@ -128,7 +128,7 @@
       "qualified_name": "tinyhat:tinyhat-agentphone",
       "aliases": ["tinyhat-agentphone"],
       "path": "skills/tinyhat-agentphone/SKILL.md",
-      "purpose": "Uses this Agent's Computer-local AgentPhone credentials through the provider's current skill for calls and text messages."
+      "purpose": "Makes and reviews calls and text messages directly with this Agent's Computer-local AgentPhone credentials and shell."
     },
     {
       "name": "tinyhat-contact-details",

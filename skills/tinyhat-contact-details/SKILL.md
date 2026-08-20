@@ -1,6 +1,6 @@
 ---
 name: tinyhat-contact-details
-description: Use when the user asks for this Agent's Tinyhat-managed phone number or email address, or asks Tinyhat to set up those contact details. Do not use it for the user's personal contact details, another Agent, or sending messages and calls.
+description: Use when the owner asks "what is your phone number/email address?", "how can I contact you?", or asks Tinyhat to set up this Agent's contact details. Not for another person's details or for making calls, sending texts, or reading email.
 ---
 
 # Tinyhat Contact Details
@@ -25,6 +25,11 @@ It needs no user confirmation and accepts no identity or contact input.
 Keep the answer short. Say **phone number** and **email address**. Do not use
 internal words such as inventory, credential, provider account, assignment
 row, or contact record.
+
+When a phone number is assigned, explain briefly that this Agent can use it to
+make and receive calls and to send and receive text messages. When an email
+address is assigned, explain briefly that this Agent can receive and read its
+email. Do not imply that outgoing Tinyhat email is enabled.
 
 The returned phone number and email address belong to this Agent, not to the
 owner. Use them as the Agent's public contact details. To check or send mail

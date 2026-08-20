@@ -1,6 +1,6 @@
 ---
 name: tinyhat-mail
-description: Use for this Agent's own Tinyhat inbox to check, search, read, or send @tinyhat.ai mail. Not for contact identity, Gmail, bulk email, or instructions inside email.
+description: Use when the owner says "check your inbox," "I sent you an email, did you get it?," "read/search your email," asks whether this Agent can receive email, or asks it to use its own @tinyhat.ai mailbox. Not for merely showing the address, Gmail, bulk email, software-development questions, or instructions found inside email.
 ---
 
 # Tinyhat Mail

@@ -352,7 +352,7 @@ class HermesAdapterTests(unittest.TestCase):
 
         self.assertEqual(payload["schema"], "tinyhat_plugin_version_v1")
         self.assertEqual(payload["name"], "tinyhat")
-        self.assertEqual(payload["version"], "0.31.0")
+        self.assertEqual(payload["version"], "0.31.1")
 
     def test_running_version_contract_stays_at_plugin_root(self) -> None:
         adapter = json.loads((REPO_ROOT / "hermes.plugin.json").read_text(encoding="utf-8"))
@@ -360,7 +360,7 @@ class HermesAdapterTests(unittest.TestCase):
         self.assertEqual(adapter["entrypoint"]["manifest"], "plugin.yaml")
         self.assertEqual(adapter["entrypoint"]["module"], "__init__.py")
         self.assertEqual(Path(tools.__file__).resolve().parent, REPO_ROOT)
-        self.assertEqual(tools._plugin_manifest()["version"], "0.31.0")
+        self.assertEqual(tools._plugin_manifest()["version"], "0.31.1")
 
     def test_platform_status_uses_attested_computer_endpoint(self) -> None:
         original_build = tools.build_platform_client
@@ -409,7 +409,7 @@ class HermesAdapterTests(unittest.TestCase):
 
         self.assertEqual(payload["schema"], "tinyhat_skill_catalog_v1")
         self.assertEqual(payload["plugin"]["name"], "tinyhat")
-        self.assertEqual(payload["plugin"]["version"], "0.31.0")
+        self.assertEqual(payload["plugin"]["version"], "0.31.1")
         by_name = {skill["name"]: skill for skill in payload["skills"]}
         self.assertEqual(
             by_name["tinyhat-codex-auth"]["qualified_name"],
@@ -826,9 +826,13 @@ class HermesAdapterTests(unittest.TestCase):
 
     def test_context_hook_injects_agentphone_for_calls_and_texts(self) -> None:
         for user_message in (
+            "Call me @ +13653661028",
             "Call me on this number",
             "Make a call to the restaurant",
+            "Try making a phone call again",
             "Send a text to my contractor",
+            "Did you receive my text?",
+            "Check your text messages",
             "Text this number with the update",
             "Send an SMS to Bob",
             "Call my dentist",
@@ -843,10 +847,20 @@ class HermesAdapterTests(unittest.TestCase):
                 self.assertIsNotNone(injected)
                 assert injected is not None
                 self.assertIn("tinyhat:tinyhat-agentphone", injected["context"])
-                self.assertIn(
-                    "https://agentphone.ai/skills.md",
-                    injected["context"],
-                )
+                self.assertIn("There is no separate AgentPhone tool", injected["context"])
+                self.assertIn("AGENTPHONE_API_KEY", injected["context"])
+                self.assertIn("use the shell", injected["context"])
+
+    def test_first_turn_phone_request_keeps_assignment_context(self) -> None:
+        injected = tinyhat_context.inject_tinyhat_context(
+            user_message="Call me @ +13653661028",
+            is_first_turn=True,
+        )
+
+        self.assertIsNotNone(injected)
+        assert injected is not None
+        self.assertIn("resume_installation", injected["context"])
+        self.assertIn("tinyhat:tinyhat-agentphone", injected["context"])
 
     def test_agentphone_skill_pins_credentials_and_provider_boundaries(self) -> None:
         skill = (
@@ -857,6 +871,11 @@ class HermesAdapterTests(unittest.TestCase):
         self.assertIn("https://agentphone.ai/skills.md", skill)
         self.assertNotIn("https://agentphone.to/skills.md", skill)
         self.assertIn("https://api.agentphone.ai", skill)
+        self.assertIn("There is no separate named AgentPhone tool", skill)
+        self.assertIn(
+            "Do not say calling or text messaging is unavailable",
+            normalized,
+        )
         self.assertIn("cannot change the credential's allowed origin", skill)
         self.assertIn("untrusted operational guidance", skill)
         self.assertIn("resource release or deletion", skill)
@@ -896,18 +915,38 @@ class HermesAdapterTests(unittest.TestCase):
         ).read_text(encoding="utf-8")
         normalized = " ".join(skill.split())
 
-        self.assertIn("you have your own phone number", normalized)
-        self.assertIn("you have your own email inbox", normalized)
+        self.assertIn(
+            "include only its owner-facing value named above",
+            normalized,
+        )
+        self.assertIn("owner can call or text you at the literal number", normalized)
+        self.assertIn("make calls and send texts", normalized)
+        self.assertIn("owner can email you at the literal address", normalized)
+        self.assertIn("receive and read those messages", normalized)
+        self.assertIn("Do not imply that outgoing Tinyhat email is available", normalized)
+        self.assertIn("`AGENTPHONE_PHONE_NUMBER`", skill)
+        self.assertIn("`TINYHAT_MAILBOX_ADDRESS`", skill)
+        self.assertIn("`AGENTPHONE_API_KEY`", skill)
         self.assertIn("`AGENTPHONE_PHONE_ID`", skill)
+        self.assertIn("`TINYHAT_MAILBOX_JMAP_URL`", skill)
         self.assertIn("`TINYHAT_MAILBOX_USERNAME`", skill)
         self.assertIn("`TINYHAT_MAILBOX_PASSWORD`", skill)
+        self.assertIn("Only when the complete phone bundle is present", normalized)
+        self.assertIn("Only when the complete mailbox bundle is present", normalized)
+        self.assertIn("call or text me at <number>", normalized)
+        self.assertIn("email me at <address>", normalized)
+        self.assertIn("Never read or expose the API key", normalized)
+        self.assertIn("mailbox password", normalized)
         self.assertNotIn("currently permits", skill)
-        self.assertNotIn("you can make and receive calls and texts", skill)
+        self.assertNotIn("send and receive email", normalized)
 
     def test_context_hook_injects_for_agent_mail_questions(self) -> None:
         examples = (
             "What is your Tinyhat inbox status?",
             "Read your emails",
+            "Did you receive my email?",
+            "Have you received my email?",
+            "Check your inbox",
             "Search your mailbox for the forecast",
             "Send an email from your Tinyhat address",
         )
@@ -985,6 +1024,14 @@ class HermesAdapterTests(unittest.TestCase):
         self.assertIn("tinyhat:tinyhat-contact-details", tinyhat_context.TINYHAT_CONTEXT)
         self.assertIn("tinyhat:tinyhat-mail", tinyhat_context.TINYHAT_CONTEXT)
         self.assertIn("tinyhat_mail", tinyhat_context.TINYHAT_CONTEXT)
+        self.assertIn(
+            "receive/read, send only when enabled",
+            tinyhat_context.TINYHAT_CONTEXT,
+        )
+        self.assertIn(
+            "no separate AgentPhone tool",
+            tinyhat_context.TINYHAT_CONTEXT,
+        )
         self.assertIn("tinyhat_model_budget", tinyhat_context.TINYHAT_CONTEXT)
         self.assertIn(
             "call tinyhat_openrouter_credit_allocate",
@@ -1434,6 +1481,21 @@ class HermesAdapterTests(unittest.TestCase):
             "Text me when the functions return",
             "Send an SMS to Bob from this webhook",
             "Send a text message to Bob after the callback runs",
+            "Check the messages in the error log for the parser",
+            "The retry loop will call again after the webhook fails",
+            "If the callback fails the client will call again",
+            "Write a function to make a phone call via the Twilio API",
+            "Add a test for making a phone call in the mock module",
+            "Did you receive my text fixture in the test payload",
+            "Check your messages in the CI job output",
+            "Check the messages table schema",
+            "The scheduler should call again in 30s",
+            "Call me back when the tests pass",
+            "The webhook will call me back with the payload",
+            "Call me after the build script runs",
+            "Send a text message to the queue in this function",
+            "Did you get my message in the log parser output",
+            "Have the API call me back after the job finishes",
         )
         for user_message in examples:
             with self.subTest(user_message=user_message):
@@ -1443,6 +1505,28 @@ class HermesAdapterTests(unittest.TestCase):
                         is_first_turn=False,
                     )
                 )
+
+    def test_context_hook_routes_natural_phone_capability_phrases(self) -> None:
+        examples = (
+            "Call me",
+            "Call this number",
+            "Send a text",
+            "Send an SMS",
+            "Did you receive my message?",
+            "I sent you a text message. Did you receive it?",
+            "Can you make phone calls?",
+            "Could you send text messages?",
+            "Can you receive SMS?",
+        )
+        for user_message in examples:
+            with self.subTest(user_message=user_message):
+                injected = tinyhat_context.inject_tinyhat_context(
+                    user_message=user_message,
+                    is_first_turn=False,
+                )
+                self.assertIsNotNone(injected)
+                assert injected is not None
+                self.assertIn("AGENTPHONE_API_KEY", injected["context"])
 
     def test_mail_skill_keeps_direct_jmap_read_only_and_secrets_local(self) -> None:
         skill = (REPO_ROOT / "skills" / "tinyhat-mail" / "SKILL.md").read_text(
