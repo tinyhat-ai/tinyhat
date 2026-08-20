@@ -4,6 +4,10 @@ All notable changes to the Tinyhat plugin are documented here.
 
 ## Unreleased
 
+- Keep the first greeting focused on the Agent's broader purpose and useful
+  work. Phone and email now appear afterward in one short sentence as optional
+  ways to reach the Agent, rather than dominating its introduction.
+
 ## 0.31.1 - 2026-08-19
 
 - Make everyday requests such as “call me,” “call again,” “send a text,” and

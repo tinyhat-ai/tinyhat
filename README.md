@@ -69,7 +69,7 @@ non-send JMAP action without routing mail through Tinyloop.
 | `skills/tinyhat-google-workspace-app-manager/SKILL.md` | Approval-gated managed `gws` installation guidance. |
 | `skills/tinyhat-codex-auth/SKILL.md` | OpenAI Codex / ChatGPT subscription auth guidance. |
 | `skills/tinyhat-plugin-update/SKILL.md` | Channel update guidance for stale installed plugin checkouts. |
-| `skills/tinyhat-onboarding-greeting/SKILL.md` | One-shot first greeting that includes the agent's available phone number and email address after Computer setup finishes. |
+| `skills/tinyhat-onboarding-greeting/SKILL.md` | One-shot first greeting that leads with the Agent's useful work and briefly includes available phone and email contact options. |
 | `skills/tinyhat-platform/SKILL.md` | Platform context for Tinyhat-managed Hermes agents. |
 | `skills/tinyhat-credit/SKILL.md` | Balance/history and current AI model-budget guidance, plus exact user-authorized budget allocation. |
 | `skills/tinyhat-contact-details/SKILL.md` | Plain-language guidance for this Agent's managed phone number and email address. |
@@ -134,8 +134,9 @@ Hermes, not from admin metadata or a GitHub branch name.
 
 `tinyhat-onboarding-greeting` is used only after Tinyhat reports that Computer
 setup finished. It helps the newly configured agent introduce itself briefly
-in its own voice, share its available phone number and email address, explain
-how the owner can contact it, and ask what to work on first.
+in its own voice, lead with the broader work it can do, briefly share its
+available phone number and email address as optional ways to stay in contact,
+and ask what useful work to start first.
 
 `tinyhat_get_platform_status` reads the existing Computer-authenticated
 platform status endpoint. It returns only safe Computer state, assignment,
