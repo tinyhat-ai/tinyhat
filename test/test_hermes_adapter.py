@@ -909,7 +909,7 @@ class HermesAdapterTests(unittest.TestCase):
             normalized_readme,
         )
 
-    def test_onboarding_greeting_mentions_contacts_without_overclaiming(self) -> None:
+    def test_onboarding_greeting_leads_with_work_and_keeps_contacts_secondary(self) -> None:
         skill = (
             REPO_ROOT / "skills" / "tinyhat-onboarding-greeting" / "SKILL.md"
         ).read_text(encoding="utf-8")
@@ -919,10 +919,16 @@ class HermesAdapterTests(unittest.TestCase):
             "include only its owner-facing value named above",
             normalized,
         )
-        self.assertIn("owner can call or text you at the literal number", normalized)
-        self.assertIn("make calls and send texts", normalized)
-        self.assertIn("owner can email you at the literal address", normalized)
-        self.assertIn("receive and read those messages", normalized)
+        self.assertIn("Lead with what this Agent is here to help with", normalized)
+        self.assertIn("The first sentence must", normalized)
+        self.assertIn("without mentioning phone, text messages, or email", normalized)
+        self.assertIn("research, planning, writing, analysis, automation", normalized)
+        self.assertIn("Only after the broader introduction", normalized)
+        self.assertIn("optional way the owner can reach this Agent", normalized)
+        self.assertIn("contact details to one short sentence", normalized)
+        self.assertIn("call or text me at <number>", normalized)
+        self.assertIn("email me at <address>", normalized)
+        self.assertIn("Those are contact options, not the Agent's main purpose", normalized)
         self.assertIn("Do not imply that outgoing Tinyhat email is available", normalized)
         self.assertIn("`AGENTPHONE_PHONE_NUMBER`", skill)
         self.assertIn("`TINYHAT_MAILBOX_ADDRESS`", skill)
@@ -933,10 +939,10 @@ class HermesAdapterTests(unittest.TestCase):
         self.assertIn("`TINYHAT_MAILBOX_PASSWORD`", skill)
         self.assertIn("Only when the complete phone bundle is present", normalized)
         self.assertIn("Only when the complete mailbox bundle is present", normalized)
-        self.assertIn("call or text me at <number>", normalized)
-        self.assertIn("email me at <address>", normalized)
         self.assertIn("Never read or expose the API key", normalized)
         self.assertIn("mailbox password", normalized)
+        self.assertNotIn("make calls and send texts when asked", normalized)
+        self.assertNotIn("place calls, send texts, and read incoming email", normalized)
         self.assertNotIn("currently permits", skill)
         self.assertNotIn("send and receive email", normalized)
 
