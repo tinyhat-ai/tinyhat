@@ -425,9 +425,9 @@ def _handler(
             self._security_headers()
             self.send_header(
                 "Set-Cookie",
-                f"{COOKIE_NAME}={_cookie_value(session_id, token)}; Path=/; Secure; HttpOnly; SameSite=Lax",
+                _browser_grant_cookie(session_id, token),
             )
-            self.send_header("Location", "/")
+            self.send_header("Location", f"/s/{session_id}")
             self.send_header("Content-Length", "0")
             self.end_headers()
 

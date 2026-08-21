@@ -305,13 +305,16 @@ class LocalAppSharingGatewayTests(unittest.TestCase):
         unlocked = connection.getresponse()
         unlocked.read()
         self.assertEqual(unlocked.status, 303)
+        self.assertEqual(unlocked.getheader("Location"), f"/s/{SESSION_ID}")
         cookie = unlocked.getheader("Set-Cookie")
         self.assertIsNotNone(cookie)
+        self.assertIn("SameSite=None", str(cookie))
+        self.assertIn("Partitioned", str(cookie))
         cookie_value = str(cookie).split(";", 1)[0]
 
         connection.request(
             "GET",
-            "/",
+            f"/s/{SESSION_ID}",
             headers={"Cookie": f"{cookie_value}; app_request=visible"},
         )
         proxied = connection.getresponse()
