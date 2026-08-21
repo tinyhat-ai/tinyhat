@@ -4,6 +4,13 @@ All notable changes to the Tinyhat plugin are documented here.
 
 ## Unreleased
 
+## 0.31.2 - 2026-08-21
+
+- Share a Computer-local HTTP app through a short-lived `view.tinyhat.ai` or
+  `viewd.tinyhat.ai` link. The Agent sends a native Telegram Mini App button
+  that opens directly for the assigned owner, while ordinary browsers use the
+  same link with a four-digit numeric access code.
+
 ## 0.31.1 - 2026-08-19
 
 - Keep the first greeting focused on the Agent's broader purpose and useful
