@@ -29,6 +29,9 @@ from .capabilities.google_workspace.connection import (
     google_workspace as handle_google_workspace,
 )
 from .capabilities.hats.tool import hats as handle_hats
+from .capabilities.local_app_sharing.tool import (
+    local_app_sharing as handle_local_app_sharing,
+)
 from .capabilities.mail.tool import tinyhat_mail as handle_mail
 from .capabilities.secrets.credentials import credentials as handle_credentials
 from .capabilities.secrets.handoff import start_private_secret_handoff
@@ -133,6 +136,11 @@ def mail(args: dict[str, Any] | None = None, **kwargs: Any) -> str:
 def hats(args: dict[str, Any] | None = None, **kwargs: Any) -> str:
     """Create, list, or inspect owner-scoped shareable hats."""
     return handle_hats(args, **kwargs)
+
+
+def local_app_sharing(args: dict[str, Any] | None = None, **kwargs: Any) -> str:
+    """Create, list, or revoke short-lived local application shares."""
+    return handle_local_app_sharing(args, **kwargs)
 
 
 def skill_catalog_payload() -> dict[str, Any]:
@@ -587,7 +595,7 @@ def _telegram_env_values() -> dict[str, str]:
 
 def _parse_env_value(raw: str) -> str:
     value = raw.strip()
-    if len(value) >= 2 and value[0] == value[-1] and value.startswith(("'", '"')):
+    if len(value) >= 2 and value[0] == value[-1] and value.startswith(("'", '"')):  # noqa: PLR2004
         value = value[1:-1]
     return value.replace('\\"', '"').replace("\\\\", "\\")
 

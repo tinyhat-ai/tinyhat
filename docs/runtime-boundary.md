@@ -25,6 +25,13 @@ If a future feature is mainly "teach the agent how to use Tinyhat", it
 belongs in this repo. If it is "keep the Computer alive and trusted", it
 belongs in the runtime.
 
+Local app sharing follows that boundary. The plugin owns the agent skill,
+numeric-port tool, and loopback HTTP gateway. Versioned Tinyloop platform APIs
+own short-lived session identity, code checks, browser grants, expiry, and
+revocation. Cloudflare infrastructure carries HTTPS traffic to the gateway.
+The runtime supplies only its existing Computer identity and plugin lifecycle;
+it gains no sharing-specific code, command, or callback.
+
 Google identity connection is a concrete example: the plugin supplies the
 agent tool, one-time Computer key, a packaged public scope manifest, implemented
 presets, requestable Custom-scope handling, detached poll/decrypt worker, owner-only

@@ -82,6 +82,48 @@ TINYHAT_CONTACT_DETAILS_SCHEMA = {
     "additionalProperties": False,
 }
 
+TINYHAT_LOCAL_APP_SHARING_SCHEMA = {
+    "type": "object",
+    "description": (
+        "Creates, lists, or revokes short-lived links to HTTP applications "
+        "already listening on this Computer's loopback interface. Tinyhat "
+        "platform APIs own session identity, codes, browser grants, expiry, "
+        "and revocation. The tool accepts a numeric port only, never a host or URL."
+    ),
+    "properties": {
+        "action": {
+            "type": "string",
+            "enum": ["create", "list", "revoke"],
+            "description": "The one sharing operation to perform.",
+        },
+        "port": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 65535,
+            "description": "Required for create: a listening loopback HTTP port.",
+        },
+        "label": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 80,
+            "description": "Optional short name for the shared application.",
+        },
+        "ttl_seconds": {
+            "type": "integer",
+            "minimum": 60,
+            "maximum": 14400,
+            "description": "Optional lifetime. Defaults to 900 seconds (15 minutes).",
+        },
+        "session_id": {
+            "type": "string",
+            "pattern": "^las_[A-Za-z0-9_-]{20,80}$",
+            "description": "Required for revoke; copy it from create or list.",
+        },
+    },
+    "required": ["action"],
+    "additionalProperties": False,
+}
+
 TINYHAT_MAIL_SCHEMA = {
     "type": "object",
     "description": (

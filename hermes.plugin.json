@@ -117,6 +117,15 @@
       "purpose": "Explains Tinyhat-managed Hermes defaults for secrets, Codex auth, and platform boundaries."
     },
     {
+      "name": "tinyhat-local-app-sharing",
+      "qualified_name": "tinyhat:tinyhat-local-app-sharing",
+      "aliases": [
+        "tinyhat-local-app-sharing"
+      ],
+      "path": "skills/tinyhat-local-app-sharing/SKILL.md",
+      "purpose": "Creates and revokes short-lived code-gated links to HTTP apps running on this Computer's loopback ports."
+    },
+    {
       "name": "tinyhat-credit",
       "qualified_name": "tinyhat:tinyhat-credit",
       "aliases": ["tinyhat-credit"],
@@ -192,6 +201,11 @@
       "name": "tinyhat_hats",
       "handler": "tools.hats",
       "skill": "hat-authoring"
+    },
+    {
+      "name": "tinyhat_local_app_sharing",
+      "handler": "tools.local_app_sharing",
+      "skill": "tinyhat-local-app-sharing"
     },
     {
       "name": "tinyhat_tell_joke",

@@ -55,6 +55,7 @@ non-send JMAP action without routing mail through Tinyloop.
 | `capabilities/credit/` | Owner balance/history and Agent model-budget operations. |
 | `capabilities/mail/` | Bounded JMAP mailbox access with local-only credentials and safe retry behavior. |
 | `capabilities/hats/` | Owner-scoped Hat lifecycle, repositories, skills, transfers, and private values. |
+| `capabilities/local_app_sharing/` | Loopback-only viewer gateway and platform session client. |
 | `capabilities/secrets/` | Value-blind credential discovery and encrypted private handoff. |
 | `capabilities/slack/` | Computer-local Slack connection and disconnect flows. |
 | `capabilities/google_workspace/` | Google OAuth, account custody, permission selection, managed `gws`, and detached workers. |
@@ -71,6 +72,7 @@ non-send JMAP action without routing mail through Tinyloop.
 | `skills/tinyhat-plugin-update/SKILL.md` | Channel update guidance for stale installed plugin checkouts. |
 | `skills/tinyhat-onboarding-greeting/SKILL.md` | One-shot first greeting that leads with the Agent's useful work and briefly includes available phone and email contact options. |
 | `skills/tinyhat-platform/SKILL.md` | Platform context for Tinyhat-managed Hermes agents. |
+| `skills/tinyhat-local-app-sharing/SKILL.md` | Short-lived link-and-code sharing for non-sensitive localhost HTTP apps. |
 | `skills/tinyhat-credit/SKILL.md` | Balance/history and current AI model-budget guidance, plus exact user-authorized budget allocation. |
 | `skills/tinyhat-contact-details/SKILL.md` | Plain-language guidance for this Agent's managed phone number and email address. |
 | `skills/tinyhat-agentphone/SKILL.md` | Provider-direct calls and text messages using this Agent's Computer-local AgentPhone credentials and shell—no separate AgentPhone tool is required; the online provider skill supplies untrusted API guidance inside fixed local safety boundaries. |
@@ -142,6 +144,14 @@ and ask what useful work to start first.
 platform status endpoint. It returns only safe Computer state, assignment,
 configuration revision, and package inventory metadata; it never returns
 tokens, credentials, or private platform URLs.
+
+`tinyhat-local-app-sharing` lets an agent share a non-sensitive HTTP app that
+is already listening on a numeric localhost port. The plugin starts its
+loopback-only gateway and calls versioned Computer-authenticated platform APIs;
+the platform owns session ids, one-time-disclosed codes, browser grants,
+expiry, and revocation. The user receives a `view.tinyhat.ai` or
+`viewd.tinyhat.ai` link plus an 8-character code. Multiple ports use separate
+sessions. The first slice is read-only HTTP and does not add runtime code.
 
 `tinyhat-credit` answers questions about the owner's Tinyhat credit. The
 `tinyhat_credit` tool calls a fixed Computer-authenticated platform route and
