@@ -6,6 +6,7 @@ import fcntl
 import json
 import os
 import re
+import signal
 import socket
 import subprocess
 import sys
@@ -20,6 +21,7 @@ from ...tool_errors import tool_error_json
 
 GATEWAY_HOST = "127.0.0.1"
 GATEWAY_PORT = 9321
+GATEWAY_PROTOCOL_VERSION = 2
 PACKAGE_ROOT = Path(__file__).resolve().parents[2]
 MAX_PORT = 65535
 MAX_LABEL_LENGTH = 80
@@ -107,9 +109,43 @@ def _gateway_is_healthy() -> bool:
             timeout=0.5,
         ) as response:
             payload = json.loads(response.read().decode("utf-8"))
-        return response.status == HTTPStatus.OK and payload == {"ok": True}
+        return response.status == HTTPStatus.OK and payload == {
+            "ok": True,
+            "protocol_version": GATEWAY_PROTOCOL_VERSION,
+        }
     except (error.URLError, json.JSONDecodeError, OSError):
         return False
+
+
+def _stop_stale_gateway() -> None:
+    """Stop only the plugin gateway recorded in the private PID file."""
+
+    try:
+        pid = int(GATEWAY_PID_PATH.read_text(encoding="ascii").strip())
+    except (OSError, ValueError):
+        return
+    if pid <= 1:
+        return
+    try:
+        command = subprocess.run(
+            ["ps", "-p", str(pid), "-o", "command="],
+            check=False,
+            capture_output=True,
+            text=True,
+            timeout=2,
+        ).stdout
+    except (OSError, subprocess.TimeoutExpired):
+        return
+    if "local_app_sharing.gateway" not in command or str(PACKAGE_ROOT) not in command:
+        return
+    try:
+        os.kill(pid, signal.SIGTERM)
+    except ProcessLookupError:
+        return
+    for _ in range(20):
+        if not _port_is_open(GATEWAY_PORT):
+            return
+        time.sleep(0.05)
 
 
 def _prepare_state_dir() -> None:
@@ -134,6 +170,7 @@ def ensure_gateway_running() -> None:
         fcntl.flock(lock_file.fileno(), fcntl.LOCK_EX)
         if _gateway_is_healthy():
             return
+        _stop_stale_gateway()
         with GATEWAY_LOG_PATH.open("ab", buffering=0) as log_file:
             os.chmod(GATEWAY_LOG_PATH, 0o600)
             process = subprocess.Popen(
@@ -171,19 +208,54 @@ def _safe_created_payload(payload: dict[str, Any]) -> dict[str, Any]:
     if VIEWER_LINK_RE.fullmatch(link) is None or not link.endswith(session_id):
         raise ValueError("platform returned an invalid sharing link")
     access_code = payload["access_code"].strip()
-    if re.fullmatch(r"[23456789ABCDEFGHJKLMNPQRSTUVWXYZ]{8}", access_code) is None:
+    if re.fullmatch(r"[0-9]{4}", access_code) is None:
         raise ValueError("platform returned an invalid access code")
     return {
         "schema": "tinyhat_local_app_share_v1",
         "status": "active",
         "session_id": session_id,
         "link": link,
+        "mini_app_url": link,
         "access_code": access_code,
         "label": payload["label"],
         "port": payload["port"],
         "expires_at": payload["expires_at"],
-        "message": "Share this link and access code with the user.",
+        "message": "The Telegram Mini App button and browser access code are ready.",
     }
+
+
+def _send_share_button(created: dict[str, Any]) -> bool:
+    """Send the owner a native Mini App button with browser fallback details."""
+
+    try:
+        from ...tools import _telegram_credentials, _telegram_send_message
+
+        token, chat_id = _telegram_credentials()
+        sent = _telegram_send_message(
+            token=token,
+            chat_id=chat_id,
+            text=(
+                f"{created['label']} is ready.\n\n"
+                "Open it inside Telegram with the button below, or use this link "
+                "in any browser:\n"
+                f"{created['link']}\n\n"
+                f"Access code: {created['access_code']}\n"
+                f"Expires: {created['expires_at']}"
+            ),
+            reply_markup={
+                "inline_keyboard": [
+                    [
+                        {
+                            "text": "View app",
+                            "web_app": {"url": created["mini_app_url"]},
+                        }
+                    ]
+                ]
+            },
+        )
+        return bool(sent.get("ok"))
+    except Exception:
+        return False
 
 
 def _create(payload: dict[str, Any]) -> dict[str, Any]:
@@ -198,7 +270,9 @@ def _create(payload: dict[str, Any]) -> dict[str, Any]:
         computer_api_path(platform_auth, "local-app-shares/v1"),
         {"port": port, "label": label, "ttl_seconds": ttl_seconds},
     )
-    return _safe_created_payload(response)
+    created = _safe_created_payload(response)
+    created["telegram_button_sent"] = _send_share_button(created)
+    return created
 
 
 def _list() -> dict[str, Any]:

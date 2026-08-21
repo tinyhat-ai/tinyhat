@@ -150,8 +150,11 @@ is already listening on a numeric localhost port. The plugin starts its
 loopback-only gateway and calls versioned Computer-authenticated platform APIs;
 the platform owns session ids, one-time-disclosed codes, browser grants,
 expiry, and revocation. The user receives a `view.tinyhat.ai` or
-`viewd.tinyhat.ai` link plus an 8-character code. Multiple ports use separate
-sessions. The first slice is read-only HTTP and does not add runtime code.
+`viewd.tinyhat.ai` link plus a four-digit numeric code. Multiple ports use separate
+sessions. The plugin also sends a native Telegram **View app** button: signed
+Mini App data lets only the assigned agent's primary owner enter without a
+code, while ordinary browsers use the four-digit numeric code. The first slice
+is read-only HTTP and does not add runtime code.
 
 `tinyhat-credit` answers questions about the owner's Tinyhat credit. The
 `tinyhat_credit` tool calls a fixed Computer-authenticated platform route and

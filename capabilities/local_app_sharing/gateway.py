@@ -14,10 +14,16 @@ from typing import Any
 from urllib.parse import parse_qs, quote, urlsplit
 
 from ...platform import PlatformClient, PlatformError, build_platform_client, computer_api_path
-from .tool import GATEWAY_HOST, GATEWAY_PORT, SESSION_ID_RE
+from .tool import (
+    GATEWAY_HOST,
+    GATEWAY_PORT,
+    GATEWAY_PROTOCOL_VERSION,
+    SESSION_ID_RE,
+)
 
 COOKIE_NAME = "__Host-tinyhat_local_app_share"
 MAX_FORM_BYTES = 1024
+MAX_TELEGRAM_INIT_DATA_BYTES = 16 * 1024
 MAX_PORT = 65535
 HOP_BY_HOP_HEADERS = frozenset(
     {
@@ -81,6 +87,15 @@ def _session_from_path(path: str) -> str | None:
     return match.group(1) if match else None
 
 
+def _telegram_authorize_session_from_path(path: str) -> str | None:
+    clean_path = urlsplit(path).path
+    match = re.fullmatch(
+        r"/s/(las_[A-Za-z0-9_-]{20,80})/telegram-authorize/?",
+        clean_path,
+    )
+    return match.group(1) if match else None
+
+
 def _code_page(*, error_message: str | None = None) -> bytes:
     error_html = (
         f'<p class="error" role="alert">{html.escape(error_message)}</p>' if error_message else ""
@@ -94,9 +109,35 @@ main{{max-width:28rem;margin:12vh auto;padding:2rem;background:white;border:1px 
 input,button{{box-sizing:border-box;width:100%;padding:.8rem;margin-top:.75rem;font:inherit}}
 button{{background:#171717;color:white;border:0}}.error{{color:#a00}}</style></head>
 <body><main><h1>Open shared app</h1><p>Enter the code your agent sent you.</p>
-{error_html}<form method="post"><label for="code">Access code</label>
-<input id="code" name="code" autocomplete="one-time-code" minlength="8" maxlength="8" required>
-<button type="submit">View app</button></form></main></body></html>""".encode()
+{error_html}<p id="telegram-status" hidden>Verifying your Telegram account…</p>
+<form id="code-form" method="post"><label for="code">Access code</label>
+<input id="code" name="code" autocomplete="one-time-code" inputmode="numeric"
+pattern="[0-9]{{4}}" minlength="4" maxlength="4" required>
+<button type="submit">View app</button></form></main>
+<script src="https://telegram.org/js/telegram-web-app.js"></script>
+<script>(() => {{
+  const app = window.Telegram && window.Telegram.WebApp;
+  if (!app || !app.initData) return;
+  const status = document.getElementById('telegram-status');
+  const form = document.getElementById('code-form');
+  status.hidden = false;
+  form.hidden = true;
+  app.ready();
+  app.expand();
+  const path = window.location.pathname.replace(/\\/$/, '');
+  fetch(`${{path}}/telegram-authorize`, {{
+    method: 'POST',
+    credentials: 'same-origin',
+    headers: {{'Content-Type': 'application/json'}},
+    body: JSON.stringify({{telegram_init_data: app.initData}}),
+  }}).then(async response => {{
+    if (!response.ok) throw new Error('not authorized');
+    window.location.replace(path);
+  }}).catch(() => {{
+    status.textContent = 'This Telegram account cannot open this share. Use the access code instead.';
+    form.hidden = false;
+  }});
+}})();</script></body></html>""".encode()
 
 
 def _handler(
@@ -113,7 +154,6 @@ def _handler(
             self.send_header("Pragma", "no-cache")
             self.send_header("Referrer-Policy", "no-referrer")
             self.send_header("X-Content-Type-Options", "nosniff")
-            self.send_header("X-Frame-Options", "SAMEORIGIN")
 
         def _write_json(self, status: int, payload: dict[str, Any]) -> None:
             body = json.dumps(payload, separators=(",", ":")).encode()
@@ -131,7 +171,10 @@ def _handler(
             self._security_headers()
             self.send_header(
                 "Content-Security-Policy",
-                "default-src 'none'; style-src 'unsafe-inline'; form-action 'self'; base-uri 'none'",
+                "default-src 'none'; style-src 'unsafe-inline'; "
+                "script-src 'unsafe-inline' https://telegram.org; connect-src 'self'; "
+                "form-action 'self'; frame-ancestors https://web.telegram.org "
+                "https://*.telegram.org; base-uri 'none'",
             )
             self.send_header("Content-Type", "text/html; charset=utf-8")
             self.send_header("Content-Length", str(len(body)))
@@ -164,6 +207,34 @@ def _handler(
                 )
             except PlatformError:
                 return None
+
+        def _authorize_telegram(
+            self, session_id: str, telegram_init_data: str
+        ) -> dict[str, Any] | None:
+            try:
+                client, platform_auth = client_factory()
+                return client.post_json(
+                    computer_api_path(
+                        platform_auth,
+                        f"local-app-shares/v1/{quote(session_id, safe='')}/authorize-telegram",
+                    ),
+                    {"telegram_init_data": telegram_init_data},
+                )
+            except PlatformError:
+                return None
+
+        def _write_browser_grant(self, session_id: str, token: str) -> None:
+            self.send_response(HTTPStatus.OK)
+            self._security_headers()
+            self.send_header(
+                "Set-Cookie",
+                f"{COOKIE_NAME}={_cookie_value(session_id, token)}; Path=/; Secure; HttpOnly; SameSite=Lax",
+            )
+            self.send_header("Content-Type", "application/json")
+            body = b'{"ok":true}'
+            self.send_header("Content-Length", str(len(body)))
+            self.end_headers()
+            self.wfile.write(body)
 
         def _authorized_target(self) -> tuple[str, int] | None:
             grant = _parse_cookie(self.headers.get("cookie"))
@@ -253,7 +324,10 @@ def _handler(
 
         def do_GET(self) -> None:
             if urlsplit(self.path).path == "/__tinyhat_share/health":
-                self._write_json(HTTPStatus.OK, {"ok": True})
+                self._write_json(
+                    HTTPStatus.OK,
+                    {"ok": True, "protocol_version": GATEWAY_PROTOCOL_VERSION},
+                )
                 return
             requested_session = _session_from_path(self.path)
             target = self._authorized_target()
@@ -273,6 +347,43 @@ def _handler(
             self.do_GET()
 
         def do_POST(self) -> None:
+            telegram_session_id = _telegram_authorize_session_from_path(self.path)
+            if telegram_session_id is not None:
+                try:
+                    length = int(self.headers.get("content-length") or "0")
+                except ValueError:
+                    length = 0
+                if not 1 <= length <= MAX_TELEGRAM_INIT_DATA_BYTES:
+                    self._write_json(HTTPStatus.BAD_REQUEST, {"error": "invalid_telegram_auth"})
+                    return
+                try:
+                    payload = json.loads(
+                        self.rfile.read(length).decode("utf-8", errors="strict")
+                    )
+                except (UnicodeDecodeError, json.JSONDecodeError):
+                    self._write_json(HTTPStatus.BAD_REQUEST, {"error": "invalid_telegram_auth"})
+                    return
+                telegram_init_data = (
+                    str(payload.get("telegram_init_data") or "").strip()
+                    if isinstance(payload, dict)
+                    else ""
+                )
+                if not telegram_init_data:
+                    self._write_json(HTTPStatus.UNAUTHORIZED, {"error": "invalid_telegram_auth"})
+                    return
+                authorized = self._authorize_telegram(
+                    telegram_session_id,
+                    telegram_init_data,
+                )
+                token = authorized.get("access_token") if isinstance(authorized, dict) else None
+                if not isinstance(token, str) or re.fullmatch(
+                    r"[A-Za-z0-9_-]{32,256}", token
+                ) is None:
+                    self._write_json(HTTPStatus.UNAUTHORIZED, {"error": "invalid_telegram_auth"})
+                    return
+                self._write_browser_grant(telegram_session_id, token)
+                return
+
             session_id = _session_from_path(self.path)
             if session_id is None:
                 self._write_json(HTTPStatus.METHOD_NOT_ALLOWED, {"error": "method_not_allowed"})
@@ -282,11 +393,11 @@ def _handler(
             except ValueError:
                 length = 0
             if not 1 <= length <= MAX_FORM_BYTES:
-                self._write_code_page(HTTPStatus.BAD_REQUEST, "Enter the 8-character code.")
+                self._write_code_page(HTTPStatus.BAD_REQUEST, "Enter the four-digit code.")
                 return
             form = parse_qs(self.rfile.read(length).decode("utf-8", errors="replace"))
-            access_code = str((form.get("code") or [""])[0]).strip().upper()
-            if re.fullmatch(r"[23456789ABCDEFGHJKLMNPQRSTUVWXYZ]{8}", access_code) is None:
+            access_code = str((form.get("code") or [""])[0]).strip()
+            if re.fullmatch(r"[0-9]{4}", access_code) is None:
                 self._write_code_page(HTTPStatus.UNAUTHORIZED, "That code is not valid.")
                 return
             authorized = self._authorize(session_id, access_code)

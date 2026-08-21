@@ -39,15 +39,18 @@ tool or skill, and covered by validation.
 create it verifies that the port is listening, starts the plugin-owned gateway
 on loopback when necessary, and asks the Computer-authenticated platform API
 for a short-lived session. The agent receives a `view.tinyhat.ai` or
-`viewd.tinyhat.ai` link and an 8-character code to send to the user. List never
-returns codes, and revoke invalidates the selected session immediately.
+`viewd.tinyhat.ai` link and a four-digit numeric code. The plugin sends a native
+Telegram **View app** button; signed Mini App data authorizes the assigned
+agent's primary owner without the code. Ordinary browsers use the same link and
+code. List never returns codes, and revoke invalidates the selected session
+immediately.
 
 The browser sends the code to the loopback gateway, which exchanges it through
 the same Computer-authenticated API for an opaque browser grant. Each proxied
 request is resolved through the platform before the gateway connects to the
 recorded `127.0.0.1` port. The first slice supports read-only HTTP `GET` and
-`HEAD`; WebSockets, writes, Telegram init-data auto-login, and application-layer
-end-to-end encryption remain later slices. No runtime code is involved.
+`HEAD`; WebSockets, writes, and application-layer end-to-end encryption remain
+later slices. No runtime code is involved.
 
 ## Private Agent Mail
 

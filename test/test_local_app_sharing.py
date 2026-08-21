@@ -24,7 +24,7 @@ from tinyhat.platform import PlatformError  # noqa: E402
 
 SESSION_ID = "las_AAAAAAAAAAAAAAAAAAAAAAAA"
 ACCESS_TOKEN = "B" * 43
-ACCESS_CODE = "ABCDEFGH"
+ACCESS_CODE = "4821"
 
 
 class LocalAppSharingToolTests(unittest.TestCase):
@@ -49,6 +49,7 @@ class LocalAppSharingToolTests(unittest.TestCase):
         with (
             mock.patch.object(tool, "_port_is_open", return_value=True),
             mock.patch.object(tool, "ensure_gateway_running"),
+            mock.patch.object(tool, "_send_share_button", return_value=True),
             mock.patch.object(
                 tool,
                 "build_platform_client",
@@ -80,7 +81,9 @@ class LocalAppSharingToolTests(unittest.TestCase):
             ],
         )
         self.assertEqual(result["link"], f"https://viewd.tinyhat.ai/s/{SESSION_ID}")
+        self.assertEqual(result["mini_app_url"], result["link"])
         self.assertEqual(result["access_code"], ACCESS_CODE)
+        self.assertTrue(result["telegram_button_sent"])
         self.assertNotIn("access_token", result)
 
     def test_list_and_revoke_never_invent_identity_or_codes(self) -> None:
@@ -153,6 +156,42 @@ class LocalAppSharingToolTests(unittest.TestCase):
         self.assertEqual(result["error"], "local_app_sharing_unavailable")
         self.assertNotIn("secret-value", json.dumps(result))
 
+    def test_share_button_uses_native_mini_app_and_includes_browser_fallback(self) -> None:
+        sent: dict[str, object] = {}
+
+        def send_message(**kwargs: object) -> dict[str, bool]:
+            sent.update(kwargs)
+            return {"ok": True}
+
+        created = {
+            "label": "Forecast preview",
+            "link": f"https://viewd.tinyhat.ai/s/{SESSION_ID}",
+            "mini_app_url": f"https://viewd.tinyhat.ai/s/{SESSION_ID}",
+            "access_code": ACCESS_CODE,
+            "expires_at": "2026-08-21T15:15:00Z",
+        }
+        with (
+            mock.patch.object(tools, "_telegram_credentials", return_value=("token", "123")),
+            mock.patch.object(tools, "_telegram_send_message", side_effect=send_message),
+        ):
+            self.assertTrue(tool._send_share_button(created))
+
+        self.assertIn(ACCESS_CODE, str(sent["text"]))
+        self.assertIn(created["link"], str(sent["text"]))
+        self.assertEqual(
+            sent["reply_markup"],
+            {
+                "inline_keyboard": [
+                    [
+                        {
+                            "text": "View app",
+                            "web_app": {"url": created["mini_app_url"]},
+                        }
+                    ]
+                ]
+            },
+        )
+
     def test_gateway_launch_does_not_depend_on_checkout_directory_name(self) -> None:
         args = tool._gateway_process_args()
         self.assertEqual(args[0], sys.executable)
@@ -214,6 +253,10 @@ class LocalAppSharingGatewayTests(unittest.TestCase):
                 test_case.platform_paths.append(path)
                 if path.endswith("/authorize") and payload == {"access_code": ACCESS_CODE}:
                     return {"access_token": ACCESS_TOKEN}
+                if path.endswith("/authorize-telegram") and payload == {
+                    "telegram_init_data": "signed-owner-init-data"
+                }:
+                    return {"access_token": ACCESS_TOKEN}
                 if path.endswith("/resolve") and payload == {"access_token": ACCESS_TOKEN}:
                     return {"port": upstream_port, "label": "Preview"}
                 raise PlatformError("unauthorized", status_code=401)
@@ -242,6 +285,9 @@ class LocalAppSharingGatewayTests(unittest.TestCase):
         locked_body = locked.read().decode()
         self.assertEqual(locked.status, 401)
         self.assertIn("Access code", locked_body)
+        self.assertIn('inputmode="numeric"', locked_body)
+        self.assertIn('pattern="[0-9]{4}"', locked_body)
+        self.assertIn("telegram-web-app.js", locked_body)
 
         form = urlencode({"code": ACCESS_CODE})
         connection.request(
@@ -281,11 +327,41 @@ class LocalAppSharingGatewayTests(unittest.TestCase):
         self.assertTrue(any(path.endswith("/authorize") for path in self.platform_paths))
         self.assertTrue(any(path.endswith("/resolve") for path in self.platform_paths))
 
+    def test_telegram_owner_init_data_sets_the_browser_grant_without_code(self) -> None:
+        connection = http.client.HTTPConnection("127.0.0.1", self.gateway_port)
+        body = json.dumps({"telegram_init_data": "signed-owner-init-data"})
+        connection.request(
+            "POST",
+            f"/s/{SESSION_ID}/telegram-authorize",
+            body=body,
+            headers={
+                "Content-Type": "application/json",
+                "Content-Length": str(len(body.encode())),
+            },
+        )
+        authorized = connection.getresponse()
+        authorized.read()
+        self.assertEqual(authorized.status, 200)
+        cookie = authorized.getheader("Set-Cookie")
+        self.assertIsNotNone(cookie)
+        self.assertTrue(
+            any(
+                path.endswith(
+                    f"local-app-shares/v1/{SESSION_ID}/authorize-telegram"
+                )
+                for path in self.platform_paths
+            )
+        )
+        connection.close()
+
     def test_health_is_public_but_writes_are_blocked(self) -> None:
         connection = http.client.HTTPConnection("127.0.0.1", self.gateway_port)
         connection.request("GET", "/__tinyhat_share/health")
         health = connection.getresponse()
-        self.assertEqual(json.loads(health.read()), {"ok": True})
+        self.assertEqual(
+            json.loads(health.read()),
+            {"ok": True, "protocol_version": tool.GATEWAY_PROTOCOL_VERSION},
+        )
         self.assertEqual(health.status, 200)
 
         connection.request("PUT", "/anything", body=b"write")

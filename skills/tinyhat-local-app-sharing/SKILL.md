@@ -7,8 +7,9 @@ description: Share, list, or stop a short-lived Tinyhat link to an HTTP app runn
 
 Use `tinyhat_local_app_sharing` to let the user review a non-sensitive HTTP
 application already running on this Computer. Tinyhat returns a public link and
-an 8-character code. The link can be opened in any browser; the user enters the
-code to view the local app.
+a four-digit numeric code. The tool also sends the owner a native **View app**
+Telegram Mini App button. The signed owner opens that button without entering a
+code; the same link can be opened in any other browser by entering the code.
 
 ## Create a share
 
@@ -25,8 +26,10 @@ code to view the local app.
 }
 ```
 
-4. Send the returned `link`, `access_code`, and expiry to the user in the same
-   message. The access code is returned only when the session is created.
+4. Check `telegram_button_sent`. When it is `true`, tell the user the **View
+   app** button is ready and do not send a duplicate button. When it is `false`,
+   send the returned `link`, four-digit `access_code`, and expiry yourself. The
+   access code is returned only when the session is created.
 
 If the user wants to review two apps or ports, create two sessions. Each gets
 its own link, code, expiry, and revocation boundary.
@@ -54,7 +57,8 @@ review is finished:
   messages, terminals, or apps containing unrelated user data.
 - This first slice is read-only HTTP: browser `GET` and `HEAD` work; writes and
   WebSockets are not supported.
-- Treat the link and code as short-lived access material. Do not put either in
+- Treat the link and code as short-lived access material. Send them only in the
+  owner's Telegram chat; do not put either in
   logs, source files, commits, issue comments, or documentation.
 - The plugin accepts only a numeric loopback port. Never work around that limit
   with a proxy to another host or network address.
