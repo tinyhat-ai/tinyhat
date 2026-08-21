@@ -47,6 +47,13 @@ def _cookie_value(session_id: str, access_token: str) -> str:
     return f"{session_id}.{access_token}"
 
 
+def _browser_grant_cookie(session_id: str, access_token: str) -> str:
+    return (
+        f"{COOKIE_NAME}={_cookie_value(session_id, access_token)}; "
+        "Path=/; Secure; HttpOnly; SameSite=None; Partitioned"
+    )
+
+
 def _parse_cookie(header: str | None) -> tuple[str, str] | None:
     if not header:
         return None
@@ -104,12 +111,18 @@ def _code_page(*, error_message: str | None = None) -> bytes:
 <html lang="en"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Open shared Tinyhat app</title>
-<style>body{{font:16px system-ui;margin:0;background:#f5f5f0;color:#171717}}
+<style>[hidden]{{display:none!important}}
+body{{font:16px system-ui;margin:0;background:#f5f5f0;color:#171717}}
 main{{max-width:28rem;margin:12vh auto;padding:2rem;background:white;border:1px solid #bbb}}
 input,button{{box-sizing:border-box;width:100%;padding:.8rem;margin-top:.75rem;font:inherit}}
-button{{background:#171717;color:white;border:0}}.error{{color:#a00}}</style></head>
-<body><main><h1>Open shared app</h1><p>Enter the code your agent sent you.</p>
-{error_html}<p id="telegram-status" hidden>Verifying your Telegram account…</p>
+button{{background:#171717;color:white;border:0}}.error{{color:#a00}}
+#loading{{display:grid;place-items:center;min-height:14rem;background:transparent;border:0}}
+.spinner{{width:2rem;height:2rem;border:.2rem solid #d7d7d2;border-top-color:#171717;
+border-radius:50%;animation:spin .8s linear infinite}}
+@keyframes spin{{to{{transform:rotate(360deg)}}}}</style></head>
+<body><main id="loading"><span class="spinner" role="status" aria-label="Loading"></span></main>
+<main id="code-page" hidden><h1>Open shared app</h1><p>Enter the code your agent sent you.</p>
+{error_html}
 <form id="code-form" method="post"><label for="code">Access code</label>
 <input id="code" name="code" autocomplete="one-time-code" inputmode="numeric"
 pattern="[0-9]{{4}}" minlength="4" maxlength="4" required>
@@ -117,11 +130,13 @@ pattern="[0-9]{{4}}" minlength="4" maxlength="4" required>
 <script src="https://telegram.org/js/telegram-web-app.js"></script>
 <script>(() => {{
   const app = window.Telegram && window.Telegram.WebApp;
-  if (!app || !app.initData) return;
-  const status = document.getElementById('telegram-status');
-  const form = document.getElementById('code-form');
-  status.hidden = false;
-  form.hidden = true;
+  const loading = document.getElementById('loading');
+  const codePage = document.getElementById('code-page');
+  if (!app || !app.initData) {{
+    loading.hidden = true;
+    codePage.hidden = false;
+    return;
+  }}
   app.ready();
   app.expand();
   const path = window.location.pathname.replace(/\\/$/, '');
@@ -134,8 +149,8 @@ pattern="[0-9]{{4}}" minlength="4" maxlength="4" required>
     if (!response.ok) throw new Error('not authorized');
     window.location.replace(path);
   }}).catch(() => {{
-    status.textContent = 'This Telegram account cannot open this share. Use the access code instead.';
-    form.hidden = false;
+    loading.hidden = true;
+    codePage.hidden = false;
   }});
 }})();</script></body></html>""".encode()
 
@@ -228,7 +243,7 @@ def _handler(
             self._security_headers()
             self.send_header(
                 "Set-Cookie",
-                f"{COOKIE_NAME}={_cookie_value(session_id, token)}; Path=/; Secure; HttpOnly; SameSite=Lax",
+                _browser_grant_cookie(session_id, token),
             )
             self.send_header("Content-Type", "application/json")
             body = b'{"ok":true}'
@@ -357,9 +372,7 @@ def _handler(
                     self._write_json(HTTPStatus.BAD_REQUEST, {"error": "invalid_telegram_auth"})
                     return
                 try:
-                    payload = json.loads(
-                        self.rfile.read(length).decode("utf-8", errors="strict")
-                    )
+                    payload = json.loads(self.rfile.read(length).decode("utf-8", errors="strict"))
                 except (UnicodeDecodeError, json.JSONDecodeError):
                     self._write_json(HTTPStatus.BAD_REQUEST, {"error": "invalid_telegram_auth"})
                     return
@@ -376,9 +389,10 @@ def _handler(
                     telegram_init_data,
                 )
                 token = authorized.get("access_token") if isinstance(authorized, dict) else None
-                if not isinstance(token, str) or re.fullmatch(
-                    r"[A-Za-z0-9_-]{32,256}", token
-                ) is None:
+                if (
+                    not isinstance(token, str)
+                    or re.fullmatch(r"[A-Za-z0-9_-]{32,256}", token) is None
+                ):
                     self._write_json(HTTPStatus.UNAUTHORIZED, {"error": "invalid_telegram_auth"})
                     return
                 self._write_browser_grant(telegram_session_id, token)

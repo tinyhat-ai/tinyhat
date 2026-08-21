@@ -288,6 +288,9 @@ class LocalAppSharingGatewayTests(unittest.TestCase):
         self.assertIn('inputmode="numeric"', locked_body)
         self.assertIn('pattern="[0-9]{4}"', locked_body)
         self.assertIn("telegram-web-app.js", locked_body)
+        self.assertIn('id="loading"', locked_body)
+        self.assertIn('id="code-page" hidden', locked_body)
+        self.assertNotIn("Verifying your Telegram account", locked_body)
 
         form = urlencode({"code": ACCESS_CODE})
         connection.request(
@@ -344,11 +347,11 @@ class LocalAppSharingGatewayTests(unittest.TestCase):
         self.assertEqual(authorized.status, 200)
         cookie = authorized.getheader("Set-Cookie")
         self.assertIsNotNone(cookie)
+        self.assertIn("SameSite=None", str(cookie))
+        self.assertIn("Partitioned", str(cookie))
         self.assertTrue(
             any(
-                path.endswith(
-                    f"local-app-shares/v1/{SESSION_ID}/authorize-telegram"
-                )
+                path.endswith(f"local-app-shares/v1/{SESSION_ID}/authorize-telegram")
                 for path in self.platform_paths
             )
         )

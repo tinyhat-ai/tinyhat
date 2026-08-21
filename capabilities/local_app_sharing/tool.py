@@ -21,7 +21,7 @@ from ...tool_errors import tool_error_json
 
 GATEWAY_HOST = "127.0.0.1"
 GATEWAY_PORT = 9321
-GATEWAY_PROTOCOL_VERSION = 2
+GATEWAY_PROTOCOL_VERSION = 3
 PACKAGE_ROOT = Path(__file__).resolve().parents[2]
 MAX_PORT = 65535
 MAX_LABEL_LENGTH = 80
