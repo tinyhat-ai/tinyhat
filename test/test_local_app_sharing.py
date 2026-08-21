@@ -215,12 +215,16 @@ class LocalAppSharingToolTests(unittest.TestCase):
 
 class _UpstreamHandler(BaseHTTPRequestHandler):
     seen_cookie: str | None = None
+    seen_connection: str | None = None
+    seen_upgrade: str | None = None
 
     def log_message(self, format_string: str, *args: object) -> None:
         _ = (format_string, args)
 
     def do_GET(self) -> None:
         type(self).seen_cookie = self.headers.get("cookie")
+        type(self).seen_connection = self.headers.get("connection")
+        type(self).seen_upgrade = self.headers.get("upgrade")
         body = b"<h1>Shared local app reached</h1>"
         self.send_response(200)
         self.send_header("Content-Type", "text/html")
@@ -237,6 +241,8 @@ class _UpstreamHandler(BaseHTTPRequestHandler):
 class LocalAppSharingGatewayTests(unittest.TestCase):
     def setUp(self) -> None:
         _UpstreamHandler.seen_cookie = None
+        _UpstreamHandler.seen_connection = None
+        _UpstreamHandler.seen_upgrade = None
         self.upstream = ThreadingHTTPServer(("127.0.0.1", 0), _UpstreamHandler)
         self.upstream_thread = threading.Thread(
             target=self.upstream.serve_forever,
@@ -332,6 +338,29 @@ class LocalAppSharingGatewayTests(unittest.TestCase):
         self.assertNotIn("must-not-overwrite", str(response_cookies))
         self.assertTrue(any(path.endswith("/authorize") for path in self.platform_paths))
         self.assertTrue(any(path.endswith("/resolve") for path in self.platform_paths))
+
+    def test_websocket_upgrade_headers_are_rejected(self) -> None:
+        connection = http.client.HTTPConnection("127.0.0.1", self.gateway_port)
+        connection.request(
+            "GET",
+            f"/s/{SESSION_ID}",
+            headers={
+                "Connection": "Upgrade",
+                "Cookie": f"{gateway.COOKIE_NAME}={SESSION_ID}.{ACCESS_TOKEN}",
+                "Sec-WebSocket-Key": "dGhlIHNhbXBsZSBub25jZQ==",
+                "Sec-WebSocket-Version": "13",
+                "Upgrade": "websocket",
+            },
+        )
+        response = connection.getresponse()
+        response.read()
+        connection.close()
+
+        self.assertEqual(response.status, 200)
+        self.assertNotEqual(response.status, 101)
+        self.assertIsNone(response.getheader("Upgrade"))
+        self.assertIsNone(_UpstreamHandler.seen_connection)
+        self.assertIsNone(_UpstreamHandler.seen_upgrade)
 
     def test_telegram_owner_init_data_sets_the_browser_grant_without_code(self) -> None:
         connection = http.client.HTTPConnection("127.0.0.1", self.gateway_port)
