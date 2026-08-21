@@ -8,6 +8,7 @@ workers, and private helpers together.
 - `mail/`: the Agent's private Tinyhat mailbox.
 - `google_workspace/`: Google connection, permission, app, and worker flows.
 - `hats/`: Hat creation, installation, repositories, and private values.
+- `local_app_sharing/`: loopback gateway and platform-owned preview sessions.
 - `secrets/`: private credential listing and encrypted handoff.
 - `slack/`: Slack connection and disconnect flows.
 

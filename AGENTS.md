@@ -30,6 +30,8 @@ This repository is the public Tinyhat plugin package. `main` is Hermes-only.
   larger multi-file capabilities with their helpers kept together.
 - `capabilities/contact_details/`, `capabilities/credit/`, and
   `capabilities/mail/`: focused Agent identity, funding, and mailbox tools.
+- `capabilities/local_app_sharing/`: the loopback-only HTTP viewer gateway and
+  thin client for platform-owned sharing sessions.
 - `skills/tinyhat-tell-joke/SKILL.md`: deterministic joke proof.
 - `skills/tinyhat-plugin-version/SKILL.md`: live plugin version proof.
 - `skills/tinyhat-onboarding-greeting/SKILL.md`: one-shot first owner greeting after Computer setup.
@@ -48,6 +50,8 @@ This repository is the public Tinyhat plugin package. `main` is Hermes-only.
   Agent's current AI model budget, and adding an exact amount to that budget.
 - `skills/tinyhat-contact-details/SKILL.md`: the Agent's assigned phone number
   and email address.
+- `skills/tinyhat-local-app-sharing/SKILL.md`: short-lived link-and-code access
+  to non-sensitive HTTP apps already running on this Computer.
 - `skills/tinyhat-agentphone/SKILL.md`: direct AgentPhone calls and text
   messages with Computer-local credentials and fixed safety boundaries around
   the provider's online instructions.

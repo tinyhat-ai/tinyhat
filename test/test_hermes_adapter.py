@@ -99,6 +99,7 @@ class HermesAdapterTests(unittest.TestCase):
         self.assertIn("tinyhat_contact_details", ctx.tools)
         self.assertIn("tinyhat_mail", ctx.tools)
         self.assertIn("tinyhat_hats", ctx.tools)
+        self.assertIn("tinyhat_local_app_sharing", ctx.tools)
         self.assertIn("tinyhat_tell_joke", ctx.tools)
         self.assertIn("tinyhat_skill_catalog", ctx.tools)
         self.assertIn("tinyhat_private_secret_handoff", ctx.tools)
@@ -126,6 +127,7 @@ class HermesAdapterTests(unittest.TestCase):
         self.assertIn("tinyhat-agentphone", ctx.skills)
         self.assertIn("tinyhat-contact-details", ctx.skills)
         self.assertIn("tinyhat-mail", ctx.skills)
+        self.assertIn("tinyhat-local-app-sharing", ctx.skills)
         self.assertIn("hat-authoring", ctx.skills)
         self.assertTrue(ctx.skills["tinyhat-plugin-version"].is_file())
         self.assertTrue(ctx.skills["tinyhat-tell-joke"].is_file())
@@ -142,6 +144,7 @@ class HermesAdapterTests(unittest.TestCase):
         self.assertTrue(ctx.skills["tinyhat-agentphone"].is_file())
         self.assertTrue(ctx.skills["tinyhat-contact-details"].is_file())
         self.assertTrue(ctx.skills["tinyhat-mail"].is_file())
+        self.assertTrue(ctx.skills["tinyhat-local-app-sharing"].is_file())
         self.assertTrue(ctx.skills["hat-authoring"].is_file())
 
     def test_registered_commands_match_telegram_dispatch_names(self) -> None:
@@ -352,7 +355,7 @@ class HermesAdapterTests(unittest.TestCase):
 
         self.assertEqual(payload["schema"], "tinyhat_plugin_version_v1")
         self.assertEqual(payload["name"], "tinyhat")
-        self.assertEqual(payload["version"], "0.31.1")
+        self.assertEqual(payload["version"], "0.31.2")
 
     def test_running_version_contract_stays_at_plugin_root(self) -> None:
         adapter = json.loads((REPO_ROOT / "hermes.plugin.json").read_text(encoding="utf-8"))
@@ -360,7 +363,7 @@ class HermesAdapterTests(unittest.TestCase):
         self.assertEqual(adapter["entrypoint"]["manifest"], "plugin.yaml")
         self.assertEqual(adapter["entrypoint"]["module"], "__init__.py")
         self.assertEqual(Path(tools.__file__).resolve().parent, REPO_ROOT)
-        self.assertEqual(tools._plugin_manifest()["version"], "0.31.1")
+        self.assertEqual(tools._plugin_manifest()["version"], "0.31.2")
 
     def test_platform_status_uses_attested_computer_endpoint(self) -> None:
         original_build = tools.build_platform_client
@@ -409,7 +412,7 @@ class HermesAdapterTests(unittest.TestCase):
 
         self.assertEqual(payload["schema"], "tinyhat_skill_catalog_v1")
         self.assertEqual(payload["plugin"]["name"], "tinyhat")
-        self.assertEqual(payload["plugin"]["version"], "0.31.1")
+        self.assertEqual(payload["plugin"]["version"], "0.31.2")
         by_name = {skill["name"]: skill for skill in payload["skills"]}
         self.assertEqual(
             by_name["tinyhat-codex-auth"]["qualified_name"],

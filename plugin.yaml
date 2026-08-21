@@ -1,5 +1,5 @@
 name: tinyhat
-version: 0.31.1
+version: 0.31.2
 description: Framework-neutral Tinyhat platform skills and tools.
 kind: standalone
 author: Tinyloop
@@ -12,6 +12,7 @@ provides_tools:
   - tinyhat_contact_details
   - tinyhat_mail
   - tinyhat_hats
+  - tinyhat_local_app_sharing
   - tinyhat_tell_joke
   - tinyhat_skill_catalog
   - tinyhat_private_secret_handoff

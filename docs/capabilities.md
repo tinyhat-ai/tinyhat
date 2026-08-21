@@ -12,6 +12,7 @@ The current capability list is intentionally small.
 | `tinyhat_contact_details` | Platform API required | Returns this Agent's managed phone number and email address, and idempotently assigns missing contacts when the platform enables them. It accepts no identity, contact, or credential input. |
 | `tinyhat_mail` | Computer-local mailbox required | Checks, lists, searches, and reads this Agent's isolated Tinyhat inbox and sends one plain-text email when server policy permits it. It never accepts or returns mailbox credentials, server addresses, or account ids. Reads are bounded and sanitized; send retries use a durable request id. |
 | `tinyhat_hats` | Available now | Creates, lists, inspects, renames, and retires one-customer Hats; checks out and syncs private repositories through Computer-scoped GitHub leases; and manages value-blind Hat credentials. Retirement hides a Hat from owner/public/new-install surfaces and deletes creator package state while preserving platform and installation history and already-installed consumer agents. Authorized installation transfers are dispatched automatically to the registered creator Computer, signed there, and decrypted only by the consumer Computer. |
+| `tinyhat_local_app_sharing` | Platform API and viewer edge required | Creates, lists, and revokes short-lived code-gated links to non-sensitive HTTP apps on numeric loopback ports. The plugin owns the local gateway; platform APIs own session identity, grants, expiry, and revocation. |
 | `tinyhat_tell_joke` | Available now | Proves Hermes loaded the Tinyhat plugin and can call a plugin tool. |
 | `tinyhat_skill_catalog` | Available now | Lists Tinyhat plugin skills with `tinyhat:<skill>` qualified names and unqualified aliases. |
 | `tinyhat-skill-authoring` skill | Available now | Teaches agents to write portable user skills with valid names, explicit trigger and non-trigger boundaries, progressive disclosure, and bounded context size. |
@@ -31,6 +32,25 @@ The current capability list is intentionally small.
 
 Each capability should be visible in this document, represented by a small
 tool or skill, and covered by validation.
+
+## Local App Sharing
+
+`tinyhat_local_app_sharing` accepts only a numeric port on this Computer. On
+create it verifies that the port is listening, starts the plugin-owned gateway
+on loopback when necessary, and asks the Computer-authenticated platform API
+for a short-lived session. The agent receives a `view.tinyhat.ai` or
+`viewd.tinyhat.ai` link and a four-digit numeric code. The plugin sends a native
+Telegram **View app** button; signed Mini App data authorizes the assigned
+agent's primary owner without the code. Ordinary browsers use the same link and
+code. List never returns codes, and revoke invalidates the selected session
+immediately.
+
+The browser sends the code to the loopback gateway, which exchanges it through
+the same Computer-authenticated API for an opaque browser grant. Each proxied
+request is resolved through the platform before the gateway connects to the
+recorded `127.0.0.1` port. The first slice supports read-only HTTP `GET` and
+`HEAD`; WebSockets, writes, and application-layer end-to-end encryption remain
+later slices. No runtime code is involved.
 
 ## Private Agent Mail
 

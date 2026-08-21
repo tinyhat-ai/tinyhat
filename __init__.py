@@ -95,6 +95,12 @@ def register(ctx: Any) -> None:
         handler=tools.hats,
     )
     ctx.register_tool(
+        name="tinyhat_local_app_sharing",
+        toolset="tinyhat",
+        schema=schemas.TINYHAT_LOCAL_APP_SHARING_SCHEMA,
+        handler=tools.local_app_sharing,
+    )
+    ctx.register_tool(
         name="tinyhat_tell_joke",
         toolset="tinyhat",
         schema=schemas.TINYHAT_TELL_JOKE_SCHEMA,
