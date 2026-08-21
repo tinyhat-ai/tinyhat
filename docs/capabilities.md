@@ -37,9 +37,12 @@ tool or skill, and covered by validation.
 
 `tinyhat_local_app_sharing` accepts only a numeric port on this Computer. On
 create it verifies that the port is listening, starts the plugin-owned gateway
-on loopback when necessary, and asks the Computer-authenticated platform API
-for a short-lived session. The agent receives a `view.tinyhat.ai` or
-`viewd.tinyhat.ai` link and a four-digit numeric code. The plugin sends a native
+on loopback when necessary, asks the platform to create or recover this
+Computer's permanent named tunnel, and runs the pinned checksum-verified
+connector with a private token file. It then asks the Computer-authenticated
+platform API for a short-lived session. The agent receives a
+`c-<opaque-key>.view.tinyhat.ai` or `c-<opaque-key>.viewd.tinyhat.ai` link and a
+four-digit numeric code. The plugin sends a native
 Telegram **View app** button; signed Mini App data authorizes the assigned
 agent's primary owner without the code. Ordinary browsers use the same link and
 code. List never returns codes, and revoke invalidates the selected session
@@ -50,7 +53,8 @@ the same Computer-authenticated API for an opaque browser grant. Each proxied
 request is resolved through the platform before the gateway connects to the
 recorded `127.0.0.1` port. The first slice supports read-only HTTP `GET` and
 `HEAD`; WebSockets, writes, and application-layer end-to-end encryption remain
-later slices. No runtime code is involved.
+later slices. This plaintext slice must not be promoted to a production channel.
+No runtime code is involved.
 
 ## Private Agent Mail
 

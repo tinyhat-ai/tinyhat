@@ -70,6 +70,8 @@ review is finished:
 ## Platform boundary
 
 The plugin owns this skill and the Computer-local gateway. Versioned Tinyhat
-platform APIs own session identity, code verification, browser grants, expiry,
-and revocation. Cloudflare infrastructure carries HTTPS traffic to the
+platform APIs own one named tunnel and opaque hostname per Computer, plus
+session identity, code verification, browser grants, expiry, and revocation.
+The plugin keeps this Computer's connector token private and runs the pinned
+Cloudflare connector. Cloudflare infrastructure carries HTTPS traffic to the
 loopback-only gateway. The Tinyhat runtime is not part of this capability.

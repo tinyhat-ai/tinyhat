@@ -18,6 +18,7 @@ from urllib import error, request
 
 from ...platform import PlatformError, build_platform_client, computer_api_path
 from ...tool_errors import tool_error_json
+from .connector import ensure_connector_running
 
 GATEWAY_HOST = "127.0.0.1"
 GATEWAY_PORT = 9321
@@ -30,7 +31,11 @@ DEFAULT_TTL_SECONDS = 15 * 60
 MIN_TTL_SECONDS = 60
 MAX_TTL_SECONDS = 4 * 60 * 60
 SESSION_ID_RE = re.compile(r"^las_[A-Za-z0-9_-]{20,80}$")
-VIEWER_LINK_RE = re.compile(r"^https://viewd?\.tinyhat\.ai/s/las_[A-Za-z0-9_-]{20,80}$")
+VIEWER_LINK_RE = re.compile(
+    r"^https://c-[0-9a-f]{24}\.(?:viewd|view)\.tinyhat\.ai/"
+    r"s/las_[A-Za-z0-9_-]{20,80}$",
+    re.IGNORECASE,
+)
 STATE_DIR = Path.home() / ".tinyhat" / "local-app-sharing"
 GATEWAY_PID_PATH = STATE_DIR / "gateway.pid"
 GATEWAY_LOG_PATH = STATE_DIR / "gateway.log"
@@ -266,11 +271,17 @@ def _create(payload: dict[str, Any]) -> dict[str, Any]:
     ttl_seconds = _clean_ttl(payload.get("ttl_seconds"))
     ensure_gateway_running()
     client, platform_auth = build_platform_client()
+    expected_origin = ensure_connector_running(
+        client=client,
+        platform_auth=platform_auth,
+    )
     response = client.post_json(
         computer_api_path(platform_auth, "local-app-shares/v1"),
         {"port": port, "label": label, "ttl_seconds": ttl_seconds},
     )
     created = _safe_created_payload(response)
+    if not created["link"].startswith(f"{expected_origin}/s/"):
+        raise ValueError("platform returned a sharing link for another Computer")
     created["telegram_button_sent"] = _send_share_button(created)
     return created
 

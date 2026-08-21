@@ -5,6 +5,7 @@ from __future__ import annotations
 import http.client
 import json
 import sys
+import tempfile
 import threading
 import unittest
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
@@ -19,12 +20,13 @@ from package_support import load_local_tinyhat  # noqa: E402
 load_local_tinyhat(REPO_ROOT)
 
 from tinyhat import schemas, tools  # noqa: E402
-from tinyhat.capabilities.local_app_sharing import gateway, tool  # noqa: E402
+from tinyhat.capabilities.local_app_sharing import connector, gateway, tool  # noqa: E402
 from tinyhat.platform import PlatformError  # noqa: E402
 
 SESSION_ID = "las_AAAAAAAAAAAAAAAAAAAAAAAA"
 ACCESS_TOKEN = "B" * 43
 ACCESS_CODE = "4821"
+COMPUTER_ORIGIN = "https://c-0123456789abcdef01234567.viewd.tinyhat.ai"
 
 
 class LocalAppSharingToolTests(unittest.TestCase):
@@ -37,7 +39,7 @@ class LocalAppSharingToolTests(unittest.TestCase):
                 return {
                     "schema_version": "v1",
                     "session_id": SESSION_ID,
-                    "link": f"https://viewd.tinyhat.ai/s/{SESSION_ID}",
+                    "link": f"{COMPUTER_ORIGIN}/s/{SESSION_ID}",
                     "access_code": ACCESS_CODE,
                     "label": "Forecast preview",
                     "port": 4310,
@@ -49,6 +51,11 @@ class LocalAppSharingToolTests(unittest.TestCase):
         with (
             mock.patch.object(tool, "_port_is_open", return_value=True),
             mock.patch.object(tool, "ensure_gateway_running"),
+            mock.patch.object(
+                tool,
+                "ensure_connector_running",
+                return_value=COMPUTER_ORIGIN,
+            ),
             mock.patch.object(tool, "_send_share_button", return_value=True),
             mock.patch.object(
                 tool,
@@ -80,7 +87,7 @@ class LocalAppSharingToolTests(unittest.TestCase):
                 )
             ],
         )
-        self.assertEqual(result["link"], f"https://viewd.tinyhat.ai/s/{SESSION_ID}")
+        self.assertEqual(result["link"], f"{COMPUTER_ORIGIN}/s/{SESSION_ID}")
         self.assertEqual(result["mini_app_url"], result["link"])
         self.assertEqual(result["access_code"], ACCESS_CODE)
         self.assertTrue(result["telegram_button_sent"])
@@ -97,7 +104,10 @@ class LocalAppSharingToolTests(unittest.TestCase):
                     "sessions": [
                         {
                             "session_id": SESSION_ID,
-                            "link": f"https://view.tinyhat.ai/s/{SESSION_ID}",
+                            "link": (
+                                "https://c-89abcdef0123456701234567.view.tinyhat.ai/"
+                                f"s/{SESSION_ID}"
+                            ),
                             "label": "App",
                             "port": 4311,
                             "expires_at": "2026-08-21T15:15:00Z",
@@ -165,8 +175,8 @@ class LocalAppSharingToolTests(unittest.TestCase):
 
         created = {
             "label": "Forecast preview",
-            "link": f"https://viewd.tinyhat.ai/s/{SESSION_ID}",
-            "mini_app_url": f"https://viewd.tinyhat.ai/s/{SESSION_ID}",
+            "link": f"{COMPUTER_ORIGIN}/s/{SESSION_ID}",
+            "mini_app_url": f"{COMPUTER_ORIGIN}/s/{SESSION_ID}",
             "access_code": ACCESS_CODE,
             "expires_at": "2026-08-21T15:15:00Z",
         }
@@ -211,6 +221,95 @@ class LocalAppSharingToolTests(unittest.TestCase):
         self.assertIn("tinyhat_local_app_sharing", skill)
         self.assertIn("Do not use", skill.split("---", 2)[1])
         self.assertNotIn("tinyhat--runtimes", skill)
+
+
+class LocalAppSharingConnectorTests(unittest.TestCase):
+    def test_connector_uses_computer_endpoint_and_never_returns_token(self) -> None:
+        token = "ey" + ("A" * 120) + ".example"
+        calls: list[tuple[str, dict[str, object]]] = []
+
+        class FakeClient:
+            def post_json(self, path: str, payload: dict[str, object]) -> dict[str, object]:
+                calls.append((path, payload))
+                return {
+                    "schema_version": "v1",
+                    "hostname": "c-0123456789abcdef01234567.viewd.tinyhat.ai",
+                    "public_origin": COMPUTER_ORIGIN,
+                    "connector_token": token,
+                }
+
+        with tempfile.TemporaryDirectory() as directory:
+            state_dir = Path(directory)
+            with (
+                mock.patch.object(connector, "STATE_DIR", state_dir),
+                mock.patch.object(connector, "LOCK_PATH", state_dir / "connector.lock"),
+                mock.patch.object(connector, "_write_token", return_value=False),
+                mock.patch.object(connector, "_connector_process", return_value=object()),
+            ):
+                origin = connector.ensure_connector_running(
+                    client=FakeClient(),  # type: ignore[arg-type]
+                    platform_auth="gcloud",
+                )
+
+        self.assertEqual(origin, COMPUTER_ORIGIN)
+        self.assertEqual(
+            calls,
+            [("/hapi/v1/computers/me/viewer-tunnel/v1/ensure", {})],
+        )
+        self.assertNotIn(token, origin)
+
+    def test_connector_process_uses_private_token_file_not_token_argument(self) -> None:
+        process = mock.Mock()
+        process.pid = 4321
+        process.poll.return_value = None
+        token = "ey" + ("B" * 120) + ".example"
+        with tempfile.TemporaryDirectory() as directory:
+            state_dir = Path(directory)
+            token_path = state_dir / "cloudflared.token"
+            with (
+                mock.patch.object(connector, "TOKEN_PATH", token_path),
+                mock.patch.object(connector, "PID_PATH", state_dir / "cloudflared.pid"),
+                mock.patch.object(connector, "LOG_PATH", state_dir / "cloudflared.log"),
+                mock.patch.object(
+                    connector.subprocess,
+                    "Popen",
+                    return_value=process,
+                ) as popen,
+                mock.patch.object(connector.time, "sleep"),
+            ):
+                connector._start_connector(Path("/private/cloudflared"))
+
+        args = popen.call_args.args[0]
+        self.assertEqual(
+            args,
+            [
+                "/private/cloudflared",
+                "tunnel",
+                "--no-autoupdate",
+                "run",
+                "--token-file",
+                str(token_path),
+            ],
+        )
+        self.assertNotIn(token, " ".join(args))
+
+    def test_connector_rejects_shared_or_unscoped_hostnames(self) -> None:
+        token = "ey" + ("A" * 120) + ".example"
+        for hostname in (
+            "viewd.tinyhat.ai",
+            "c-not-opaque.viewd.tinyhat.ai",
+            "c-0123456789abcdef01234567.example.com",
+        ):
+            with self.subTest(hostname=hostname):
+                with self.assertRaisesRegex(ValueError, "invalid Computer viewer"):
+                    connector._validated_connector_payload(
+                        {
+                            "schema_version": "v1",
+                            "hostname": hostname,
+                            "public_origin": f"https://{hostname}",
+                            "connector_token": token,
+                        }
+                    )
 
 
 class _UpstreamHandler(BaseHTTPRequestHandler):
