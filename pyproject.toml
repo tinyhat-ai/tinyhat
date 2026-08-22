@@ -3,7 +3,7 @@ name = "tinyhat"
 version = "0.32.0"
 description = "Hermes plugin that teaches agents how to use Tinyhat platform capabilities."
 readme = "README.md"
-requires-python = ">=3.9"
+requires-python = ">=3.9.2"
 license = { text = "MIT" }
 authors = [{ name = "Tinyloop", email = "tinyhat@tinyloop.co" }]
 keywords = ["tinyhat", "hermes", "plugin", "skills", "agent-platform"]
