@@ -78,7 +78,7 @@ pattern="[0-9]{4}" minlength="4" maxlength="4" required>
   async function configureWorker(session, connection, rawKey) {
     if (!('serviceWorker' in navigator)) throw new Error('service-worker-unavailable');
     const registration = await navigator.serviceWorker.register(
-      '/__tinyhat_share/e2ee-v2-sw.js', {scope: '/'}
+      '/__tinyhat_share/e2ee-v3-sw.js', {scope: '/'}
     );
     await navigator.serviceWorker.ready;
     const worker = registration.active || registration.waiting || registration.installing;
@@ -146,8 +146,10 @@ pattern="[0-9]{4}" minlength="4" maxlength="4" required>
       ['encrypt', 'decrypt'],
     );
     const rawKey = await crypto.subtle.exportKey('raw', key);
+    const sessionFragment = `#${protocol}=${expectedFingerprint}`;
+    sessionStorage.setItem(`tinyhat-e2ee-fragment:${sessionId}`, sessionFragment);
     await configureWorker(sessionId, handshake.connection_id, rawKey);
-    location.replace(`/s/${sessionId}/app/${location.hash}`);
+    location.replace(`/s/${sessionId}/app/${sessionFragment}`);
   }
 
   function base64UrlToBytes(value) {
@@ -207,14 +209,21 @@ pattern="[0-9]{4}" minlength="4" maxlength="4" required>
 ).encode("utf-8")
 
 
-APP_SHELL = br"""'use strict';
+APP_SHELL = r"""'use strict';
 (() => {
   const script = document.currentScript;
   const sessionId = script && script.dataset.sessionId;
   if (!/^las_[A-Za-z0-9_-]{20,80}$/.test(sessionId || '')) return;
-  history.replaceState(null, '', `/s/${sessionId}${location.hash}`);
+  const key = `tinyhat-e2ee-fragment:${sessionId}`;
+  const stored = sessionStorage.getItem(key) || '';
+  const fragmentPattern = /^#__CONTENT_ENCRYPTION_PROTOCOL__=[A-Za-z0-9_-]{43}$/;
+  const fragment = fragmentPattern.test(stored)
+    ? stored
+    : fragmentPattern.test(location.hash) ? location.hash : '';
+  if (fragment) sessionStorage.setItem(key, fragment);
+  history.replaceState(null, '', `/s/${sessionId}${fragment}`);
 })();
-"""
+""".replace("__CONTENT_ENCRYPTION_PROTOCOL__", CONTENT_ENCRYPTION_PROTOCOL).encode("utf-8")
 
 
 SERVICE_WORKER = r"""'use strict';
@@ -431,7 +440,7 @@ async function encryptedFetch(event, route) {
   if (body && event.request.mode === 'navigate' && /text\/html/i.test(contentType)) {
     const source = new TextDecoder().decode(body);
     const shell = `<base href="/s/${config.sessionId}/app/">` +
-      `<script src="/__tinyhat_share/app-shell-v2.js" ` +
+      `<script src="/__tinyhat_share/app-shell-v3.js" ` +
       `data-session-id="${config.sessionId}"><\/script>`;
     const head = source.match(/<head(?:\s[^>]*)?>/i);
     const html = head
