@@ -6,6 +6,7 @@ import base64
 import hashlib
 import json
 import os
+import re
 import tempfile
 import time
 from contextlib import suppress
@@ -28,6 +29,7 @@ MAX_KEY_FILE_BYTES = 16 * 1024
 P256_COORDINATE_BYTES = 32
 HKDF_SALT_BYTES = 32
 AES_GCM_NONCE_BYTES = 12
+SESSION_ID_RE = re.compile(r"^las_[A-Za-z0-9_-]{12,64}$")
 
 
 class LocalAppCryptoError(RuntimeError):
@@ -124,7 +126,7 @@ class SessionKeyStore:
         self.root = root
 
     def _path(self, session_id: str) -> Path:
-        if not session_id.startswith("las_") or not session_id.replace("_", "").isalnum():
+        if SESSION_ID_RE.fullmatch(session_id) is None:
             raise LocalAppCryptoError("Local app session id is invalid.")
         return self.root / f"{session_id}.json"
 

@@ -70,6 +70,19 @@ class LocalAppSharingCryptoTests(unittest.TestCase):
             store.delete(SESSION_ID)
             self.assertFalse(key_path.exists())
 
+    def test_session_key_accepts_urlsafe_platform_session_id(self) -> None:
+        session_id = "las_AA-BB_CC0123456789"
+        with tempfile.TemporaryDirectory() as directory:
+            store = crypto.SessionKeyStore(Path(directory) / "sessions")
+
+            session_key = store.create(
+                session_id=session_id,
+                expires_at_epoch=time.time() + 3600,
+            )
+
+            self.assertEqual(session_key.session_id, session_id)
+            self.assertEqual(store.load(session_id).fingerprint, session_key.fingerprint)
+
     def test_encrypted_envelope_rejects_tampering_and_wrong_context(self) -> None:
         key = bytes(range(32))
         aad = crypto.request_aad(
