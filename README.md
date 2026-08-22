@@ -158,10 +158,13 @@ agent result and process arguments. The user receives a
 ports use separate sessions through the same Computer tunnel. The plugin also
 sends a native Telegram **View app** button: signed
 Mini App data lets only the assigned agent's primary owner enter without a
-code, while ordinary browsers use the four-digit numeric code. The first slice
-is read-only HTTP and does not add runtime code. It is not approved for
-production promotion until application-level end-to-end encryption is reviewed
-and deployed.
+code, while ordinary browsers use the four-digit numeric code. Each share has a
+Computer-local P-256 private key. Its fingerprint is carried in the URL
+fragment, and each authorized browser derives an ephemeral AES-256-GCM content
+key with the Computer. Tinyhat's platform APIs and Cloudflare carry only
+authorization metadata and encrypted local-app traffic; they do not receive
+the content key, page plaintext, or upstream app cookies. Plaintext proxy routes
+fail closed. The viewer remains read-only HTTP and adds no runtime code.
 
 `tinyhat-credit` answers questions about the owner's Tinyhat credit. The
 `tinyhat_credit` tool calls a fixed Computer-authenticated platform route and

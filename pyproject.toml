@@ -7,7 +7,7 @@ requires-python = ">=3.9"
 license = { text = "MIT" }
 authors = [{ name = "Tinyloop", email = "tinyhat@tinyloop.co" }]
 keywords = ["tinyhat", "hermes", "plugin", "skills", "agent-platform"]
-dependencies = []
+dependencies = ["cryptography==48.0.1"]
 
 [project.urls]
 Homepage = "https://github.com/tinyhat-ai/tinyhat"

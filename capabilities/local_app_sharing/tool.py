@@ -11,6 +11,8 @@ import socket
 import subprocess
 import sys
 import time
+from contextlib import suppress
+from datetime import datetime
 from http import HTTPStatus
 from pathlib import Path
 from typing import Any
@@ -19,10 +21,16 @@ from urllib import error, request
 from ...platform import PlatformError, build_platform_client, computer_api_path
 from ...tool_errors import tool_error_json
 from .connector import ensure_connector_running
+from .crypto import (
+    CONTENT_ENCRYPTION_PROTOCOL,
+    LocalAppCryptoError,
+    SessionKeyStore,
+    encrypted_link,
+)
 
 GATEWAY_HOST = "127.0.0.1"
 GATEWAY_PORT = 9321
-GATEWAY_PROTOCOL_VERSION = 3
+GATEWAY_PROTOCOL_VERSION = 4
 PACKAGE_ROOT = Path(__file__).resolve().parents[2]
 MAX_PORT = 65535
 MAX_LABEL_LENGTH = 80
@@ -37,6 +45,7 @@ VIEWER_LINK_RE = re.compile(
     re.IGNORECASE,
 )
 STATE_DIR = Path.home() / ".tinyhat" / "local-app-sharing"
+SESSION_KEY_STORE = SessionKeyStore(STATE_DIR / "sessions")
 GATEWAY_PID_PATH = STATE_DIR / "gateway.pid"
 GATEWAY_LOG_PATH = STATE_DIR / "gateway.log"
 GATEWAY_LOCK_PATH = STATE_DIR / "gateway.lock"
@@ -117,6 +126,7 @@ def _gateway_is_healthy() -> bool:
         return response.status == HTTPStatus.OK and payload == {
             "ok": True,
             "protocol_version": GATEWAY_PROTOCOL_VERSION,
+            "content_encryption": CONTENT_ENCRYPTION_PROTOCOL,
         }
     except (error.URLError, json.JSONDecodeError, OSError):
         return False
@@ -197,6 +207,17 @@ def ensure_gateway_running() -> None:
     raise RuntimeError("the local sharing gateway did not become ready")
 
 
+def _expires_at_epoch(value: str) -> float:
+    try:
+        parsed = datetime.fromisoformat(value.replace("Z", "+00:00"))
+    except ValueError as exc:
+        raise ValueError("platform returned an invalid sharing expiry") from exc
+    epoch = parsed.timestamp()
+    if epoch <= time.time():
+        raise ValueError("platform returned an expired sharing session")
+    return epoch
+
+
 def _safe_created_payload(payload: dict[str, Any]) -> dict[str, Any]:
     required = {
         "session_id": str,
@@ -208,6 +229,8 @@ def _safe_created_payload(payload: dict[str, Any]) -> dict[str, Any]:
     }
     if any(not isinstance(payload.get(key), kind) for key, kind in required.items()):
         raise ValueError("platform returned an invalid sharing session")
+    if payload.get("content_encryption") != CONTENT_ENCRYPTION_PROTOCOL:
+        raise ValueError("platform did not require end-to-end encrypted sharing")
     session_id = _clean_session_id(payload["session_id"])
     link = payload["link"].strip()
     if VIEWER_LINK_RE.fullmatch(link) is None or not link.endswith(session_id):
@@ -225,6 +248,7 @@ def _safe_created_payload(payload: dict[str, Any]) -> dict[str, Any]:
         "label": payload["label"],
         "port": payload["port"],
         "expires_at": payload["expires_at"],
+        "content_encryption": CONTENT_ENCRYPTION_PROTOCOL,
         "message": "The Telegram Mini App button and browser access code are ready.",
     }
 
@@ -233,7 +257,8 @@ def _send_share_button(created: dict[str, Any]) -> bool:
     """Send the owner a native Mini App button with browser fallback details."""
 
     try:
-        from ...tools import _telegram_credentials, _telegram_send_message
+        # Late import avoids a cycle through the root Hermes tool facade.
+        from ...tools import _telegram_credentials, _telegram_send_message  # noqa: PLC0415
 
         token, chat_id = _telegram_credentials()
         sent = _telegram_send_message(
@@ -277,11 +302,32 @@ def _create(payload: dict[str, Any]) -> dict[str, Any]:
     )
     response = client.post_json(
         computer_api_path(platform_auth, "local-app-shares/v1"),
-        {"port": port, "label": label, "ttl_seconds": ttl_seconds},
+        {
+            "port": port,
+            "label": label,
+            "ttl_seconds": ttl_seconds,
+            "content_encryption": CONTENT_ENCRYPTION_PROTOCOL,
+        },
     )
     created = _safe_created_payload(response)
     if not created["link"].startswith(f"{expected_origin}/s/"):
         raise ValueError("platform returned a sharing link for another Computer")
+    try:
+        session_key = SESSION_KEY_STORE.create(
+            session_id=created["session_id"],
+            expires_at_epoch=_expires_at_epoch(created["expires_at"]),
+        )
+    except (LocalAppCryptoError, OSError) as exc:
+        with suppress(PlatformError, OSError):
+            client.delete_json(
+                computer_api_path(
+                    platform_auth,
+                    f"local-app-shares/v1/{created['session_id']}",
+                )
+            )
+        raise RuntimeError("the Computer could not create the encrypted sharing key") from exc
+    created["link"] = encrypted_link(created["link"], session_key.fingerprint)
+    created["mini_app_url"] = created["link"]
     created["telegram_button_sent"] = _send_share_button(created)
     return created
 
@@ -302,13 +348,20 @@ def _list() -> dict[str, Any]:
         link = str(raw.get("link") or "").strip()
         if VIEWER_LINK_RE.fullmatch(link) is None or not link.endswith(session_id):
             raise ValueError("platform returned an invalid sharing link")
+        if raw.get("content_encryption") != CONTENT_ENCRYPTION_PROTOCOL:
+            raise ValueError("platform returned a sharing session without encryption")
+        try:
+            session_key = SESSION_KEY_STORE.load(session_id)
+        except LocalAppCryptoError as exc:
+            raise ValueError("Computer encryption state is missing for an active share") from exc
         safe_sessions.append(
             {
                 "session_id": session_id,
-                "link": link,
+                "link": encrypted_link(link, session_key.fingerprint),
                 "label": str(raw.get("label") or "Local app")[:80],
                 "port": _clean_port(raw.get("port")),
                 "expires_at": str(raw.get("expires_at") or ""),
+                "content_encryption": CONTENT_ENCRYPTION_PROTOCOL,
             }
         )
     return {
@@ -325,6 +378,7 @@ def _revoke(payload: dict[str, Any]) -> dict[str, Any]:
     )
     if response.get("status") != "revoked" or response.get("session_id") != session_id:
         raise ValueError("platform returned an invalid revocation response")
+    SESSION_KEY_STORE.delete(session_id)
     return {
         "schema": "tinyhat_local_app_share_revoke_v1",
         "session_id": session_id,

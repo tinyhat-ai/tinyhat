@@ -4,6 +4,14 @@ All notable changes to the Tinyhat plugin are documented here.
 
 ## Unreleased
 
+- Encrypt every shared local-app request and response between the user's
+  browser and the assigned Computer with an ephemeral P-256 ECDH connection
+  key and AES-256-GCM. The per-session private key stays in a mode-`0600`
+  Computer-local file, its fingerprint stays in the URL fragment, and neither
+  Tinyhat's platform APIs nor Cloudflare receive the content key or plaintext
+  local-app traffic. Plaintext proxy routes now fail closed. This release
+  requires the matching Tinyloop platform API contract before promotion.
+
 ## 0.31.2 - 2026-08-21
 
 - Share a Computer-local HTTP app through a short-lived `view.tinyhat.ai` or

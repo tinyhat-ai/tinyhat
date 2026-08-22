@@ -10,6 +10,10 @@ application already running on this Computer. Tinyhat returns a public link and
 a four-digit numeric code. The tool also sends the owner a native **View app**
 Telegram Mini App button. The signed owner opens that button without entering a
 code; the same link can be opened in any other browser by entering the code.
+The complete returned link includes a Computer-key fingerprint in its URL
+fragment. Preserve that link exactly. After authorization, the browser and
+Computer derive an ephemeral content key and exchange only encrypted app
+requests and responses through Cloudflare.
 
 ## Create a share
 
@@ -60,6 +64,8 @@ review is finished:
 - Treat the link and code as short-lived access material. Send them only in the
   owner's Telegram chat; do not put either in
   logs, source files, commits, issue comments, or documentation.
+- Never remove, shorten, or reconstruct the URL fragment. It binds the browser
+  to this share's Computer-local key; a link without it fails closed.
 - The plugin accepts only a numeric loopback port. Never work around that limit
   with a proxy to another host or network address.
 - Revoke the session after the review when continued access is unnecessary.
@@ -74,4 +80,7 @@ platform APIs own one named tunnel and opaque hostname per Computer, plus
 session identity, code verification, browser grants, expiry, and revocation.
 The plugin keeps this Computer's connector token private and runs the pinned
 Cloudflare connector. Cloudflare infrastructure carries HTTPS traffic to the
-loopback-only gateway. The Tinyhat runtime is not part of this capability.
+loopback-only gateway, but local-app content uses browser-to-Computer
+end-to-end encryption. The platform receives authorization and expiry
+metadata, not content keys, page contents, requests, responses, or upstream app
+cookies. The Tinyhat runtime is not part of this capability.

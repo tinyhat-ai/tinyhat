@@ -1,30 +1,54 @@
-"""Loopback-only HTTP gateway for Tinyhat local application shares."""
+"""Loopback-only encrypted HTTP gateway for Tinyhat local app shares."""
 
 from __future__ import annotations
 
-import html
+import base64
 import http.client
 import json
+import os
 import re
+import secrets
+import threading
+import time
 from collections.abc import Callable
+from dataclasses import dataclass, field
+from datetime import datetime
 from http import HTTPStatus
 from http.cookies import SimpleCookie
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+from pathlib import Path
 from typing import Any
-from urllib.parse import parse_qs, quote, urlsplit
+from urllib.parse import quote, urlsplit
 
 from ...platform import PlatformClient, PlatformError, build_platform_client, computer_api_path
-from .tool import (
-    GATEWAY_HOST,
-    GATEWAY_PORT,
-    GATEWAY_PROTOCOL_VERSION,
-    SESSION_ID_RE,
+from .crypto import (
+    CONTENT_CIPHER,
+    CONTENT_ENCRYPTION_PROTOCOL,
+    KEY_AGREEMENT_ALGORITHM,
+    LocalAppCryptoError,
+    SessionKeyStore,
+    decrypt_json,
+    derive_content_key,
+    encrypt_json,
+    request_aad,
+    response_aad,
 )
+from .tool import GATEWAY_HOST, GATEWAY_PORT, GATEWAY_PROTOCOL_VERSION, STATE_DIR
+from .viewer import SERVICE_WORKER, VIEWER_PAGE
 
-COOKIE_NAME = "__Host-tinyhat_local_app_share"
-MAX_FORM_BYTES = 1024
-MAX_TELEGRAM_INIT_DATA_BYTES = 16 * 1024
+COOKIE_PREFIX = "__Host-tinyhat_share_"
+MAX_JSON_BYTES = 16 * 1024 * 1024
+MAX_UPSTREAM_BODY_BYTES = 10 * 1024 * 1024
+MAX_TARGET_LENGTH = 4096
+MAX_ACTIVE_CONNECTIONS = 100
+MAX_REQUEST_IDS_PER_CONNECTION = 4096
 MAX_PORT = 65535
+MAX_HEADER_VALUE_LENGTH = 4096
+CONNECTION_ID_RE = re.compile(r"^e2e_[A-Za-z0-9_-]{20,80}$")
+REQUEST_ID_RE = re.compile(r"^[A-Za-z0-9_-]{16,128}$")
+SAFE_REQUEST_HEADERS = frozenset(
+    {"accept", "accept-language", "if-none-match", "if-modified-since", "range"}
+)
 HOP_BY_HOP_HEADERS = frozenset(
     {
         "connection",
@@ -43,18 +67,18 @@ def _client() -> tuple[PlatformClient, str]:
     return build_platform_client()
 
 
-def _cookie_value(session_id: str, access_token: str) -> str:
-    return f"{session_id}.{access_token}"
+def _cookie_name(session_id: str) -> str:
+    return f"{COOKIE_PREFIX}{session_id}"
 
 
 def _browser_grant_cookie(session_id: str, access_token: str) -> str:
     return (
-        f"{COOKIE_NAME}={_cookie_value(session_id, access_token)}; "
+        f"{_cookie_name(session_id)}={access_token}; "
         "Path=/; Secure; HttpOnly; SameSite=None; Partitioned"
     )
 
 
-def _parse_cookie(header: str | None) -> tuple[str, str] | None:
+def _parse_cookie(header: str | None, session_id: str) -> str | None:
     if not header:
         return None
     cookie = SimpleCookie()
@@ -62,104 +86,154 @@ def _parse_cookie(header: str | None) -> tuple[str, str] | None:
         cookie.load(header)
     except Exception:
         return None
-    morsel = cookie.get(COOKIE_NAME)
-    if morsel is None:
+    morsel = cookie.get(_cookie_name(session_id))
+    if morsel is None or re.fullmatch(r"[A-Za-z0-9_-]{32,256}", morsel.value) is None:
         return None
-    session_id, separator, access_token = morsel.value.partition(".")
-    if (
-        not separator
-        or SESSION_ID_RE.fullmatch(session_id) is None
-        or re.fullmatch(r"[A-Za-z0-9_-]{32,256}", access_token) is None
-    ):
-        return None
-    return session_id, access_token
+    return morsel.value
 
 
-def _without_gateway_cookie(header: str | None) -> str | None:
-    if not header:
-        return None
-    cookie = SimpleCookie()
-    try:
-        cookie.load(header)
-    except Exception:
-        return None
-    cookie.pop(COOKIE_NAME, None)
-    values = [f"{name}={morsel.value}" for name, morsel in cookie.items()]
-    return "; ".join(values) or None
-
-
-def _session_from_path(path: str) -> str | None:
-    clean_path = urlsplit(path).path
-    match = re.fullmatch(r"/s/(las_[A-Za-z0-9_-]{20,80})/?", clean_path)
-    return match.group(1) if match else None
-
-
-def _telegram_authorize_session_from_path(path: str) -> str | None:
+def _match(path: str, suffix: str = "") -> str | None:
     clean_path = urlsplit(path).path
     match = re.fullmatch(
-        r"/s/(las_[A-Za-z0-9_-]{20,80})/telegram-authorize/?",
+        rf"/s/(las_[A-Za-z0-9_-]{{20,80}}){re.escape(suffix)}/?",
         clean_path,
     )
     return match.group(1) if match else None
 
 
-def _code_page(*, error_message: str | None = None) -> bytes:
-    error_html = (
-        f'<p class="error" role="alert">{html.escape(error_message)}</p>' if error_message else ""
-    )
-    return f"""<!doctype html>
-<html lang="en"><head><meta charset="utf-8">
-<meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Open shared Tinyhat app</title>
-<style>[hidden]{{display:none!important}}
-body{{font:16px system-ui;margin:0;background:#f5f5f0;color:#171717}}
-main{{max-width:28rem;margin:12vh auto;padding:2rem;background:white;border:1px solid #bbb}}
-input,button{{box-sizing:border-box;width:100%;padding:.8rem;margin-top:.75rem;font:inherit}}
-button{{background:#171717;color:white;border:0}}.error{{color:#a00}}
-#loading{{display:grid;place-items:center;min-height:14rem;background:transparent;border:0}}
-.spinner{{width:2rem;height:2rem;border:.2rem solid #d7d7d2;border-top-color:#171717;
-border-radius:50%;animation:spin .8s linear infinite}}
-@keyframes spin{{to{{transform:rotate(360deg)}}}}</style></head>
-<body><main id="loading"><span class="spinner" role="status" aria-label="Loading"></span></main>
-<main id="code-page" hidden><h1>Open shared app</h1><p>Enter the code your agent sent you.</p>
-{error_html}
-<form id="code-form" method="post"><label for="code">Access code</label>
-<input id="code" name="code" autocomplete="one-time-code" inputmode="numeric"
-pattern="[0-9]{{4}}" minlength="4" maxlength="4" required>
-<button type="submit">View app</button></form></main>
-<script src="https://telegram.org/js/telegram-web-app.js"></script>
-<script>(() => {{
-  const app = window.Telegram && window.Telegram.WebApp;
-  const loading = document.getElementById('loading');
-  const codePage = document.getElementById('code-page');
-  if (!app || !app.initData) {{
-    loading.hidden = true;
-    codePage.hidden = false;
-    return;
-  }}
-  app.ready();
-  app.expand();
-  const path = window.location.pathname.replace(/\\/$/, '');
-  fetch(`${{path}}/telegram-authorize`, {{
-    method: 'POST',
-    credentials: 'same-origin',
-    headers: {{'Content-Type': 'application/json'}},
-    body: JSON.stringify({{telegram_init_data: app.initData}}),
-  }}).then(async response => {{
-    if (!response.ok) throw new Error('not authorized');
-    window.location.replace(path);
-  }}).catch(() => {{
-    loading.hidden = true;
-    codePage.hidden = false;
-  }});
-}})();</script></body></html>""".encode()
+def _app_session_from_path(path: str) -> str | None:
+    clean_path = urlsplit(path).path
+    match = re.match(r"^/s/(las_[A-Za-z0-9_-]{20,80})/app(?:/|$)", clean_path)
+    return match.group(1) if match else None
+
+
+def _expires_at_epoch(value: Any) -> float:
+    try:
+        return datetime.fromisoformat(str(value).replace("Z", "+00:00")).timestamp()
+    except ValueError as exc:
+        raise LocalAppCryptoError("Encrypted local app grant is invalid.") from exc
+
+
+def _b64url(value: bytes) -> str:
+    return base64.urlsafe_b64encode(value).decode("ascii").rstrip("=")
+
+
+@dataclass
+class _EncryptedConnection:
+    connection_id: str
+    session_id: str
+    port: int
+    key: bytearray
+    expires_at_epoch: float
+    used_request_ids: set[str] = field(default_factory=set)
+    upstream_cookies: dict[str, str] = field(default_factory=dict)
+    lock: threading.Lock = field(default_factory=threading.Lock)
+
+    def wipe(self) -> None:
+        for index in range(len(self.key)):
+            self.key[index] = 0
+        self.used_request_ids.clear()
+        self.upstream_cookies.clear()
+
+
+class _ConnectionRegistry:
+    def __init__(self) -> None:
+        self._lock = threading.Lock()
+        self._items: dict[str, _EncryptedConnection] = {}
+
+    def _prune_locked(self) -> None:
+        now = time.time()
+        expired = [key for key, item in self._items.items() if item.expires_at_epoch <= now]
+        for key in expired:
+            self._items.pop(key).wipe()
+
+    def create(
+        self,
+        *,
+        session_id: str,
+        port: int,
+        key: bytes,
+        expires_at_epoch: float,
+    ) -> _EncryptedConnection:
+        with self._lock:
+            self._prune_locked()
+            if len(self._items) >= MAX_ACTIVE_CONNECTIONS:
+                oldest = min(self._items, key=lambda value: self._items[value].expires_at_epoch)
+                self._items.pop(oldest).wipe()
+            connection_id = f"e2e_{secrets.token_urlsafe(24)}"
+            item = _EncryptedConnection(
+                connection_id=connection_id,
+                session_id=session_id,
+                port=port,
+                key=bytearray(key),
+                expires_at_epoch=expires_at_epoch,
+            )
+            self._items[connection_id] = item
+            return item
+
+    def reserve_request(
+        self, *, connection_id: str, session_id: str, request_id: str, port: int
+    ) -> _EncryptedConnection:
+        with self._lock:
+            self._prune_locked()
+            item = self._items.get(connection_id)
+            if (
+                item is None
+                or item.session_id != session_id
+                or item.port != port
+                or request_id in item.used_request_ids
+            ):
+                raise LocalAppCryptoError("Encrypted local app connection is invalid.")
+            if len(item.used_request_ids) >= MAX_REQUEST_IDS_PER_CONNECTION:
+                raise LocalAppCryptoError("Encrypted local app connection must be refreshed.")
+            item.used_request_ids.add(request_id)
+            return item
+
+
+def _capture_upstream_cookies(
+    connection: _EncryptedConnection,
+    raw_headers: list[tuple[str, str]],
+) -> None:
+    for name, value in raw_headers:
+        if name.lower() != "set-cookie":
+            continue
+        cookie = SimpleCookie()
+        try:
+            cookie.load(value)
+        except Exception:
+            continue
+        for cookie_name, morsel in cookie.items():
+            connection.upstream_cookies[cookie_name] = morsel.value
+
+
+def _safe_upstream_response_headers(
+    raw_headers: list[tuple[str, str]],
+) -> list[list[str]]:
+    safe_headers: list[list[str]] = []
+    stripped = {"content-length", "set-cookie", "cache-control", "pragma"}
+    for name, value in raw_headers:
+        lower = name.lower()
+        if lower in HOP_BY_HOP_HEADERS or lower in stripped:
+            continue
+        safe_value = value
+        if lower == "location":
+            location = urlsplit(value)
+            if location.hostname in {"localhost", "127.0.0.1", "::1"}:
+                safe_value = location.path or "/"
+                if location.query:
+                    safe_value = f"{safe_value}?{location.query}"
+        safe_headers.append([name, safe_value])
+    return safe_headers
 
 
 def _handler(
     client_factory: Callable[[], tuple[PlatformClient, str]],
+    *,
+    key_store: SessionKeyStore,
+    connections: _ConnectionRegistry,
 ) -> type[BaseHTTPRequestHandler]:
     class GatewayHandler(BaseHTTPRequestHandler):
-        server_version = "TinyhatLocalAppGateway/1"
+        server_version = "TinyhatLocalAppGateway/2"
 
         def log_message(self, format_string: str, *args: Any) -> None:
             _ = (format_string, args)
@@ -170,37 +244,56 @@ def _handler(
             self.send_header("Referrer-Policy", "no-referrer")
             self.send_header("X-Content-Type-Options", "nosniff")
 
-        def _write_json(self, status: int, payload: dict[str, Any]) -> None:
-            body = json.dumps(payload, separators=(",", ":")).encode()
+        def _write_bytes(
+            self,
+            status: int,
+            body: bytes,
+            *,
+            content_type: str,
+            extra_headers: dict[str, str] | None = None,
+        ) -> None:
             self.send_response(status)
             self._security_headers()
-            self.send_header("Content-Type", "application/json")
+            if extra_headers:
+                for name, value in extra_headers.items():
+                    self.send_header(name, value)
+            self.send_header("Content-Type", content_type)
             self.send_header("Content-Length", str(len(body)))
             self.end_headers()
             if self.command != "HEAD":
                 self.wfile.write(body)
 
-        def _write_code_page(self, status: int, message: str | None = None) -> None:
-            body = _code_page(error_message=message)
-            self.send_response(status)
-            self._security_headers()
-            self.send_header(
-                "Content-Security-Policy",
-                "default-src 'none'; style-src 'unsafe-inline'; "
-                "script-src 'unsafe-inline' https://telegram.org; connect-src 'self'; "
-                "form-action 'self'; frame-ancestors https://web.telegram.org "
-                "https://*.telegram.org; base-uri 'none'",
+        def _write_json(
+            self,
+            status: int,
+            payload: dict[str, Any],
+            *,
+            extra_headers: dict[str, str] | None = None,
+        ) -> None:
+            self._write_bytes(
+                status,
+                json.dumps(payload, separators=(",", ":")).encode("utf-8"),
+                content_type="application/json",
+                extra_headers=extra_headers,
             )
-            self.send_header("Content-Type", "text/html; charset=utf-8")
-            self.send_header("Content-Length", str(len(body)))
-            self.end_headers()
-            if self.command != "HEAD":
-                self.wfile.write(body)
+
+        def _read_json(self, *, maximum_bytes: int = MAX_JSON_BYTES) -> dict[str, Any] | None:
+            try:
+                length = int(self.headers.get("content-length") or "0")
+            except ValueError:
+                return None
+            if not 1 <= length <= maximum_bytes:
+                return None
+            try:
+                payload = json.loads(self.rfile.read(length).decode("utf-8", errors="strict"))
+            except (UnicodeDecodeError, json.JSONDecodeError):
+                return None
+            return payload if isinstance(payload, dict) else None
 
         def _resolve(self, session_id: str, access_token: str) -> dict[str, Any] | None:
             try:
                 client, platform_auth = client_factory()
-                return client.post_json(
+                payload = client.post_json(
                     computer_api_path(
                         platform_auth,
                         f"local-app-shares/v1/{quote(session_id, safe='')}/resolve",
@@ -209,11 +302,14 @@ def _handler(
                 )
             except PlatformError:
                 return None
+            if payload.get("content_encryption") != CONTENT_ENCRYPTION_PROTOCOL:
+                return None
+            return payload
 
         def _authorize(self, session_id: str, access_code: str) -> dict[str, Any] | None:
             try:
                 client, platform_auth = client_factory()
-                return client.post_json(
+                payload = client.post_json(
                     computer_api_path(
                         platform_auth,
                         f"local-app-shares/v1/{quote(session_id, safe='')}/authorize",
@@ -222,13 +318,18 @@ def _handler(
                 )
             except PlatformError:
                 return None
+            return (
+                payload
+                if payload.get("content_encryption") == CONTENT_ENCRYPTION_PROTOCOL
+                else None
+            )
 
         def _authorize_telegram(
             self, session_id: str, telegram_init_data: str
         ) -> dict[str, Any] | None:
             try:
                 client, platform_auth = client_factory()
-                return client.post_json(
+                payload = client.post_json(
                     computer_api_path(
                         platform_auth,
                         f"local-app-shares/v1/{quote(session_id, safe='')}/authorize-telegram",
@@ -237,202 +338,310 @@ def _handler(
                 )
             except PlatformError:
                 return None
-
-        def _write_browser_grant(self, session_id: str, token: str) -> None:
-            self.send_response(HTTPStatus.OK)
-            self._security_headers()
-            self.send_header(
-                "Set-Cookie",
-                _browser_grant_cookie(session_id, token),
+            return (
+                payload
+                if payload.get("content_encryption") == CONTENT_ENCRYPTION_PROTOCOL
+                else None
             )
-            self.send_header("Content-Type", "application/json")
-            body = b'{"ok":true}'
-            self.send_header("Content-Length", str(len(body)))
-            self.end_headers()
-            self.wfile.write(body)
 
-        def _authorized_target(self) -> tuple[str, int] | None:
-            grant = _parse_cookie(self.headers.get("cookie"))
-            if grant is None:
+        def _write_browser_grant(self, session_id: str, payload: dict[str, Any] | None) -> None:
+            token = payload.get("access_token") if isinstance(payload, dict) else None
+            if not isinstance(token, str) or re.fullmatch(r"[A-Za-z0-9_-]{32,256}", token) is None:
+                self._write_json(HTTPStatus.UNAUTHORIZED, {"error": "share_access_denied"})
+                return
+            self._write_json(
+                HTTPStatus.OK,
+                {"ok": True, "content_encryption": CONTENT_ENCRYPTION_PROTOCOL},
+                extra_headers={"Set-Cookie": _browser_grant_cookie(session_id, token)},
+            )
+
+        def _authorized_target(self, session_id: str) -> tuple[int, float] | None:
+            access_token = _parse_cookie(self.headers.get("cookie"), session_id)
+            if access_token is None:
                 return None
-            session_id, access_token = grant
             resolved = self._resolve(session_id, access_token)
             if not isinstance(resolved, dict):
                 return None
             port = resolved.get("port")
             if isinstance(port, bool) or not isinstance(port, int) or not 1 <= port <= MAX_PORT:
                 return None
-            return session_id, port
+            try:
+                expires_at_epoch = _expires_at_epoch(resolved.get("expires_at"))
+            except LocalAppCryptoError:
+                return None
+            if expires_at_epoch <= time.time():
+                return None
+            return port, expires_at_epoch
 
-        def _write_upstream_response(
+        def _write_viewer(self) -> None:
+            self._write_bytes(
+                HTTPStatus.OK,
+                VIEWER_PAGE,
+                content_type="text/html; charset=utf-8",
+                extra_headers={
+                    "Content-Security-Policy": (
+                        "default-src 'none'; style-src 'unsafe-inline'; "
+                        "script-src 'unsafe-inline' https://telegram.org; "
+                        "connect-src 'self'; frame-src 'self'; worker-src 'self'; "
+                        "form-action 'none'; frame-ancestors https://web.telegram.org "
+                        "https://*.telegram.org; base-uri 'none'"
+                    )
+                },
+            )
+
+        def _write_service_worker(self) -> None:
+            self._write_bytes(
+                HTTPStatus.OK,
+                SERVICE_WORKER,
+                content_type="text/javascript; charset=utf-8",
+                extra_headers={"Service-Worker-Allowed": "/"},
+            )
+
+        def _write_key(self, session_id: str) -> None:
+            if self._authorized_target(session_id) is None:
+                self._write_json(HTTPStatus.UNAUTHORIZED, {"error": "share_access_required"})
+                return
+            try:
+                session_key = key_store.load(session_id)
+            except LocalAppCryptoError:
+                self._write_json(HTTPStatus.GONE, {"error": "share_key_unavailable"})
+                return
+            self._write_json(
+                HTTPStatus.OK,
+                {
+                    "content_encryption": CONTENT_ENCRYPTION_PROTOCOL,
+                    "key_agreement": KEY_AGREEMENT_ALGORITHM,
+                    "content_cipher": CONTENT_CIPHER,
+                    "public_key_jwk": session_key.public_jwk,
+                    "fingerprint": session_key.fingerprint,
+                },
+            )
+
+        def _handshake(self, session_id: str) -> None:
+            target = self._authorized_target(session_id)
+            payload = self._read_json(maximum_bytes=8192)
+            if target is None or payload is None:
+                self._write_json(HTTPStatus.UNAUTHORIZED, {"error": "share_access_required"})
+                return
+            public_jwk = payload.get("browser_public_jwk")
+            if not isinstance(public_jwk, dict):
+                self._write_json(HTTPStatus.BAD_REQUEST, {"error": "invalid_browser_key"})
+                return
+            try:
+                session_key = key_store.load(session_id)
+                salt = os.urandom(32)
+                content_key = derive_content_key(
+                    session_key=session_key,
+                    browser_public_jwk=public_jwk,
+                    salt=salt,
+                )
+            except LocalAppCryptoError:
+                self._write_json(HTTPStatus.BAD_REQUEST, {"error": "invalid_browser_key"})
+                return
+            port, grant_expiry = target
+            connection = connections.create(
+                session_id=session_id,
+                port=port,
+                key=content_key,
+                expires_at_epoch=min(grant_expiry, session_key.expires_at_epoch),
+            )
+            self._write_json(
+                HTTPStatus.OK,
+                {
+                    "content_encryption": CONTENT_ENCRYPTION_PROTOCOL,
+                    "connection_id": connection.connection_id,
+                    "salt": _b64url(salt),
+                    "expires_at_epoch": connection.expires_at_epoch,
+                },
+            )
+
+        def _upstream_request(
             self,
             *,
-            status: int,
-            reason: str | None,
-            response_headers: list[tuple[str, str]],
-            body: bytes,
-        ) -> None:
-            self.send_response(status, reason)
-            self._security_headers()
-            for key, original_value in response_headers:
-                lower = key.lower()
-                if lower in HOP_BY_HOP_HEADERS or lower in {
-                    "content-length",
-                    "cache-control",
-                    "pragma",
-                }:
-                    continue
-                if lower == "set-cookie" and original_value.lstrip().startswith(f"{COOKIE_NAME}="):
-                    continue
-                value = original_value
-                if lower == "location":
-                    location = urlsplit(value)
-                    if location.hostname in {"localhost", "127.0.0.1"}:
-                        value = location.path or "/"
-                        if location.query:
-                            value = f"{value}?{location.query}"
-                self.send_header(key, value)
-            self.send_header("Content-Length", str(len(body)))
-            self.end_headers()
-            if self.command != "HEAD":
-                self.wfile.write(body)
-
-        def _proxy(self, *, session_id: str, port: int) -> None:
-            parsed = urlsplit(self.path)
-            upstream_path = parsed.path
-            if _session_from_path(self.path) == session_id:
-                upstream_path = "/"
-            if parsed.query:
-                upstream_path = f"{upstream_path}?{parsed.query}"
+            connection: _EncryptedConnection,
+            method: str,
+            target: str,
+            request_headers: dict[str, str],
+        ) -> dict[str, Any]:
             headers = {
-                key: value
-                for key, value in self.headers.items()
-                if key.lower() not in HOP_BY_HOP_HEADERS
-                and key.lower() not in {"host", "content-length"}
+                name.title(): value
+                for name, value in request_headers.items()
+                if name in SAFE_REQUEST_HEADERS and len(value) <= MAX_HEADER_VALUE_LENGTH
             }
-            upstream_cookie = _without_gateway_cookie(self.headers.get("cookie"))
-            if upstream_cookie:
-                headers["Cookie"] = upstream_cookie
-            else:
-                headers.pop("Cookie", None)
-            headers["Host"] = f"127.0.0.1:{port}"
-            connection = http.client.HTTPConnection("127.0.0.1", port, timeout=15)
-            try:
-                connection.request(self.command, upstream_path, headers=headers)
-                response = connection.getresponse()
-                body = response.read()
-                status = response.status
-                reason = response.reason
-                response_headers = response.getheaders()
-            except OSError:
-                self._write_json(HTTPStatus.BAD_GATEWAY, {"error": "local_app_unavailable"})
-                return
-            finally:
-                connection.close()
+            headers["Host"] = f"127.0.0.1:{connection.port}"
+            headers["Accept-Encoding"] = "identity"
+            with connection.lock:
+                if connection.upstream_cookies:
+                    headers["Cookie"] = "; ".join(
+                        f"{name}={value}" for name, value in connection.upstream_cookies.items()
+                    )
+                upstream = http.client.HTTPConnection("127.0.0.1", connection.port, timeout=15)
+                try:
+                    upstream.request(method, target, headers=headers)
+                    response = upstream.getresponse()
+                    body = response.read(MAX_UPSTREAM_BODY_BYTES + 1)
+                    if len(body) > MAX_UPSTREAM_BODY_BYTES:
+                        raise LocalAppCryptoError("Local app response is too large.")
+                    raw_headers = response.getheaders()
+                    status = response.status
+                    reason = response.reason
+                except OSError as exc:
+                    raise LocalAppCryptoError("Local app is unavailable.") from exc
+                finally:
+                    upstream.close()
+                _capture_upstream_cookies(connection, raw_headers)
+            return {
+                "status": status,
+                "reason": reason or "",
+                "headers": _safe_upstream_response_headers(raw_headers),
+                "body": _b64url(body),
+            }
 
-            self._write_upstream_response(
-                status=status,
-                reason=reason,
-                response_headers=response_headers,
-                body=body,
+        def _encrypted_request(self, session_id: str) -> None:
+            target = self._authorized_target(session_id)
+            outer = self._read_json()
+            if target is None or outer is None:
+                self._write_json(HTTPStatus.UNAUTHORIZED, {"error": "share_access_required"})
+                return
+            connection_id = str(outer.get("connection_id") or "")
+            request_id = str(outer.get("request_id") or "")
+            if (
+                outer.get("content_encryption") != CONTENT_ENCRYPTION_PROTOCOL
+                or CONNECTION_ID_RE.fullmatch(connection_id) is None
+                or REQUEST_ID_RE.fullmatch(request_id) is None
+            ):
+                self._write_json(HTTPStatus.BAD_REQUEST, {"error": "invalid_encrypted_request"})
+                return
+            port, _ = target
+            try:
+                connection = connections.reserve_request(
+                    connection_id=connection_id,
+                    session_id=session_id,
+                    request_id=request_id,
+                    port=port,
+                )
+                request_payload = decrypt_json(
+                    key=bytes(connection.key),
+                    nonce=str(outer.get("nonce") or ""),
+                    ciphertext=str(outer.get("ciphertext") or ""),
+                    aad=request_aad(
+                        session_id=session_id,
+                        connection_id=connection_id,
+                        request_id=request_id,
+                    ),
+                )
+                method = str(request_payload.get("method") or "").upper()
+                raw_target = str(request_payload.get("target") or "")
+                parsed_target = urlsplit(raw_target)
+                headers_payload = request_payload.get("headers")
+                if (
+                    method not in {"GET", "HEAD"}
+                    or not raw_target.startswith("/")
+                    or len(raw_target) > MAX_TARGET_LENGTH
+                    or parsed_target.scheme
+                    or parsed_target.netloc
+                    or not isinstance(headers_payload, dict)
+                ):
+                    raise LocalAppCryptoError("Encrypted local app request is invalid.")
+                request_headers = {
+                    str(name).lower(): str(value)
+                    for name, value in headers_payload.items()
+                    if isinstance(name, str) and isinstance(value, str)
+                }
+                response_payload = self._upstream_request(
+                    connection=connection,
+                    method=method,
+                    target=raw_target,
+                    request_headers=request_headers,
+                )
+                encrypted = encrypt_json(
+                    key=bytes(connection.key),
+                    payload=response_payload,
+                    aad=response_aad(
+                        session_id=session_id,
+                        connection_id=connection_id,
+                        request_id=request_id,
+                    ),
+                )
+            except LocalAppCryptoError:
+                self._write_json(HTTPStatus.BAD_REQUEST, {"error": "invalid_encrypted_request"})
+                return
+            self._write_json(
+                HTTPStatus.OK,
+                {"content_encryption": CONTENT_ENCRYPTION_PROTOCOL, **encrypted},
             )
 
         def do_GET(self) -> None:
-            if urlsplit(self.path).path == "/__tinyhat_share/health":
+            path = urlsplit(self.path).path
+            if path == "/__tinyhat_share/health":
                 self._write_json(
                     HTTPStatus.OK,
-                    {"ok": True, "protocol_version": GATEWAY_PROTOCOL_VERSION},
+                    {
+                        "ok": True,
+                        "protocol_version": GATEWAY_PROTOCOL_VERSION,
+                        "content_encryption": CONTENT_ENCRYPTION_PROTOCOL,
+                    },
                 )
                 return
-            requested_session = _session_from_path(self.path)
-            target = self._authorized_target()
-            if target is None:
-                if requested_session is not None:
-                    self._write_code_page(HTTPStatus.UNAUTHORIZED)
-                else:
-                    self._write_json(HTTPStatus.UNAUTHORIZED, {"error": "share_access_required"})
+            if path == "/__tinyhat_share/e2ee-v1-sw.js":
+                self._write_service_worker()
                 return
-            session_id, port = target
-            if requested_session is not None and requested_session != session_id:
-                self._write_code_page(HTTPStatus.UNAUTHORIZED)
+            session_id = _match(self.path)
+            if session_id is not None:
+                self._write_viewer()
                 return
-            self._proxy(session_id=session_id, port=port)
+            key_session_id = _match(self.path, "/e2ee-key")
+            if key_session_id is not None:
+                self._write_key(key_session_id)
+                return
+            if _app_session_from_path(self.path) is not None:
+                self._write_json(
+                    HTTPStatus.UPGRADE_REQUIRED,
+                    {"error": "encrypted_transport_required"},
+                )
+                return
+            self._write_json(HTTPStatus.UNAUTHORIZED, {"error": "share_access_required"})
 
         def do_HEAD(self) -> None:
             self.do_GET()
 
         def do_POST(self) -> None:
-            telegram_session_id = _telegram_authorize_session_from_path(self.path)
+            telegram_session_id = _match(self.path, "/telegram-authorize")
             if telegram_session_id is not None:
-                try:
-                    length = int(self.headers.get("content-length") or "0")
-                except ValueError:
-                    length = 0
-                if not 1 <= length <= MAX_TELEGRAM_INIT_DATA_BYTES:
+                payload = self._read_json(maximum_bytes=16 * 1024)
+                init_data = str(payload.get("telegram_init_data") or "") if payload else ""
+                if not init_data:
                     self._write_json(HTTPStatus.BAD_REQUEST, {"error": "invalid_telegram_auth"})
                     return
-                try:
-                    payload = json.loads(self.rfile.read(length).decode("utf-8", errors="strict"))
-                except (UnicodeDecodeError, json.JSONDecodeError):
-                    self._write_json(HTTPStatus.BAD_REQUEST, {"error": "invalid_telegram_auth"})
-                    return
-                telegram_init_data = (
-                    str(payload.get("telegram_init_data") or "").strip()
-                    if isinstance(payload, dict)
-                    else ""
-                )
-                if not telegram_init_data:
-                    self._write_json(HTTPStatus.UNAUTHORIZED, {"error": "invalid_telegram_auth"})
-                    return
-                authorized = self._authorize_telegram(
+                self._write_browser_grant(
                     telegram_session_id,
-                    telegram_init_data,
+                    self._authorize_telegram(telegram_session_id, init_data),
                 )
-                token = authorized.get("access_token") if isinstance(authorized, dict) else None
-                if (
-                    not isinstance(token, str)
-                    or re.fullmatch(r"[A-Za-z0-9_-]{32,256}", token) is None
-                ):
-                    self._write_json(HTTPStatus.UNAUTHORIZED, {"error": "invalid_telegram_auth"})
+                return
+            code_session_id = _match(self.path, "/code-authorize")
+            if code_session_id is not None:
+                payload = self._read_json(maximum_bytes=1024)
+                access_code = str(payload.get("access_code") or "") if payload else ""
+                if re.fullmatch(r"[0-9]{4}", access_code) is None:
+                    self._write_json(HTTPStatus.BAD_REQUEST, {"error": "invalid_access_code"})
                     return
-                self._write_browser_grant(telegram_session_id, token)
-                return
-
-            session_id = _session_from_path(self.path)
-            if session_id is None:
-                self._write_json(HTTPStatus.METHOD_NOT_ALLOWED, {"error": "method_not_allowed"})
-                return
-            try:
-                length = int(self.headers.get("content-length") or "0")
-            except ValueError:
-                length = 0
-            if not 1 <= length <= MAX_FORM_BYTES:
-                self._write_code_page(HTTPStatus.BAD_REQUEST, "Enter the four-digit code.")
-                return
-            form = parse_qs(self.rfile.read(length).decode("utf-8", errors="replace"))
-            access_code = str((form.get("code") or [""])[0]).strip()
-            if re.fullmatch(r"[0-9]{4}", access_code) is None:
-                self._write_code_page(HTTPStatus.UNAUTHORIZED, "That code is not valid.")
-                return
-            authorized = self._authorize(session_id, access_code)
-            token = authorized.get("access_token") if isinstance(authorized, dict) else None
-            if not isinstance(token, str) or re.fullmatch(r"[A-Za-z0-9_-]{32,256}", token) is None:
-                self._write_code_page(
-                    HTTPStatus.UNAUTHORIZED, "That code is not valid or has expired."
+                self._write_browser_grant(
+                    code_session_id,
+                    self._authorize(code_session_id, access_code),
                 )
                 return
-            self.send_response(HTTPStatus.SEE_OTHER)
-            self._security_headers()
-            self.send_header(
-                "Set-Cookie",
-                _browser_grant_cookie(session_id, token),
-            )
-            self.send_header("Location", f"/s/{session_id}")
-            self.send_header("Content-Length", "0")
-            self.end_headers()
+            handshake_session_id = _match(self.path, "/e2ee-handshake")
+            if handshake_session_id is not None:
+                self._handshake(handshake_session_id)
+                return
+            encrypted_session_id = _match(self.path, "/encrypted")
+            if encrypted_session_id is not None:
+                self._encrypted_request(encrypted_session_id)
+                return
+            self._write_json(HTTPStatus.METHOD_NOT_ALLOWED, {"error": "method_not_allowed"})
 
         def do_PUT(self) -> None:
-            self._write_json(HTTPStatus.METHOD_NOT_ALLOWED, {"error": "read_only_pilot"})
+            self._write_json(HTTPStatus.METHOD_NOT_ALLOWED, {"error": "read_only_share"})
 
         do_PATCH = do_PUT
         do_DELETE = do_PUT
@@ -445,12 +654,17 @@ def serve(
     host: str = GATEWAY_HOST,
     port: int = GATEWAY_PORT,
     client_factory: Callable[[], tuple[PlatformClient, str]] = _client,
+    key_store: SessionKeyStore | None = None,
 ) -> None:
     """Run the plugin gateway on loopback; non-loopback binds are refused."""
 
     if host not in {"127.0.0.1", "::1"}:
         raise ValueError("Tinyhat local app gateway must bind to loopback")
-    server = ThreadingHTTPServer((host, port), _handler(client_factory))
+    store = key_store or SessionKeyStore(Path(STATE_DIR) / "sessions")
+    server = ThreadingHTTPServer(
+        (host, port),
+        _handler(client_factory, key_store=store, connections=_ConnectionRegistry()),
+    )
     server.serve_forever()
 
 
