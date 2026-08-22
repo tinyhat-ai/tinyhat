@@ -10,7 +10,7 @@ import tempfile
 import threading
 import time
 import unittest
-from datetime import UTC, datetime
+from datetime import datetime, timezone
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from unittest import mock
@@ -46,7 +46,7 @@ CONNECTOR_TOKEN = base64.b64encode(
 
 
 def _future_expiry() -> str:
-    return datetime.fromtimestamp(time.time() + 3600, tz=UTC).isoformat()
+    return datetime.fromtimestamp(time.time() + 3600, tz=timezone.utc).isoformat()
 
 
 class LocalAppSharingCryptoTests(unittest.TestCase):
