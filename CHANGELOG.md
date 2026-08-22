@@ -4,6 +4,8 @@ All notable changes to the Tinyhat plugin are documented here.
 
 ## Unreleased
 
+## 0.32.0 - 2026-08-22
+
 - Encrypt every shared local-app request and response between the user's
   browser and the assigned Computer with an ephemeral P-256 ECDH connection
   key and AES-256-GCM. The per-session private key stays in a mode-`0600`
