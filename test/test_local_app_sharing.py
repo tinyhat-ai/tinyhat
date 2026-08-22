@@ -281,11 +281,17 @@ class LocalAppSharingToolTests(unittest.TestCase):
         )
 
     def test_gateway_health_contract_forces_plaintext_process_replacement(self) -> None:
-        self.assertGreaterEqual(tool.GATEWAY_PROTOCOL_VERSION, 5)
+        self.assertGreaterEqual(tool.GATEWAY_PROTOCOL_VERSION, 6)
         viewer = gateway.VIEWER_PAGE.decode("utf-8")
         self.assertIn("content_encryption", viewer)
         self.assertIn("controllerchange", viewer)
         self.assertIn("service-worker-control-timeout", viewer)
+        self.assertNotIn("<iframe", viewer)
+        self.assertIn("location.replace", viewer)
+        worker = gateway.SERVICE_WORKER.decode("utf-8")
+        self.assertIn("app-shell-v1.js", worker)
+        self.assertIn("worker-src 'none'", worker)
+        self.assertIn("history.replaceState", gateway.APP_SHELL.decode("utf-8"))
 
     def test_gateway_launch_does_not_depend_on_checkout_directory_name(self) -> None:
         args = tool._gateway_process_args()
@@ -563,6 +569,10 @@ class LocalAppSharingGatewayTests(unittest.TestCase):
         direct_status, _, direct = self._request("GET", f"/s/{SESSION_ID}/app/")
         self.assertEqual(direct_status, 426)
         self.assertEqual(json.loads(direct)["error"], "encrypted_transport_required")
+
+        shell_status, _, shell = self._request("GET", "/__tinyhat_share/app-shell-v1.js")
+        self.assertEqual(shell_status, 200)
+        self.assertIn(b"history.replaceState", shell)
 
     def test_code_auth_round_trips_only_ciphertext_and_rejects_replay(self) -> None:
         cookie = self._authorize()

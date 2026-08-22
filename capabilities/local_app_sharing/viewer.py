@@ -16,7 +16,7 @@ border-radius:50%;animation:spin .8s linear infinite}@keyframes spin{to{transfor
 #code-page{box-sizing:border-box;max-width:28rem;margin:12vh auto;padding:2rem;background:white;border:1px solid #bbb}
 input,button{box-sizing:border-box;width:100%;padding:.8rem;margin-top:.75rem;font:inherit}
 button{background:#171717;color:white;border:0}.error{color:#a00}
-#app{display:block;width:100%;height:100%;border:0;background:white}</style></head>
+</style></head>
 <body><main id="loading"><span class="spinner" role="status" aria-label="Loading"></span></main>
 <main id="code-page" hidden><h1>Open shared app</h1><p>Enter the code your agent sent you.</p>
 <p id="error" class="error" role="alert" hidden></p>
@@ -24,7 +24,6 @@ button{background:#171717;color:white;border:0}.error{color:#a00}
 <input id="code" name="code" autocomplete="one-time-code" inputmode="numeric"
 pattern="[0-9]{4}" minlength="4" maxlength="4" required>
 <button type="submit">View app</button></form></main>
-<iframe id="app" title="Shared app" sandbox="allow-scripts" hidden></iframe>
 <script src="https://telegram.org/js/telegram-web-app.js"></script>
 <script>(() => {
   'use strict';
@@ -34,7 +33,6 @@ pattern="[0-9]{4}" minlength="4" maxlength="4" required>
   const codeForm = document.getElementById('code-form');
   const codeInput = document.getElementById('code');
   const error = document.getElementById('error');
-  const appFrame = document.getElementById('app');
   const sessionId = location.pathname.match(/^\/s\/(las_[A-Za-z0-9_-]{20,80})\/?$/)?.[1];
   const expectedFingerprint = new URLSearchParams(location.hash.slice(1)).get(protocol);
   const telegram = window.Telegram && window.Telegram.WebApp;
@@ -49,7 +47,6 @@ pattern="[0-9]{4}" minlength="4" maxlength="4" required>
 
   function showCode(message) {
     loading.hidden = true;
-    appFrame.hidden = true;
     codePage.hidden = false;
     error.hidden = !message;
     error.textContent = message || '';
@@ -150,10 +147,7 @@ pattern="[0-9]{4}" minlength="4" maxlength="4" required>
     );
     const rawKey = await crypto.subtle.exportKey('raw', key);
     await configureWorker(sessionId, handshake.connection_id, rawKey);
-    codePage.hidden = true;
-    loading.hidden = true;
-    appFrame.src = `/s/${sessionId}/app/`;
-    appFrame.hidden = false;
+    location.replace(`/s/${sessionId}/app/${location.hash}`);
   }
 
   function base64UrlToBytes(value) {
@@ -211,6 +205,16 @@ pattern="[0-9]{4}" minlength="4" maxlength="4" required>
 })();</script></body></html>""".replace(
     "__CONTENT_ENCRYPTION_PROTOCOL__", CONTENT_ENCRYPTION_PROTOCOL
 ).encode("utf-8")
+
+
+APP_SHELL = br"""'use strict';
+(() => {
+  const script = document.currentScript;
+  const sessionId = script && script.dataset.sessionId;
+  if (!/^las_[A-Za-z0-9_-]{20,80}$/.test(sessionId || '')) return;
+  history.replaceState(null, '', `/s/${sessionId}${location.hash}`);
+})();
+"""
 
 
 SERVICE_WORKER = r"""'use strict';
@@ -342,11 +346,25 @@ async function encryptedFetch(event, route) {
   for (const pair of payload.headers || []) {
     if (Array.isArray(pair) && pair.length === 2) responseHeaders.append(pair[0], pair[1]);
   }
-  const body = event.request.method === 'HEAD'
+  let body = event.request.method === 'HEAD'
     ? null
     : payload.body
       ? base64UrlToBytes(payload.body)
       : new Uint8Array();
+  const contentType = responseHeaders.get('content-type') || '';
+  if (body && event.request.mode === 'navigate' && /text\/html/i.test(contentType)) {
+    const source = new TextDecoder().decode(body);
+    const shell = `<base href="/s/${config.sessionId}/app/">` +
+      `<script src="/__tinyhat_share/app-shell-v1.js" ` +
+      `data-session-id="${config.sessionId}"><\/script>`;
+    const head = source.match(/<head(?:\s[^>]*)?>/i);
+    const html = head
+      ? source.slice(0, head.index + head[0].length) + shell +
+        source.slice(head.index + head[0].length)
+      : shell + source;
+    body = new TextEncoder().encode(html);
+    responseHeaders.append('Content-Security-Policy', "worker-src 'none'");
+  }
   return new Response(body, {status: payload.status, statusText: payload.reason || '', headers: responseHeaders});
 }
 
@@ -357,4 +375,4 @@ self.addEventListener('fetch', event => {
 """.replace("__CONTENT_ENCRYPTION_PROTOCOL__", CONTENT_ENCRYPTION_PROTOCOL).encode("utf-8")
 
 
-__all__ = ["SERVICE_WORKER", "VIEWER_PAGE"]
+__all__ = ["APP_SHELL", "SERVICE_WORKER", "VIEWER_PAGE"]

@@ -34,7 +34,7 @@ from .crypto import (
     response_aad,
 )
 from .tool import GATEWAY_HOST, GATEWAY_PORT, GATEWAY_PROTOCOL_VERSION, STATE_DIR
-from .viewer import SERVICE_WORKER, VIEWER_PAGE
+from .viewer import APP_SHELL, SERVICE_WORKER, VIEWER_PAGE
 
 COOKIE_PREFIX = "__Host-tinyhat_share_"
 MAX_JSON_BYTES = 16 * 1024 * 1024
@@ -397,6 +397,13 @@ def _handler(
                 extra_headers={"Service-Worker-Allowed": "/"},
             )
 
+        def _write_app_shell(self) -> None:
+            self._write_bytes(
+                HTTPStatus.OK,
+                APP_SHELL,
+                content_type="text/javascript; charset=utf-8",
+            )
+
         def _write_key(self, session_id: str) -> None:
             if self._authorized_target(session_id) is None:
                 self._write_json(HTTPStatus.UNAUTHORIZED, {"error": "share_access_required"})
@@ -585,6 +592,9 @@ def _handler(
                 return
             if path == "/__tinyhat_share/e2ee-v1-sw.js":
                 self._write_service_worker()
+                return
+            if path == "/__tinyhat_share/app-shell-v1.js":
+                self._write_app_shell()
                 return
             session_id = _match(self.path)
             if session_id is not None:
