@@ -110,6 +110,7 @@ class LocalAppSharingToolTests(unittest.TestCase):
                     "status": "active",
                     "created_at": _future_expiry(),
                     "expires_at": _future_expiry(),
+                    "access_mode": "code",
                     "content_encryption": crypto.CONTENT_ENCRYPTION_PROTOCOL,
                 }
 
@@ -151,6 +152,7 @@ class LocalAppSharingToolTests(unittest.TestCase):
                         "port": 4310,
                         "label": "Forecast preview",
                         "ttl_seconds": 900,
+                        "access_mode": "code",
                         "content_encryption": crypto.CONTENT_ENCRYPTION_PROTOCOL,
                     },
                 )
@@ -159,9 +161,64 @@ class LocalAppSharingToolTests(unittest.TestCase):
         self.assertTrue(result["link"].startswith(f"{COMPUTER_ORIGIN}/s/{SESSION_ID}#"))
         self.assertEqual(result["mini_app_url"], result["link"])
         self.assertEqual(result["access_code"], ACCESS_CODE)
+        self.assertEqual(result["access_mode"], "code")
         self.assertEqual(result["content_encryption"], crypto.CONTENT_ENCRYPTION_PROTOCOL)
         self.assertTrue(result["telegram_button_sent"])
         self.assertNotIn("access_token", result)
+
+    def test_create_link_mode_returns_no_code(self) -> None:
+        requests: list[tuple[str, dict[str, object]]] = []
+
+        class FakeClient:
+            def post_json(self, path: str, payload: dict[str, object]) -> dict[str, object]:
+                requests.append((path, payload))
+                return {
+                    "schema_version": "v1",
+                    "session_id": SESSION_ID,
+                    "link": f"{COMPUTER_ORIGIN}/s/{SESSION_ID}",
+                    "access_mode": "link",
+                    "label": "Open review",
+                    "port": 4310,
+                    "status": "active",
+                    "created_at": _future_expiry(),
+                    "expires_at": _future_expiry(),
+                    "content_encryption": crypto.CONTENT_ENCRYPTION_PROTOCOL,
+                }
+
+        with tempfile.TemporaryDirectory() as directory:
+            key_store = crypto.SessionKeyStore(Path(directory) / "sessions")
+            with (
+                mock.patch.object(tool, "SESSION_KEY_STORE", key_store),
+                mock.patch.object(tool, "_port_is_open", return_value=True),
+                mock.patch.object(tool, "ensure_gateway_running"),
+                mock.patch.object(
+                    tool,
+                    "ensure_connector_running",
+                    return_value=COMPUTER_ORIGIN,
+                ),
+                mock.patch.object(tool, "_send_share_button", return_value=True),
+                mock.patch.object(
+                    tool,
+                    "build_platform_client",
+                    return_value=(FakeClient(), "gcloud"),
+                ),
+            ):
+                result = json.loads(
+                    tool.local_app_sharing(
+                        {
+                            "action": "create",
+                            "port": 4310,
+                            "label": "Open review",
+                            "ttl_seconds": 900,
+                            "access_mode": "link",
+                        }
+                    )
+                )
+
+        self.assertEqual(requests[0][1]["access_mode"], "link")
+        self.assertEqual(result["access_mode"], "link")
+        self.assertNotIn("access_code", result)
+        self.assertIn("link-only", result["message"])
 
     def test_list_rebuilds_links_from_local_keys_and_revoke_deletes_them(self) -> None:
         paths: list[tuple[str, str]] = []
@@ -178,6 +235,7 @@ class LocalAppSharingToolTests(unittest.TestCase):
                             "label": "App",
                             "port": 4311,
                             "expires_at": _future_expiry(),
+                            "access_mode": "link",
                             "content_encryption": crypto.CONTENT_ENCRYPTION_PROTOCOL,
                         }
                     ],
@@ -206,6 +264,7 @@ class LocalAppSharingToolTests(unittest.TestCase):
             self.assertFalse((key_store.root / f"{SESSION_ID}.json").exists())
 
         self.assertIn(f"#{crypto.CONTENT_ENCRYPTION_PROTOCOL}=", listed["sessions"][0]["link"])
+        self.assertEqual(listed["sessions"][0]["access_mode"], "link")
         self.assertNotIn("access_code", json.dumps(listed))
         self.assertEqual(revoked["status"], "revoked")
         self.assertEqual(
@@ -227,6 +286,7 @@ class LocalAppSharingToolTests(unittest.TestCase):
             "status": "active",
             "created_at": _future_expiry(),
             "expires_at": _future_expiry(),
+            "access_mode": "code",
         }
         with self.assertRaisesRegex(ValueError, "end-to-end encrypted"):
             tool._safe_created_payload(response)
@@ -265,6 +325,7 @@ class LocalAppSharingToolTests(unittest.TestCase):
             "link": link,
             "mini_app_url": link,
             "access_code": ACCESS_CODE,
+            "access_mode": "code",
             "expires_at": _future_expiry(),
         }
         with (
@@ -280,14 +341,39 @@ class LocalAppSharingToolTests(unittest.TestCase):
             {"inline_keyboard": [[{"text": "View app", "web_app": {"url": link}}]]},
         )
 
+    def test_link_only_share_button_omits_access_code(self) -> None:
+        sent: dict[str, object] = {}
+
+        def send_message(**kwargs: object) -> dict[str, bool]:
+            sent.update(kwargs)
+            return {"ok": True}
+
+        link = f"{COMPUTER_ORIGIN}/s/{SESSION_ID}#{crypto.CONTENT_ENCRYPTION_PROTOCOL}={'F' * 43}"
+        created = {
+            "label": "Open review",
+            "link": link,
+            "mini_app_url": link,
+            "access_mode": "link",
+            "expires_at": _future_expiry(),
+        }
+        with (
+            mock.patch.object(tools, "_telegram_credentials", return_value=("token", "123")),
+            mock.patch.object(tools, "_telegram_send_message", side_effect=send_message),
+        ):
+            self.assertTrue(tool._send_share_button(created))
+
+        self.assertIn("Anyone with this complete link", str(sent["text"]))
+        self.assertNotIn("Access code", str(sent["text"]))
+
     def test_gateway_health_contract_forces_plaintext_process_replacement(self) -> None:
-        self.assertGreaterEqual(tool.GATEWAY_PROTOCOL_VERSION, 8)
+        self.assertGreaterEqual(tool.GATEWAY_PROTOCOL_VERSION, 9)
         viewer = gateway.VIEWER_PAGE.decode("utf-8")
         self.assertIn("content_encryption", viewer)
         self.assertIn("controllerchange", viewer)
         self.assertIn("service-worker-control-timeout", viewer)
         self.assertNotIn("<iframe", viewer)
         self.assertIn("location.replace", viewer)
+        self.assertIn("link-authorize", viewer)
         worker = gateway.SERVICE_WORKER.decode("utf-8")
         self.assertIn("app-shell-v3.js", worker)
         self.assertIn("indexedDB.open", worker)
@@ -449,6 +535,7 @@ class LocalAppSharingGatewayTests(unittest.TestCase):
                     "schema_version": "v1",
                     "session_id": SESSION_ID,
                     "expires_at": test_case.expiry,
+                    "access_mode": "code",
                     "content_encryption": crypto.CONTENT_ENCRYPTION_PROTOCOL,
                 }
                 if path.endswith("/authorize") and payload == {"access_code": ACCESS_CODE}:
@@ -457,6 +544,8 @@ class LocalAppSharingGatewayTests(unittest.TestCase):
                     "telegram_init_data": "signed-owner-init-data"
                 }:
                     return {**common, "access_token": ACCESS_TOKEN}
+                if path.endswith("/authorize-link") and payload == {}:
+                    return {**common, "access_mode": "link", "access_token": ACCESS_TOKEN}
                 if path.endswith("/resolve") and payload == {"access_token": ACCESS_TOKEN}:
                     return {**common, "port": test_case.upstream_port, "label": "Preview"}
                 raise PlatformError("unauthorized", status_code=401)
@@ -627,6 +716,22 @@ class LocalAppSharingGatewayTests(unittest.TestCase):
         self.assertIn(gateway._cookie_name(SESSION_ID), cookie)
         self.assertIn("SameSite=None", cookie)
         self.assertIn("Partitioned", cookie)
+
+    def test_link_only_auth_sets_session_scoped_grant_without_code(self) -> None:
+        status, headers, body = self._request(
+            "POST",
+            f"/s/{SESSION_ID}/link-authorize",
+        )
+        self.assertEqual(status, 200, body)
+        self.assertIn(gateway._cookie_name(SESSION_ID), headers["set-cookie"])
+        self.assertTrue(
+            any(
+                path.endswith(
+                    f"/local-app-shares/v1/{SESSION_ID}/authorize-link"
+                )
+                for path in self.platform_paths
+            )
+        )
 
     def test_health_declares_encryption_and_all_writes_are_blocked(self) -> None:
         status, _, body = self._request("GET", "/__tinyhat_share/health")

@@ -30,7 +30,7 @@ from .crypto import (
 
 GATEWAY_HOST = "127.0.0.1"
 GATEWAY_PORT = 9321
-GATEWAY_PROTOCOL_VERSION = 8
+GATEWAY_PROTOCOL_VERSION = 9
 PACKAGE_ROOT = Path(__file__).resolve().parents[2]
 MAX_PORT = 65535
 MAX_LABEL_LENGTH = 80
@@ -38,6 +38,7 @@ MIN_PRINTABLE_ORDINAL = 32
 DEFAULT_TTL_SECONDS = 15 * 60
 MIN_TTL_SECONDS = 60
 MAX_TTL_SECONDS = 4 * 60 * 60
+ACCESS_MODES = {"code", "link"}
 SESSION_ID_RE = re.compile(r"^las_[A-Za-z0-9_-]{20,80}$")
 VIEWER_LINK_RE = re.compile(
     r"^https://c-[0-9a-f]{24}\.(?:viewd|view)\.tinyhat\.ai/"
@@ -99,6 +100,13 @@ def _clean_ttl(value: Any) -> int:
     ):
         raise ValueError(f"ttl_seconds must be {MIN_TTL_SECONDS} to {MAX_TTL_SECONDS}")
     return ttl
+
+
+def _clean_access_mode(value: Any) -> str:
+    access_mode = str(value or "code").strip().lower()
+    if access_mode not in ACCESS_MODES:
+        raise ValueError("access_mode must be code or link")
+    return access_mode
 
 
 def _clean_session_id(value: Any) -> str:
@@ -222,7 +230,7 @@ def _safe_created_payload(payload: dict[str, Any]) -> dict[str, Any]:
     required = {
         "session_id": str,
         "link": str,
-        "access_code": str,
+        "access_mode": str,
         "label": str,
         "port": int,
         "expires_at": str,
@@ -235,22 +243,33 @@ def _safe_created_payload(payload: dict[str, Any]) -> dict[str, Any]:
     link = payload["link"].strip()
     if VIEWER_LINK_RE.fullmatch(link) is None or not link.endswith(session_id):
         raise ValueError("platform returned an invalid sharing link")
-    access_code = payload["access_code"].strip()
-    if re.fullmatch(r"[0-9]{4}", access_code) is None:
-        raise ValueError("platform returned an invalid access code")
-    return {
+    access_mode = _clean_access_mode(payload["access_mode"])
+    access_code = payload.get("access_code")
+    if access_mode == "code":
+        if not isinstance(access_code, str) or re.fullmatch(r"[0-9]{4}", access_code) is None:
+            raise ValueError("platform returned an invalid access code")
+    elif access_code not in {None, ""}:
+        raise ValueError("platform returned a code for a link-only share")
+    safe = {
         "schema": "tinyhat_local_app_share_v1",
         "status": "active",
         "session_id": session_id,
         "link": link,
         "mini_app_url": link,
-        "access_code": access_code,
+        "access_mode": access_mode,
         "label": payload["label"],
         "port": payload["port"],
         "expires_at": payload["expires_at"],
         "content_encryption": CONTENT_ENCRYPTION_PROTOCOL,
-        "message": "The Telegram Mini App button and browser access code are ready.",
+        "message": (
+            "The Telegram Mini App button and link-only browser access are ready."
+            if access_mode == "link"
+            else "The Telegram Mini App button and browser access code are ready."
+        ),
     }
+    if access_mode == "code":
+        safe["access_code"] = access_code
+    return safe
 
 
 def _send_share_button(created: dict[str, Any]) -> bool:
@@ -261,6 +280,11 @@ def _send_share_button(created: dict[str, Any]) -> bool:
         from ...tools import _telegram_credentials, _telegram_send_message  # noqa: PLC0415
 
         token, chat_id = _telegram_credentials()
+        access_detail = (
+            "Anyone with this complete link can open it.\n"
+            if created["access_mode"] == "link"
+            else f"Access code: {created['access_code']}\n"
+        )
         sent = _telegram_send_message(
             token=token,
             chat_id=chat_id,
@@ -269,7 +293,7 @@ def _send_share_button(created: dict[str, Any]) -> bool:
                 "Open it inside Telegram with the button below, or use this link "
                 "in any browser:\n"
                 f"{created['link']}\n\n"
-                f"Access code: {created['access_code']}\n"
+                f"{access_detail}"
                 f"Expires: {created['expires_at']}"
             ),
             reply_markup={
@@ -294,6 +318,7 @@ def _create(payload: dict[str, Any]) -> dict[str, Any]:
         raise ValueError(f"no local application is listening on port {port}")
     label = _clean_label(payload.get("label"))
     ttl_seconds = _clean_ttl(payload.get("ttl_seconds"))
+    access_mode = _clean_access_mode(payload.get("access_mode"))
     ensure_gateway_running()
     client, platform_auth = build_platform_client()
     expected_origin = ensure_connector_running(
@@ -306,6 +331,7 @@ def _create(payload: dict[str, Any]) -> dict[str, Any]:
             "port": port,
             "label": label,
             "ttl_seconds": ttl_seconds,
+            "access_mode": access_mode,
             "content_encryption": CONTENT_ENCRYPTION_PROTOCOL,
         },
     )
@@ -350,6 +376,7 @@ def _list() -> dict[str, Any]:
             raise ValueError("platform returned an invalid sharing link")
         if raw.get("content_encryption") != CONTENT_ENCRYPTION_PROTOCOL:
             raise ValueError("platform returned a sharing session without encryption")
+        access_mode = _clean_access_mode(raw.get("access_mode"))
         try:
             session_key = SESSION_KEY_STORE.load(session_id)
         except LocalAppCryptoError as exc:
@@ -361,6 +388,7 @@ def _list() -> dict[str, Any]:
                 "label": str(raw.get("label") or "Local app")[:80],
                 "port": _clean_port(raw.get("port")),
                 "expires_at": str(raw.get("expires_at") or ""),
+                "access_mode": access_mode,
                 "content_encryption": CONTENT_ENCRYPTION_PROTOCOL,
             }
         )

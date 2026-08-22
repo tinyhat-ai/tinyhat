@@ -324,6 +324,24 @@ def _handler(
                 else None
             )
 
+        def _authorize_link(self, session_id: str) -> dict[str, Any] | None:
+            try:
+                client, platform_auth = client_factory()
+                payload = client.post_json(
+                    computer_api_path(
+                        platform_auth,
+                        f"local-app-shares/v1/{quote(session_id, safe='')}/authorize-link",
+                    ),
+                    {},
+                )
+            except PlatformError:
+                return None
+            return (
+                payload
+                if payload.get("content_encryption") == CONTENT_ENCRYPTION_PROTOCOL
+                else None
+            )
+
         def _authorize_telegram(
             self, session_id: str, telegram_init_data: str
         ) -> dict[str, Any] | None:
@@ -616,8 +634,13 @@ def _handler(
             self.do_GET()
 
         def do_POST(self) -> None:
-            telegram_session_id = _match(self.path, "/telegram-authorize")
-            if telegram_session_id is not None:
+            link_session_id = _match(self.path, "/link-authorize")
+            if link_session_id is not None:
+                self._write_browser_grant(
+                    link_session_id,
+                    self._authorize_link(link_session_id),
+                )
+            elif (telegram_session_id := _match(self.path, "/telegram-authorize")) is not None:
                 payload = self._read_json(maximum_bytes=16 * 1024)
                 init_data = str(payload.get("telegram_init_data") or "") if payload else ""
                 if not init_data:
@@ -627,9 +650,7 @@ def _handler(
                     telegram_session_id,
                     self._authorize_telegram(telegram_session_id, init_data),
                 )
-                return
-            code_session_id = _match(self.path, "/code-authorize")
-            if code_session_id is not None:
+            elif (code_session_id := _match(self.path, "/code-authorize")) is not None:
                 payload = self._read_json(maximum_bytes=1024)
                 access_code = str(payload.get("access_code") or "") if payload else ""
                 if re.fullmatch(r"[0-9]{4}", access_code) is None:
@@ -639,16 +660,12 @@ def _handler(
                     code_session_id,
                     self._authorize(code_session_id, access_code),
                 )
-                return
-            handshake_session_id = _match(self.path, "/e2ee-handshake")
-            if handshake_session_id is not None:
+            elif (handshake_session_id := _match(self.path, "/e2ee-handshake")) is not None:
                 self._handshake(handshake_session_id)
-                return
-            encrypted_session_id = _match(self.path, "/encrypted")
-            if encrypted_session_id is not None:
+            elif (encrypted_session_id := _match(self.path, "/encrypted")) is not None:
                 self._encrypted_request(encrypted_session_id)
-                return
-            self._write_json(HTTPStatus.METHOD_NOT_ALLOWED, {"error": "method_not_allowed"})
+            else:
+                self._write_json(HTTPStatus.METHOD_NOT_ALLOWED, {"error": "method_not_allowed"})
 
         def do_PUT(self) -> None:
             self._write_json(HTTPStatus.METHOD_NOT_ALLOWED, {"error": "read_only_share"})

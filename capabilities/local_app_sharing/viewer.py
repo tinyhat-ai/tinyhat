@@ -166,6 +166,10 @@ pattern="[0-9]{4}" minlength="4" maxlength="4" required>
     });
   }
 
+  async function authorizeLink() {
+    await jsonFetch(`/s/${sessionId}/link-authorize`, {method: 'POST'});
+  }
+
   codeForm.addEventListener('submit', async event => {
     event.preventDefault();
     loading.hidden = false;
@@ -192,6 +196,11 @@ pattern="[0-9]{4}" minlength="4" maxlength="4" required>
       telegram.expand();
     }
     try {
+      await openEncryptedApp();
+      return;
+    } catch (_) {}
+    try {
+      await authorizeLink();
       await openEncryptedApp();
       return;
     } catch (_) {}

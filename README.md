@@ -154,11 +154,13 @@ platform for this Computer's own named Cloudflare Tunnel, installs the pinned
 checksum-verified connector, and keeps its Computer-scoped token out of the
 agent result and process arguments. The user receives a
 `c-<opaque-key>.view.tinyhat.ai` or
-`c-<opaque-key>.viewd.tinyhat.ai` link plus a four-digit numeric code. Multiple
+`c-<opaque-key>.viewd.tinyhat.ai` link plus, by default, a four-digit numeric code. Multiple
 ports use separate sessions through the same Computer tunnel. The plugin also
 sends a native Telegram **View app** button: signed
 Mini App data lets only the assigned agent's primary owner enter without a
-code, while ordinary browsers use the four-digit numeric code. Each share has a
+code, while ordinary browsers use the four-digit numeric code. Agents can also
+explicitly create a link-only session when anyone holding the complete link
+should be able to review the app without a code. Each share has a
 Computer-local P-256 private key. Its fingerprint is carried in the URL
 fragment, and each authorized browser derives an ephemeral AES-256-GCM content
 key with the Computer. Tinyhat's platform APIs and Cloudflare carry only

@@ -12,7 +12,10 @@ All notable changes to the Tinyhat plugin are documented here.
   Computer-local file, its fingerprint stays in the URL fragment, and neither
   Tinyhat's platform APIs nor Cloudflare receive the content key or plaintext
   local-app traffic. Plaintext proxy routes now fail closed. This release
-  requires the matching Tinyloop platform API contract before promotion.
+  also lets an Agent explicitly create a link-only share that anyone holding
+  the complete encrypted URL can open without a code; four-digit code access
+  remains the default. It requires the matching Tinyloop platform API contract
+  before promotion.
 
 ## 0.31.2 - 2026-08-21
 
