@@ -281,8 +281,11 @@ class LocalAppSharingToolTests(unittest.TestCase):
         )
 
     def test_gateway_health_contract_forces_plaintext_process_replacement(self) -> None:
-        self.assertGreaterEqual(tool.GATEWAY_PROTOCOL_VERSION, 4)
-        self.assertIn("content_encryption", gateway.VIEWER_PAGE.decode("utf-8"))
+        self.assertGreaterEqual(tool.GATEWAY_PROTOCOL_VERSION, 5)
+        viewer = gateway.VIEWER_PAGE.decode("utf-8")
+        self.assertIn("content_encryption", viewer)
+        self.assertIn("controllerchange", viewer)
+        self.assertIn("service-worker-control-timeout", viewer)
 
     def test_gateway_launch_does_not_depend_on_checkout_directory_name(self) -> None:
         args = tool._gateway_process_args()

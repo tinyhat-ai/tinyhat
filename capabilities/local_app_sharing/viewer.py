@@ -102,6 +102,22 @@ pattern="[0-9]{4}" minlength="4" maxlength="4" required>
         key: bytesToBase64Url(new Uint8Array(rawKey)),
       }, [channel.port2]);
     });
+    if (!navigator.serviceWorker.controller) {
+      await new Promise((resolve, reject) => {
+        const timer = setTimeout(() => {
+          navigator.serviceWorker.removeEventListener('controllerchange', onControllerChange);
+          reject(new Error('service-worker-control-timeout'));
+        }, 5000);
+        function onControllerChange() {
+          if (!navigator.serviceWorker.controller) return;
+          clearTimeout(timer);
+          navigator.serviceWorker.removeEventListener('controllerchange', onControllerChange);
+          resolve();
+        }
+        navigator.serviceWorker.addEventListener('controllerchange', onControllerChange);
+        onControllerChange();
+      });
+    }
   }
 
   async function openEncryptedApp() {
