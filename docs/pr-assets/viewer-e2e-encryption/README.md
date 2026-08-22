@@ -13,6 +13,8 @@ omitted.
   decrypts after the service worker has been idle.
 - `browser-code-gate.png`: the same kind of link opened outside Telegram asks
   for the four-digit numeric access code.
+- `browser-link-only.png`: an explicit link-access share opens the decrypted
+  local app in a fresh browser session without displaying the code gate.
 
 The corresponding browser run also proved that reopening the canonical share
 URL retained authorization, kept the session path and encryption fingerprint,
