@@ -281,7 +281,7 @@ class LocalAppSharingToolTests(unittest.TestCase):
         )
 
     def test_gateway_health_contract_forces_plaintext_process_replacement(self) -> None:
-        self.assertGreaterEqual(tool.GATEWAY_PROTOCOL_VERSION, 6)
+        self.assertGreaterEqual(tool.GATEWAY_PROTOCOL_VERSION, 7)
         viewer = gateway.VIEWER_PAGE.decode("utf-8")
         self.assertIn("content_encryption", viewer)
         self.assertIn("controllerchange", viewer)
@@ -289,7 +289,10 @@ class LocalAppSharingToolTests(unittest.TestCase):
         self.assertNotIn("<iframe", viewer)
         self.assertIn("location.replace", viewer)
         worker = gateway.SERVICE_WORKER.decode("utf-8")
-        self.assertIn("app-shell-v1.js", worker)
+        self.assertIn("app-shell-v2.js", worker)
+        self.assertIn("indexedDB.open", worker)
+        self.assertIn("persistConfig", worker)
+        self.assertIn("loadConfig", worker)
         self.assertIn("worker-src 'none'", worker)
         self.assertIn("history.replaceState", gateway.APP_SHELL.decode("utf-8"))
 
@@ -570,7 +573,7 @@ class LocalAppSharingGatewayTests(unittest.TestCase):
         self.assertEqual(direct_status, 426)
         self.assertEqual(json.loads(direct)["error"], "encrypted_transport_required")
 
-        shell_status, _, shell = self._request("GET", "/__tinyhat_share/app-shell-v1.js")
+        shell_status, _, shell = self._request("GET", "/__tinyhat_share/app-shell-v2.js")
         self.assertEqual(shell_status, 200)
         self.assertIn(b"history.replaceState", shell)
 

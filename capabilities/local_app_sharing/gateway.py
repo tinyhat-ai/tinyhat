@@ -590,10 +590,10 @@ def _handler(
                     },
                 )
                 return
-            if path == "/__tinyhat_share/e2ee-v1-sw.js":
+            if path == "/__tinyhat_share/e2ee-v2-sw.js":
                 self._write_service_worker()
                 return
-            if path == "/__tinyhat_share/app-shell-v1.js":
+            if path == "/__tinyhat_share/app-shell-v2.js":
                 self._write_app_shell()
                 return
             session_id = _match(self.path)

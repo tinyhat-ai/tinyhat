@@ -78,7 +78,7 @@ pattern="[0-9]{4}" minlength="4" maxlength="4" required>
   async function configureWorker(session, connection, rawKey) {
     if (!('serviceWorker' in navigator)) throw new Error('service-worker-unavailable');
     const registration = await navigator.serviceWorker.register(
-      '/__tinyhat_share/e2ee-v1-sw.js', {scope: '/'}
+      '/__tinyhat_share/e2ee-v2-sw.js', {scope: '/'}
     );
     await navigator.serviceWorker.ready;
     const worker = registration.active || registration.waiting || registration.installing;
@@ -221,6 +221,66 @@ SERVICE_WORKER = r"""'use strict';
 const PROTOCOL = '__CONTENT_ENCRYPTION_PROTOCOL__';
 const CONFIGS = new Map();
 const CLIENT_SESSIONS = new Map();
+const CONFIG_DB_NAME = 'tinyhat-local-app-sharing';
+const CONFIG_DB_VERSION = 1;
+const CONFIG_STORE_NAME = 'e2ee-configs';
+
+function openConfigDb() {
+  return new Promise((resolve, reject) => {
+    const request = indexedDB.open(CONFIG_DB_NAME, CONFIG_DB_VERSION);
+    request.onupgradeneeded = () => {
+      const db = request.result;
+      if (!db.objectStoreNames.contains(CONFIG_STORE_NAME)) {
+        db.createObjectStore(CONFIG_STORE_NAME, {keyPath: 'sessionId'});
+      }
+    };
+    request.onsuccess = () => resolve(request.result);
+    request.onerror = () => reject(request.error || new Error('config-db-open-failed'));
+  });
+}
+
+async function persistConfig(config) {
+  const db = await openConfigDb();
+  try {
+    await new Promise((resolve, reject) => {
+      const transaction = db.transaction(CONFIG_STORE_NAME, 'readwrite');
+      transaction.objectStore(CONFIG_STORE_NAME).put(config);
+      transaction.oncomplete = () => resolve();
+      transaction.onerror = () => reject(
+        transaction.error || new Error('config-db-write-failed')
+      );
+      transaction.onabort = () => reject(
+        transaction.error || new Error('config-db-write-aborted')
+      );
+    });
+  } finally {
+    db.close();
+  }
+}
+
+async function loadConfig(sessionId) {
+  const cached = CONFIGS.get(sessionId);
+  if (cached) return cached;
+  const db = await openConfigDb();
+  let stored;
+  try {
+    stored = await new Promise((resolve, reject) => {
+      const request = db.transaction(CONFIG_STORE_NAME, 'readonly')
+        .objectStore(CONFIG_STORE_NAME).get(sessionId);
+      request.onsuccess = () => resolve(request.result);
+      request.onerror = () => reject(request.error || new Error('config-db-read-failed'));
+    });
+  } finally {
+    db.close();
+  }
+  if (!stored || !stored.key || !stored.connectionId) return null;
+  const key = await crypto.subtle.importKey(
+    'raw', base64UrlToBytes(stored.key), {name: 'AES-GCM'}, false, ['encrypt', 'decrypt']
+  );
+  const config = {sessionId, connectionId: stored.connectionId, key};
+  CONFIGS.set(sessionId, config);
+  return config;
+}
 
 function base64UrlToBytes(value) {
   const clean = String(value || '').replace(/-/g, '+').replace(/_/g, '/');
@@ -266,7 +326,9 @@ self.addEventListener('message', event => {
       const cryptoKey = await crypto.subtle.importKey(
         'raw', base64UrlToBytes(key), {name: 'AES-GCM'}, false, ['encrypt', 'decrypt']
       );
-      CONFIGS.set(sessionId, {sessionId, connectionId, key: cryptoKey});
+      const config = {sessionId, connectionId, key: cryptoKey};
+      CONFIGS.set(sessionId, config);
+      await persistConfig({sessionId, connectionId, key});
       if (event.source && event.source.id) CLIENT_SESSIONS.set(event.source.id, sessionId);
       if (reply) reply.postMessage({ok: true});
     } catch (_) {
@@ -275,22 +337,36 @@ self.addEventListener('message', event => {
   })());
 });
 
-function routeFor(event) {
+async function sessionForClient(clientId) {
+  if (!clientId) return null;
+  const cached = CLIENT_SESSIONS.get(clientId);
+  if (cached) return cached;
+  const client = await self.clients.get(clientId);
+  if (!client) return null;
+  const match = new URL(client.url).pathname.match(
+    /^\/s\/(las_[A-Za-z0-9_-]{20,80})(?:\/|$)/
+  );
+  if (!match) return null;
+  CLIENT_SESSIONS.set(clientId, match[1]);
+  return match[1];
+}
+
+async function routeFor(event) {
   const url = new URL(event.request.url);
   if (url.origin !== self.location.origin) return null;
   const app = url.pathname.match(/^\/s\/(las_[A-Za-z0-9_-]{20,80})\/app(\/.*)?$/);
   if (app) {
     const sessionId = app[1];
-    const config = CONFIGS.get(sessionId);
+    const config = await loadConfig(sessionId);
     if (!config) return null;
     if (event.resultingClientId) CLIENT_SESSIONS.set(event.resultingClientId, sessionId);
     return {config, target: (app[2] || '/') + url.search};
   }
-  const sessionId = CLIENT_SESSIONS.get(event.clientId);
+  const sessionId = await sessionForClient(event.clientId);
   if (!sessionId || url.pathname.startsWith('/s/') || url.pathname.startsWith('/__tinyhat_share/')) {
     return null;
   }
-  const config = CONFIGS.get(sessionId);
+  const config = await loadConfig(sessionId);
   return config ? {config, target: url.pathname + url.search} : null;
 }
 
@@ -355,7 +431,7 @@ async function encryptedFetch(event, route) {
   if (body && event.request.mode === 'navigate' && /text\/html/i.test(contentType)) {
     const source = new TextDecoder().decode(body);
     const shell = `<base href="/s/${config.sessionId}/app/">` +
-      `<script src="/__tinyhat_share/app-shell-v1.js" ` +
+      `<script src="/__tinyhat_share/app-shell-v2.js" ` +
       `data-session-id="${config.sessionId}"><\/script>`;
     const head = source.match(/<head(?:\s[^>]*)?>/i);
     const html = head
@@ -369,8 +445,12 @@ async function encryptedFetch(event, route) {
 }
 
 self.addEventListener('fetch', event => {
-  const route = routeFor(event);
-  if (route) event.respondWith(encryptedFetch(event, route));
+  const url = new URL(event.request.url);
+  if (url.origin !== self.location.origin) return;
+  event.respondWith((async () => {
+    const route = await routeFor(event);
+    return route ? encryptedFetch(event, route) : fetch(event.request);
+  })());
 });
 """.replace("__CONTENT_ENCRYPTION_PROTOCOL__", CONTENT_ENCRYPTION_PROTOCOL).encode("utf-8")
 
