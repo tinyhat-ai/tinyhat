@@ -1,13 +1,13 @@
 [project]
 name = "tinyhat"
-version = "0.31.2"
+version = "0.32.0"
 description = "Hermes plugin that teaches agents how to use Tinyhat platform capabilities."
 readme = "README.md"
-requires-python = ">=3.9"
+requires-python = ">=3.9.2"
 license = { text = "MIT" }
 authors = [{ name = "Tinyloop", email = "tinyhat@tinyloop.co" }]
 keywords = ["tinyhat", "hermes", "plugin", "skills", "agent-platform"]
-dependencies = []
+dependencies = ["cryptography==48.0.1"]
 
 [project.urls]
 Homepage = "https://github.com/tinyhat-ai/tinyhat"

@@ -87,8 +87,9 @@ TINYHAT_LOCAL_APP_SHARING_SCHEMA = {
     "description": (
         "Creates, lists, or revokes short-lived links to HTTP applications "
         "already listening on this Computer's loopback interface. Tinyhat "
-        "platform APIs own session identity, codes, browser grants, expiry, "
-        "and revocation. The tool accepts a numeric port only, never a host or URL."
+        "platform APIs own session identity, access mode, codes where required, "
+        "browser grants, expiry, and revocation. The tool accepts a numeric port "
+        "only, never a host or URL."
     ),
     "properties": {
         "action": {
@@ -113,6 +114,14 @@ TINYHAT_LOCAL_APP_SHARING_SCHEMA = {
             "minimum": 60,
             "maximum": 14400,
             "description": "Optional lifetime. Defaults to 900 seconds (15 minutes).",
+        },
+        "access_mode": {
+            "type": "string",
+            "enum": ["code", "link"],
+            "description": (
+                "Optional access policy. code is the default and requires a four-digit "
+                "browser code; link lets anyone holding the complete encrypted link open it."
+            ),
         },
         "session_id": {
             "type": "string",

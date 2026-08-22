@@ -12,7 +12,7 @@ The current capability list is intentionally small.
 | `tinyhat_contact_details` | Platform API required | Returns this Agent's managed phone number and email address, and idempotently assigns missing contacts when the platform enables them. It accepts no identity, contact, or credential input. |
 | `tinyhat_mail` | Computer-local mailbox required | Checks, lists, searches, and reads this Agent's isolated Tinyhat inbox and sends one plain-text email when server policy permits it. It never accepts or returns mailbox credentials, server addresses, or account ids. Reads are bounded and sanitized; send retries use a durable request id. |
 | `tinyhat_hats` | Available now | Creates, lists, inspects, renames, and retires one-customer Hats; checks out and syncs private repositories through Computer-scoped GitHub leases; and manages value-blind Hat credentials. Retirement hides a Hat from owner/public/new-install surfaces and deletes creator package state while preserving platform and installation history and already-installed consumer agents. Authorized installation transfers are dispatched automatically to the registered creator Computer, signed there, and decrypted only by the consumer Computer. |
-| `tinyhat_local_app_sharing` | Platform API and viewer edge required | Creates, lists, and revokes short-lived code-gated links to non-sensitive HTTP apps on numeric loopback ports. The plugin owns the local gateway; platform APIs own session identity, grants, expiry, and revocation. |
+| `tinyhat_local_app_sharing` | Platform API and viewer edge required | Creates, lists, and revokes short-lived encrypted links to HTTP apps on numeric loopback ports. Four-digit code access is the default; an agent may explicitly choose link-only access when anyone holding the complete link should be able to view the app. The plugin owns the local gateway and browser-to-Computer encryption; platform APIs own session identity, grants, expiry, and revocation. |
 | `tinyhat_tell_joke` | Available now | Proves Hermes loaded the Tinyhat plugin and can call a plugin tool. |
 | `tinyhat_skill_catalog` | Available now | Lists Tinyhat plugin skills with `tinyhat:<skill>` qualified names and unqualified aliases. |
 | `tinyhat-skill-authoring` skill | Available now | Teaches agents to write portable user skills with valid names, explicit trigger and non-trigger boundaries, progressive disclosure, and bounded context size. |
@@ -41,20 +41,22 @@ on loopback when necessary, asks the platform to create or recover this
 Computer's permanent named tunnel, and runs the pinned checksum-verified
 connector with a private token file. It then asks the Computer-authenticated
 platform API for a short-lived session. The agent receives a
-`c-<opaque-key>.view.tinyhat.ai` or `c-<opaque-key>.viewd.tinyhat.ai` link and a
-four-digit numeric code. The plugin sends a native
-Telegram **View app** button; signed Mini App data authorizes the assigned
-agent's primary owner without the code. Ordinary browsers use the same link and
-code. List never returns codes, and revoke invalidates the selected session
-immediately.
+`c-<opaque-key>.view.tinyhat.ai` or `c-<opaque-key>.viewd.tinyhat.ai` link.
+Sessions use `access_mode: "code"` by default and return a four-digit numeric
+code. An agent can explicitly request `access_mode: "link"`; that mode returns
+no code and authorizes anyone who possesses the complete link. The plugin sends
+a native Telegram **View app** button; signed Mini App data also authorizes the
+assigned agent's primary owner without a code. List never returns codes, and
+revoke invalidates the selected session immediately.
 
-The browser sends the code to the loopback gateway, which exchanges it through
-the same Computer-authenticated API for an opaque browser grant. Each proxied
-request is resolved through the platform before the gateway connects to the
-recorded `127.0.0.1` port. The first slice supports read-only HTTP `GET` and
-`HEAD`; WebSockets, writes, and application-layer end-to-end encryption remain
-later slices. This plaintext slice must not be promoted to a production channel.
-No runtime code is involved.
+Before sharing, the Computer creates a per-session P-256 key pair. The complete
+link carries the browser key material in its URL fragment, which is not sent to
+the platform or Cloudflare. The browser and Computer derive an AES-256-GCM key
+with ECDH and HKDF-SHA256, and the gateway encrypts application responses before
+they cross the tunnel. The platform resolves session metadata and authorization
+but cannot decrypt the app content. Direct plaintext access is rejected. The
+gateway supports read-only HTTP `GET` and `HEAD`; writes and WebSockets are not
+shared. No runtime code is involved.
 
 ## Private Agent Mail
 

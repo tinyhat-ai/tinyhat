@@ -30,6 +30,9 @@ jobs:
       - name: Validate package shape
         run: python3 scripts/validate_framework_package.py
 
+      - name: Install runtime dependencies
+        run: python3 -m pip install 'cryptography==48.0.1'
+
       - name: Python unit tests
         run: python3 -m unittest discover -s test -p "*.py"
 

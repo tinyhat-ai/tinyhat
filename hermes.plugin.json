@@ -1,6 +1,6 @@
 {
   "schema": "tinyhat.framework-adapter.v1",
-  "version": "0.31.2",
+  "version": "0.32.0",
   "framework": {
     "name": "hermes",
     "minimum": "0.0.0"
@@ -123,7 +123,7 @@
         "tinyhat-local-app-sharing"
       ],
       "path": "skills/tinyhat-local-app-sharing/SKILL.md",
-      "purpose": "Creates and revokes short-lived code-gated links to HTTP apps running on this Computer's loopback ports."
+      "purpose": "Creates and revokes short-lived encrypted links to HTTP apps on this Computer, using four-digit code access by default or explicit link-only access."
     },
     {
       "name": "tinyhat-credit",

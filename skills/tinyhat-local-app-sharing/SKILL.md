@@ -6,10 +6,16 @@ description: Share, list, or stop a short-lived Tinyhat link to an HTTP app runn
 # Tinyhat Local App Sharing
 
 Use `tinyhat_local_app_sharing` to let the user review a non-sensitive HTTP
-application already running on this Computer. Tinyhat returns a public link and
-a four-digit numeric code. The tool also sends the owner a native **View app**
-Telegram Mini App button. The signed owner opens that button without entering a
-code; the same link can be opened in any other browser by entering the code.
+application already running on this Computer. By default Tinyhat returns a
+public link and a four-digit numeric code. The tool also sends the owner a
+native **View app** Telegram Mini App button. The signed owner opens that
+button without entering a code; the same link can be opened in any other
+browser by entering the code. When the user explicitly wants anyone with the
+link to have access, create a link-only session instead.
+The complete returned link includes a Computer-key fingerprint in its URL
+fragment. Preserve that link exactly. After authorization, the browser and
+Computer derive an ephemeral content key and exchange only encrypted app
+requests and responses through Cloudflare.
 
 ## Create a share
 
@@ -26,13 +32,27 @@ code; the same link can be opened in any other browser by entering the code.
 }
 ```
 
+`access_mode` defaults to `code`. Set `"access_mode": "link"` only when the
+user asks for a share that anyone holding the complete link can open without a
+code:
+
+```json
+{
+  "action": "create",
+  "port": 3000,
+  "label": "Open campaign review",
+  "ttl_seconds": 900,
+  "access_mode": "link"
+}
+```
+
 4. Check `telegram_button_sent`. When it is `true`, tell the user the **View
    app** button is ready and do not send a duplicate button. When it is `false`,
-   send the returned `link`, four-digit `access_code`, and expiry yourself. The
-   access code is returned only when the session is created.
+   send the returned `link`, expiry, and (for `access_mode: code`) four-digit
+   `access_code` yourself. A link-only session returns no access code.
 
 If the user wants to review two apps or ports, create two sessions. Each gets
-its own link, code, expiry, and revocation boundary.
+its own link, access mode, expiry, and revocation boundary.
 
 ## List or stop shares
 
@@ -57,9 +77,12 @@ review is finished:
   messages, terminals, or apps containing unrelated user data.
 - This first slice is read-only HTTP: browser `GET` and `HEAD` work; writes and
   WebSockets are not supported.
-- Treat the link and code as short-lived access material. Send them only in the
-  owner's Telegram chat; do not put either in
+- Treat the link and any code as short-lived access material. A link-only URL
+  is itself sufficient for access, so use that mode only at the user's request.
+  Send access material only in the owner's Telegram chat; do not put it in
   logs, source files, commits, issue comments, or documentation.
+- Never remove, shorten, or reconstruct the URL fragment. It binds the browser
+  to this share's Computer-local key; a link without it fails closed.
 - The plugin accepts only a numeric loopback port. Never work around that limit
   with a proxy to another host or network address.
 - Revoke the session after the review when continued access is unnecessary.
@@ -71,7 +94,11 @@ review is finished:
 
 The plugin owns this skill and the Computer-local gateway. Versioned Tinyhat
 platform APIs own one named tunnel and opaque hostname per Computer, plus
-session identity, code verification, browser grants, expiry, and revocation.
+session identity, access mode, code verification where required, browser
+grants, expiry, and revocation.
 The plugin keeps this Computer's connector token private and runs the pinned
 Cloudflare connector. Cloudflare infrastructure carries HTTPS traffic to the
-loopback-only gateway. The Tinyhat runtime is not part of this capability.
+loopback-only gateway, but local-app content uses browser-to-Computer
+end-to-end encryption. The platform receives authorization and expiry
+metadata, not content keys, page contents, requests, responses, or upstream app
+cookies. The Tinyhat runtime is not part of this capability.
