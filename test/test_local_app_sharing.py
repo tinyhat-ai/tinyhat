@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import base64
 import http.client
 import json
 import sys
@@ -27,6 +28,16 @@ SESSION_ID = "las_AAAAAAAAAAAAAAAAAAAAAAAA"
 ACCESS_TOKEN = "B" * 43
 ACCESS_CODE = "4821"
 COMPUTER_ORIGIN = "https://c-0123456789abcdef01234567.viewd.tinyhat.ai"
+CONNECTOR_TOKEN = base64.b64encode(
+    json.dumps(
+        {
+            "a": "35a071f190ad8fd5d612b388d74491ca",
+            "t": "123e4567-e89b-42d3-a456-426614174000",
+            "s": base64.b64encode(bytes(range(32))).decode("ascii"),
+        },
+        separators=(",", ":"),
+    ).encode("ascii")
+).decode("ascii")
 
 
 class LocalAppSharingToolTests(unittest.TestCase):
@@ -225,7 +236,7 @@ class LocalAppSharingToolTests(unittest.TestCase):
 
 class LocalAppSharingConnectorTests(unittest.TestCase):
     def test_connector_uses_computer_endpoint_and_never_returns_token(self) -> None:
-        token = "ey" + ("A" * 120) + ".example"
+        token = CONNECTOR_TOKEN
         calls: list[tuple[str, dict[str, object]]] = []
 
         class FakeClient:
@@ -262,7 +273,7 @@ class LocalAppSharingConnectorTests(unittest.TestCase):
         process = mock.Mock()
         process.pid = 4321
         process.poll.return_value = None
-        token = "ey" + ("B" * 120) + ".example"
+        token = CONNECTOR_TOKEN
         with tempfile.TemporaryDirectory() as directory:
             state_dir = Path(directory)
             token_path = state_dir / "cloudflared.token"
@@ -275,6 +286,7 @@ class LocalAppSharingConnectorTests(unittest.TestCase):
                     "Popen",
                     return_value=process,
                 ) as popen,
+                mock.patch.object(connector, "_connector_ready", return_value=True),
                 mock.patch.object(connector.time, "sleep"),
             ):
                 connector._start_connector(Path("/private/cloudflared"))
@@ -286,6 +298,10 @@ class LocalAppSharingConnectorTests(unittest.TestCase):
                 "/private/cloudflared",
                 "tunnel",
                 "--no-autoupdate",
+                "--metrics",
+                "127.0.0.1:9322",
+                "--grace-period",
+                "5s",
                 "run",
                 "--token-file",
                 str(token_path),
@@ -294,7 +310,7 @@ class LocalAppSharingConnectorTests(unittest.TestCase):
         self.assertNotIn(token, " ".join(args))
 
     def test_connector_rejects_shared_or_unscoped_hostnames(self) -> None:
-        token = "ey" + ("A" * 120) + ".example"
+        token = CONNECTOR_TOKEN
         for hostname in (
             "viewd.tinyhat.ai",
             "c-not-opaque.viewd.tinyhat.ai",
@@ -310,6 +326,47 @@ class LocalAppSharingConnectorTests(unittest.TestCase):
                             "connector_token": token,
                         }
                     )
+
+    def test_stop_connector_escalates_when_graceful_shutdown_stalls(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            pid_path = Path(directory) / "cloudflared.pid"
+            pid_path.write_text("4321\n", encoding="ascii")
+            with (
+                mock.patch.object(connector, "PID_PATH", pid_path),
+                mock.patch.object(connector, "CONNECTOR_STOP_POLLS", 1),
+                mock.patch.object(connector, "CONNECTOR_KILL_POLLS", 1),
+                mock.patch.object(
+                    connector,
+                    "_connector_process",
+                    side_effect=[object(), object(), None],
+                ),
+                mock.patch.object(connector.os, "kill") as kill,
+                mock.patch.object(connector.time, "sleep"),
+            ):
+                connector._stop_connector()
+
+        self.assertEqual(
+            kill.call_args_list,
+            [
+                mock.call(4321, connector.signal.SIGTERM),
+                mock.call(4321, connector.signal.SIGKILL),
+            ],
+        )
+
+    def test_write_token_recovers_from_corrupt_non_ascii_file(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            state_dir = Path(directory)
+            token_path = state_dir / "cloudflared.token"
+            token_path.write_bytes(b"\xff\xfe")
+            with (
+                mock.patch.object(connector, "STATE_DIR", state_dir),
+                mock.patch.object(connector, "TOKEN_PATH", token_path),
+            ):
+                changed = connector._write_token(CONNECTOR_TOKEN)
+                stored = token_path.read_text(encoding="ascii").strip()
+
+        self.assertTrue(changed)
+        self.assertEqual(stored, CONNECTOR_TOKEN)
 
 
 class _UpstreamHandler(BaseHTTPRequestHandler):

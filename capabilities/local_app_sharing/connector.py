@@ -54,7 +54,7 @@ HOSTNAME_RE = re.compile(
     r"^c-[0-9a-f]{24}\.(?:viewd|view)\.tinyhat\.ai$",
     re.IGNORECASE,
 )
-CONNECTOR_TOKEN_RE = re.compile(r"^[A-Za-z0-9._~-]{80,4096}$")
+CONNECTOR_TOKEN_RE = re.compile(r"^[A-Za-z0-9+/=]{80,4096}$")
 STATE_DIR = Path.home() / ".tinyhat" / "local-app-sharing"
 BINARY_PATH = STATE_DIR / f"cloudflared-{CLOUDFLARED_VERSION}"
 TOKEN_PATH = STATE_DIR / "cloudflared.token"
@@ -62,6 +62,13 @@ PID_PATH = STATE_DIR / "cloudflared.pid"
 LOG_PATH = STATE_DIR / "cloudflared.log"
 LOCK_PATH = STATE_DIR / "cloudflared.lock"
 DOWNLOAD_LIMIT_BYTES = 100 * 1024 * 1024
+CONNECTOR_METRICS_URL = "http://127.0.0.1:9322/ready"
+CONNECTOR_GRACE_SECONDS = 5
+CONNECTOR_STOP_POLL_SECONDS = 0.1
+CONNECTOR_STOP_POLLS = 60
+CONNECTOR_KILL_POLLS = 20
+CONNECTOR_READY_POLL_SECONDS = 0.25
+CONNECTOR_READY_POLLS = 80
 
 
 def _prepare_state_dir() -> None:
@@ -181,7 +188,7 @@ def _write_token(token: str) -> bool:
 
     try:
         existing = TOKEN_PATH.read_text(encoding="ascii").strip()
-    except OSError:
+    except (OSError, UnicodeDecodeError):
         existing = ""
     changed = not hmac.compare_digest(existing, token)
     if not changed:
@@ -229,7 +236,12 @@ def _connector_process() -> subprocess.CompletedProcess[str] | None:
     if process.returncode != 0:
         return None
     command = process.stdout
-    if str(BINARY_PATH) not in command or str(TOKEN_PATH) not in command:
+    if (
+        "cloudflared-" not in command
+        or "tunnel" not in command
+        or "--token-file" not in command
+        or str(TOKEN_PATH) not in command
+    ):
         return None
     return process
 
@@ -242,10 +254,27 @@ def _stop_connector() -> None:
         os.kill(pid, signal.SIGTERM)
     except ProcessLookupError:
         return
-    for _ in range(40):
+    for _ in range(CONNECTOR_STOP_POLLS):
         if _connector_process() is None:
             return
-        time.sleep(0.05)
+        time.sleep(CONNECTOR_STOP_POLL_SECONDS)
+    try:
+        os.kill(pid, signal.SIGKILL)
+    except ProcessLookupError:
+        return
+    for _ in range(CONNECTOR_KILL_POLLS):
+        if _connector_process() is None:
+            return
+        time.sleep(CONNECTOR_STOP_POLL_SECONDS)
+    raise RuntimeError("the prior Computer viewer connector could not be stopped")
+
+
+def _connector_ready() -> bool:
+    try:
+        with request.urlopen(CONNECTOR_METRICS_URL, timeout=0.5) as response:
+            return response.status == 200
+    except (error.HTTPError, error.URLError, OSError, TimeoutError):
+        return False
 
 
 def _start_connector(binary_path: Path) -> None:
@@ -256,6 +285,10 @@ def _start_connector(binary_path: Path) -> None:
                 str(binary_path),
                 "tunnel",
                 "--no-autoupdate",
+                "--metrics",
+                "127.0.0.1:9322",
+                "--grace-period",
+                f"{CONNECTOR_GRACE_SECONDS}s",
                 "run",
                 "--token-file",
                 str(TOKEN_PATH),
@@ -268,10 +301,14 @@ def _start_connector(binary_path: Path) -> None:
         )
     PID_PATH.write_text(f"{process.pid}\n", encoding="ascii")
     os.chmod(PID_PATH, 0o600)
-    for _ in range(30):
+    for _ in range(CONNECTOR_READY_POLLS):
         if process.poll() is not None:
             raise RuntimeError("the Computer viewer connector exited during startup")
-        time.sleep(0.1)
+        if _connector_ready():
+            return
+        time.sleep(CONNECTOR_READY_POLL_SECONDS)
+    _stop_connector()
+    raise RuntimeError("the Computer viewer connector did not become ready")
 
 
 def ensure_connector_running(
@@ -281,15 +318,19 @@ def ensure_connector_running(
 ) -> str:
     """Provision and run this Computer's tunnel without exposing its token."""
 
-    response = client.post_json(
-        computer_api_path(platform_auth, "viewer-tunnel/v1/ensure"),
-        {},
-    )
-    public_origin, token = _validated_connector_payload(response)
     _prepare_state_dir()
     with LOCK_PATH.open("a+", encoding="utf-8") as lock_file:
         os.chmod(LOCK_PATH, 0o600)
         fcntl.flock(lock_file.fileno(), fcntl.LOCK_EX)
+        # Keep token retrieval, persistence, and process restart in one local
+        # critical section so concurrent share requests cannot apply responses
+        # out of order. The platform returns a stable token for the lifetime of
+        # the remotely managed tunnel and rotates it only by recreating it.
+        response = client.post_json(
+            computer_api_path(platform_auth, "viewer-tunnel/v1/ensure"),
+            {},
+        )
+        public_origin, token = _validated_connector_payload(response)
         token_changed = _write_token(token)
         if token_changed:
             _stop_connector()
