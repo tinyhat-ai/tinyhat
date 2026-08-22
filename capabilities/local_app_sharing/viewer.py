@@ -36,6 +36,7 @@ pattern="[0-9]{4}" minlength="4" maxlength="4" required>
   const sessionId = location.pathname.match(/^\/s\/(las_[A-Za-z0-9_-]{20,80})\/?$/)?.[1];
   const expectedFingerprint = new URLSearchParams(location.hash.slice(1)).get(protocol);
   const telegram = window.Telegram && window.Telegram.WebApp;
+  const embedded = window.top !== window.self;
 
   function bytesToBase64Url(bytes) {
     let binary = '';
@@ -162,12 +163,16 @@ pattern="[0-9]{4}" minlength="4" maxlength="4" required>
     await jsonFetch(`/s/${sessionId}/telegram-authorize`, {
       method: 'POST',
       headers: {'Content-Type': 'application/json'},
-      body: JSON.stringify({telegram_init_data: telegram.initData}),
+      body: JSON.stringify({telegram_init_data: telegram.initData, embedded}),
     });
   }
 
   async function authorizeLink() {
-    await jsonFetch(`/s/${sessionId}/link-authorize`, {method: 'POST'});
+    await jsonFetch(`/s/${sessionId}/link-authorize`, {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({embedded}),
+    });
   }
 
   codeForm.addEventListener('submit', async event => {
@@ -178,7 +183,7 @@ pattern="[0-9]{4}" minlength="4" maxlength="4" required>
       await jsonFetch(`/s/${sessionId}/code-authorize`, {
         method: 'POST',
         headers: {'Content-Type': 'application/json'},
-        body: JSON.stringify({access_code: codeInput.value}),
+        body: JSON.stringify({access_code: codeInput.value, embedded}),
       });
       await openEncryptedApp();
     } catch (_) {
