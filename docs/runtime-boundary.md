@@ -26,11 +26,19 @@ belongs in this repo. If it is "keep the Computer alive and trusted", it
 belongs in the runtime.
 
 Local app sharing follows that boundary. The plugin owns the agent skill,
-numeric-port tool, and loopback HTTP gateway. Versioned Tinyloop platform APIs
-own short-lived session identity, code checks, browser grants, expiry, and
-revocation. Cloudflare infrastructure carries HTTPS traffic to the gateway.
+numeric-port tool, loopback HTTP gateway, and pinned `cloudflared` connector.
+Versioned Tinyloop platform APIs own one named Cloudflare Tunnel per Computer,
+its opaque DNS route, and short-lived session identity, code checks, browser
+grants, expiry, and revocation. The backend account credential never reaches
+the plugin; the plugin receives only its Computer-scoped connector token.
+Cloudflare infrastructure carries HTTPS traffic to the gateway.
 The runtime supplies only its existing Computer identity and plugin lifecycle;
 it gains no sharing-specific code, command, or callback.
+
+Cloudflare HTTPS is transport security, not application-level end-to-end
+encryption. Channel promotion remains blocked until browser and gateway
+session-key establishment and ciphertext-only transport are reviewed and
+deployed without giving the platform content keys.
 
 Google identity connection is a concrete example: the plugin supplies the
 agent tool, one-time Computer key, a packaged public scope manifest, implemented

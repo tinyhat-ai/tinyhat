@@ -7,7 +7,10 @@ All notable changes to the Tinyhat plugin are documented here.
 ## 0.31.2 - 2026-08-21
 
 - Share a Computer-local HTTP app through a short-lived `view.tinyhat.ai` or
-  `viewd.tinyhat.ai` link. The Agent sends a native Telegram Mini App button
+  `viewd.tinyhat.ai` link on one permanent named Cloudflare Tunnel per Computer.
+  The plugin installs a pinned, checksum-verified connector and keeps its
+  Computer-scoped token out of agent-visible results and process arguments.
+  The Agent sends a native Telegram Mini App button
   that opens directly for the assigned owner, while ordinary browsers use the
   same link with a four-digit numeric access code.
 
