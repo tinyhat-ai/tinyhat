@@ -355,7 +355,7 @@ class HermesAdapterTests(unittest.TestCase):
 
         self.assertEqual(payload["schema"], "tinyhat_plugin_version_v1")
         self.assertEqual(payload["name"], "tinyhat")
-        self.assertEqual(payload["version"], "0.32.1")
+        self.assertEqual(payload["version"], "0.32.2")
 
     def test_running_version_contract_stays_at_plugin_root(self) -> None:
         adapter = json.loads((REPO_ROOT / "hermes.plugin.json").read_text(encoding="utf-8"))
@@ -363,7 +363,7 @@ class HermesAdapterTests(unittest.TestCase):
         self.assertEqual(adapter["entrypoint"]["manifest"], "plugin.yaml")
         self.assertEqual(adapter["entrypoint"]["module"], "__init__.py")
         self.assertEqual(Path(tools.__file__).resolve().parent, REPO_ROOT)
-        self.assertEqual(tools._plugin_manifest()["version"], "0.32.1")
+        self.assertEqual(tools._plugin_manifest()["version"], "0.32.2")
 
     def test_platform_status_uses_attested_computer_endpoint(self) -> None:
         original_build = tools.build_platform_client
@@ -412,7 +412,7 @@ class HermesAdapterTests(unittest.TestCase):
 
         self.assertEqual(payload["schema"], "tinyhat_skill_catalog_v1")
         self.assertEqual(payload["plugin"]["name"], "tinyhat")
-        self.assertEqual(payload["plugin"]["version"], "0.32.1")
+        self.assertEqual(payload["plugin"]["version"], "0.32.2")
         by_name = {skill["name"]: skill for skill in payload["skills"]}
         self.assertEqual(
             by_name["tinyhat-codex-auth"]["qualified_name"],

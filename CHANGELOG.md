@@ -4,6 +4,8 @@ All notable changes to the Tinyhat plugin are documented here.
 
 ## Unreleased
 
+## 0.32.2 - 2026-08-23
+
 - Add a plain HTTPS transport for ordinary, non-sensitive local app shares and
   make it the agent-facing default. Plain shares keep the same short-lived
   session, code/link access policy, Telegram-owner authorization, per-Computer
