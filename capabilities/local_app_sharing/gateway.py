@@ -71,11 +71,23 @@ def _cookie_name(session_id: str) -> str:
     return f"{COOKIE_PREFIX}{session_id}"
 
 
-def _browser_grant_cookie(session_id: str, access_token: str) -> str:
-    return (
+def _browser_grant_cookie(
+    session_id: str, access_token: str, *, embedded: bool
+) -> str:
+    """Use CHIPS only for iframe clients that need third-party cookie access.
+
+    Native Telegram Mini Apps and ordinary browsers load the viewer as a
+    top-level page. Some WebKit releases reject cookies carrying the
+    ``Partitioned`` attribute there, while Telegram Web embeds the viewer and
+    needs a partitioned cookie. The viewer reports that browsing-context fact;
+    it does not change whether the platform authorizes the share.
+    """
+
+    cookie = (
         f"{_cookie_name(session_id)}={access_token}; "
-        "Path=/; Secure; HttpOnly; SameSite=None; Partitioned"
+        "Path=/; Secure; HttpOnly; SameSite=None"
     )
+    return f"{cookie}; Partitioned" if embedded else cookie
 
 
 def _parse_cookie(header: str | None, session_id: str) -> str | None:
@@ -362,7 +374,13 @@ def _handler(
                 else None
             )
 
-        def _write_browser_grant(self, session_id: str, payload: dict[str, Any] | None) -> None:
+        def _write_browser_grant(
+            self,
+            session_id: str,
+            payload: dict[str, Any] | None,
+            *,
+            embedded: bool,
+        ) -> None:
             token = payload.get("access_token") if isinstance(payload, dict) else None
             if not isinstance(token, str) or re.fullmatch(r"[A-Za-z0-9_-]{32,256}", token) is None:
                 self._write_json(HTTPStatus.UNAUTHORIZED, {"error": "share_access_denied"})
@@ -370,7 +388,13 @@ def _handler(
             self._write_json(
                 HTTPStatus.OK,
                 {"ok": True, "content_encryption": CONTENT_ENCRYPTION_PROTOCOL},
-                extra_headers={"Set-Cookie": _browser_grant_cookie(session_id, token)},
+                extra_headers={
+                    "Set-Cookie": _browser_grant_cookie(
+                        session_id,
+                        token,
+                        embedded=embedded,
+                    )
+                },
             )
 
         def _authorized_target(self, session_id: str) -> tuple[int, float] | None:
@@ -636,9 +660,12 @@ def _handler(
         def do_POST(self) -> None:
             link_session_id = _match(self.path, "/link-authorize")
             if link_session_id is not None:
+                payload = self._read_json(maximum_bytes=1024)
+                embedded = payload.get("embedded") is True if payload else False
                 self._write_browser_grant(
                     link_session_id,
                     self._authorize_link(link_session_id),
+                    embedded=embedded,
                 )
             elif (telegram_session_id := _match(self.path, "/telegram-authorize")) is not None:
                 payload = self._read_json(maximum_bytes=16 * 1024)
@@ -649,6 +676,7 @@ def _handler(
                 self._write_browser_grant(
                     telegram_session_id,
                     self._authorize_telegram(telegram_session_id, init_data),
+                    embedded=payload.get("embedded") is True,
                 )
             elif (code_session_id := _match(self.path, "/code-authorize")) is not None:
                 payload = self._read_json(maximum_bytes=1024)
@@ -659,6 +687,7 @@ def _handler(
                 self._write_browser_grant(
                     code_session_id,
                     self._authorize(code_session_id, access_code),
+                    embedded=payload.get("embedded") is True,
                 )
             elif (handshake_session_id := _match(self.path, "/e2ee-handshake")) is not None:
                 self._handshake(handshake_session_id)

@@ -379,7 +379,7 @@ class LocalAppSharingToolTests(unittest.TestCase):
         self.assertNotIn("Access code", str(sent["text"]))
 
     def test_gateway_health_contract_forces_plaintext_process_replacement(self) -> None:
-        self.assertGreaterEqual(tool.GATEWAY_PROTOCOL_VERSION, 9)
+        self.assertGreaterEqual(tool.GATEWAY_PROTOCOL_VERSION, 10)
         viewer = gateway.VIEWER_PAGE.decode("utf-8")
         self.assertIn("content_encryption", viewer)
         self.assertIn("controllerchange", viewer)
@@ -674,6 +674,8 @@ class LocalAppSharingGatewayTests(unittest.TestCase):
         self.assertEqual(status, 200)
         self.assertIn('id="loading"', html)
         self.assertIn('id="code-page" hidden', html)
+        self.assertIn("const embedded = window.top !== window.self", html)
+        self.assertIn("JSON.stringify({embedded})", html)
         self.assertNotIn("Verifying your Telegram account", html)
         direct_status, _, direct = self._request("GET", f"/s/{SESSION_ID}/app/")
         self.assertEqual(direct_status, 426)
@@ -718,25 +720,45 @@ class LocalAppSharingGatewayTests(unittest.TestCase):
         )
         self.assertEqual(replay_status, 400)
 
-    def test_telegram_owner_auth_sets_session_scoped_grant_without_code(self) -> None:
+    def test_native_telegram_owner_auth_uses_first_party_grant_cookie(self) -> None:
         status, headers, body = self._request(
             "POST",
             f"/s/{SESSION_ID}/telegram-authorize",
-            payload={"telegram_init_data": "signed-owner-init-data"},
+            payload={
+                "telegram_init_data": "signed-owner-init-data",
+                "embedded": False,
+            },
         )
         self.assertEqual(status, 200, body)
         cookie = headers["set-cookie"]
         self.assertIn(gateway._cookie_name(SESSION_ID), cookie)
         self.assertIn("SameSite=None", cookie)
+        self.assertNotIn("Partitioned", cookie)
+
+    def test_telegram_web_owner_auth_uses_partitioned_grant_cookie(self) -> None:
+        status, headers, body = self._request(
+            "POST",
+            f"/s/{SESSION_ID}/telegram-authorize",
+            payload={
+                "telegram_init_data": "signed-owner-init-data",
+                "embedded": True,
+            },
+        )
+        self.assertEqual(status, 200, body)
+        cookie = headers["set-cookie"]
+        self.assertIn(gateway._cookie_name(SESSION_ID), cookie)
         self.assertIn("Partitioned", cookie)
 
     def test_link_only_auth_sets_session_scoped_grant_without_code(self) -> None:
         status, headers, body = self._request(
             "POST",
             f"/s/{SESSION_ID}/link-authorize",
+            payload={"embedded": False},
         )
         self.assertEqual(status, 200, body)
-        self.assertIn(gateway._cookie_name(SESSION_ID), headers["set-cookie"])
+        cookie = headers["set-cookie"]
+        self.assertIn(gateway._cookie_name(SESSION_ID), cookie)
+        self.assertNotIn("Partitioned", cookie)
         self.assertTrue(
             any(
                 path.endswith(
