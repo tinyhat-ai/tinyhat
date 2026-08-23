@@ -1,4 +1,4 @@
-"""Browser shell and service worker for encrypted local app sharing."""
+"""Browser shell plus encrypted and ordinary local app transports."""
 
 from __future__ import annotations
 
@@ -25,12 +25,14 @@ background:#171717;color:white;border:0;text-align:center;text-decoration:none;f
 <input id="code" name="code" autocomplete="one-time-code" inputmode="numeric"
 pattern="[0-9]{4}" minlength="4" maxlength="4" required>
 <button type="submit">View app</button></form></main>
-<main id="browser-page" hidden><a id="browser-link" class="browser-link" target="_blank"
+<main id="browser-page" hidden><p>This encrypted app needs browser security features that
+Telegram does not provide.</p><a id="browser-link" class="browser-link" target="_blank"
 rel="noopener noreferrer">Open shared app in browser</a></main>
 <script src="https://telegram.org/js/telegram-web-app.js"></script>
 <script>(() => {
   'use strict';
   const protocol = '__CONTENT_ENCRYPTION_PROTOCOL__';
+  const plainTransport = 'none';
   const handoffProtocol = 'tinyhat-browser-handoff-v1';
   const loading = document.getElementById('loading');
   const codePage = document.getElementById('code-page');
@@ -45,7 +47,6 @@ rel="noopener noreferrer">Open shared app in browser</a></main>
   const incomingBrowserHandoff = fragmentParams.get(handoffProtocol);
   const telegram = window.Telegram && window.Telegram.WebApp;
   const embedded = window.top !== window.self;
-  const workerAvailable = 'serviceWorker' in navigator;
   let browserHandoffUrl = '';
 
   function bytesToBase64Url(bytes) {
@@ -200,6 +201,10 @@ rel="noopener noreferrer">Open shared app in browser</a></main>
     location.replace(`/s/${sessionId}/app/${sessionFragment}`);
   }
 
+  function openPlainApp() {
+    location.replace(`/s/${sessionId}/app/`);
+  }
+
   function base64UrlToBytes(value) {
     const clean = String(value || '').replace(/-/g, '+').replace(/_/g, '/');
     const binary = atob(clean + '='.repeat((4 - clean.length % 4) % 4));
@@ -234,6 +239,14 @@ rel="noopener noreferrer">Open shared app in browser</a></main>
     });
   }
 
+  async function currentAuthorization() {
+    return jsonFetch(`/s/${sessionId}/session`, {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: '{}',
+    });
+  }
+
   async function consumeBrowserHandoff() {
     if (!incomingBrowserHandoff) return;
     await jsonFetch(`/s/${sessionId}/browser-handoff-authorize`, {
@@ -262,6 +275,28 @@ rel="noopener noreferrer">Open shared app in browser</a></main>
     }
   }
 
+  async function openAuthorizedApp(authorization) {
+    if (authorization && authorization.content_encryption === plainTransport) {
+      openPlainApp();
+      return true;
+    }
+    if (!authorization || authorization.content_encryption !== protocol) return false;
+    if (!expectedFingerprint) {
+      showCode('This encrypted sharing link is incomplete.');
+      return true;
+    }
+    if (!('serviceWorker' in navigator)) {
+      try {
+        const handoff = await createBrowserHandoff();
+        showBrowserHandoff(handoff.browser_handoff);
+        return true;
+      } catch (_) {
+        return false;
+      }
+    }
+    return openOrHandoff();
+  }
+
   codeForm.addEventListener('submit', async event => {
     event.preventDefault();
     loading.hidden = false;
@@ -273,21 +308,17 @@ rel="noopener noreferrer">Open shared app in browser</a></main>
         body: JSON.stringify({
           access_code: codeInput.value,
           embedded,
-          browser_handoff: !workerAvailable,
+          browser_handoff: false,
         }),
       });
-      if (!workerAvailable) {
-        showBrowserHandoff(authorization.browser_handoff);
-        return;
-      }
-      if (!await openOrHandoff()) throw new Error('share-open-failed');
+      if (!await openAuthorizedApp(authorization)) throw new Error('share-open-failed');
     } catch (_) {
       showCode('That code is not valid or has expired.');
     }
   });
 
   (async () => {
-    if (!sessionId || !expectedFingerprint) {
+    if (!sessionId) {
       showCode('This sharing link is incomplete.');
       return;
     }
@@ -302,36 +333,15 @@ rel="noopener noreferrer">Open shared app in browser</a></main>
         history.replaceState(null, '', `${location.pathname}${canonicalFragment()}`);
       }
     }
-    if (!workerAvailable) {
-      try {
-        const authorization = await createBrowserHandoff();
-        showBrowserHandoff(authorization.browser_handoff);
-        return;
-      } catch (_) {}
-      try {
-        const authorization = await authorizeLink(true);
-        showBrowserHandoff(authorization.browser_handoff);
-        return;
-      } catch (_) {}
-      if (telegram && telegram.initData) {
-        try {
-          const authorization = await authorizeTelegram(true);
-          showBrowserHandoff(authorization.browser_handoff);
-          return;
-        } catch (_) {}
-      }
-      showCode('');
-      return;
-    }
-    if (await openOrHandoff()) return;
     try {
-      await authorizeLink();
-      if (await openOrHandoff()) return;
+      if (await openAuthorizedApp(await currentAuthorization())) return;
+    } catch (_) {}
+    try {
+      if (await openAuthorizedApp(await authorizeLink())) return;
     } catch (_) {}
     if (telegram && telegram.initData) {
       try {
-        await authorizeTelegram();
-        if (await openOrHandoff()) return;
+        if (await openAuthorizedApp(await authorizeTelegram())) return;
       } catch (_) {}
     }
     showCode('');
