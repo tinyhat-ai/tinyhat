@@ -160,8 +160,12 @@ sends a native Telegram **View app** button: signed
 Mini App data lets only the assigned agent's primary owner enter without a
 code, while ordinary browsers use the four-digit numeric code. Agents can also
 explicitly create a link-only session when anyone holding the complete link
-should be able to review the app without a code. Each share has a
-Computer-local P-256 private key. Its fingerprint is carried in the URL
+should be able to review the app without a code. Telegram WebViews that support
+service workers render the encrypted app directly. When Telegram on iOS does
+not expose service workers, the loading-only Mini App offers a native browser
+action backed by a short-lived, one-time Computer-local handoff; the owner or
+link-only viewer continues in the external browser without a code. Each share
+has a Computer-local P-256 private key. Its fingerprint is carried in the URL
 fragment, and each authorized browser derives an ephemeral AES-256-GCM content
 key with the Computer. Tinyhat's platform APIs and Cloudflare carry only
 authorization metadata and encrypted local-app traffic; they do not receive

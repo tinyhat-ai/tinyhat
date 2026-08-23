@@ -42,10 +42,13 @@ MAX_UPSTREAM_BODY_BYTES = 10 * 1024 * 1024
 MAX_TARGET_LENGTH = 4096
 MAX_ACTIVE_CONNECTIONS = 100
 MAX_REQUEST_IDS_PER_CONNECTION = 4096
+MAX_BROWSER_HANDOFFS = 100
+BROWSER_HANDOFF_TTL_SECONDS = 5 * 60
 MAX_PORT = 65535
 MAX_HEADER_VALUE_LENGTH = 4096
 CONNECTION_ID_RE = re.compile(r"^e2e_[A-Za-z0-9_-]{20,80}$")
 REQUEST_ID_RE = re.compile(r"^[A-Za-z0-9_-]{16,128}$")
+BROWSER_HANDOFF_RE = re.compile(r"^bh_[A-Za-z0-9_-]{32,128}$")
 SAFE_REQUEST_HEADERS = frozenset(
     {"accept", "accept-language", "if-none-match", "if-modified-since", "range"}
 )
@@ -202,6 +205,71 @@ class _ConnectionRegistry:
             return item
 
 
+@dataclass(frozen=True)
+class _BrowserHandoff:
+    session_id: str
+    access_token: str
+    expires_at_epoch: float
+
+
+class _BrowserHandoffRegistry:
+    """Hold short-lived one-time grants while iOS leaves a Telegram WebView."""
+
+    def __init__(self) -> None:
+        self._lock = threading.Lock()
+        self._items: dict[str, _BrowserHandoff] = {}
+
+    def _prune_locked(self) -> None:
+        now = time.time()
+        expired = [
+            token
+            for token, handoff in self._items.items()
+            if handoff.expires_at_epoch <= now
+        ]
+        for token in expired:
+            self._items.pop(token, None)
+
+    def create(
+        self,
+        *,
+        session_id: str,
+        access_token: str,
+        grant_expires_at_epoch: float,
+    ) -> str:
+        with self._lock:
+            self._prune_locked()
+            if len(self._items) >= MAX_BROWSER_HANDOFFS:
+                oldest = min(
+                    self._items,
+                    key=lambda token: self._items[token].expires_at_epoch,
+                )
+                self._items.pop(oldest, None)
+            token = f"bh_{secrets.token_urlsafe(32)}"
+            self._items[token] = _BrowserHandoff(
+                session_id=session_id,
+                access_token=access_token,
+                expires_at_epoch=min(
+                    grant_expires_at_epoch,
+                    time.time() + BROWSER_HANDOFF_TTL_SECONDS,
+                ),
+            )
+            return token
+
+    def consume(self, *, session_id: str, token: str) -> str | None:
+        if BROWSER_HANDOFF_RE.fullmatch(token) is None:
+            return None
+        with self._lock:
+            self._prune_locked()
+            handoff = self._items.pop(token, None)
+        if (
+            handoff is None
+            or handoff.session_id != session_id
+            or handoff.expires_at_epoch <= time.time()
+        ):
+            return None
+        return handoff.access_token
+
+
 def _capture_upstream_cookies(
     connection: _EncryptedConnection,
     raw_headers: list[tuple[str, str]],
@@ -243,7 +311,10 @@ def _handler(
     *,
     key_store: SessionKeyStore,
     connections: _ConnectionRegistry,
+    browser_handoffs: _BrowserHandoffRegistry | None = None,
 ) -> type[BaseHTTPRequestHandler]:
+    handoffs = browser_handoffs or _BrowserHandoffRegistry()
+
     class GatewayHandler(BaseHTTPRequestHandler):
         server_version = "TinyhatLocalAppGateway/2"
 
@@ -380,14 +451,33 @@ def _handler(
             payload: dict[str, Any] | None,
             *,
             embedded: bool,
+            create_browser_handoff: bool = False,
         ) -> None:
             token = payload.get("access_token") if isinstance(payload, dict) else None
             if not isinstance(token, str) or re.fullmatch(r"[A-Za-z0-9_-]{32,256}", token) is None:
                 self._write_json(HTTPStatus.UNAUTHORIZED, {"error": "share_access_denied"})
                 return
+            response: dict[str, Any] = {
+                "ok": True,
+                "content_encryption": CONTENT_ENCRYPTION_PROTOCOL,
+            }
+            if create_browser_handoff:
+                try:
+                    grant_expires_at_epoch = _expires_at_epoch(payload.get("expires_at"))
+                except LocalAppCryptoError:
+                    self._write_json(
+                        HTTPStatus.UNAUTHORIZED,
+                        {"error": "share_access_denied"},
+                    )
+                    return
+                response["browser_handoff"] = handoffs.create(
+                    session_id=session_id,
+                    access_token=token,
+                    grant_expires_at_epoch=grant_expires_at_epoch,
+                )
             self._write_json(
                 HTTPStatus.OK,
-                {"ok": True, "content_encryption": CONTENT_ENCRYPTION_PROTOCOL},
+                response,
                 extra_headers={
                     "Set-Cookie": _browser_grant_cookie(
                         session_id,
@@ -395,6 +485,46 @@ def _handler(
                         embedded=embedded,
                     )
                 },
+            )
+
+        def _write_new_browser_handoff(self, session_id: str) -> None:
+            access_token = _parse_cookie(self.headers.get("cookie"), session_id)
+            if access_token is None:
+                self._write_json(HTTPStatus.UNAUTHORIZED, {"error": "share_access_denied"})
+                return
+            resolved = self._resolve(session_id, access_token)
+            if not isinstance(resolved, dict):
+                self._write_json(HTTPStatus.UNAUTHORIZED, {"error": "share_access_denied"})
+                return
+            try:
+                grant_expires_at_epoch = _expires_at_epoch(resolved.get("expires_at"))
+            except LocalAppCryptoError:
+                self._write_json(HTTPStatus.UNAUTHORIZED, {"error": "share_access_denied"})
+                return
+            self._write_json(
+                HTTPStatus.OK,
+                {
+                    "ok": True,
+                    "content_encryption": CONTENT_ENCRYPTION_PROTOCOL,
+                    "browser_handoff": handoffs.create(
+                        session_id=session_id,
+                        access_token=access_token,
+                        grant_expires_at_epoch=grant_expires_at_epoch,
+                    ),
+                },
+            )
+
+        def _consume_browser_handoff(self, session_id: str) -> None:
+            payload = self._read_json(maximum_bytes=1024)
+            token = str(payload.get("browser_handoff") or "") if payload else ""
+            access_token = handoffs.consume(session_id=session_id, token=token)
+            if access_token is None:
+                self._write_json(HTTPStatus.UNAUTHORIZED, {"error": "share_access_denied"})
+                return
+            self._write_browser_grant(
+                session_id,
+                {"access_token": access_token},
+                embedded=False,
             )
 
         def _authorized_target(self, session_id: str) -> tuple[int, float] | None:
@@ -658,14 +788,26 @@ def _handler(
             self.do_GET()
 
         def do_POST(self) -> None:
-            link_session_id = _match(self.path, "/link-authorize")
-            if link_session_id is not None:
+            handoff_session_id = _match(self.path, "/browser-handoff")
+            if handoff_session_id is not None:
+                self._write_new_browser_handoff(handoff_session_id)
+            elif (
+                consume_session_id := _match(
+                    self.path,
+                    "/browser-handoff-authorize",
+                )
+            ) is not None:
+                self._consume_browser_handoff(consume_session_id)
+            elif (link_session_id := _match(self.path, "/link-authorize")) is not None:
                 payload = self._read_json(maximum_bytes=1024)
                 embedded = payload.get("embedded") is True if payload else False
                 self._write_browser_grant(
                     link_session_id,
                     self._authorize_link(link_session_id),
                     embedded=embedded,
+                    create_browser_handoff=(
+                        payload.get("browser_handoff") is True if payload else False
+                    ),
                 )
             elif (telegram_session_id := _match(self.path, "/telegram-authorize")) is not None:
                 payload = self._read_json(maximum_bytes=16 * 1024)
@@ -677,6 +819,7 @@ def _handler(
                     telegram_session_id,
                     self._authorize_telegram(telegram_session_id, init_data),
                     embedded=payload.get("embedded") is True,
+                    create_browser_handoff=payload.get("browser_handoff") is True,
                 )
             elif (code_session_id := _match(self.path, "/code-authorize")) is not None:
                 payload = self._read_json(maximum_bytes=1024)
@@ -688,6 +831,7 @@ def _handler(
                     code_session_id,
                     self._authorize(code_session_id, access_code),
                     embedded=payload.get("embedded") is True,
+                    create_browser_handoff=payload.get("browser_handoff") is True,
                 )
             elif (handshake_session_id := _match(self.path, "/e2ee-handshake")) is not None:
                 self._handshake(handshake_session_id)

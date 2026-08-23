@@ -379,7 +379,7 @@ class LocalAppSharingToolTests(unittest.TestCase):
         self.assertNotIn("Access code", str(sent["text"]))
 
     def test_gateway_health_contract_forces_plaintext_process_replacement(self) -> None:
-        self.assertGreaterEqual(tool.GATEWAY_PROTOCOL_VERSION, 10)
+        self.assertGreaterEqual(tool.GATEWAY_PROTOCOL_VERSION, 11)
         viewer = gateway.VIEWER_PAGE.decode("utf-8")
         self.assertIn("content_encryption", viewer)
         self.assertIn("controllerchange", viewer)
@@ -674,8 +674,12 @@ class LocalAppSharingGatewayTests(unittest.TestCase):
         self.assertEqual(status, 200)
         self.assertIn('id="loading"', html)
         self.assertIn('id="code-page" hidden', html)
+        self.assertIn('id="browser-page" hidden', html)
         self.assertIn("const embedded = window.top !== window.self", html)
-        self.assertIn("JSON.stringify({embedded})", html)
+        self.assertIn("const workerAvailable = 'serviceWorker' in navigator", html)
+        self.assertIn("browser-handoff-authorize", html)
+        self.assertIn("telegram.MainButton.onClick", html)
+        self.assertIn("updateViaCache: 'none'", html)
         self.assertNotIn("Verifying your Telegram account", html)
         direct_status, _, direct = self._request("GET", f"/s/{SESSION_ID}/app/")
         self.assertEqual(direct_status, 426)
@@ -734,6 +738,62 @@ class LocalAppSharingGatewayTests(unittest.TestCase):
         self.assertIn(gateway._cookie_name(SESSION_ID), cookie)
         self.assertIn("SameSite=None", cookie)
         self.assertNotIn("Partitioned", cookie)
+        self.assertNotIn("browser_handoff", json.loads(body))
+
+    def test_native_telegram_owner_can_handoff_to_service_worker_browser(self) -> None:
+        status, _, body = self._request(
+            "POST",
+            f"/s/{SESSION_ID}/telegram-authorize",
+            payload={
+                "telegram_init_data": "signed-owner-init-data",
+                "embedded": False,
+                "browser_handoff": True,
+            },
+        )
+        self.assertEqual(status, 200, body)
+        handoff = json.loads(body)["browser_handoff"]
+        self.assertRegex(handoff, r"^bh_[A-Za-z0-9_-]{32,128}$")
+
+        handoff_status, handoff_headers, handoff_body = self._request(
+            "POST",
+            f"/s/{SESSION_ID}/browser-handoff-authorize",
+            payload={"browser_handoff": handoff},
+        )
+        self.assertEqual(handoff_status, 200, handoff_body)
+        self.assertIn(gateway._cookie_name(SESSION_ID), handoff_headers["set-cookie"])
+        self.assertNotIn("Partitioned", handoff_headers["set-cookie"])
+
+        replay_status, _, _ = self._request(
+            "POST",
+            f"/s/{SESSION_ID}/browser-handoff-authorize",
+            payload={"browser_handoff": handoff},
+        )
+        self.assertEqual(replay_status, 401)
+
+    def test_existing_browser_grant_can_create_a_fresh_browser_handoff(self) -> None:
+        cookie = self._authorize()
+        status, _, body = self._request(
+            "POST",
+            f"/s/{SESSION_ID}/browser-handoff",
+            payload={},
+            cookie=cookie,
+        )
+        self.assertEqual(status, 200, body)
+        self.assertRegex(
+            json.loads(body)["browser_handoff"],
+            r"^bh_[A-Za-z0-9_-]{32,128}$",
+        )
+
+    def test_browser_handoff_is_session_bound_and_one_time(self) -> None:
+        registry = gateway._BrowserHandoffRegistry()
+        token = registry.create(
+            session_id=SESSION_ID,
+            access_token=ACCESS_TOKEN,
+            grant_expires_at_epoch=time.time() + 60,
+        )
+
+        self.assertIsNone(registry.consume(session_id=f"las_{'Z' * 24}", token=token))
+        self.assertIsNone(registry.consume(session_id=SESSION_ID, token=token))
 
     def test_telegram_web_owner_auth_uses_partitioned_grant_cookie(self) -> None:
         status, headers, body = self._request(
