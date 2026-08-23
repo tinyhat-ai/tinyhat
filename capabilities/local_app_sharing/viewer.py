@@ -46,6 +46,7 @@ rel="noopener noreferrer">Open shared app in browser</a></main>
   const telegram = window.Telegram && window.Telegram.WebApp;
   const embedded = window.top !== window.self;
   const workerAvailable = 'serviceWorker' in navigator;
+  let browserHandoffUrl = '';
 
   function bytesToBase64Url(bytes) {
     let binary = '';
@@ -77,19 +78,23 @@ rel="noopener noreferrer">Open shared app in browser</a></main>
       return;
     }
     const externalUrl = `${location.origin}${location.pathname}${canonicalFragment(browserHandoff)}`;
+    browserHandoffUrl = externalUrl;
     codePage.hidden = true;
-    if (telegram && telegram.initData && telegram.MainButton && telegram.openLink) {
-      loading.hidden = false;
-      browserPage.hidden = true;
-      telegram.MainButton.setText('Open shared app');
-      telegram.MainButton.show();
-      telegram.MainButton.onClick(() => telegram.openLink(externalUrl));
-      return;
-    }
     loading.hidden = true;
     browserPage.hidden = false;
     browserLink.href = externalUrl;
+    if (telegram && telegram.initData && telegram.MainButton && telegram.openLink) {
+      telegram.MainButton.setText('Open shared app');
+      telegram.MainButton.show();
+      telegram.MainButton.onClick(() => telegram.openLink(externalUrl));
+    }
   }
+
+  browserLink.addEventListener('click', event => {
+    if (!browserHandoffUrl || !telegram || !telegram.initData || !telegram.openLink) return;
+    event.preventDefault();
+    telegram.openLink(browserHandoffUrl);
+  });
 
   async function jsonFetch(path, options = {}) {
     const response = await fetch(path, {credentials: 'same-origin', ...options});

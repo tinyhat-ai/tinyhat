@@ -6,10 +6,12 @@ All notable changes to the Tinyhat plugin are documented here.
 
 - Stop treating missing service-worker support in Telegram's iOS WebViews as
   an access-code failure. An authorized owner or link-only share now receives
-  a short-lived, one-time Computer-local browser handoff, keeps the page itself
-  loading-only in a Mini App, and continues the existing end-to-end encrypted
-  viewer in the external browser without entering a code. Browser handoffs stay
-  in the URL fragment, are removed after use, and cannot be replayed.
+  a short-lived, one-time Computer-local browser handoff and continues the
+  existing end-to-end encrypted viewer in the external browser without entering
+  a code. The handoff action appears both in the Mini App and as Telegram's
+  native main button, so an iOS client cannot leave the user on an indefinite
+  loading screen. Browser handoffs stay in the URL fragment, are removed after
+  use, and cannot be replayed.
 
 ## 0.32.1 - 2026-08-22
 

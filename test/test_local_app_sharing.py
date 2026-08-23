@@ -379,7 +379,7 @@ class LocalAppSharingToolTests(unittest.TestCase):
         self.assertNotIn("Access code", str(sent["text"]))
 
     def test_gateway_health_contract_forces_plaintext_process_replacement(self) -> None:
-        self.assertGreaterEqual(tool.GATEWAY_PROTOCOL_VERSION, 11)
+        self.assertGreaterEqual(tool.GATEWAY_PROTOCOL_VERSION, 12)
         viewer = gateway.VIEWER_PAGE.decode("utf-8")
         self.assertIn("content_encryption", viewer)
         self.assertIn("controllerchange", viewer)
@@ -679,6 +679,9 @@ class LocalAppSharingGatewayTests(unittest.TestCase):
         self.assertIn("const workerAvailable = 'serviceWorker' in navigator", html)
         self.assertIn("browser-handoff-authorize", html)
         self.assertIn("telegram.MainButton.onClick", html)
+        self.assertIn("browserPage.hidden = false", html)
+        self.assertIn("browserLink.addEventListener('click'", html)
+        self.assertIn("telegram.openLink(browserHandoffUrl)", html)
         self.assertIn("updateViaCache: 'none'", html)
         self.assertNotIn("Verifying your Telegram account", html)
         direct_status, _, direct = self._request("GET", f"/s/{SESSION_ID}/app/")
