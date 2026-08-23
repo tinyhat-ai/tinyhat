@@ -4,6 +4,15 @@ All notable changes to the Tinyhat plugin are documented here.
 
 ## Unreleased
 
+## 0.32.1 - 2026-08-22
+
+- Open an owner-authorized shared app directly in native Telegram Mini Apps,
+  and open link-only shares directly in ordinary browsers, without showing an
+  access-code form. Telegram Web iframes keep their partitioned browser grant;
+  native Mini Apps and top-level browser tabs now use a compatible first-party
+  grant. Code-protected links outside Telegram still require their four-digit
+  access code.
+
 ## 0.32.0 - 2026-08-22
 
 - Encrypt every shared local-app request and response between the user's
