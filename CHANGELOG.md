@@ -4,6 +4,22 @@ All notable changes to the Tinyhat plugin are documented here.
 
 ## Unreleased
 
+- Add a plain HTTPS transport for ordinary, non-sensitive local app shares and
+  make it the agent-facing default. Plain shares keep the same short-lived
+  session, code/link access policy, Telegram-owner authorization, per-Computer
+  Cloudflare Tunnel, and read-only gateway, but render directly inside Telegram
+  without requiring a service worker. Agents can still request the existing
+  browser-to-Computer encrypted transport explicitly.
+- Stop treating missing service-worker support in Telegram's iOS WebViews as
+  an access-code failure. An authorized owner or link-only share now receives
+  a short-lived, one-time Computer-local browser handoff and continues the
+  existing end-to-end encrypted viewer in the external browser without entering
+  a code. The handoff action appears both in the Mini App and as Telegram's
+  native main button, so an iOS client cannot leave the user on an indefinite
+  loading screen. The handoff now explains that it is required only for an
+  encrypted share. Browser handoffs stay in the URL fragment, are removed after
+  use, and cannot be replayed.
+
 ## 0.32.1 - 2026-08-22
 
 - Open an owner-authorized shared app directly in native Telegram Mini Apps,

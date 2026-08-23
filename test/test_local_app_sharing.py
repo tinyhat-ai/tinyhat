@@ -107,7 +107,7 @@ class LocalAppSharingCryptoTests(unittest.TestCase):
 
 
 class LocalAppSharingToolTests(unittest.TestCase):
-    def test_create_requires_encryption_and_returns_fragment_bound_link(self) -> None:
+    def test_create_encrypted_returns_fragment_bound_link(self) -> None:
         requests: list[tuple[str, dict[str, object]]] = []
 
         class FakeClient:
@@ -152,6 +152,7 @@ class LocalAppSharingToolTests(unittest.TestCase):
                             "port": 4310,
                             "label": "Forecast preview",
                             "ttl_seconds": 900,
+                            "encryption_mode": "encrypted",
                         }
                     )
                 )
@@ -175,6 +176,7 @@ class LocalAppSharingToolTests(unittest.TestCase):
         self.assertEqual(result["mini_app_url"], result["link"])
         self.assertEqual(result["access_code"], ACCESS_CODE)
         self.assertEqual(result["access_mode"], "code")
+        self.assertEqual(result["encryption_mode"], "encrypted")
         self.assertEqual(result["content_encryption"], crypto.CONTENT_ENCRYPTION_PROTOCOL)
         self.assertTrue(result["telegram_button_sent"])
         self.assertNotIn("access_token", result)
@@ -195,7 +197,7 @@ class LocalAppSharingToolTests(unittest.TestCase):
                     "status": "active",
                     "created_at": _future_expiry(),
                     "expires_at": _future_expiry(),
-                    "content_encryption": crypto.CONTENT_ENCRYPTION_PROTOCOL,
+                    "content_encryption": "none",
                 }
 
         with tempfile.TemporaryDirectory() as directory:
@@ -229,7 +231,10 @@ class LocalAppSharingToolTests(unittest.TestCase):
                 )
 
         self.assertEqual(requests[0][1]["access_mode"], "link")
+        self.assertEqual(requests[0][1]["content_encryption"], "none")
         self.assertEqual(result["access_mode"], "link")
+        self.assertEqual(result["encryption_mode"], "plain")
+        self.assertEqual(result["link"], f"{COMPUTER_ORIGIN}/s/{SESSION_ID}")
         self.assertNotIn("access_code", result)
         self.assertIn("link-only", result["message"])
 
@@ -288,7 +293,7 @@ class LocalAppSharingToolTests(unittest.TestCase):
             ],
         )
 
-    def test_platform_without_encryption_fails_closed(self) -> None:
+    def test_platform_without_a_supported_transport_fails_closed(self) -> None:
         response = {
             "schema_version": "v1",
             "session_id": SESSION_ID,
@@ -301,7 +306,7 @@ class LocalAppSharingToolTests(unittest.TestCase):
             "expires_at": _future_expiry(),
             "access_mode": "code",
         }
-        with self.assertRaisesRegex(ValueError, "end-to-end encrypted"):
+        with self.assertRaisesRegex(ValueError, "unsupported sharing transport"):
             tool._safe_created_payload(response)
 
     def test_create_rejects_closed_or_gateway_ports_before_platform_call(self) -> None:
@@ -379,13 +384,16 @@ class LocalAppSharingToolTests(unittest.TestCase):
         self.assertNotIn("Access code", str(sent["text"]))
 
     def test_gateway_health_contract_forces_plaintext_process_replacement(self) -> None:
-        self.assertGreaterEqual(tool.GATEWAY_PROTOCOL_VERSION, 10)
+        self.assertGreaterEqual(tool.GATEWAY_PROTOCOL_VERSION, 13)
         viewer = gateway.VIEWER_PAGE.decode("utf-8")
         self.assertIn("content_encryption", viewer)
         self.assertIn("controllerchange", viewer)
         self.assertIn("service-worker-control-timeout", viewer)
         self.assertNotIn("<iframe", viewer)
         self.assertIn("location.replace", viewer)
+        self.assertIn("openPlainApp", viewer)
+        self.assertIn("currentAuthorization", viewer)
+        self.assertIn("This encrypted app needs browser security features", viewer)
         self.assertIn("link-authorize", viewer)
         worker = gateway.SERVICE_WORKER.decode("utf-8")
         self.assertIn("app-shell-v3.js", worker)
@@ -416,6 +424,16 @@ class LocalAppSharingToolTests(unittest.TestCase):
             encoding="utf-8"
         )
         self.assertIn("browser-to-Computer", skill)
+        self.assertEqual(
+            schemas.TINYHAT_LOCAL_APP_SHARING_SCHEMA["properties"]["encryption_mode"]["enum"],
+            ["plain", "encrypted"],
+        )
+        access_description = schemas.TINYHAT_LOCAL_APP_SHARING_SCHEMA["properties"][
+            "access_mode"
+        ]["description"]
+        self.assertIn("private default", access_description)
+        self.assertIn("verified Telegram owner", access_description)
+        self.assertIn("public", access_description)
         self.assertIn("tinyhat_local_app_sharing", skill)
         self.assertIn("Do not use", skill.split("---", 2)[1])
         self.assertNotIn("tinyhat--runtimes", skill)
@@ -533,6 +551,7 @@ class LocalAppSharingGatewayTests(unittest.TestCase):
         self.upstream_port = int(self.upstream.server_address[1])
         self.platform_paths: list[str] = []
         self.expiry = _future_expiry()
+        self.content_transport = crypto.CONTENT_ENCRYPTION_PROTOCOL
         self.temp_dir = tempfile.TemporaryDirectory()
         self.key_store = crypto.SessionKeyStore(Path(self.temp_dir.name) / "sessions")
         self.session_key = self.key_store.create(
@@ -549,7 +568,7 @@ class LocalAppSharingGatewayTests(unittest.TestCase):
                     "session_id": SESSION_ID,
                     "expires_at": test_case.expiry,
                     "access_mode": "code",
-                    "content_encryption": crypto.CONTENT_ENCRYPTION_PROTOCOL,
+                    "content_encryption": test_case.content_transport,
                 }
                 if path.endswith("/authorize") and payload == {"access_code": ACCESS_CODE}:
                     return {**common, "access_token": ACCESS_TOKEN}
@@ -668,22 +687,59 @@ class LocalAppSharingGatewayTests(unittest.TestCase):
         )
         return status, raw, json.loads(raw)
 
-    def test_shell_starts_as_spinner_only_and_plaintext_proxy_is_gone(self) -> None:
+    def test_shell_starts_as_spinner_and_encrypted_share_blocks_plain_proxy(self) -> None:
         status, _, body = self._request("GET", f"/s/{SESSION_ID}")
         html = body.decode()
         self.assertEqual(status, 200)
         self.assertIn('id="loading"', html)
         self.assertIn('id="code-page" hidden', html)
+        self.assertIn('id="browser-page" hidden', html)
         self.assertIn("const embedded = window.top !== window.self", html)
-        self.assertIn("JSON.stringify({embedded})", html)
+        self.assertIn("const plainTransport = 'none'", html)
+        self.assertIn("browser-handoff-authorize", html)
+        self.assertIn("telegram.MainButton.onClick", html)
+        self.assertIn("browserPage.hidden = false", html)
+        self.assertIn("browserLink.addEventListener('click'", html)
+        self.assertIn("telegram.openLink(browserHandoffUrl)", html)
+        self.assertIn("updateViaCache: 'none'", html)
         self.assertNotIn("Verifying your Telegram account", html)
-        direct_status, _, direct = self._request("GET", f"/s/{SESSION_ID}/app/")
+        cookie = self._authorize()
+        direct_status, _, direct = self._request(
+            "GET", f"/s/{SESSION_ID}/app/", cookie=cookie
+        )
         self.assertEqual(direct_status, 426)
         self.assertEqual(json.loads(direct)["error"], "encrypted_transport_required")
 
         shell_status, _, shell = self._request("GET", "/__tinyhat_share/app-shell-v3.js")
         self.assertEqual(shell_status, 200)
         self.assertIn(b"history.replaceState", shell)
+
+    def test_plain_share_renders_local_html_without_a_service_worker(self) -> None:
+        self.content_transport = gateway.PLAIN_CONTENT_TRANSPORT
+        cookie = self._authorize()
+
+        session_status, _, session_body = self._request(
+            "POST",
+            f"/s/{SESSION_ID}/session",
+            payload={},
+            cookie=cookie,
+        )
+        self.assertEqual(session_status, 200, session_body)
+        self.assertEqual(
+            json.loads(session_body)["content_encryption"],
+            gateway.PLAIN_CONTENT_TRANSPORT,
+        )
+
+        status, headers, body = self._request(
+            "GET",
+            f"/s/{SESSION_ID}/app/",
+            cookie=cookie,
+        )
+        self.assertEqual(status, 200, body)
+        self.assertIn(b"Shared local app reached: private-marker", body)
+        self.assertIn(f'<base href="/s/{SESSION_ID}/app/">'.encode(), body)
+        self.assertEqual(headers["cache-control"], "no-store")
+        self.assertNotIn("set-cookie", headers)
 
     def test_code_auth_round_trips_only_ciphertext_and_rejects_replay(self) -> None:
         cookie = self._authorize()
@@ -734,6 +790,62 @@ class LocalAppSharingGatewayTests(unittest.TestCase):
         self.assertIn(gateway._cookie_name(SESSION_ID), cookie)
         self.assertIn("SameSite=None", cookie)
         self.assertNotIn("Partitioned", cookie)
+        self.assertNotIn("browser_handoff", json.loads(body))
+
+    def test_native_telegram_owner_can_handoff_to_service_worker_browser(self) -> None:
+        status, _, body = self._request(
+            "POST",
+            f"/s/{SESSION_ID}/telegram-authorize",
+            payload={
+                "telegram_init_data": "signed-owner-init-data",
+                "embedded": False,
+                "browser_handoff": True,
+            },
+        )
+        self.assertEqual(status, 200, body)
+        handoff = json.loads(body)["browser_handoff"]
+        self.assertRegex(handoff, r"^bh_[A-Za-z0-9_-]{32,128}$")
+
+        handoff_status, handoff_headers, handoff_body = self._request(
+            "POST",
+            f"/s/{SESSION_ID}/browser-handoff-authorize",
+            payload={"browser_handoff": handoff},
+        )
+        self.assertEqual(handoff_status, 200, handoff_body)
+        self.assertIn(gateway._cookie_name(SESSION_ID), handoff_headers["set-cookie"])
+        self.assertNotIn("Partitioned", handoff_headers["set-cookie"])
+
+        replay_status, _, _ = self._request(
+            "POST",
+            f"/s/{SESSION_ID}/browser-handoff-authorize",
+            payload={"browser_handoff": handoff},
+        )
+        self.assertEqual(replay_status, 401)
+
+    def test_existing_browser_grant_can_create_a_fresh_browser_handoff(self) -> None:
+        cookie = self._authorize()
+        status, _, body = self._request(
+            "POST",
+            f"/s/{SESSION_ID}/browser-handoff",
+            payload={},
+            cookie=cookie,
+        )
+        self.assertEqual(status, 200, body)
+        self.assertRegex(
+            json.loads(body)["browser_handoff"],
+            r"^bh_[A-Za-z0-9_-]{32,128}$",
+        )
+
+    def test_browser_handoff_is_session_bound_and_one_time(self) -> None:
+        registry = gateway._BrowserHandoffRegistry()
+        token = registry.create(
+            session_id=SESSION_ID,
+            access_token=ACCESS_TOKEN,
+            grant_expires_at_epoch=time.time() + 60,
+        )
+
+        self.assertIsNone(registry.consume(session_id=f"las_{'Z' * 24}", token=token))
+        self.assertIsNone(registry.consume(session_id=SESSION_ID, token=token))
 
     def test_telegram_web_owner_auth_uses_partitioned_grant_cookie(self) -> None:
         status, headers, body = self._request(
@@ -768,7 +880,7 @@ class LocalAppSharingGatewayTests(unittest.TestCase):
             )
         )
 
-    def test_health_declares_encryption_and_all_writes_are_blocked(self) -> None:
+    def test_health_declares_transports_and_all_writes_are_blocked(self) -> None:
         status, _, body = self._request("GET", "/__tinyhat_share/health")
         self.assertEqual(status, 200)
         self.assertEqual(
@@ -776,7 +888,10 @@ class LocalAppSharingGatewayTests(unittest.TestCase):
             {
                 "ok": True,
                 "protocol_version": tool.GATEWAY_PROTOCOL_VERSION,
-                "content_encryption": crypto.CONTENT_ENCRYPTION_PROTOCOL,
+                "content_transports": [
+                    gateway.PLAIN_CONTENT_TRANSPORT,
+                    crypto.CONTENT_ENCRYPTION_PROTOCOL,
+                ],
             },
         )
         for method in ("PUT", "PATCH", "DELETE"):

@@ -30,7 +30,7 @@ from .crypto import (
 
 GATEWAY_HOST = "127.0.0.1"
 GATEWAY_PORT = 9321
-GATEWAY_PROTOCOL_VERSION = 10
+GATEWAY_PROTOCOL_VERSION = 13
 PACKAGE_ROOT = Path(__file__).resolve().parents[2]
 MAX_PORT = 65535
 MAX_LABEL_LENGTH = 80
@@ -39,6 +39,10 @@ DEFAULT_TTL_SECONDS = 15 * 60
 MIN_TTL_SECONDS = 60
 MAX_TTL_SECONDS = 4 * 60 * 60
 ACCESS_MODES = {"code", "link"}
+ENCRYPTION_MODES = {
+    "plain": "none",
+    "encrypted": CONTENT_ENCRYPTION_PROTOCOL,
+}
 SESSION_ID_RE = re.compile(r"^las_[A-Za-z0-9_-]{20,80}$")
 VIEWER_LINK_RE = re.compile(
     r"^https://c-[0-9a-f]{24}\.(?:viewd|view)\.tinyhat\.ai/"
@@ -109,6 +113,13 @@ def _clean_access_mode(value: Any) -> str:
     return access_mode
 
 
+def _clean_encryption_mode(value: Any) -> str:
+    encryption_mode = str(value or "plain").strip().lower()
+    if encryption_mode not in ENCRYPTION_MODES:
+        raise ValueError("encryption_mode must be plain or encrypted")
+    return encryption_mode
+
+
 def _clean_session_id(value: Any) -> str:
     session_id = str(value or "").strip()
     if SESSION_ID_RE.fullmatch(session_id) is None:
@@ -134,7 +145,7 @@ def _gateway_is_healthy() -> bool:
         return response.status == HTTPStatus.OK and payload == {
             "ok": True,
             "protocol_version": GATEWAY_PROTOCOL_VERSION,
-            "content_encryption": CONTENT_ENCRYPTION_PROTOCOL,
+            "content_transports": ["none", CONTENT_ENCRYPTION_PROTOCOL],
         }
     except (error.URLError, json.JSONDecodeError, OSError):
         return False
@@ -237,8 +248,12 @@ def _safe_created_payload(payload: dict[str, Any]) -> dict[str, Any]:
     }
     if any(not isinstance(payload.get(key), kind) for key, kind in required.items()):
         raise ValueError("platform returned an invalid sharing session")
-    if payload.get("content_encryption") != CONTENT_ENCRYPTION_PROTOCOL:
-        raise ValueError("platform did not require end-to-end encrypted sharing")
+    content_encryption = str(payload.get("content_encryption") or "")
+    if content_encryption not in ENCRYPTION_MODES.values():
+        raise ValueError("platform returned an unsupported sharing transport")
+    encryption_mode = (
+        "encrypted" if content_encryption == CONTENT_ENCRYPTION_PROTOCOL else "plain"
+    )
     session_id = _clean_session_id(payload["session_id"])
     link = payload["link"].strip()
     if VIEWER_LINK_RE.fullmatch(link) is None or not link.endswith(session_id):
@@ -260,7 +275,8 @@ def _safe_created_payload(payload: dict[str, Any]) -> dict[str, Any]:
         "label": payload["label"],
         "port": payload["port"],
         "expires_at": payload["expires_at"],
-        "content_encryption": CONTENT_ENCRYPTION_PROTOCOL,
+        "encryption_mode": encryption_mode,
+        "content_encryption": content_encryption,
         "message": (
             "The Telegram Mini App button and link-only browser access are ready."
             if access_mode == "link"
@@ -319,6 +335,8 @@ def _create(payload: dict[str, Any]) -> dict[str, Any]:
     label = _clean_label(payload.get("label"))
     ttl_seconds = _clean_ttl(payload.get("ttl_seconds"))
     access_mode = _clean_access_mode(payload.get("access_mode"))
+    encryption_mode = _clean_encryption_mode(payload.get("encryption_mode"))
+    content_encryption = ENCRYPTION_MODES[encryption_mode]
     ensure_gateway_running()
     client, platform_auth = build_platform_client()
     expected_origin = ensure_connector_running(
@@ -332,27 +350,32 @@ def _create(payload: dict[str, Any]) -> dict[str, Any]:
             "label": label,
             "ttl_seconds": ttl_seconds,
             "access_mode": access_mode,
-            "content_encryption": CONTENT_ENCRYPTION_PROTOCOL,
+            "content_encryption": content_encryption,
         },
     )
     created = _safe_created_payload(response)
     if not created["link"].startswith(f"{expected_origin}/s/"):
         raise ValueError("platform returned a sharing link for another Computer")
-    try:
-        session_key = SESSION_KEY_STORE.create(
-            session_id=created["session_id"],
-            expires_at_epoch=_expires_at_epoch(created["expires_at"]),
-        )
-    except (LocalAppCryptoError, OSError) as exc:
-        with suppress(PlatformError, OSError):
-            client.delete_json(
-                computer_api_path(
-                    platform_auth,
-                    f"local-app-shares/v1/{created['session_id']}",
-                )
+    if created["encryption_mode"] != encryption_mode:
+        raise ValueError("platform returned a different sharing transport")
+    if encryption_mode == "encrypted":
+        try:
+            session_key = SESSION_KEY_STORE.create(
+                session_id=created["session_id"],
+                expires_at_epoch=_expires_at_epoch(created["expires_at"]),
             )
-        raise RuntimeError("the Computer could not create the encrypted sharing key") from exc
-    created["link"] = encrypted_link(created["link"], session_key.fingerprint)
+        except (LocalAppCryptoError, OSError) as exc:
+            with suppress(PlatformError, OSError):
+                client.delete_json(
+                    computer_api_path(
+                        platform_auth,
+                        f"local-app-shares/v1/{created['session_id']}",
+                    )
+                )
+            raise RuntimeError(
+                "the Computer could not create the encrypted sharing key"
+            ) from exc
+        created["link"] = encrypted_link(created["link"], session_key.fingerprint)
     created["mini_app_url"] = created["link"]
     created["telegram_button_sent"] = _send_share_button(created)
     return created
@@ -374,22 +397,31 @@ def _list() -> dict[str, Any]:
         link = str(raw.get("link") or "").strip()
         if VIEWER_LINK_RE.fullmatch(link) is None or not link.endswith(session_id):
             raise ValueError("platform returned an invalid sharing link")
-        if raw.get("content_encryption") != CONTENT_ENCRYPTION_PROTOCOL:
-            raise ValueError("platform returned a sharing session without encryption")
+        content_encryption = str(raw.get("content_encryption") or "")
+        if content_encryption not in ENCRYPTION_MODES.values():
+            raise ValueError("platform returned an unsupported sharing transport")
+        encryption_mode = (
+            "encrypted" if content_encryption == CONTENT_ENCRYPTION_PROTOCOL else "plain"
+        )
         access_mode = _clean_access_mode(raw.get("access_mode"))
-        try:
-            session_key = SESSION_KEY_STORE.load(session_id)
-        except LocalAppCryptoError as exc:
-            raise ValueError("Computer encryption state is missing for an active share") from exc
+        if encryption_mode == "encrypted":
+            try:
+                session_key = SESSION_KEY_STORE.load(session_id)
+            except LocalAppCryptoError as exc:
+                raise ValueError(
+                    "Computer encryption state is missing for an active share"
+                ) from exc
+            link = encrypted_link(link, session_key.fingerprint)
         safe_sessions.append(
             {
                 "session_id": session_id,
-                "link": encrypted_link(link, session_key.fingerprint),
+                "link": link,
                 "label": str(raw.get("label") or "Local app")[:80],
                 "port": _clean_port(raw.get("port")),
                 "expires_at": str(raw.get("expires_at") or ""),
                 "access_mode": access_mode,
-                "content_encryption": CONTENT_ENCRYPTION_PROTOCOL,
+                "encryption_mode": encryption_mode,
+                "content_encryption": content_encryption,
             }
         )
     return {

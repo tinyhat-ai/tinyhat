@@ -45,18 +45,23 @@ platform API for a short-lived session. The agent receives a
 Sessions use `access_mode: "code"` by default and return a four-digit numeric
 code. An agent can explicitly request `access_mode: "link"`; that mode returns
 no code and authorizes anyone who possesses the complete link. The plugin sends
-a native Telegram **View app** button; signed Mini App data also authorizes the
-assigned agent's primary owner without a code. List never returns codes, and
-revoke invalidates the selected session immediately.
+a native Telegram **View app** button. Shares are private by default: ordinary
+browsers use the four-digit code, while valid signed Mini App data lets the
+assigned agent's primary owner bypass it. Missing or invalid Telegram identity
+falls back to the same code form. Public link shares open immediately for
+anyone holding the complete link in Telegram or any other browser. List never
+returns codes, and revoke invalidates the selected session immediately.
 
-Before sharing, the Computer creates a per-session P-256 key pair. The complete
-link carries the browser key material in its URL fragment, which is not sent to
-the platform or Cloudflare. The browser and Computer derive an AES-256-GCM key
-with ECDH and HKDF-SHA256, and the gateway encrypts application responses before
-they cross the tunnel. The platform resolves session metadata and authorization
-but cannot decrypt the app content. Direct plaintext access is rejected. The
-gateway supports read-only HTTP `GET` and `HEAD`; writes and WebSockets are not
-shared. No runtime code is involved.
+`encryption_mode: "plain"` is the default for ordinary, non-sensitive pages.
+It uses the per-Computer Cloudflare HTTPS tunnel and renders directly inside
+Telegram without a service worker. `encryption_mode: "encrypted"` creates a
+per-session P-256 key pair; the complete link carries its fingerprint in the
+URL fragment, and the browser and Computer derive an AES-256-GCM key with ECDH
+and HKDF-SHA256. Telegram iOS hands that encrypted mode to an external browser
+when its WebView cannot run the required service worker. The platform resolves
+session metadata and authorization but does not proxy app content. Both modes
+support read-only HTTP `GET` and `HEAD`; writes and WebSockets are not shared.
+No runtime code is involved.
 
 ## Private Agent Mail
 

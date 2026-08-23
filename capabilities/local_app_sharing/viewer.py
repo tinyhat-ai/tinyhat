@@ -1,4 +1,4 @@
-"""Browser shell and service worker for encrypted local app sharing."""
+"""Browser shell plus encrypted and ordinary local app transports."""
 
 from __future__ import annotations
 
@@ -13,9 +13,10 @@ body{font:16px system-ui;background:#f5f5f0;color:#171717}
 #loading{display:grid;place-items:center;height:100%;background:#f5f5f0}
 .spinner{width:2rem;height:2rem;border:.2rem solid #d7d7d2;border-top-color:#171717;
 border-radius:50%;animation:spin .8s linear infinite}@keyframes spin{to{transform:rotate(360deg)}}
-#code-page{box-sizing:border-box;max-width:28rem;margin:12vh auto;padding:2rem;background:white;border:1px solid #bbb}
+#code-page,#browser-page{box-sizing:border-box;max-width:28rem;margin:12vh auto;padding:2rem;background:white;border:1px solid #bbb}
 input,button{box-sizing:border-box;width:100%;padding:.8rem;margin-top:.75rem;font:inherit}
-button{background:#171717;color:white;border:0}.error{color:#a00}
+button,.browser-link{box-sizing:border-box;display:block;width:100%;padding:.8rem;margin-top:.75rem;
+background:#171717;color:white;border:0;text-align:center;text-decoration:none;font:inherit}.error{color:#a00}
 </style></head>
 <body><main id="loading"><span class="spinner" role="status" aria-label="Loading"></span></main>
 <main id="code-page" hidden><h1>Open shared app</h1><p>Enter the code your agent sent you.</p>
@@ -24,19 +25,29 @@ button{background:#171717;color:white;border:0}.error{color:#a00}
 <input id="code" name="code" autocomplete="one-time-code" inputmode="numeric"
 pattern="[0-9]{4}" minlength="4" maxlength="4" required>
 <button type="submit">View app</button></form></main>
+<main id="browser-page" hidden><p>This encrypted app needs browser security features that
+Telegram does not provide.</p><a id="browser-link" class="browser-link" target="_blank"
+rel="noopener noreferrer">Open shared app in browser</a></main>
 <script src="https://telegram.org/js/telegram-web-app.js"></script>
 <script>(() => {
   'use strict';
   const protocol = '__CONTENT_ENCRYPTION_PROTOCOL__';
+  const plainTransport = 'none';
+  const handoffProtocol = 'tinyhat-browser-handoff-v1';
   const loading = document.getElementById('loading');
   const codePage = document.getElementById('code-page');
+  const browserPage = document.getElementById('browser-page');
+  const browserLink = document.getElementById('browser-link');
   const codeForm = document.getElementById('code-form');
   const codeInput = document.getElementById('code');
   const error = document.getElementById('error');
   const sessionId = location.pathname.match(/^\/s\/(las_[A-Za-z0-9_-]{20,80})\/?$/)?.[1];
-  const expectedFingerprint = new URLSearchParams(location.hash.slice(1)).get(protocol);
+  const fragmentParams = new URLSearchParams(location.hash.slice(1));
+  const expectedFingerprint = fragmentParams.get(protocol);
+  const incomingBrowserHandoff = fragmentParams.get(handoffProtocol);
   const telegram = window.Telegram && window.Telegram.WebApp;
   const embedded = window.top !== window.self;
+  let browserHandoffUrl = '';
 
   function bytesToBase64Url(bytes) {
     let binary = '';
@@ -48,11 +59,43 @@ pattern="[0-9]{4}" minlength="4" maxlength="4" required>
 
   function showCode(message) {
     loading.hidden = true;
+    browserPage.hidden = true;
     codePage.hidden = false;
     error.hidden = !message;
     error.textContent = message || '';
     codeInput.focus();
   }
+
+  function canonicalFragment(browserHandoff) {
+    const params = new URLSearchParams();
+    params.set(protocol, expectedFingerprint);
+    if (browserHandoff) params.set(handoffProtocol, browserHandoff);
+    return `#${params.toString()}`;
+  }
+
+  function showBrowserHandoff(browserHandoff) {
+    if (!/^bh_[A-Za-z0-9_-]{32,128}$/.test(browserHandoff || '')) {
+      showCode('');
+      return;
+    }
+    const externalUrl = `${location.origin}${location.pathname}${canonicalFragment(browserHandoff)}`;
+    browserHandoffUrl = externalUrl;
+    codePage.hidden = true;
+    loading.hidden = true;
+    browserPage.hidden = false;
+    browserLink.href = externalUrl;
+    if (telegram && telegram.initData && telegram.MainButton && telegram.openLink) {
+      telegram.MainButton.setText('Open shared app');
+      telegram.MainButton.show();
+      telegram.MainButton.onClick(() => telegram.openLink(externalUrl));
+    }
+  }
+
+  browserLink.addEventListener('click', event => {
+    if (!browserHandoffUrl || !telegram || !telegram.initData || !telegram.openLink) return;
+    event.preventDefault();
+    telegram.openLink(browserHandoffUrl);
+  });
 
   async function jsonFetch(path, options = {}) {
     const response = await fetch(path, {credentials: 'same-origin', ...options});
@@ -78,10 +121,15 @@ pattern="[0-9]{4}" minlength="4" maxlength="4" required>
 
   async function configureWorker(session, connection, rawKey) {
     if (!('serviceWorker' in navigator)) throw new Error('service-worker-unavailable');
-    const registration = await navigator.serviceWorker.register(
-      '/__tinyhat_share/e2ee-v3-sw.js', {scope: '/'}
-    );
-    await navigator.serviceWorker.ready;
+    let registration;
+    try {
+      registration = await navigator.serviceWorker.register(
+        '/__tinyhat_share/e2ee-v3-sw.js', {scope: '/', updateViaCache: 'none'}
+      );
+      await navigator.serviceWorker.ready;
+    } catch (_) {
+      throw new Error('service-worker-unavailable');
+    }
     const worker = registration.active || registration.waiting || registration.installing;
     if (!worker) throw new Error('service-worker-unavailable');
     await new Promise((resolve, reject) => {
@@ -153,26 +201,100 @@ pattern="[0-9]{4}" minlength="4" maxlength="4" required>
     location.replace(`/s/${sessionId}/app/${sessionFragment}`);
   }
 
+  function openPlainApp() {
+    location.replace(`/s/${sessionId}/app/`);
+  }
+
   function base64UrlToBytes(value) {
     const clean = String(value || '').replace(/-/g, '+').replace(/_/g, '/');
     const binary = atob(clean + '='.repeat((4 - clean.length % 4) % 4));
     return Uint8Array.from(binary, character => character.charCodeAt(0));
   }
 
-  async function authorizeTelegram() {
-    await jsonFetch(`/s/${sessionId}/telegram-authorize`, {
+  async function authorizeTelegram(browserHandoff = false) {
+    return jsonFetch(`/s/${sessionId}/telegram-authorize`, {
       method: 'POST',
       headers: {'Content-Type': 'application/json'},
-      body: JSON.stringify({telegram_init_data: telegram.initData, embedded}),
+      body: JSON.stringify({
+        telegram_init_data: telegram.initData,
+        embedded,
+        browser_handoff: browserHandoff,
+      }),
     });
   }
 
-  async function authorizeLink() {
-    await jsonFetch(`/s/${sessionId}/link-authorize`, {
+  async function authorizeLink(browserHandoff = false) {
+    return jsonFetch(`/s/${sessionId}/link-authorize`, {
       method: 'POST',
       headers: {'Content-Type': 'application/json'},
-      body: JSON.stringify({embedded}),
+      body: JSON.stringify({embedded, browser_handoff: browserHandoff}),
     });
+  }
+
+  async function createBrowserHandoff() {
+    return jsonFetch(`/s/${sessionId}/browser-handoff`, {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: '{}',
+    });
+  }
+
+  async function currentAuthorization() {
+    return jsonFetch(`/s/${sessionId}/session`, {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: '{}',
+    });
+  }
+
+  async function consumeBrowserHandoff() {
+    if (!incomingBrowserHandoff) return;
+    await jsonFetch(`/s/${sessionId}/browser-handoff-authorize`, {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({browser_handoff: incomingBrowserHandoff}),
+    });
+    history.replaceState(null, '', `${location.pathname}${canonicalFragment()}`);
+  }
+
+  async function openOrHandoff() {
+    try {
+      await openEncryptedApp();
+      return true;
+    } catch (failure) {
+      if (!String(failure && failure.message || '').startsWith('service-worker-')) {
+        return false;
+      }
+      try {
+        const authorization = await createBrowserHandoff();
+        showBrowserHandoff(authorization.browser_handoff);
+        return true;
+      } catch (_) {
+        return false;
+      }
+    }
+  }
+
+  async function openAuthorizedApp(authorization) {
+    if (authorization && authorization.content_encryption === plainTransport) {
+      openPlainApp();
+      return true;
+    }
+    if (!authorization || authorization.content_encryption !== protocol) return false;
+    if (!expectedFingerprint) {
+      showCode('This encrypted sharing link is incomplete.');
+      return true;
+    }
+    if (!('serviceWorker' in navigator)) {
+      try {
+        const handoff = await createBrowserHandoff();
+        showBrowserHandoff(handoff.browser_handoff);
+        return true;
+      } catch (_) {
+        return false;
+      }
+    }
+    return openOrHandoff();
   }
 
   codeForm.addEventListener('submit', async event => {
@@ -180,19 +302,23 @@ pattern="[0-9]{4}" minlength="4" maxlength="4" required>
     loading.hidden = false;
     codePage.hidden = true;
     try {
-      await jsonFetch(`/s/${sessionId}/code-authorize`, {
+      const authorization = await jsonFetch(`/s/${sessionId}/code-authorize`, {
         method: 'POST',
         headers: {'Content-Type': 'application/json'},
-        body: JSON.stringify({access_code: codeInput.value, embedded}),
+        body: JSON.stringify({
+          access_code: codeInput.value,
+          embedded,
+          browser_handoff: false,
+        }),
       });
-      await openEncryptedApp();
+      if (!await openAuthorizedApp(authorization)) throw new Error('share-open-failed');
     } catch (_) {
       showCode('That code is not valid or has expired.');
     }
   });
 
   (async () => {
-    if (!sessionId || !expectedFingerprint) {
+    if (!sessionId) {
       showCode('This sharing link is incomplete.');
       return;
     }
@@ -200,20 +326,22 @@ pattern="[0-9]{4}" minlength="4" maxlength="4" required>
       telegram.ready();
       telegram.expand();
     }
+    if (incomingBrowserHandoff) {
+      try {
+        await consumeBrowserHandoff();
+      } catch (_) {
+        history.replaceState(null, '', `${location.pathname}${canonicalFragment()}`);
+      }
+    }
     try {
-      await openEncryptedApp();
-      return;
+      if (await openAuthorizedApp(await currentAuthorization())) return;
     } catch (_) {}
     try {
-      await authorizeLink();
-      await openEncryptedApp();
-      return;
+      if (await openAuthorizedApp(await authorizeLink())) return;
     } catch (_) {}
     if (telegram && telegram.initData) {
       try {
-        await authorizeTelegram();
-        await openEncryptedApp();
-        return;
+        if (await openAuthorizedApp(await authorizeTelegram())) return;
       } catch (_) {}
     }
     showCode('');

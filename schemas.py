@@ -119,8 +119,20 @@ TINYHAT_LOCAL_APP_SHARING_SCHEMA = {
             "type": "string",
             "enum": ["code", "link"],
             "description": (
-                "Optional access policy. code is the default and requires a four-digit "
-                "browser code; link lets anyone holding the complete encrypted link open it."
+                "Optional visibility policy. code is the private default: browsers need "
+                "the four-digit code, while the verified Telegram owner may bypass it. "
+                "link is public to anyone holding the complete link and never asks for "
+                "a code."
+            ),
+        },
+        "encryption_mode": {
+            "type": "string",
+            "enum": ["plain", "encrypted"],
+            "description": (
+                "Optional content transport. plain is the default for ordinary, "
+                "non-sensitive pages and renders directly in Telegram. encrypted adds "
+                "browser-to-Computer encryption and may require opening an external "
+                "browser on Telegram iOS."
             ),
         },
         "session_id": {
