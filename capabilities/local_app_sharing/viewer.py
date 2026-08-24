@@ -34,6 +34,7 @@ rel="noopener noreferrer">Open shared app in browser</a></main>
   const protocol = '__CONTENT_ENCRYPTION_PROTOCOL__';
   const plainTransport = 'none';
   const handoffProtocol = 'tinyhat-browser-handoff-v1';
+  const ownerCodeProtocol = 'tinyhat-owner-access-code-v1';
   const loading = document.getElementById('loading');
   const codePage = document.getElementById('code-page');
   const browserPage = document.getElementById('browser-page');
@@ -45,6 +46,7 @@ rel="noopener noreferrer">Open shared app in browser</a></main>
   const fragmentParams = new URLSearchParams(location.hash.slice(1));
   const expectedFingerprint = fragmentParams.get(protocol);
   const incomingBrowserHandoff = fragmentParams.get(handoffProtocol);
+  const incomingOwnerCode = fragmentParams.get(ownerCodeProtocol);
   const telegram = window.Telegram && window.Telegram.WebApp;
   const embedded = window.top !== window.self;
   let browserHandoffUrl = '';
@@ -231,6 +233,29 @@ rel="noopener noreferrer">Open shared app in browser</a></main>
     });
   }
 
+  async function authorizeCode(accessCode, browserHandoff = false) {
+    return jsonFetch(`/s/${sessionId}/code-authorize`, {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({
+        access_code: accessCode,
+        embedded,
+        browser_handoff: browserHandoff,
+      }),
+    });
+  }
+
+  function removeOwnerCodeFromAddress() {
+    const safeFragment = new URLSearchParams(location.hash.slice(1));
+    safeFragment.delete(ownerCodeProtocol);
+    const serialized = safeFragment.toString();
+    history.replaceState(
+      null,
+      '',
+      `${location.pathname}${serialized ? `#${serialized}` : ''}`,
+    );
+  }
+
   async function createBrowserHandoff() {
     return jsonFetch(`/s/${sessionId}/browser-handoff`, {
       method: 'POST',
@@ -302,15 +327,7 @@ rel="noopener noreferrer">Open shared app in browser</a></main>
     loading.hidden = false;
     codePage.hidden = true;
     try {
-      const authorization = await jsonFetch(`/s/${sessionId}/code-authorize`, {
-        method: 'POST',
-        headers: {'Content-Type': 'application/json'},
-        body: JSON.stringify({
-          access_code: codeInput.value,
-          embedded,
-          browser_handoff: false,
-        }),
-      });
+      const authorization = await authorizeCode(codeInput.value);
       if (!await openAuthorizedApp(authorization)) throw new Error('share-open-failed');
     } catch (_) {
       showCode('That code is not valid or has expired.');
@@ -322,6 +339,7 @@ rel="noopener noreferrer">Open shared app in browser</a></main>
       showCode('This sharing link is incomplete.');
       return;
     }
+    if (incomingOwnerCode) removeOwnerCodeFromAddress();
     if (telegram && telegram.initData) {
       telegram.ready();
       telegram.expand();
@@ -342,6 +360,11 @@ rel="noopener noreferrer">Open shared app in browser</a></main>
     if (telegram && telegram.initData) {
       try {
         if (await openAuthorizedApp(await authorizeTelegram())) return;
+      } catch (_) {}
+    }
+    if (/^[0-9]{4}$/.test(incomingOwnerCode || '')) {
+      try {
+        if (await openAuthorizedApp(await authorizeCode(incomingOwnerCode))) return;
       } catch (_) {}
     }
     showCode('');
