@@ -159,7 +159,9 @@ agent result and process arguments. The user receives a
 `c-<opaque-key>.view.tinyhat.ai` or
 `c-<opaque-key>.viewd.tinyhat.ai` link plus, by default, a four-digit numeric code. Multiple
 Views use separate sessions through the same Computer tunnel. The plugin also
-sends a native Telegram **Open view** button: signed
+sends a native Telegram **Open view** button by default (or a concise
+`button_label` such as **View report** when the user or context calls for it):
+signed
 Mini App data lets only the assigned agent's primary owner enter without a
 code, while ordinary browsers use the four-digit numeric code. If Telegram
 credentials are absent or invalid, the same code form appears as in any other

@@ -113,6 +113,16 @@ TINYHAT_LOCAL_APP_SHARING_SCHEMA = {
             "maxLength": 80,
             "description": "Optional user-facing name that explains the View's purpose.",
         },
+        "button_label": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 64,
+            "description": (
+                "Optional user-facing Telegram action text. Defaults to Open view. "
+                "Use the user's requested wording or a concise phrase that matches "
+                "the content, such as View report or Open forecast. Never say app."
+            ),
+        },
         "ttl_seconds": {
             "type": "integer",
             "minimum": 60,

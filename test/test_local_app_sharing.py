@@ -434,6 +434,41 @@ class LocalAppSharingToolTests(unittest.TestCase):
         self.assertIn("Your View", str(sent["text"]))
         self.assertNotIn("port", str(sent["text"]).lower())
 
+    def test_share_button_accepts_context_specific_user_facing_label(self) -> None:
+        sent: dict[str, object] = {}
+
+        def send_message(**kwargs: object) -> dict[str, bool]:
+            sent.update(kwargs)
+            return {"ok": True}
+
+        link = f"{COMPUTER_ORIGIN}/s/{SESSION_ID}"
+        created = {
+            "label": "Revenue forecast",
+            "button_label": "View report",
+            "link": link,
+            "mini_app_url": link,
+            "access_mode": "link",
+            "expires_at": _future_expiry(),
+        }
+        with (
+            mock.patch.object(tools, "_telegram_credentials", return_value=("token", "123")),
+            mock.patch.object(tools, "_telegram_send_message", side_effect=send_message),
+        ):
+            self.assertTrue(tool._send_share_button(created))
+
+        self.assertEqual(
+            sent["reply_markup"],
+            {"inline_keyboard": [[{"text": "View report", "web_app": {"url": link}}]]},
+        )
+
+    def test_button_label_defaults_to_open_view_and_rejects_invalid_text(self) -> None:
+        self.assertEqual(tool._clean_button_label(None), "Open view")
+        self.assertEqual(tool._clean_button_label("  Open   forecast "), "Open forecast")
+        with self.assertRaisesRegex(ValueError, "1 to 64 printable characters"):
+            tool._clean_button_label("x" * 65)
+        with self.assertRaisesRegex(ValueError, "1 to 64 printable characters"):
+            tool._clean_button_label("Open\x01report")
+
     def test_link_only_share_button_omits_access_code(self) -> None:
         sent: dict[str, object] = {}
 
@@ -468,7 +503,11 @@ class LocalAppSharingToolTests(unittest.TestCase):
         self.assertIn("location.replace", viewer)
         self.assertIn("openPlainApp", viewer)
         self.assertIn("currentAuthorization", viewer)
-        self.assertIn("This encrypted app needs browser security features", viewer)
+        self.assertIn("<h1>Open View</h1>", viewer)
+        self.assertIn("Open View in browser", viewer)
+        self.assertNotIn("View app", viewer)
+        self.assertNotIn("Open shared app", viewer)
+        self.assertIn("This encrypted View needs browser security features", viewer)
         self.assertIn("link-authorize", viewer)
         self.assertIn("tinyhat-owner-access-code-v1", viewer)
         self.assertIn("safeFragment.delete(ownerCodeProtocol)", viewer)

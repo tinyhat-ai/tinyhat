@@ -39,6 +39,7 @@ text.
   "action": "create",
   "port": 3000,
   "label": "Weekly revenue report",
+  "button_label": "View report",
   "ttl_seconds": 900
 }
 ```
@@ -47,7 +48,11 @@ text.
    its port, server, localhost, or the underlying application unless the user
    explicitly asks for technical details.
 
-The tool sends the owner a native **Open view** Telegram Mini App button. When
+The tool sends the owner a native Telegram Mini App button. Its default label
+is **Open view**. If the user asks for specific wording, pass it as
+`button_label`. Otherwise, use a short content-specific action when it improves
+clarity, such as **View report**, **Open forecast**, or **Review dashboard**.
+Never call the shared result an app in user-facing button text. When
 `telegram_button_sent` is `true`, do not send a duplicate button. When it is
 `false`, send the returned link, expiry, and, for a private View, the four-digit
 access code yourself.

@@ -49,7 +49,9 @@ platform API for a short-lived session. The agent receives a
 Sessions use `access_mode: "code"` by default and return a four-digit numeric
 code. An agent can explicitly request `access_mode: "link"`; that mode returns
 no code and authorizes anyone who possesses the complete link. The plugin sends
-a native Telegram **Open view** button. Views are private by default: ordinary
+a native Telegram **Open view** button by default. The optional `button_label`
+can use clearer content-specific wording such as **View report**. Views are
+private by default: ordinary
 browsers use the four-digit code, while valid signed Mini App data lets the
 assigned agent's primary owner bypass it. Missing or invalid Telegram identity
 falls back to the same code form. Public Views open immediately for

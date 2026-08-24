@@ -34,6 +34,7 @@ GATEWAY_PROTOCOL_VERSION = 13
 PACKAGE_ROOT = Path(__file__).resolve().parents[2]
 MAX_PORT = 65535
 MAX_LABEL_LENGTH = 80
+MAX_BUTTON_LABEL_LENGTH = 64
 MIN_PRINTABLE_ORDINAL = 32
 DEFAULT_TTL_SECONDS = 15 * 60
 MIN_TTL_SECONDS = 60
@@ -85,6 +86,17 @@ def _clean_label(value: Any) -> str:
     ):
         raise ValueError("label must be 1 to 80 printable characters")
     return label
+
+
+def _clean_button_label(value: Any) -> str:
+    button_label = " ".join(str(value or "Open view").split())
+    if (
+        not button_label
+        or len(button_label) > MAX_BUTTON_LABEL_LENGTH
+        or any(ord(character) < MIN_PRINTABLE_ORDINAL for character in button_label)
+    ):
+        raise ValueError("button_label must be 1 to 64 printable characters")
+    return button_label
 
 
 def _clean_port(value: Any) -> int:
@@ -315,7 +327,7 @@ def _send_share_button(created: dict[str, Any]) -> bool:
                 "inline_keyboard": [
                     [
                         {
-                            "text": "Open view",
+                            "text": _clean_button_label(created.get("button_label")),
                             "web_app": {"url": created["mini_app_url"]},
                         }
                     ]
@@ -332,6 +344,7 @@ def _create(payload: dict[str, Any]) -> dict[str, Any]:
     if not _port_is_open(port):
         raise ValueError("the page for this View is not available yet")
     label = _clean_label(payload.get("label"))
+    button_label = _clean_button_label(payload.get("button_label"))
     ttl_seconds = _clean_ttl(payload.get("ttl_seconds"))
     access_mode = _clean_access_mode(payload.get("access_mode"))
     encryption_mode = _clean_encryption_mode(payload.get("encryption_mode"))
@@ -389,6 +402,7 @@ def _create(payload: dict[str, Any]) -> dict[str, Any]:
             ) from exc
         created["link"] = encrypted_link(created["link"], session_key.fingerprint)
     created["mini_app_url"] = created["link"]
+    created["button_label"] = button_label
     created["telegram_button_sent"] = _send_share_button(created)
     return created
 
