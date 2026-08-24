@@ -204,7 +204,7 @@ rel="noopener noreferrer">Open Visual in browser</a></main>
   }
 
   function openPlainApp() {
-    location.replace(`/s/${sessionId}/app/`);
+    location.replace(`/s/${sessionId}`);
   }
 
   function base64UrlToBytes(value) {

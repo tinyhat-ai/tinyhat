@@ -904,7 +904,11 @@ def _handler(
                 return
             session_id = _match(self.path)
             if session_id is not None:
-                self._write_viewer()
+                target = self._authorized_target(session_id)
+                if target is not None and target[2] == PLAIN_CONTENT_TRANSPORT:
+                    self._plain_request(session_id, "/")
+                else:
+                    self._write_viewer()
                 return
             key_session_id = _match(self.path, "/e2ee-key")
             if key_session_id is not None:

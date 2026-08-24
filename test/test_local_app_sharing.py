@@ -496,7 +496,7 @@ class LocalAppSharingToolTests(unittest.TestCase):
         self.assertNotIn("Access code", str(sent["text"]))
 
     def test_gateway_health_contract_forces_plaintext_process_replacement(self) -> None:
-        self.assertGreaterEqual(tool.GATEWAY_PROTOCOL_VERSION, 15)
+        self.assertGreaterEqual(tool.GATEWAY_PROTOCOL_VERSION, 16)
         viewer = gateway.VIEWER_PAGE.decode("utf-8")
         self.assertIn("content_encryption", viewer)
         self.assertIn("controllerchange", viewer)
@@ -504,6 +504,8 @@ class LocalAppSharingToolTests(unittest.TestCase):
         self.assertNotIn("<iframe", viewer)
         self.assertIn("location.replace", viewer)
         self.assertIn("openPlainApp", viewer)
+        self.assertIn("location.replace(`/s/${sessionId}`);", viewer)
+        self.assertNotIn("location.replace(`/s/${sessionId}/app/`);", viewer)
         self.assertIn("currentAuthorization", viewer)
         self.assertIn("<h1>Open Visual</h1>", viewer)
         self.assertIn("Open Visual in browser", viewer)
@@ -847,6 +849,10 @@ class LocalAppSharingGatewayTests(unittest.TestCase):
 
     def test_plain_share_renders_local_html_without_a_service_worker(self) -> None:
         self.content_transport = gateway.PLAIN_CONTENT_TRANSPORT
+        public_status, _, public_body = self._request("GET", f"/s/{SESSION_ID}")
+        self.assertEqual(public_status, 200, public_body)
+        self.assertIn(b"Open Tinyhat Visual", public_body)
+
         cookie = self._authorize()
 
         session_status, _, session_body = self._request(
@@ -863,7 +869,7 @@ class LocalAppSharingGatewayTests(unittest.TestCase):
 
         status, headers, body = self._request(
             "GET",
-            f"/s/{SESSION_ID}/app/",
+            f"/s/{SESSION_ID}",
             cookie=cookie,
         )
         self.assertEqual(status, 200, body)
@@ -871,6 +877,14 @@ class LocalAppSharingGatewayTests(unittest.TestCase):
         self.assertIn(f'<base href="/s/{SESSION_ID}/app/">'.encode(), body)
         self.assertEqual(headers["cache-control"], "no-store")
         self.assertNotIn("set-cookie", headers)
+
+        resource_status, _, resource_body = self._request(
+            "GET",
+            f"/s/{SESSION_ID}/app/",
+            cookie=cookie,
+        )
+        self.assertEqual(resource_status, 200, resource_body)
+        self.assertIn(b"Shared local app reached: private-marker", resource_body)
 
     def test_code_auth_round_trips_only_ciphertext_and_rejects_replay(self) -> None:
         cookie = self._authorize()
