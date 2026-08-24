@@ -158,19 +158,17 @@ class LocalAppSharingToolTests(unittest.TestCase):
                 )
 
         self.assertEqual(
-            requests,
-            [
-                (
-                    "/hapi/v1/computers/me/local-app-shares/v1",
-                    {
-                        "port": 4310,
-                        "label": "Forecast preview",
-                        "ttl_seconds": 900,
-                        "access_mode": "code",
-                        "content_encryption": crypto.CONTENT_ENCRYPTION_PROTOCOL,
-                    },
-                )
-            ],
+            requests[0],
+            (
+                "/hapi/v1/computers/me/local-app-shares/v1",
+                {
+                    "port": 4310,
+                    "label": "Forecast preview",
+                    "ttl_seconds": 900,
+                    "access_mode": "code",
+                    "content_encryption": crypto.CONTENT_ENCRYPTION_PROTOCOL,
+                },
+            ),
         )
         self.assertTrue(result["link"].startswith(f"{COMPUTER_ORIGIN}/s/{SESSION_ID}#"))
         self.assertEqual(result["mini_app_url"], result["link"])
@@ -180,6 +178,7 @@ class LocalAppSharingToolTests(unittest.TestCase):
         self.assertEqual(result["content_encryption"], crypto.CONTENT_ENCRYPTION_PROTOCOL)
         self.assertTrue(result["telegram_button_sent"])
         self.assertNotIn("access_token", result)
+        self.assertNotIn("port", result)
 
     def test_create_link_mode_returns_no_code(self) -> None:
         requests: list[tuple[str, dict[str, object]]] = []
@@ -236,7 +235,8 @@ class LocalAppSharingToolTests(unittest.TestCase):
         self.assertEqual(result["encryption_mode"], "plain")
         self.assertEqual(result["link"], f"{COMPUTER_ORIGIN}/s/{SESSION_ID}")
         self.assertNotIn("access_code", result)
-        self.assertIn("link-only", result["message"])
+        self.assertIn("public View", result["message"])
+        self.assertNotIn("port", result)
 
     def test_list_rebuilds_links_from_local_keys_and_revoke_deletes_them(self) -> None:
         paths: list[tuple[str, str]] = []
@@ -284,6 +284,7 @@ class LocalAppSharingToolTests(unittest.TestCase):
         self.assertIn(f"#{crypto.CONTENT_ENCRYPTION_PROTOCOL}=", listed["sessions"][0]["link"])
         self.assertEqual(listed["sessions"][0]["access_mode"], "link")
         self.assertNotIn("access_code", json.dumps(listed))
+        self.assertNotIn("port", listed["sessions"][0])
         self.assertEqual(revoked["status"], "revoked")
         self.assertEqual(
             paths,
@@ -317,7 +318,8 @@ class LocalAppSharingToolTests(unittest.TestCase):
             tool.local_app_sharing({"action": "create", "port": tool.GATEWAY_PORT, "label": "Bad"})
         )
         self.assertEqual(closed["error"], "invalid_local_app_share_request")
-        self.assertIn("no local application", closed["message"])
+        self.assertEqual(closed["message"], "the page for this View is not available yet")
+        self.assertNotIn("4312", closed["message"])
         self.assertEqual(gateway_port["error"], "invalid_local_app_share_request")
 
     def test_platform_errors_do_not_echo_sensitive_details(self) -> None:
@@ -356,8 +358,10 @@ class LocalAppSharingToolTests(unittest.TestCase):
         self.assertIn(link, str(sent["text"]))
         self.assertEqual(
             sent["reply_markup"],
-            {"inline_keyboard": [[{"text": "View app", "web_app": {"url": link}}]]},
+            {"inline_keyboard": [[{"text": "Open view", "web_app": {"url": link}}]]},
         )
+        self.assertIn("Your View", str(sent["text"]))
+        self.assertNotIn("port", str(sent["text"]).lower())
 
     def test_link_only_share_button_omits_access_code(self) -> None:
         sent: dict[str, object] = {}
@@ -435,6 +439,8 @@ class LocalAppSharingToolTests(unittest.TestCase):
         self.assertIn("verified Telegram owner", access_description)
         self.assertIn("public", access_description)
         self.assertIn("tinyhat_local_app_sharing", skill)
+        self.assertIn("visual page", skill)
+        self.assertIn("Do not mention", skill)
         self.assertIn("Do not use", skill.split("---", 2)[1])
         self.assertNotIn("tinyhat--runtimes", skill)
 

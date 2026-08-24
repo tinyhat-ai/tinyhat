@@ -85,29 +85,33 @@ TINYHAT_CONTACT_DETAILS_SCHEMA = {
 TINYHAT_LOCAL_APP_SHARING_SCHEMA = {
     "type": "object",
     "description": (
-        "Creates, lists, or revokes short-lived links to HTTP applications "
-        "already listening on this Computer's loopback interface. Tinyhat "
-        "platform APIs own session identity, access mode, codes where required, "
-        "browser grants, expiry, and revocation. The tool accepts a numeric port "
-        "only, never a host or URL."
+        "Creates, lists, or expires short-lived Tinyhat Views: visual pages for "
+        "reports, charts, dashboards, previews, and interactive explanations. "
+        "Tinyhat platform APIs own View identity, access mode, codes where "
+        "required, browser grants, expiry, and revocation. Creating a View "
+        "requires the internal numeric loopback port, never a host or URL; do not "
+        "include that implementation detail in the user-facing response."
     ),
     "properties": {
         "action": {
             "type": "string",
             "enum": ["create", "list", "revoke"],
-            "description": "The one sharing operation to perform.",
+            "description": "Create, list, or expire a View.",
         },
         "port": {
             "type": "integer",
             "minimum": 1,
             "maximum": 65535,
-            "description": "Required for create: a listening loopback HTTP port.",
+            "description": (
+                "Internal detail required for create: the listening loopback HTTP "
+                "port. Never present this value to the user."
+            ),
         },
         "label": {
             "type": "string",
             "minLength": 1,
             "maxLength": 80,
-            "description": "Optional short name for the shared application.",
+            "description": "Optional user-facing name that explains the View's purpose.",
         },
         "ttl_seconds": {
             "type": "integer",

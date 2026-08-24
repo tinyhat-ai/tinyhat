@@ -145,9 +145,12 @@ platform status endpoint. It returns only safe Computer state, assignment,
 configuration revision, and package inventory metadata; it never returns
 tokens, credentials, or private platform URLs.
 
-`tinyhat-local-app-sharing` lets an agent share a non-sensitive HTTP app that
-is already listening on a numeric localhost port. The plugin starts its
-loopback-only gateway and calls versioned Computer-authenticated platform APIs;
+`tinyhat-local-app-sharing` teaches agents to use **Views** as a visual way to
+communicate with their users. An agent can turn a report, chart, dashboard,
+interactive explanation, or preview into a short-lived View and present what
+the user can learn from it without exposing localhost or port details. The
+plugin starts its loopback-only gateway and calls versioned
+Computer-authenticated platform APIs;
 the platform owns session ids, one-time-disclosed codes, browser grants,
 expiry, and revocation. Before creating the first session, the plugin asks the
 platform for this Computer's own named Cloudflare Tunnel, installs the pinned
@@ -155,8 +158,8 @@ checksum-verified connector, and keeps its Computer-scoped token out of the
 agent result and process arguments. The user receives a
 `c-<opaque-key>.view.tinyhat.ai` or
 `c-<opaque-key>.viewd.tinyhat.ai` link plus, by default, a four-digit numeric code. Multiple
-ports use separate sessions through the same Computer tunnel. The plugin also
-sends a native Telegram **View app** button: signed
+Views use separate sessions through the same Computer tunnel. The plugin also
+sends a native Telegram **Open view** button: signed
 Mini App data lets only the assigned agent's primary owner enter without a
 code, while ordinary browsers use the four-digit numeric code. If Telegram
 credentials are absent or invalid, the same code form appears as in any other
