@@ -4,6 +4,8 @@ All notable changes to the Tinyhat plugin are documented here.
 
 ## Unreleased
 
+## 0.32.3 - 2026-08-24
+
 - Present shared visual pages as **Visuals** throughout the agent skill,
   Telegram messages and buttons, and viewer UI. The default action is now
   **Open visual**, while content-specific labels such as **Open report** remain
