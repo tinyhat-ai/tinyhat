@@ -145,9 +145,9 @@ platform status endpoint. It returns only safe Computer state, assignment,
 configuration revision, and package inventory metadata; it never returns
 tokens, credentials, or private platform URLs.
 
-`tinyhat-local-app-sharing` teaches agents to use **Views** as a visual way to
+`tinyhat-local-app-sharing` teaches agents to use **Visuals** as a visual way to
 communicate with their users. An agent can turn a report, chart, dashboard,
-interactive explanation, or preview into a short-lived View and present what
+interactive explanation, or preview into a short-lived Visual and present what
 the user can learn from it without exposing localhost or port details. The
 plugin starts its loopback-only gateway and calls versioned
 Computer-authenticated platform APIs;
@@ -158,9 +158,9 @@ checksum-verified connector, and keeps its Computer-scoped token out of the
 agent result and process arguments. The user receives a
 `c-<opaque-key>.view.tinyhat.ai` or
 `c-<opaque-key>.viewd.tinyhat.ai` link plus, by default, a four-digit numeric code. Multiple
-Views use separate sessions through the same Computer tunnel. The plugin also
-sends a native Telegram **Open view** button by default (or a concise
-`button_label` such as **View report** when the user or context calls for it):
+Visuals use separate sessions through the same Computer tunnel. The plugin also
+sends a native Telegram **Open visual** button by default (or a concise
+`button_label` such as **Open report** when the user or context calls for it):
 signed
 Mini App data lets only the assigned agent's primary owner enter without a
 code, while ordinary browsers use the four-digit numeric code. If Telegram

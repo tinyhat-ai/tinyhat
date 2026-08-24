@@ -1,4 +1,4 @@
-"""Agent-facing tool for platform-owned Tinyhat Views."""
+"""Agent-facing tool for platform-owned Tinyhat Visuals."""
 
 from __future__ import annotations
 
@@ -30,7 +30,7 @@ from .crypto import (
 
 GATEWAY_HOST = "127.0.0.1"
 GATEWAY_PORT = 9321
-GATEWAY_PROTOCOL_VERSION = 14
+GATEWAY_PROTOCOL_VERSION = 15
 PACKAGE_ROOT = Path(__file__).resolve().parents[2]
 MAX_PORT = 65535
 MAX_LABEL_LENGTH = 80
@@ -78,7 +78,7 @@ serve()
 
 
 def _clean_label(value: Any) -> str:
-    label = " ".join(str(value or "View").split())
+    label = " ".join(str(value or "Visual").split())
     if (
         not label
         or len(label) > MAX_LABEL_LENGTH
@@ -89,7 +89,7 @@ def _clean_label(value: Any) -> str:
 
 
 def _clean_button_label(value: Any) -> str:
-    button_label = " ".join(str(value or "Open view").split())
+    button_label = " ".join(str(value or "Open visual").split())
     if (
         not button_label
         or len(button_label) > MAX_BUTTON_LABEL_LENGTH
@@ -289,9 +289,9 @@ def _safe_created_payload(payload: dict[str, Any]) -> dict[str, Any]:
         "encryption_mode": encryption_mode,
         "content_encryption": content_encryption,
         "message": (
-            "The public View and Telegram button are ready."
+            "The public Visual and Telegram button are ready."
             if access_mode == "link"
-            else "The private View, Telegram button, and browser access code are ready."
+            else "The private Visual, Telegram button, and browser access code are ready."
         ),
     }
     if access_mode == "code":
@@ -316,8 +316,8 @@ def _send_share_button(created: dict[str, Any]) -> bool:
             token=token,
             chat_id=chat_id,
             text=(
-                f"Your View, {created['label']}, is ready.\n\n"
-                "Open the View inside Telegram with the button below, or use this link "
+                f"Your Visual, {created['label']}, is ready.\n\n"
+                "Open the Visual inside Telegram with the button below, or use this link "
                 "in any browser:\n"
                 f"{created['link']}\n\n"
                 f"{access_detail}"
@@ -342,7 +342,7 @@ def _send_share_button(created: dict[str, Any]) -> bool:
 def _create(payload: dict[str, Any]) -> dict[str, Any]:
     port = _clean_port(payload.get("port"))
     if not _port_is_open(port):
-        raise ValueError("the page for this View is not available yet")
+        raise ValueError("the page for this Visual is not available yet")
     label = _clean_label(payload.get("label"))
     button_label = _clean_button_label(payload.get("button_label"))
     ttl_seconds = _clean_ttl(payload.get("ttl_seconds"))
@@ -387,7 +387,7 @@ def _create(payload: dict[str, Any]) -> dict[str, Any]:
                 registration.get("session_id") != created["session_id"]
                 or registration.get("status") != "registered"
             ):
-                raise ValueError("platform returned an invalid View link registration")
+                raise ValueError("platform returned an invalid Visual link registration")
         except (LocalAppCryptoError, PlatformError, OSError, ValueError) as exc:
             with suppress(PlatformError, OSError):
                 client.delete_json(
@@ -443,7 +443,7 @@ def _list() -> dict[str, Any]:
             {
                 "session_id": session_id,
                 "link": link,
-                "label": str(raw.get("label") or "View")[:80],
+                "label": str(raw.get("label") or "Visual")[:80],
                 "expires_at": str(raw.get("expires_at") or ""),
                 "access_mode": access_mode,
                 "encryption_mode": encryption_mode,
@@ -473,7 +473,7 @@ def _revoke(payload: dict[str, Any]) -> dict[str, Any]:
 
 
 def local_app_sharing(args: dict[str, Any] | None = None, **_: Any) -> str:
-    """Create, list, or expire platform-owned Tinyhat Views."""
+    """Create, list, or expire platform-owned Tinyhat Visuals."""
 
     payload = args if isinstance(args, dict) else {}
     action = str(payload.get("action") or "").strip().lower()
@@ -501,7 +501,7 @@ def local_app_sharing(args: dict[str, Any] | None = None, **_: Any) -> str:
         return tool_error_json(
             tool="tinyhat_local_app_sharing",
             error_name="local_app_sharing_unavailable",
-            message="Tinyhat Views are temporarily unavailable.",
+            message="Tinyhat Visuals are temporarily unavailable.",
         )
     return json.dumps(result, sort_keys=True)
 

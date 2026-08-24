@@ -246,7 +246,7 @@ class LocalAppSharingToolTests(unittest.TestCase):
         self.assertEqual(result["encryption_mode"], "plain")
         self.assertEqual(result["link"], f"{COMPUTER_ORIGIN}/s/{SESSION_ID}")
         self.assertNotIn("access_code", result)
-        self.assertIn("public View", result["message"])
+        self.assertIn("public Visual", result["message"])
         self.assertNotIn("port", result)
 
     def test_encrypted_create_fails_closed_when_link_registration_fails(self) -> None:
@@ -389,7 +389,9 @@ class LocalAppSharingToolTests(unittest.TestCase):
             tool.local_app_sharing({"action": "create", "port": tool.GATEWAY_PORT, "label": "Bad"})
         )
         self.assertEqual(closed["error"], "invalid_local_app_share_request")
-        self.assertEqual(closed["message"], "the page for this View is not available yet")
+        self.assertEqual(
+            closed["message"], "the page for this Visual is not available yet"
+        )
         self.assertNotIn("4312", closed["message"])
         self.assertEqual(gateway_port["error"], "invalid_local_app_share_request")
 
@@ -429,9 +431,9 @@ class LocalAppSharingToolTests(unittest.TestCase):
         self.assertIn(link, str(sent["text"]))
         self.assertEqual(
             sent["reply_markup"],
-            {"inline_keyboard": [[{"text": "Open view", "web_app": {"url": link}}]]},
+            {"inline_keyboard": [[{"text": "Open visual", "web_app": {"url": link}}]]},
         )
-        self.assertIn("Your View", str(sent["text"]))
+        self.assertIn("Your Visual", str(sent["text"]))
         self.assertNotIn("port", str(sent["text"]).lower())
 
     def test_share_button_accepts_context_specific_user_facing_label(self) -> None:
@@ -444,7 +446,7 @@ class LocalAppSharingToolTests(unittest.TestCase):
         link = f"{COMPUTER_ORIGIN}/s/{SESSION_ID}"
         created = {
             "label": "Revenue forecast",
-            "button_label": "View report",
+            "button_label": "Open report",
             "link": link,
             "mini_app_url": link,
             "access_mode": "link",
@@ -458,11 +460,11 @@ class LocalAppSharingToolTests(unittest.TestCase):
 
         self.assertEqual(
             sent["reply_markup"],
-            {"inline_keyboard": [[{"text": "View report", "web_app": {"url": link}}]]},
+            {"inline_keyboard": [[{"text": "Open report", "web_app": {"url": link}}]]},
         )
 
-    def test_button_label_defaults_to_open_view_and_rejects_invalid_text(self) -> None:
-        self.assertEqual(tool._clean_button_label(None), "Open view")
+    def test_button_label_defaults_to_open_visual_and_rejects_invalid_text(self) -> None:
+        self.assertEqual(tool._clean_button_label(None), "Open visual")
         self.assertEqual(tool._clean_button_label("  Open   forecast "), "Open forecast")
         with self.assertRaisesRegex(ValueError, "1 to 64 printable characters"):
             tool._clean_button_label("x" * 65)
@@ -494,7 +496,7 @@ class LocalAppSharingToolTests(unittest.TestCase):
         self.assertNotIn("Access code", str(sent["text"]))
 
     def test_gateway_health_contract_forces_plaintext_process_replacement(self) -> None:
-        self.assertGreaterEqual(tool.GATEWAY_PROTOCOL_VERSION, 14)
+        self.assertGreaterEqual(tool.GATEWAY_PROTOCOL_VERSION, 15)
         viewer = gateway.VIEWER_PAGE.decode("utf-8")
         self.assertIn("content_encryption", viewer)
         self.assertIn("controllerchange", viewer)
@@ -503,11 +505,11 @@ class LocalAppSharingToolTests(unittest.TestCase):
         self.assertIn("location.replace", viewer)
         self.assertIn("openPlainApp", viewer)
         self.assertIn("currentAuthorization", viewer)
-        self.assertIn("<h1>Open View</h1>", viewer)
-        self.assertIn("Open View in browser", viewer)
+        self.assertIn("<h1>Open Visual</h1>", viewer)
+        self.assertIn("Open Visual in browser", viewer)
         self.assertNotIn("View app", viewer)
         self.assertNotIn("Open shared app", viewer)
-        self.assertIn("This encrypted View needs browser security features", viewer)
+        self.assertIn("This encrypted Visual needs browser security features", viewer)
         self.assertIn("link-authorize", viewer)
         self.assertIn("tinyhat-owner-access-code-v1", viewer)
         self.assertIn("safeFragment.delete(ownerCodeProtocol)", viewer)
