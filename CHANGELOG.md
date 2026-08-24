@@ -4,6 +4,13 @@ All notable changes to the Tinyhat plugin are documented here.
 
 ## Unreleased
 
+## 0.32.4 - 2026-08-24
+
+- Keep a public Visual at the exact link the Agent shared after it opens.
+  Authorized plain Visuals now render directly from their canonical `/s/...`
+  URL, so copying, reloading, or sharing that address continues to work
+  without exposing an internal route or unexpectedly asking for a code.
+
 ## 0.32.3 - 2026-08-24
 
 - Present shared visual pages as **Visuals** throughout the agent skill,
