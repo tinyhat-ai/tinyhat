@@ -85,29 +85,43 @@ TINYHAT_CONTACT_DETAILS_SCHEMA = {
 TINYHAT_LOCAL_APP_SHARING_SCHEMA = {
     "type": "object",
     "description": (
-        "Creates, lists, or revokes short-lived links to HTTP applications "
-        "already listening on this Computer's loopback interface. Tinyhat "
-        "platform APIs own session identity, access mode, codes where required, "
-        "browser grants, expiry, and revocation. The tool accepts a numeric port "
-        "only, never a host or URL."
+        "Creates, lists, or expires short-lived Tinyhat Visuals: visual pages for "
+        "reports, charts, dashboards, previews, and interactive explanations. "
+        "Tinyhat platform APIs own Visual identity, access mode, codes where "
+        "required, browser grants, expiry, and revocation. Creating a Visual "
+        "requires the internal numeric loopback port, never a host or URL; do not "
+        "include that implementation detail in the user-facing response."
     ),
     "properties": {
         "action": {
             "type": "string",
             "enum": ["create", "list", "revoke"],
-            "description": "The one sharing operation to perform.",
+            "description": "Create, list, or expire a Visual.",
         },
         "port": {
             "type": "integer",
             "minimum": 1,
             "maximum": 65535,
-            "description": "Required for create: a listening loopback HTTP port.",
+            "description": (
+                "Internal detail required for create: the listening loopback HTTP "
+                "port. Never present this value to the user."
+            ),
         },
         "label": {
             "type": "string",
             "minLength": 1,
             "maxLength": 80,
-            "description": "Optional short name for the shared application.",
+            "description": "Optional user-facing name that explains the Visual's purpose.",
+        },
+        "button_label": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 64,
+            "description": (
+                "Optional user-facing Telegram action text. Defaults to Open visual. "
+                "Use the user's requested wording or a concise phrase that matches "
+                "the content, such as Open report or Open forecast. Never say app."
+            ),
         },
         "ttl_seconds": {
             "type": "integer",

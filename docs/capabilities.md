@@ -12,7 +12,7 @@ The current capability list is intentionally small.
 | `tinyhat_contact_details` | Platform API required | Returns this Agent's managed phone number and email address, and idempotently assigns missing contacts when the platform enables them. It accepts no identity, contact, or credential input. |
 | `tinyhat_mail` | Computer-local mailbox required | Checks, lists, searches, and reads this Agent's isolated Tinyhat inbox and sends one plain-text email when server policy permits it. It never accepts or returns mailbox credentials, server addresses, or account ids. Reads are bounded and sanitized; send retries use a durable request id. |
 | `tinyhat_hats` | Available now | Creates, lists, inspects, renames, and retires one-customer Hats; checks out and syncs private repositories through Computer-scoped GitHub leases; and manages value-blind Hat credentials. Retirement hides a Hat from owner/public/new-install surfaces and deletes creator package state while preserving platform and installation history and already-installed consumer agents. Authorized installation transfers are dispatched automatically to the registered creator Computer, signed there, and decrypted only by the consumer Computer. |
-| `tinyhat_local_app_sharing` | Platform API and viewer edge required | Creates, lists, and revokes short-lived encrypted links to HTTP apps on numeric loopback ports. Four-digit code access is the default; an agent may explicitly choose link-only access when anyone holding the complete link should be able to view the app. The plugin owns the local gateway and browser-to-Computer encryption; platform APIs own session identity, grants, expiry, and revocation. |
+| `tinyhat_local_app_sharing` | Platform API and viewer edge required | Creates, lists, and expires short-lived Visuals for visual reports, charts, dashboards, explanations, and previews. Four-digit code access is the default; an agent may explicitly choose public access when anyone holding the complete link should be able to open the Visual. The plugin keeps localhost and port details internal. |
 | `tinyhat_tell_joke` | Available now | Proves Hermes loaded the Tinyhat plugin and can call a plugin tool. |
 | `tinyhat_skill_catalog` | Available now | Lists Tinyhat plugin skills with `tinyhat:<skill>` qualified names and unqualified aliases. |
 | `tinyhat-skill-authoring` skill | Available now | Teaches agents to write portable user skills with valid names, explicit trigger and non-trigger boundaries, progressive disclosure, and bounded context size. |
@@ -33,10 +33,14 @@ The current capability list is intentionally small.
 Each capability should be visible in this document, represented by a small
 tool or skill, and covered by validation.
 
-## Local App Sharing
+## Tinyhat Visuals
 
-`tinyhat_local_app_sharing` accepts only a numeric port on this Computer. On
-create it verifies that the port is listening, starts the plugin-owned gateway
+`tinyhat_local_app_sharing` lets agents communicate visually with short-lived
+Visuals: reports, charts, dashboards, interactive explanations, and previews.
+The agent presents the Visual's purpose to the user and keeps implementation
+details such as localhost and port numbers internal. On create, the tool
+accepts only a numeric port on this Computer, verifies that it is listening,
+starts the plugin-owned gateway
 on loopback when necessary, asks the platform to create or recover this
 Computer's permanent named tunnel, and runs the pinned checksum-verified
 connector with a private token file. It then asks the Computer-authenticated
@@ -45,10 +49,12 @@ platform API for a short-lived session. The agent receives a
 Sessions use `access_mode: "code"` by default and return a four-digit numeric
 code. An agent can explicitly request `access_mode: "link"`; that mode returns
 no code and authorizes anyone who possesses the complete link. The plugin sends
-a native Telegram **View app** button. Shares are private by default: ordinary
+a native Telegram **Open visual** button by default. The optional `button_label`
+can use clearer content-specific wording such as **Open report**. Visuals are
+private by default: ordinary
 browsers use the four-digit code, while valid signed Mini App data lets the
 assigned agent's primary owner bypass it. Missing or invalid Telegram identity
-falls back to the same code form. Public link shares open immediately for
+falls back to the same code form. Public Visuals open immediately for
 anyone holding the complete link in Telegram or any other browser. List never
 returns codes, and revoke invalidates the selected session immediately.
 
@@ -62,6 +68,11 @@ when its WebView cannot run the required service worker. The platform resolves
 session metadata and authorization but does not proxy app content. Both modes
 support read-only HTTP `GET` and `HEAD`; writes and WebSockets are not shared.
 No runtime code is involved.
+
+For an encrypted Visual, the plugin registers only the public key fingerprint
+with the platform after creating the Computer-local session key. This lets the
+owner Mini App reconstruct the same complete link for later opening or copying;
+the private key remains on the Computer.
 
 ## Private Agent Mail
 

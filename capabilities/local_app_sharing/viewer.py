@@ -7,7 +7,7 @@ from .crypto import CONTENT_ENCRYPTION_PROTOCOL
 VIEWER_PAGE = r"""<!doctype html>
 <html lang="en"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Open shared Tinyhat app</title>
+<title>Open Tinyhat Visual</title>
 <style>[hidden]{display:none!important}html,body{height:100%;margin:0}
 body{font:16px system-ui;background:#f5f5f0;color:#171717}
 #loading{display:grid;place-items:center;height:100%;background:#f5f5f0}
@@ -19,21 +19,22 @@ button,.browser-link{box-sizing:border-box;display:block;width:100%;padding:.8re
 background:#171717;color:white;border:0;text-align:center;text-decoration:none;font:inherit}.error{color:#a00}
 </style></head>
 <body><main id="loading"><span class="spinner" role="status" aria-label="Loading"></span></main>
-<main id="code-page" hidden><h1>Open shared app</h1><p>Enter the code your agent sent you.</p>
+<main id="code-page" hidden><h1>Open Visual</h1><p>Enter the code your agent sent you.</p>
 <p id="error" class="error" role="alert" hidden></p>
 <form id="code-form"><label for="code">Access code</label>
 <input id="code" name="code" autocomplete="one-time-code" inputmode="numeric"
 pattern="[0-9]{4}" minlength="4" maxlength="4" required>
-<button type="submit">View app</button></form></main>
-<main id="browser-page" hidden><p>This encrypted app needs browser security features that
+<button type="submit">Open visual</button></form></main>
+<main id="browser-page" hidden><p>This encrypted Visual needs browser security features that
 Telegram does not provide.</p><a id="browser-link" class="browser-link" target="_blank"
-rel="noopener noreferrer">Open shared app in browser</a></main>
+rel="noopener noreferrer">Open Visual in browser</a></main>
 <script src="https://telegram.org/js/telegram-web-app.js"></script>
 <script>(() => {
   'use strict';
   const protocol = '__CONTENT_ENCRYPTION_PROTOCOL__';
   const plainTransport = 'none';
   const handoffProtocol = 'tinyhat-browser-handoff-v1';
+  const ownerCodeProtocol = 'tinyhat-owner-access-code-v1';
   const loading = document.getElementById('loading');
   const codePage = document.getElementById('code-page');
   const browserPage = document.getElementById('browser-page');
@@ -45,6 +46,7 @@ rel="noopener noreferrer">Open shared app in browser</a></main>
   const fragmentParams = new URLSearchParams(location.hash.slice(1));
   const expectedFingerprint = fragmentParams.get(protocol);
   const incomingBrowserHandoff = fragmentParams.get(handoffProtocol);
+  const incomingOwnerCode = fragmentParams.get(ownerCodeProtocol);
   const telegram = window.Telegram && window.Telegram.WebApp;
   const embedded = window.top !== window.self;
   let browserHandoffUrl = '';
@@ -85,7 +87,7 @@ rel="noopener noreferrer">Open shared app in browser</a></main>
     browserPage.hidden = false;
     browserLink.href = externalUrl;
     if (telegram && telegram.initData && telegram.MainButton && telegram.openLink) {
-      telegram.MainButton.setText('Open shared app');
+      telegram.MainButton.setText('Open visual');
       telegram.MainButton.show();
       telegram.MainButton.onClick(() => telegram.openLink(externalUrl));
     }
@@ -231,6 +233,29 @@ rel="noopener noreferrer">Open shared app in browser</a></main>
     });
   }
 
+  async function authorizeCode(accessCode, browserHandoff = false) {
+    return jsonFetch(`/s/${sessionId}/code-authorize`, {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({
+        access_code: accessCode,
+        embedded,
+        browser_handoff: browserHandoff,
+      }),
+    });
+  }
+
+  function removeOwnerCodeFromAddress() {
+    const safeFragment = new URLSearchParams(location.hash.slice(1));
+    safeFragment.delete(ownerCodeProtocol);
+    const serialized = safeFragment.toString();
+    history.replaceState(
+      null,
+      '',
+      `${location.pathname}${serialized ? `#${serialized}` : ''}`,
+    );
+  }
+
   async function createBrowserHandoff() {
     return jsonFetch(`/s/${sessionId}/browser-handoff`, {
       method: 'POST',
@@ -302,15 +327,7 @@ rel="noopener noreferrer">Open shared app in browser</a></main>
     loading.hidden = false;
     codePage.hidden = true;
     try {
-      const authorization = await jsonFetch(`/s/${sessionId}/code-authorize`, {
-        method: 'POST',
-        headers: {'Content-Type': 'application/json'},
-        body: JSON.stringify({
-          access_code: codeInput.value,
-          embedded,
-          browser_handoff: false,
-        }),
-      });
+      const authorization = await authorizeCode(codeInput.value);
       if (!await openAuthorizedApp(authorization)) throw new Error('share-open-failed');
     } catch (_) {
       showCode('That code is not valid or has expired.');
@@ -322,6 +339,7 @@ rel="noopener noreferrer">Open shared app in browser</a></main>
       showCode('This sharing link is incomplete.');
       return;
     }
+    if (incomingOwnerCode) removeOwnerCodeFromAddress();
     if (telegram && telegram.initData) {
       telegram.ready();
       telegram.expand();
@@ -342,6 +360,11 @@ rel="noopener noreferrer">Open shared app in browser</a></main>
     if (telegram && telegram.initData) {
       try {
         if (await openAuthorizedApp(await authorizeTelegram())) return;
+      } catch (_) {}
+    }
+    if (/^[0-9]{4}$/.test(incomingOwnerCode || '')) {
+      try {
+        if (await openAuthorizedApp(await authorizeCode(incomingOwnerCode))) return;
       } catch (_) {}
     }
     showCode('');
@@ -524,7 +547,7 @@ async function routeFor(event) {
 async function encryptedFetch(event, route) {
   const {config, target} = route;
   if (!['GET', 'HEAD'].includes(event.request.method)) {
-    return new Response('Read-only shared app', {status: 405});
+    return new Response('Read-only Visual', {status: 405});
   }
   const headers = {};
   for (const name of ['accept', 'accept-language', 'if-none-match', 'if-modified-since', 'range']) {
@@ -557,7 +580,7 @@ async function encryptedFetch(event, route) {
       ciphertext: bytesToBase64Url(new Uint8Array(ciphertext)),
     }),
   });
-  if (!outer.ok) return new Response('Shared app unavailable', {status: outer.status});
+  if (!outer.ok) return new Response('Visual unavailable', {status: outer.status});
   const encrypted = await outer.json();
   const decrypted = await crypto.subtle.decrypt(
     {

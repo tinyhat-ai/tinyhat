@@ -1,4 +1,4 @@
-"""Agent-facing tool for platform-owned local application sharing sessions."""
+"""Agent-facing tool for platform-owned Tinyhat Visuals."""
 
 from __future__ import annotations
 
@@ -30,10 +30,11 @@ from .crypto import (
 
 GATEWAY_HOST = "127.0.0.1"
 GATEWAY_PORT = 9321
-GATEWAY_PROTOCOL_VERSION = 13
+GATEWAY_PROTOCOL_VERSION = 15
 PACKAGE_ROOT = Path(__file__).resolve().parents[2]
 MAX_PORT = 65535
 MAX_LABEL_LENGTH = 80
+MAX_BUTTON_LABEL_LENGTH = 64
 MIN_PRINTABLE_ORDINAL = 32
 DEFAULT_TTL_SECONDS = 15 * 60
 MIN_TTL_SECONDS = 60
@@ -77,7 +78,7 @@ serve()
 
 
 def _clean_label(value: Any) -> str:
-    label = " ".join(str(value or "Local app").split())
+    label = " ".join(str(value or "Visual").split())
     if (
         not label
         or len(label) > MAX_LABEL_LENGTH
@@ -85,6 +86,17 @@ def _clean_label(value: Any) -> str:
     ):
         raise ValueError("label must be 1 to 80 printable characters")
     return label
+
+
+def _clean_button_label(value: Any) -> str:
+    button_label = " ".join(str(value or "Open visual").split())
+    if (
+        not button_label
+        or len(button_label) > MAX_BUTTON_LABEL_LENGTH
+        or any(ord(character) < MIN_PRINTABLE_ORDINAL for character in button_label)
+    ):
+        raise ValueError("button_label must be 1 to 64 printable characters")
+    return button_label
 
 
 def _clean_port(value: Any) -> int:
@@ -273,14 +285,13 @@ def _safe_created_payload(payload: dict[str, Any]) -> dict[str, Any]:
         "mini_app_url": link,
         "access_mode": access_mode,
         "label": payload["label"],
-        "port": payload["port"],
         "expires_at": payload["expires_at"],
         "encryption_mode": encryption_mode,
         "content_encryption": content_encryption,
         "message": (
-            "The Telegram Mini App button and link-only browser access are ready."
+            "The public Visual and Telegram button are ready."
             if access_mode == "link"
-            else "The Telegram Mini App button and browser access code are ready."
+            else "The private Visual, Telegram button, and browser access code are ready."
         ),
     }
     if access_mode == "code":
@@ -297,7 +308,7 @@ def _send_share_button(created: dict[str, Any]) -> bool:
 
         token, chat_id = _telegram_credentials()
         access_detail = (
-            "Anyone with this complete link can open it.\n"
+            "Access: Anyone with this complete link can open it.\n"
             if created["access_mode"] == "link"
             else f"Access code: {created['access_code']}\n"
         )
@@ -305,18 +316,18 @@ def _send_share_button(created: dict[str, Any]) -> bool:
             token=token,
             chat_id=chat_id,
             text=(
-                f"{created['label']} is ready.\n\n"
-                "Open it inside Telegram with the button below, or use this link "
+                f"Your Visual, {created['label']}, is ready.\n\n"
+                "Open the Visual inside Telegram with the button below, or use this link "
                 "in any browser:\n"
                 f"{created['link']}\n\n"
                 f"{access_detail}"
-                f"Expires: {created['expires_at']}"
+                f"Available until: {created['expires_at']}"
             ),
             reply_markup={
                 "inline_keyboard": [
                     [
                         {
-                            "text": "View app",
+                            "text": _clean_button_label(created.get("button_label")),
                             "web_app": {"url": created["mini_app_url"]},
                         }
                     ]
@@ -331,8 +342,9 @@ def _send_share_button(created: dict[str, Any]) -> bool:
 def _create(payload: dict[str, Any]) -> dict[str, Any]:
     port = _clean_port(payload.get("port"))
     if not _port_is_open(port):
-        raise ValueError(f"no local application is listening on port {port}")
+        raise ValueError("the page for this Visual is not available yet")
     label = _clean_label(payload.get("label"))
+    button_label = _clean_button_label(payload.get("button_label"))
     ttl_seconds = _clean_ttl(payload.get("ttl_seconds"))
     access_mode = _clean_access_mode(payload.get("access_mode"))
     encryption_mode = _clean_encryption_mode(payload.get("encryption_mode"))
@@ -364,7 +376,19 @@ def _create(payload: dict[str, Any]) -> dict[str, Any]:
                 session_id=created["session_id"],
                 expires_at_epoch=_expires_at_epoch(created["expires_at"]),
             )
-        except (LocalAppCryptoError, OSError) as exc:
+            registration = client.post_json(
+                computer_api_path(
+                    platform_auth,
+                    f"local-app-shares/v1/{created['session_id']}/link-fingerprint",
+                ),
+                {"fingerprint": session_key.fingerprint},
+            )
+            if (
+                registration.get("session_id") != created["session_id"]
+                or registration.get("status") != "registered"
+            ):
+                raise ValueError("platform returned an invalid Visual link registration")
+        except (LocalAppCryptoError, PlatformError, OSError, ValueError) as exc:
             with suppress(PlatformError, OSError):
                 client.delete_json(
                     computer_api_path(
@@ -372,11 +396,13 @@ def _create(payload: dict[str, Any]) -> dict[str, Any]:
                         f"local-app-shares/v1/{created['session_id']}",
                     )
                 )
+            SESSION_KEY_STORE.delete(created["session_id"])
             raise RuntimeError(
                 "the Computer could not create the encrypted sharing key"
             ) from exc
         created["link"] = encrypted_link(created["link"], session_key.fingerprint)
     created["mini_app_url"] = created["link"]
+    created["button_label"] = button_label
     created["telegram_button_sent"] = _send_share_button(created)
     return created
 
@@ -404,6 +430,7 @@ def _list() -> dict[str, Any]:
             "encrypted" if content_encryption == CONTENT_ENCRYPTION_PROTOCOL else "plain"
         )
         access_mode = _clean_access_mode(raw.get("access_mode"))
+        _clean_port(raw.get("port"))
         if encryption_mode == "encrypted":
             try:
                 session_key = SESSION_KEY_STORE.load(session_id)
@@ -416,8 +443,7 @@ def _list() -> dict[str, Any]:
             {
                 "session_id": session_id,
                 "link": link,
-                "label": str(raw.get("label") or "Local app")[:80],
-                "port": _clean_port(raw.get("port")),
+                "label": str(raw.get("label") or "Visual")[:80],
                 "expires_at": str(raw.get("expires_at") or ""),
                 "access_mode": access_mode,
                 "encryption_mode": encryption_mode,
@@ -447,7 +473,7 @@ def _revoke(payload: dict[str, Any]) -> dict[str, Any]:
 
 
 def local_app_sharing(args: dict[str, Any] | None = None, **_: Any) -> str:
-    """Create, list, or revoke platform-owned local application shares."""
+    """Create, list, or expire platform-owned Tinyhat Visuals."""
 
     payload = args if isinstance(args, dict) else {}
     action = str(payload.get("action") or "").strip().lower()
@@ -475,7 +501,7 @@ def local_app_sharing(args: dict[str, Any] | None = None, **_: Any) -> str:
         return tool_error_json(
             tool="tinyhat_local_app_sharing",
             error_name="local_app_sharing_unavailable",
-            message="Tinyhat local app sharing is temporarily unavailable.",
+            message="Tinyhat Visuals are temporarily unavailable.",
         )
     return json.dumps(result, sort_keys=True)
 
