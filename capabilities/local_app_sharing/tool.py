@@ -363,7 +363,19 @@ def _create(payload: dict[str, Any]) -> dict[str, Any]:
                 session_id=created["session_id"],
                 expires_at_epoch=_expires_at_epoch(created["expires_at"]),
             )
-        except (LocalAppCryptoError, OSError) as exc:
+            registration = client.post_json(
+                computer_api_path(
+                    platform_auth,
+                    f"local-app-shares/v1/{created['session_id']}/link-fingerprint",
+                ),
+                {"fingerprint": session_key.fingerprint},
+            )
+            if (
+                registration.get("session_id") != created["session_id"]
+                or registration.get("status") != "registered"
+            ):
+                raise ValueError("platform returned an invalid View link registration")
+        except (LocalAppCryptoError, PlatformError, OSError, ValueError) as exc:
             with suppress(PlatformError, OSError):
                 client.delete_json(
                     computer_api_path(
@@ -371,6 +383,7 @@ def _create(payload: dict[str, Any]) -> dict[str, Any]:
                         f"local-app-shares/v1/{created['session_id']}",
                     )
                 )
+            SESSION_KEY_STORE.delete(created["session_id"])
             raise RuntimeError(
                 "the Computer could not create the encrypted sharing key"
             ) from exc

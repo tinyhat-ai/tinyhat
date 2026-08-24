@@ -67,6 +67,11 @@ session metadata and authorization but does not proxy app content. Both modes
 support read-only HTTP `GET` and `HEAD`; writes and WebSockets are not shared.
 No runtime code is involved.
 
+For an encrypted View, the plugin registers only the public key fingerprint
+with the platform after creating the Computer-local session key. This lets the
+owner Mini App reconstruct the same complete link for later opening or copying;
+the private key remains on the Computer.
+
 ## Private Agent Mail
 
 `tinyhat_mail` reads the mailbox values already supplied to the assigned

@@ -113,6 +113,12 @@ class LocalAppSharingToolTests(unittest.TestCase):
         class FakeClient:
             def post_json(self, path: str, payload: dict[str, object]) -> dict[str, object]:
                 requests.append((path, payload))
+                if path.endswith("/link-fingerprint"):
+                    return {
+                        "schema_version": "v1",
+                        "session_id": SESSION_ID,
+                        "status": "registered",
+                    }
                 return {
                     "schema_version": "v1",
                     "session_id": SESSION_ID,
@@ -170,6 +176,11 @@ class LocalAppSharingToolTests(unittest.TestCase):
                 },
             ),
         )
+        self.assertEqual(
+            requests[1][0],
+            f"/hapi/v1/computers/me/local-app-shares/v1/{SESSION_ID}/link-fingerprint",
+        )
+        self.assertRegex(str(requests[1][1]["fingerprint"]), r"^[A-Za-z0-9_-]{43}$")
         self.assertTrue(result["link"].startswith(f"{COMPUTER_ORIGIN}/s/{SESSION_ID}#"))
         self.assertEqual(result["mini_app_url"], result["link"])
         self.assertEqual(result["access_code"], ACCESS_CODE)
@@ -237,6 +248,66 @@ class LocalAppSharingToolTests(unittest.TestCase):
         self.assertNotIn("access_code", result)
         self.assertIn("public View", result["message"])
         self.assertNotIn("port", result)
+
+    def test_encrypted_create_fails_closed_when_link_registration_fails(self) -> None:
+        deleted_paths: list[str] = []
+
+        class FakeClient:
+            def post_json(self, path: str, payload: dict[str, object]) -> dict[str, object]:
+                if path.endswith("/link-fingerprint"):
+                    return {"status": "unexpected"}
+                return {
+                    "schema_version": "v1",
+                    "session_id": SESSION_ID,
+                    "link": f"{COMPUTER_ORIGIN}/s/{SESSION_ID}",
+                    "access_code": ACCESS_CODE,
+                    "label": "Private report",
+                    "port": 4310,
+                    "status": "active",
+                    "created_at": _future_expiry(),
+                    "expires_at": _future_expiry(),
+                    "access_mode": "code",
+                    "content_encryption": crypto.CONTENT_ENCRYPTION_PROTOCOL,
+                }
+
+            def delete_json(self, path: str) -> dict[str, object]:
+                deleted_paths.append(path)
+                return {"session_id": SESSION_ID, "status": "revoked"}
+
+        with tempfile.TemporaryDirectory() as directory:
+            key_store = crypto.SessionKeyStore(Path(directory) / "sessions")
+            with (
+                mock.patch.object(tool, "SESSION_KEY_STORE", key_store),
+                mock.patch.object(tool, "_port_is_open", return_value=True),
+                mock.patch.object(tool, "ensure_gateway_running"),
+                mock.patch.object(
+                    tool,
+                    "ensure_connector_running",
+                    return_value=COMPUTER_ORIGIN,
+                ),
+                mock.patch.object(
+                    tool,
+                    "build_platform_client",
+                    return_value=(FakeClient(), "gcloud"),
+                ),
+            ):
+                result = json.loads(
+                    tool.local_app_sharing(
+                        {
+                            "action": "create",
+                            "port": 4310,
+                            "label": "Private report",
+                            "encryption_mode": "encrypted",
+                        }
+                    )
+                )
+            self.assertFalse((key_store.root / f"{SESSION_ID}.json").exists())
+
+        self.assertEqual(result["error"], "local_app_sharing_unavailable")
+        self.assertEqual(
+            deleted_paths,
+            [f"/hapi/v1/computers/me/local-app-shares/v1/{SESSION_ID}"],
+        )
 
     def test_list_rebuilds_links_from_local_keys_and_revoke_deletes_them(self) -> None:
         paths: list[tuple[str, str]] = []
