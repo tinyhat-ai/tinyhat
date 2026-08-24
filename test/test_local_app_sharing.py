@@ -550,6 +550,16 @@ class LocalAppSharingToolTests(unittest.TestCase):
         access_description = schemas.TINYHAT_LOCAL_APP_SHARING_SCHEMA["properties"][
             "access_mode"
         ]["description"]
+        schema_description = schemas.TINYHAT_LOCAL_APP_SHARING_SCHEMA["description"]
+        button_description = schemas.TINYHAT_LOCAL_APP_SHARING_SCHEMA["properties"][
+            "button_label"
+        ]["description"]
+        self.assertIn("Tinyhat Visuals", schema_description)
+        self.assertNotIn("Tinyhat Views", schema_description)
+        self.assertIn("Defaults to Open visual", button_description)
+        self.assertIn("Open report", button_description)
+        self.assertNotIn("Open view", button_description)
+        self.assertNotIn("View report", button_description)
         self.assertIn("private default", access_description)
         self.assertIn("verified Telegram owner", access_description)
         self.assertIn("public", access_description)

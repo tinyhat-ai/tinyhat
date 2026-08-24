@@ -51,7 +51,7 @@ This repository is the public Tinyhat plugin package. `main` is Hermes-only.
   Agent's current AI model budget, and adding an exact amount to that budget.
 - `skills/tinyhat-contact-details/SKILL.md`: the Agent's assigned phone number
   and email address.
-- `skills/tinyhat-local-app-sharing/SKILL.md`: short-lived Views for visual
+- `skills/tinyhat-local-app-sharing/SKILL.md`: short-lived Visuals for visual
   reports, charts, dashboards, explanations, and previews.
 - `skills/tinyhat-agentphone/SKILL.md`: direct AgentPhone calls and text
   messages with Computer-local credentials and fixed safety boundaries around

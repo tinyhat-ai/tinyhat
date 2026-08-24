@@ -85,10 +85,10 @@ TINYHAT_CONTACT_DETAILS_SCHEMA = {
 TINYHAT_LOCAL_APP_SHARING_SCHEMA = {
     "type": "object",
     "description": (
-        "Creates, lists, or expires short-lived Tinyhat Views: visual pages for "
+        "Creates, lists, or expires short-lived Tinyhat Visuals: visual pages for "
         "reports, charts, dashboards, previews, and interactive explanations. "
-        "Tinyhat platform APIs own View identity, access mode, codes where "
-        "required, browser grants, expiry, and revocation. Creating a View "
+        "Tinyhat platform APIs own Visual identity, access mode, codes where "
+        "required, browser grants, expiry, and revocation. Creating a Visual "
         "requires the internal numeric loopback port, never a host or URL; do not "
         "include that implementation detail in the user-facing response."
     ),
@@ -96,7 +96,7 @@ TINYHAT_LOCAL_APP_SHARING_SCHEMA = {
         "action": {
             "type": "string",
             "enum": ["create", "list", "revoke"],
-            "description": "Create, list, or expire a View.",
+            "description": "Create, list, or expire a Visual.",
         },
         "port": {
             "type": "integer",
@@ -111,16 +111,16 @@ TINYHAT_LOCAL_APP_SHARING_SCHEMA = {
             "type": "string",
             "minLength": 1,
             "maxLength": 80,
-            "description": "Optional user-facing name that explains the View's purpose.",
+            "description": "Optional user-facing name that explains the Visual's purpose.",
         },
         "button_label": {
             "type": "string",
             "minLength": 1,
             "maxLength": 64,
             "description": (
-                "Optional user-facing Telegram action text. Defaults to Open view. "
+                "Optional user-facing Telegram action text. Defaults to Open visual. "
                 "Use the user's requested wording or a concise phrase that matches "
-                "the content, such as View report or Open forecast. Never say app."
+                "the content, such as Open report or Open forecast. Never say app."
             ),
         },
         "ttl_seconds": {

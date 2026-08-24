@@ -139,7 +139,7 @@ def hats(args: dict[str, Any] | None = None, **kwargs: Any) -> str:
 
 
 def local_app_sharing(args: dict[str, Any] | None = None, **kwargs: Any) -> str:
-    """Create, list, or expire short-lived Tinyhat Views."""
+    """Create, list, or expire short-lived Tinyhat Visuals."""
     return handle_local_app_sharing(args, **kwargs)
 
 
