@@ -494,7 +494,7 @@ class LocalAppSharingToolTests(unittest.TestCase):
         self.assertNotIn("Access code", str(sent["text"]))
 
     def test_gateway_health_contract_forces_plaintext_process_replacement(self) -> None:
-        self.assertGreaterEqual(tool.GATEWAY_PROTOCOL_VERSION, 13)
+        self.assertGreaterEqual(tool.GATEWAY_PROTOCOL_VERSION, 14)
         viewer = gateway.VIEWER_PAGE.decode("utf-8")
         self.assertIn("content_encryption", viewer)
         self.assertIn("controllerchange", viewer)
