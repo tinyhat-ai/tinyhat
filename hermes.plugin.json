@@ -126,6 +126,13 @@
       "purpose": "Creates and revokes short-lived encrypted links to HTTP apps on this Computer, using four-digit code access by default or explicit link-only access."
     },
     {
+      "name": "tinyhat-computer-desktop",
+      "qualified_name": "tinyhat:tinyhat-computer-desktop",
+      "aliases": ["tinyhat-computer-desktop"],
+      "path": "skills/tinyhat-computer-desktop/SKILL.md",
+      "purpose": "Creates a short-lived, view-only desktop connection for the assigned owner, with automatic Telegram verification or a six-digit browser code."
+    },
+    {
       "name": "tinyhat-credit",
       "qualified_name": "tinyhat:tinyhat-credit",
       "aliases": ["tinyhat-credit"],
@@ -191,6 +198,11 @@
       "name": "tinyhat_contact_details",
       "handler": "tools.contact_details",
       "skill": "tinyhat-contact-details"
+    },
+    {
+      "name": "tinyhat_computer_desktop",
+      "handler": "tools.computer_desktop",
+      "skill": "tinyhat-computer-desktop"
     },
     {
       "name": "tinyhat_mail",

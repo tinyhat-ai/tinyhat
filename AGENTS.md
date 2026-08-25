@@ -33,6 +33,9 @@ This repository is the public Tinyhat plugin package. `main` is Hermes-only.
 - `capabilities/local_app_sharing/`: the loopback-only HTTP viewer gateway,
   pinned per-Computer Cloudflare connector, and thin client for platform-owned
   tunnel and sharing-session APIs.
+- `capabilities/computer_desktop/`: a thin client for the platform-owned,
+  view-only desktop-session broker. Desktop transport and installation remain
+  outside the plugin.
 - `skills/tinyhat-tell-joke/SKILL.md`: deterministic joke proof.
 - `skills/tinyhat-plugin-version/SKILL.md`: live plugin version proof.
 - `skills/tinyhat-onboarding-greeting/SKILL.md`: one-shot first owner greeting after Computer setup.
@@ -53,6 +56,8 @@ This repository is the public Tinyhat plugin package. `main` is Hermes-only.
   and email address.
 - `skills/tinyhat-local-app-sharing/SKILL.md`: short-lived Visuals for visual
   reports, charts, dashboards, explanations, and previews.
+- `skills/tinyhat-computer-desktop/SKILL.md`: owner-requested live desktop
+  viewing with Telegram owner bypass or a six-digit browser code.
 - `skills/tinyhat-agentphone/SKILL.md`: direct AgentPhone calls and text
   messages with Computer-local credentials and fixed safety boundaries around
   the provider's online instructions.

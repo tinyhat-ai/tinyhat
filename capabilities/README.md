@@ -9,6 +9,7 @@ workers, and private helpers together.
 - `google_workspace/`: Google connection, permission, app, and worker flows.
 - `hats/`: Hat creation, installation, repositories, and private values.
 - `local_app_sharing/`: loopback gateway and platform-owned preview sessions.
+- `computer_desktop/`: thin platform client for owner desktop connections.
 - `secrets/`: private credential listing and encrypted handoff.
 - `slack/`: Slack connection and disconnect flows.
 

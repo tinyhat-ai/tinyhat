@@ -10,6 +10,7 @@ provides_tools:
   - tinyhat_model_budget
   - tinyhat_openrouter_credit_allocate
   - tinyhat_contact_details
+  - tinyhat_computer_desktop
   - tinyhat_mail
   - tinyhat_hats
   - tinyhat_local_app_sharing

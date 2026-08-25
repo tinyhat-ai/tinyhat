@@ -82,6 +82,19 @@ TINYHAT_CONTACT_DETAILS_SCHEMA = {
     "additionalProperties": False,
 }
 
+TINYHAT_COMPUTER_DESKTOP_SCHEMA = {
+    "type": "object",
+    "description": (
+        "Creates or reuses a short-lived, view-only connection to this "
+        "authenticated Computer's desktop for its assigned owner. Returns one "
+        "shareable browser link, a six-digit code for ordinary browsers, and "
+        "an expiry. The assigned Telegram owner is authenticated automatically."
+    ),
+    "properties": {},
+    "required": [],
+    "additionalProperties": False,
+}
+
 TINYHAT_LOCAL_APP_SHARING_SCHEMA = {
     "type": "object",
     "description": (

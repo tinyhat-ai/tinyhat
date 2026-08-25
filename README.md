@@ -56,6 +56,7 @@ non-send JMAP action without routing mail through Tinyloop.
 | `capabilities/mail/` | Bounded JMAP mailbox access with local-only credentials and safe retry behavior. |
 | `capabilities/hats/` | Owner-scoped Hat lifecycle, repositories, skills, transfers, and private values. |
 | `capabilities/local_app_sharing/` | Loopback-only viewer gateway and platform session client. |
+| `capabilities/computer_desktop/` | Thin client for platform-owned desktop sessions. |
 | `capabilities/secrets/` | Value-blind credential discovery and encrypted private handoff. |
 | `capabilities/slack/` | Computer-local Slack connection and disconnect flows. |
 | `capabilities/google_workspace/` | Google OAuth, account custody, permission selection, managed `gws`, and detached workers. |
