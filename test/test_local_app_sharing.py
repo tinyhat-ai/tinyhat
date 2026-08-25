@@ -389,9 +389,7 @@ class LocalAppSharingToolTests(unittest.TestCase):
             tool.local_app_sharing({"action": "create", "port": tool.GATEWAY_PORT, "label": "Bad"})
         )
         self.assertEqual(closed["error"], "invalid_local_app_share_request")
-        self.assertEqual(
-            closed["message"], "the page for this Visual is not available yet"
-        )
+        self.assertEqual(closed["message"], "the page for this Visual is not available yet")
         self.assertNotIn("4312", closed["message"])
         self.assertEqual(gateway_port["error"], "invalid_local_app_share_request")
 
@@ -496,7 +494,7 @@ class LocalAppSharingToolTests(unittest.TestCase):
         self.assertNotIn("Access code", str(sent["text"]))
 
     def test_gateway_health_contract_forces_plaintext_process_replacement(self) -> None:
-        self.assertGreaterEqual(tool.GATEWAY_PROTOCOL_VERSION, 16)
+        self.assertGreaterEqual(tool.GATEWAY_PROTOCOL_VERSION, 17)
         viewer = gateway.VIEWER_PAGE.decode("utf-8")
         self.assertIn("content_encryption", viewer)
         self.assertIn("controllerchange", viewer)
@@ -504,8 +502,8 @@ class LocalAppSharingToolTests(unittest.TestCase):
         self.assertNotIn("<iframe", viewer)
         self.assertIn("location.replace", viewer)
         self.assertIn("openPlainApp", viewer)
-        self.assertIn("location.replace(`/s/${sessionId}`);", viewer)
-        self.assertNotIn("location.replace(`/s/${sessionId}/app/`);", viewer)
+        self.assertIn("type: 'tinyhat-plain-configure'", viewer)
+        self.assertIn("location.replace(`/s/${sessionId}/app/`);", viewer)
         self.assertIn("currentAuthorization", viewer)
         self.assertIn("<h1>Open Visual</h1>", viewer)
         self.assertIn("Open Visual in browser", viewer)
@@ -522,6 +520,9 @@ class LocalAppSharingToolTests(unittest.TestCase):
         self.assertIn("persistConfig", worker)
         self.assertIn("loadConfig", worker)
         self.assertIn("worker-src 'none'", worker)
+        self.assertIn("plainFetch", worker)
+        self.assertIn("event.request.clone().arrayBuffer()", worker)
+        self.assertNotIn("Read-only Visual", worker)
         app_shell = gateway.APP_SHELL.decode("utf-8")
         self.assertIn("history.replaceState", app_shell)
         self.assertIn("sessionStorage.getItem", app_shell)
@@ -549,13 +550,13 @@ class LocalAppSharingToolTests(unittest.TestCase):
             schemas.TINYHAT_LOCAL_APP_SHARING_SCHEMA["properties"]["encryption_mode"]["enum"],
             ["plain", "encrypted"],
         )
-        access_description = schemas.TINYHAT_LOCAL_APP_SHARING_SCHEMA["properties"][
-            "access_mode"
-        ]["description"]
+        access_description = schemas.TINYHAT_LOCAL_APP_SHARING_SCHEMA["properties"]["access_mode"][
+            "description"
+        ]
         schema_description = schemas.TINYHAT_LOCAL_APP_SHARING_SCHEMA["description"]
-        button_description = schemas.TINYHAT_LOCAL_APP_SHARING_SCHEMA["properties"][
-            "button_label"
-        ]["description"]
+        button_description = schemas.TINYHAT_LOCAL_APP_SHARING_SCHEMA["properties"]["button_label"][
+            "description"
+        ]
         self.assertIn("Tinyhat Visuals", schema_description)
         self.assertNotIn("Tinyhat Views", schema_description)
         self.assertIn("Defaults to Open visual", button_description)
@@ -569,6 +570,10 @@ class LocalAppSharingToolTests(unittest.TestCase):
         self.assertIn("visual page", skill)
         self.assertIn("Do not mention", skill)
         self.assertIn("Do not use", skill.split("---", 2)[1])
+        self.assertIn("owner-requested private admin pages", skill)
+        self.assertIn("always use private code access", skill)
+        self.assertIn("`POST`", skill)
+        self.assertNotIn("Do not share credential pages", skill)
         self.assertNotIn("tinyhat--runtimes", skill)
 
 
@@ -660,6 +665,10 @@ class LocalAppSharingConnectorTests(unittest.TestCase):
 
 class _UpstreamHandler(BaseHTTPRequestHandler):
     seen_cookie: str | None = None
+    seen_method: str | None = None
+    seen_path: str | None = None
+    seen_body: bytes | None = None
+    seen_csrf: str | None = None
 
     def log_message(self, format_string: str, *args: object) -> None:
         _ = (format_string, args)
@@ -674,10 +683,35 @@ class _UpstreamHandler(BaseHTTPRequestHandler):
         self.end_headers()
         self.wfile.write(body)
 
+    def _write_interactive_response(self) -> None:
+        length = int(self.headers.get("content-length") or "0")
+        type(self).seen_method = self.command
+        type(self).seen_path = self.path
+        type(self).seen_body = self.rfile.read(length) if length else b""
+        type(self).seen_cookie = self.headers.get("cookie")
+        type(self).seen_csrf = self.headers.get("x-csrf-token")
+        body = json.dumps({"method": self.command, "path": self.path, "updated": True}).encode()
+        self.send_response(201)
+        self.send_header("Content-Type", "application/json")
+        self.send_header("Location", "/saved")
+        self.send_header("Content-Length", str(len(body)))
+        self.end_headers()
+        self.wfile.write(body)
+
+    do_POST = _write_interactive_response
+    do_PUT = _write_interactive_response
+    do_PATCH = _write_interactive_response
+    do_DELETE = _write_interactive_response
+    do_OPTIONS = _write_interactive_response
+
 
 class LocalAppSharingGatewayTests(unittest.TestCase):
     def setUp(self) -> None:
         _UpstreamHandler.seen_cookie = None
+        _UpstreamHandler.seen_method = None
+        _UpstreamHandler.seen_path = None
+        _UpstreamHandler.seen_body = None
+        _UpstreamHandler.seen_csrf = None
         self.upstream = ThreadingHTTPServer(("127.0.0.1", 0), _UpstreamHandler)
         self.upstream_thread = threading.Thread(target=self.upstream.serve_forever, daemon=True)
         self.upstream_thread.start()
@@ -734,21 +768,25 @@ class LocalAppSharingGatewayTests(unittest.TestCase):
         self.upstream_thread.join(timeout=2)
         self.temp_dir.cleanup()
 
-    def _request(
+    def _request(  # noqa: PLR0913 - test helper exposes HTTP request inputs
         self,
         method: str,
         path: str,
         *,
         payload: dict[str, object] | None = None,
         cookie: str | None = None,
+        raw_body: bytes | None = None,
+        extra_headers: dict[str, str] | None = None,
     ) -> tuple[int, dict[str, str], bytes]:
         connection = http.client.HTTPConnection("127.0.0.1", self.gateway_port)
-        body = json.dumps(payload).encode() if payload is not None else None
+        body = json.dumps(payload).encode() if payload is not None else raw_body
         headers: dict[str, str] = {}
         if body is not None:
             headers.update({"Content-Type": "application/json", "Content-Length": str(len(body))})
         if cookie:
             headers["Cookie"] = cookie
+        if extra_headers:
+            headers.update(extra_headers)
         connection.request(method, path, body=body, headers=headers)
         response = connection.getresponse()
         response_body = response.read()
@@ -800,9 +838,36 @@ class LocalAppSharingGatewayTests(unittest.TestCase):
         content_key: bytes,
         request_id: str,
     ) -> tuple[int, bytes, dict[str, object]]:
+        return self._encrypted_app_request(
+            cookie=cookie,
+            connection_id=connection_id,
+            content_key=content_key,
+            request_id=request_id,
+            method="GET",
+            target="/",
+        )
+
+    def _encrypted_app_request(  # noqa: PLR0913 - test helper exposes encrypted request inputs
+        self,
+        *,
+        cookie: str,
+        connection_id: str,
+        content_key: bytes,
+        request_id: str,
+        method: str,
+        target: str,
+        body: bytes = b"",
+        headers: dict[str, str] | None = None,
+    ) -> tuple[int, bytes, dict[str, object]]:
+        encoded_body = base64.urlsafe_b64encode(body).decode("ascii").rstrip("=")
         encrypted = crypto.encrypt_json(
             key=content_key,
-            payload={"method": "GET", "target": "/", "headers": {}},
+            payload={
+                "method": method,
+                "target": target,
+                "headers": headers or {},
+                "body": encoded_body,
+            },
             aad=crypto.request_aad(
                 session_id=SESSION_ID,
                 connection_id=connection_id,
@@ -837,9 +902,7 @@ class LocalAppSharingGatewayTests(unittest.TestCase):
         self.assertIn("updateViaCache: 'none'", html)
         self.assertNotIn("Verifying your Telegram account", html)
         cookie = self._authorize()
-        direct_status, _, direct = self._request(
-            "GET", f"/s/{SESSION_ID}/app/", cookie=cookie
-        )
+        direct_status, _, direct = self._request("GET", f"/s/{SESSION_ID}/app/", cookie=cookie)
         self.assertEqual(direct_status, 426)
         self.assertEqual(json.loads(direct)["error"], "encrypted_transport_required")
 
@@ -886,6 +949,56 @@ class LocalAppSharingGatewayTests(unittest.TestCase):
         self.assertEqual(resource_status, 200, resource_body)
         self.assertIn(b"Shared local app reached: private-marker", resource_body)
 
+    def test_plain_share_forwards_interactive_requests_and_keeps_app_session(self) -> None:
+        self.content_transport = gateway.PLAIN_CONTENT_TRANSPORT
+        cookie = self._authorize()
+
+        initial_status, _, _ = self._request(
+            "GET",
+            f"/s/{SESSION_ID}/app/",
+            cookie=cookie,
+        )
+        self.assertEqual(initial_status, 200)
+
+        request_body = b'{"enabled":true}'
+        status, headers, body = self._request(
+            "POST",
+            f"/s/{SESSION_ID}/app/admin/settings?tab=sharing",
+            cookie=cookie,
+            raw_body=request_body,
+            extra_headers={
+                "Content-Type": "application/json",
+                "X-CSRF-Token": "owner-approved",
+            },
+        )
+
+        self.assertEqual(status, 201, body)
+        self.assertEqual(_UpstreamHandler.seen_method, "POST")
+        self.assertEqual(
+            _UpstreamHandler.seen_path,
+            "/admin/settings?tab=sharing",
+        )
+        self.assertEqual(_UpstreamHandler.seen_body, request_body)
+        self.assertEqual(_UpstreamHandler.seen_csrf, "owner-approved")
+        self.assertEqual(_UpstreamHandler.seen_cookie, "app_session=allowed")
+        self.assertEqual(
+            headers["location"],
+            f"/s/{SESSION_ID}/app/saved",
+        )
+        self.assertNotIn("set-cookie", headers)
+
+        for method in ("PUT", "PATCH", "DELETE", "OPTIONS"):
+            with self.subTest(method=method):
+                next_status, _, _ = self._request(
+                    method,
+                    f"/s/{SESSION_ID}/app/admin/settings",
+                    cookie=cookie,
+                    raw_body=b"{}",
+                    extra_headers={"Content-Type": "application/json"},
+                )
+                self.assertEqual(next_status, 201)
+                self.assertEqual(_UpstreamHandler.seen_method, method)
+
     def test_code_auth_round_trips_only_ciphertext_and_rejects_replay(self) -> None:
         cookie = self._authorize()
         connection_id, content_key = self._handshake(cookie)
@@ -920,6 +1033,51 @@ class LocalAppSharingGatewayTests(unittest.TestCase):
             request_id=request_id,
         )
         self.assertEqual(replay_status, 400)
+
+    def test_encrypted_share_forwards_write_body_headers_and_app_session(self) -> None:
+        cookie = self._authorize()
+        connection_id, content_key = self._handshake(cookie)
+        self._encrypted_get(
+            cookie=cookie,
+            connection_id=connection_id,
+            content_key=content_key,
+            request_id="request_" + "E" * 24,
+        )
+        request_id = "request_" + "F" * 24
+        request_body = b'{"theme":"dark"}'
+
+        status, wire_body, encrypted_payload = self._encrypted_app_request(
+            cookie=cookie,
+            connection_id=connection_id,
+            content_key=content_key,
+            request_id=request_id,
+            method="PATCH",
+            target="/admin/preferences",
+            body=request_body,
+            headers={
+                "content-type": "application/json",
+                "x-csrf-token": "owner-approved",
+            },
+        )
+
+        self.assertEqual(status, 200, wire_body)
+        decrypted = crypto.decrypt_json(
+            key=content_key,
+            nonce=str(encrypted_payload["nonce"]),
+            ciphertext=str(encrypted_payload["ciphertext"]),
+            aad=crypto.response_aad(
+                session_id=SESSION_ID,
+                connection_id=connection_id,
+                request_id=request_id,
+            ),
+        )
+        self.assertEqual(decrypted["status"], 201)
+        self.assertEqual(_UpstreamHandler.seen_method, "PATCH")
+        self.assertEqual(_UpstreamHandler.seen_path, "/admin/preferences")
+        self.assertEqual(_UpstreamHandler.seen_body, request_body)
+        self.assertEqual(_UpstreamHandler.seen_csrf, "owner-approved")
+        self.assertEqual(_UpstreamHandler.seen_cookie, "app_session=allowed")
+        self.assertIn(f"/s/{SESSION_ID}/app/saved", json.dumps(decrypted))
 
     def test_native_telegram_owner_auth_uses_first_party_grant_cookie(self) -> None:
         status, headers, body = self._request(
@@ -1018,14 +1176,12 @@ class LocalAppSharingGatewayTests(unittest.TestCase):
         self.assertNotIn("Partitioned", cookie)
         self.assertTrue(
             any(
-                path.endswith(
-                    f"/local-app-shares/v1/{SESSION_ID}/authorize-link"
-                )
+                path.endswith(f"/local-app-shares/v1/{SESSION_ID}/authorize-link")
                 for path in self.platform_paths
             )
         )
 
-    def test_health_declares_transports_and_all_writes_are_blocked(self) -> None:
+    def test_health_declares_transports_and_non_visual_paths_reject_writes(self) -> None:
         status, _, body = self._request("GET", "/__tinyhat_share/health")
         self.assertEqual(status, 200)
         self.assertEqual(
@@ -1043,7 +1199,7 @@ class LocalAppSharingGatewayTests(unittest.TestCase):
             with self.subTest(method=method):
                 blocked_status, _, blocked_body = self._request(method, "/anything")
                 self.assertEqual(blocked_status, 405)
-                self.assertEqual(json.loads(blocked_body)["error"], "read_only_share")
+                self.assertEqual(json.loads(blocked_body)["error"], "method_not_allowed")
 
 
 if __name__ == "__main__":

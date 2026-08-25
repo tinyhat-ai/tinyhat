@@ -58,16 +58,20 @@ falls back to the same code form. Public Visuals open immediately for
 anyone holding the complete link in Telegram or any other browser. List never
 returns codes, and revoke invalidates the selected session immediately.
 
-`encryption_mode: "plain"` is the default for ordinary, non-sensitive pages.
-It uses the per-Computer Cloudflare HTTPS tunnel and renders directly inside
-Telegram without a service worker. `encryption_mode: "encrypted"` creates a
+`encryption_mode: "plain"` is the default, including for private code-protected
+interactive pages. It uses the per-Computer Cloudflare HTTPS tunnel and renders
+directly inside Telegram. `encryption_mode: "encrypted"` creates a
 per-session P-256 key pair; the complete link carries its fingerprint in the
 URL fragment, and the browser and Computer derive an AES-256-GCM key with ECDH
 and HKDF-SHA256. Telegram iOS hands that encrypted mode to an external browser
 when its WebView cannot run the required service worker. The platform resolves
 session metadata and authorization but does not proxy app content. Both modes
-support read-only HTTP `GET` and `HEAD`; writes and WebSockets are not shared.
-No runtime code is involved.
+carry normal HTTP interactions (`GET`, `HEAD`, `POST`, `PUT`, `PATCH`, `DELETE`,
+and `OPTIONS`), request bodies, redirects, and Computer-local upstream cookies.
+The local page owns authorization, CSRF protection, mutation behavior, and any
+tighter limits chosen by the user. An owner may share an admin or
+credential-management page privately with code access; the skill never makes
+such a page public. WebSockets remain unsupported. No runtime code is involved.
 
 For an encrypted Visual, the plugin registers only the public key fingerprint
 with the platform after creating the Computer-local session key. This lets the

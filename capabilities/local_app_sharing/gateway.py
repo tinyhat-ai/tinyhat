@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import base64
+import binascii
 import http.client
 import json
 import os
@@ -37,7 +38,7 @@ from .tool import GATEWAY_HOST, GATEWAY_PORT, GATEWAY_PROTOCOL_VERSION, STATE_DI
 from .viewer import APP_SHELL, SERVICE_WORKER, VIEWER_PAGE
 
 COOKIE_PREFIX = "__Host-tinyhat_share_"
-MAX_JSON_BYTES = 16 * 1024 * 1024
+MAX_JSON_BYTES = 24 * 1024 * 1024
 MAX_UPSTREAM_BODY_BYTES = 10 * 1024 * 1024
 MAX_TARGET_LENGTH = 4096
 MAX_ACTIVE_CONNECTIONS = 100
@@ -49,14 +50,13 @@ MAX_HEADER_VALUE_LENGTH = 4096
 CONNECTION_ID_RE = re.compile(r"^e2e_[A-Za-z0-9_-]{20,80}$")
 REQUEST_ID_RE = re.compile(r"^[A-Za-z0-9_-]{16,128}$")
 BROWSER_HANDOFF_RE = re.compile(r"^bh_[A-Za-z0-9_-]{32,128}$")
+HEADER_NAME_RE = re.compile(r"^[a-z0-9!#$%&'*+.^_`|~-]+$")
 PLAIN_CONTENT_TRANSPORT = "none"
 SUPPORTED_CONTENT_TRANSPORTS = {
     PLAIN_CONTENT_TRANSPORT,
     CONTENT_ENCRYPTION_PROTOCOL,
 }
-SAFE_REQUEST_HEADERS = frozenset(
-    {"accept", "accept-language", "if-none-match", "if-modified-since", "range"}
-)
+PROXIED_HTTP_METHODS = frozenset({"GET", "HEAD", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"})
 HOP_BY_HOP_HEADERS = frozenset(
     {
         "connection",
@@ -69,6 +69,9 @@ HOP_BY_HOP_HEADERS = frozenset(
         "upgrade",
     }
 )
+REQUEST_HEADERS_NOT_FORWARDED = HOP_BY_HOP_HEADERS | frozenset(
+    {"accept-encoding", "content-length", "cookie", "host"}
+)
 
 
 def _client() -> tuple[PlatformClient, str]:
@@ -79,9 +82,7 @@ def _cookie_name(session_id: str) -> str:
     return f"{COOKIE_PREFIX}{session_id}"
 
 
-def _browser_grant_cookie(
-    session_id: str, access_token: str, *, embedded: bool
-) -> str:
+def _browser_grant_cookie(session_id: str, access_token: str, *, embedded: bool) -> str:
     """Use CHIPS only for iframe clients that need third-party cookie access.
 
     Native Telegram Mini Apps and ordinary browsers load the viewer as a
@@ -92,8 +93,7 @@ def _browser_grant_cookie(
     """
 
     cookie = (
-        f"{_cookie_name(session_id)}={access_token}; "
-        "Path=/; Secure; HttpOnly; SameSite=None"
+        f"{_cookie_name(session_id)}={access_token}; " "Path=/; Secure; HttpOnly; SameSite=None"
     )
     return f"{cookie}; Partitioned" if embedded else cookie
 
@@ -218,6 +218,68 @@ class _ConnectionRegistry:
             return item
 
 
+@dataclass
+class _PlainConnection:
+    session_id: str
+    access_token: str
+    port: int
+    expires_at_epoch: float
+    upstream_cookies: dict[str, str] = field(default_factory=dict)
+    lock: threading.Lock = field(default_factory=threading.Lock)
+
+
+class _PlainConnectionRegistry:
+    """Keep upstream app cookies local to one authorized browser grant."""
+
+    def __init__(self) -> None:
+        self._lock = threading.Lock()
+        self._items: dict[tuple[str, str], _PlainConnection] = {}
+
+    def _prune_locked(self) -> None:
+        now = time.time()
+        expired = [key for key, item in self._items.items() if item.expires_at_epoch <= now]
+        for key in expired:
+            self._items.pop(key, None)
+
+    def get_or_create(
+        self,
+        *,
+        session_id: str,
+        access_token: str,
+        port: int,
+        expires_at_epoch: float,
+    ) -> _PlainConnection:
+        key = (session_id, access_token)
+        with self._lock:
+            self._prune_locked()
+            item = self._items.get(key)
+            if item is not None and item.port == port:
+                item.expires_at_epoch = expires_at_epoch
+                return item
+            if len(self._items) >= MAX_ACTIVE_CONNECTIONS:
+                oldest = min(
+                    self._items,
+                    key=lambda value: self._items[value].expires_at_epoch,
+                )
+                self._items.pop(oldest, None)
+            item = _PlainConnection(
+                session_id=session_id,
+                access_token=access_token,
+                port=port,
+                expires_at_epoch=expires_at_epoch,
+            )
+            self._items[key] = item
+            return item
+
+
+@dataclass(frozen=True)
+class _AuthorizedTarget:
+    port: int
+    expires_at_epoch: float
+    content_encryption: str
+    access_token: str
+
+
 @dataclass(frozen=True)
 class _BrowserHandoff:
     session_id: str
@@ -235,9 +297,7 @@ class _BrowserHandoffRegistry:
     def _prune_locked(self) -> None:
         now = time.time()
         expired = [
-            token
-            for token, handoff in self._items.items()
-            if handoff.expires_at_epoch <= now
+            token for token, handoff in self._items.items() if handoff.expires_at_epoch <= now
         ]
         for token in expired:
             self._items.pop(token, None)
@@ -284,7 +344,7 @@ class _BrowserHandoffRegistry:
 
 
 def _capture_upstream_cookies(
-    connection: _EncryptedConnection,
+    connection: _EncryptedConnection | _PlainConnection,
     raw_headers: list[tuple[str, str]],
 ) -> None:
     for name, value in raw_headers:
@@ -296,11 +356,69 @@ def _capture_upstream_cookies(
         except Exception:
             continue
         for cookie_name, morsel in cookie.items():
-            connection.upstream_cookies[cookie_name] = morsel.value
+            if morsel["max-age"] == "0" or not morsel.value:
+                connection.upstream_cookies.pop(cookie_name, None)
+            else:
+                connection.upstream_cookies[cookie_name] = morsel.value
+
+
+def _forward_request_headers(
+    raw_headers: Any,
+    *,
+    port: int,
+    upstream_cookies: dict[str, str],
+) -> dict[str, str]:
+    """Forward end-to-end app headers without leaking the Visual grant cookie."""
+
+    headers: dict[str, str] = {}
+    for name, value in raw_headers.items():
+        lower = str(name).lower()
+        if (
+            HEADER_NAME_RE.fullmatch(lower) is None
+            or lower in REQUEST_HEADERS_NOT_FORWARDED
+            or len(str(value)) > MAX_HEADER_VALUE_LENGTH
+        ):
+            continue
+        canonical_name = "-".join(part.capitalize() for part in lower.split("-"))
+        headers[canonical_name] = str(value)
+    upstream_origin = f"http://127.0.0.1:{port}"
+    if "Origin" in headers:
+        headers["Origin"] = upstream_origin
+    if "Referer" in headers:
+        parsed = urlsplit(headers["Referer"])
+        referer_path = parsed.path or "/"
+        if parsed.query:
+            referer_path = f"{referer_path}?{parsed.query}"
+        headers["Referer"] = f"{upstream_origin}{referer_path}"
+    headers["Host"] = f"127.0.0.1:{port}"
+    headers["Accept-Encoding"] = "identity"
+    if upstream_cookies:
+        headers["Cookie"] = "; ".join(f"{name}={value}" for name, value in upstream_cookies.items())
+    return headers
+
+
+def _decode_request_body(value: Any) -> bytes:
+    if value in {None, ""}:
+        return b""
+    if not isinstance(value, str) or len(value) > (MAX_UPSTREAM_BODY_BYTES * 2):
+        raise LocalAppCryptoError("Encrypted local app request body is invalid.")
+    try:
+        body = base64.b64decode(
+            value + "=" * (-len(value) % 4),
+            altchars=b"-_",
+            validate=True,
+        )
+    except (binascii.Error, ValueError) as exc:
+        raise LocalAppCryptoError("Encrypted local app request body is invalid.") from exc
+    if len(body) > MAX_UPSTREAM_BODY_BYTES:
+        raise LocalAppCryptoError("Encrypted local app request body is too large.")
+    return body
 
 
 def _safe_upstream_response_headers(
     raw_headers: list[tuple[str, str]],
+    *,
+    session_id: str | None = None,
 ) -> list[list[str]]:
     safe_headers: list[list[str]] = []
     stripped = {"content-length", "set-cookie", "cache-control", "pragma"}
@@ -315,6 +433,8 @@ def _safe_upstream_response_headers(
                 safe_value = location.path or "/"
                 if location.query:
                     safe_value = f"{safe_value}?{location.query}"
+            if session_id and safe_value.startswith("/"):
+                safe_value = f"/s/{session_id}/app{safe_value}"
         safe_headers.append([name, safe_value])
     return safe_headers
 
@@ -324,9 +444,11 @@ def _handler(
     *,
     key_store: SessionKeyStore,
     connections: _ConnectionRegistry,
+    plain_connections: _PlainConnectionRegistry | None = None,
     browser_handoffs: _BrowserHandoffRegistry | None = None,
 ) -> type[BaseHTTPRequestHandler]:
     handoffs = browser_handoffs or _BrowserHandoffRegistry()
+    plain_sessions = plain_connections or _PlainConnectionRegistry()
 
     class GatewayHandler(BaseHTTPRequestHandler):
         server_version = "TinyhatLocalAppGateway/2"
@@ -385,6 +507,15 @@ def _handler(
             except (UnicodeDecodeError, json.JSONDecodeError):
                 return None
             return payload if isinstance(payload, dict) else None
+
+        def _read_request_body(self) -> bytes | None:
+            try:
+                length = int(self.headers.get("content-length") or "0")
+            except ValueError:
+                return None
+            if length < 0 or length > MAX_UPSTREAM_BODY_BYTES:
+                return None
+            return self.rfile.read(length) if length else b""
 
         def _resolve(self, session_id: str, access_token: str) -> dict[str, Any] | None:
             try:
@@ -567,7 +698,7 @@ def _handler(
                 embedded=False,
             )
 
-        def _authorized_target(self, session_id: str) -> tuple[int, float, str] | None:
+        def _authorized_target(self, session_id: str) -> _AuthorizedTarget | None:
             access_token = _parse_cookie(self.headers.get("cookie"), session_id)
             if access_token is None:
                 return None
@@ -581,12 +712,18 @@ def _handler(
                 expires_at_epoch = _expires_at_epoch(resolved.get("expires_at"))
             except LocalAppCryptoError:
                 return None
-            if expires_at_epoch <= time.time():
-                return None
             content_encryption = resolved.get("content_encryption")
-            if content_encryption not in SUPPORTED_CONTENT_TRANSPORTS:
+            if (
+                expires_at_epoch <= time.time()
+                or content_encryption not in SUPPORTED_CONTENT_TRANSPORTS
+            ):
                 return None
-            return port, expires_at_epoch, content_encryption
+            return _AuthorizedTarget(
+                port=port,
+                expires_at_epoch=expires_at_epoch,
+                content_encryption=content_encryption,
+                access_token=access_token,
+            )
 
         def _write_viewer(self) -> None:
             self._write_bytes(
@@ -621,7 +758,7 @@ def _handler(
 
         def _write_key(self, session_id: str) -> None:
             target = self._authorized_target(session_id)
-            if target is None or target[2] != CONTENT_ENCRYPTION_PROTOCOL:
+            if target is None or target.content_encryption != CONTENT_ENCRYPTION_PROTOCOL:
                 self._write_json(HTTPStatus.UNAUTHORIZED, {"error": "share_access_required"})
                 return
             try:
@@ -661,15 +798,17 @@ def _handler(
             except LocalAppCryptoError:
                 self._write_json(HTTPStatus.BAD_REQUEST, {"error": "invalid_browser_key"})
                 return
-            port, grant_expiry, content_encryption = target
-            if content_encryption != CONTENT_ENCRYPTION_PROTOCOL:
+            if target.content_encryption != CONTENT_ENCRYPTION_PROTOCOL:
                 self._write_json(HTTPStatus.BAD_REQUEST, {"error": "encrypted_transport_required"})
                 return
             connection = connections.create(
                 session_id=session_id,
-                port=port,
+                port=target.port,
                 key=content_key,
-                expires_at_epoch=min(grant_expiry, session_key.expires_at_epoch),
+                expires_at_epoch=min(
+                    target.expires_at_epoch,
+                    session_key.expires_at_epoch,
+                ),
             )
             self._write_json(
                 HTTPStatus.OK,
@@ -688,22 +827,17 @@ def _handler(
             method: str,
             target: str,
             request_headers: dict[str, str],
+            request_body: bytes,
         ) -> dict[str, Any]:
-            headers = {
-                name.title(): value
-                for name, value in request_headers.items()
-                if name in SAFE_REQUEST_HEADERS and len(value) <= MAX_HEADER_VALUE_LENGTH
-            }
-            headers["Host"] = f"127.0.0.1:{connection.port}"
-            headers["Accept-Encoding"] = "identity"
             with connection.lock:
-                if connection.upstream_cookies:
-                    headers["Cookie"] = "; ".join(
-                        f"{name}={value}" for name, value in connection.upstream_cookies.items()
-                    )
+                headers = _forward_request_headers(
+                    request_headers,
+                    port=connection.port,
+                    upstream_cookies=connection.upstream_cookies,
+                )
                 upstream = http.client.HTTPConnection("127.0.0.1", connection.port, timeout=15)
                 try:
-                    upstream.request(method, target, headers=headers)
+                    upstream.request(method, target, body=request_body, headers=headers)
                     response = upstream.getresponse()
                     body = response.read(MAX_UPSTREAM_BODY_BYTES + 1)
                     if len(body) > MAX_UPSTREAM_BODY_BYTES:
@@ -719,7 +853,10 @@ def _handler(
             return {
                 "status": status,
                 "reason": reason or "",
-                "headers": _safe_upstream_response_headers(raw_headers),
+                "headers": _safe_upstream_response_headers(
+                    raw_headers,
+                    session_id=connection.session_id,
+                ),
                 "body": _b64url(body),
             }
 
@@ -738,8 +875,7 @@ def _handler(
             ):
                 self._write_json(HTTPStatus.BAD_REQUEST, {"error": "invalid_encrypted_request"})
                 return
-            port, _, content_encryption = target
-            if content_encryption != CONTENT_ENCRYPTION_PROTOCOL:
+            if target.content_encryption != CONTENT_ENCRYPTION_PROTOCOL:
                 self._write_json(HTTPStatus.BAD_REQUEST, {"error": "encrypted_transport_required"})
                 return
             try:
@@ -747,7 +883,7 @@ def _handler(
                     connection_id=connection_id,
                     session_id=session_id,
                     request_id=request_id,
-                    port=port,
+                    port=target.port,
                 )
                 request_payload = decrypt_json(
                     key=bytes(connection.key),
@@ -764,7 +900,7 @@ def _handler(
                 parsed_target = urlsplit(raw_target)
                 headers_payload = request_payload.get("headers")
                 if (
-                    method not in {"GET", "HEAD"}
+                    method not in PROXIED_HTTP_METHODS
                     or not raw_target.startswith("/")
                     or len(raw_target) > MAX_TARGET_LENGTH
                     or parsed_target.scheme
@@ -777,11 +913,13 @@ def _handler(
                     for name, value in headers_payload.items()
                     if isinstance(name, str) and isinstance(value, str)
                 }
+                request_body = _decode_request_body(request_payload.get("body"))
                 response_payload = self._upstream_request(
                     connection=connection,
                     method=method,
                     target=raw_target,
                     request_headers=request_headers,
+                    request_body=request_body,
                 )
                 encrypted = encrypt_json(
                     key=bytes(connection.key),
@@ -806,15 +944,14 @@ def _handler(
             if authorized is None:
                 self._write_json(HTTPStatus.UNAUTHORIZED, {"error": "share_access_required"})
                 return
-            port, _, content_encryption = authorized
-            if content_encryption != PLAIN_CONTENT_TRANSPORT:
+            if authorized.content_encryption != PLAIN_CONTENT_TRANSPORT:
                 self._write_json(
                     HTTPStatus.UPGRADE_REQUIRED,
                     {"error": "encrypted_transport_required"},
                 )
                 return
             if (
-                self.command not in {"GET", "HEAD"}
+                self.command not in PROXIED_HTTP_METHODS
                 or not target.startswith("/")
                 or len(target) > MAX_TARGET_LENGTH
                 or parsed_target.scheme
@@ -822,27 +959,50 @@ def _handler(
             ):
                 self._write_json(HTTPStatus.BAD_REQUEST, {"error": "invalid_plain_request"})
                 return
-
-            request_headers = {
-                name.title(): value
-                for name in SAFE_REQUEST_HEADERS
-                if (value := self.headers.get(name)) is not None
-                and len(value) <= MAX_HEADER_VALUE_LENGTH
-            }
-            request_headers["Host"] = f"127.0.0.1:{port}"
-            request_headers["Accept-Encoding"] = "identity"
-            upstream = http.client.HTTPConnection("127.0.0.1", port, timeout=15)
-            try:
-                upstream.request(self.command, target, headers=request_headers)
-                response = upstream.getresponse()
-                body = response.read(MAX_UPSTREAM_BODY_BYTES + 1)
-                raw_headers = response.getheaders()
-                status = response.status
-            except OSError:
-                self._write_json(HTTPStatus.BAD_GATEWAY, {"error": "local_app_unavailable"})
+            request_body = self._read_request_body()
+            if request_body is None:
+                self._write_json(
+                    HTTPStatus.REQUEST_ENTITY_TOO_LARGE,
+                    {"error": "local_app_request_too_large"},
+                )
                 return
-            finally:
-                upstream.close()
+            connection = plain_sessions.get_or_create(
+                session_id=session_id,
+                access_token=authorized.access_token,
+                port=authorized.port,
+                expires_at_epoch=authorized.expires_at_epoch,
+            )
+            with connection.lock:
+                request_headers = _forward_request_headers(
+                    self.headers,
+                    port=authorized.port,
+                    upstream_cookies=connection.upstream_cookies,
+                )
+                upstream = http.client.HTTPConnection(
+                    "127.0.0.1",
+                    authorized.port,
+                    timeout=15,
+                )
+                try:
+                    upstream.request(
+                        self.command,
+                        target,
+                        body=request_body,
+                        headers=request_headers,
+                    )
+                    response = upstream.getresponse()
+                    body = response.read(MAX_UPSTREAM_BODY_BYTES + 1)
+                    raw_headers = response.getheaders()
+                    status = response.status
+                except OSError:
+                    self._write_json(
+                        HTTPStatus.BAD_GATEWAY,
+                        {"error": "local_app_unavailable"},
+                    )
+                    return
+                finally:
+                    upstream.close()
+                _capture_upstream_cookies(connection, raw_headers)
             if len(body) > MAX_UPSTREAM_BODY_BYTES:
                 self._write_json(
                     HTTPStatus.REQUEST_ENTITY_TOO_LARGE,
@@ -851,27 +1011,28 @@ def _handler(
                 return
 
             content_type = next(
-                (
-                    value
-                    for name, value in raw_headers
-                    if name.lower() == "content-type"
-                ),
+                (value for name, value in raw_headers if name.lower() == "content-type"),
                 "application/octet-stream",
             )
             if self.command == "GET" and re.search(r"text/html", content_type, re.I):
                 source = body.decode("utf-8", errors="replace")
-                base = f'<base href="/s/{session_id}/app/">'
+                base = (
+                    f'<base href="/s/{session_id}/app/">'
+                    '<script src="/__tinyhat_share/app-shell-v3.js" '
+                    f'data-session-id="{session_id}"></script>'
+                )
                 head = re.search(r"<head(?:\s[^>]*)?>", source, re.I)
                 source = (
-                    source[: head.end()] + base + source[head.end() :]
-                    if head
-                    else base + source
+                    source[: head.end()] + base + source[head.end() :] if head else base + source
                 )
                 body = source.encode("utf-8")
 
             self.send_response(status)
             self._security_headers()
-            safe_headers = _safe_upstream_response_headers(raw_headers)
+            safe_headers = _safe_upstream_response_headers(
+                raw_headers,
+                session_id=session_id,
+            )
             if not any(name.lower() == "content-type" for name, _ in safe_headers):
                 safe_headers.append(["Content-Type", content_type])
             for name, value in safe_headers:
@@ -880,6 +1041,17 @@ def _handler(
             self.end_headers()
             if self.command != "HEAD":
                 self.wfile.write(body)
+
+        def _proxy_current_app_route(self) -> bool:
+            app_route = _app_route(self.path)
+            if app_route is not None:
+                self._plain_request(*app_route)
+                return True
+            session_id = _match(self.path)
+            if session_id is not None:
+                self._plain_request(session_id, "/")
+                return True
+            return False
 
         def do_GET(self) -> None:
             path = urlsplit(self.path).path
@@ -905,7 +1077,7 @@ def _handler(
             session_id = _match(self.path)
             if session_id is not None:
                 target = self._authorized_target(session_id)
-                if target is not None and target[2] == PLAIN_CONTENT_TRANSPORT:
+                if target is not None and target.content_encryption == PLAIN_CONTENT_TRANSPORT:
                     self._plain_request(session_id, "/")
                 else:
                     self._write_viewer()
@@ -975,14 +1147,21 @@ def _handler(
                 self._handshake(handshake_session_id)
             elif (encrypted_session_id := _match(self.path, "/encrypted")) is not None:
                 self._encrypted_request(encrypted_session_id)
+            elif self._proxy_current_app_route():
+                return
             else:
                 self._write_json(HTTPStatus.METHOD_NOT_ALLOWED, {"error": "method_not_allowed"})
 
         def do_PUT(self) -> None:
-            self._write_json(HTTPStatus.METHOD_NOT_ALLOWED, {"error": "read_only_share"})
+            if not self._proxy_current_app_route():
+                self._write_json(
+                    HTTPStatus.METHOD_NOT_ALLOWED,
+                    {"error": "method_not_allowed"},
+                )
 
         do_PATCH = do_PUT
         do_DELETE = do_PUT
+        do_OPTIONS = do_PUT
 
     return GatewayHandler
 
