@@ -34,6 +34,16 @@ The current capability list is intentionally small.
 Each capability should be visible in this document, represented by a small
 tool or skill, and covered by validation.
 
+## Computer desktop
+
+`tinyhat_computer_desktop` lets the owner open a short-lived, view-only look at
+their Agent's Computer. The Agent sends a native Telegram **Open desktop**
+button together with a browser link and six-digit access code. Telegram can
+authenticate the assigned owner directly; other browsers use the same stable
+link and code.
+
+![Native Telegram Open desktop button](assets/computer-desktop/telegram-open-desktop-button.jpg)
+
 ## Tinyhat Visuals
 
 `tinyhat_local_app_sharing` lets agents communicate visually with short-lived
