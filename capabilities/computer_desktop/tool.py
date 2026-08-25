@@ -48,7 +48,7 @@ def _safe_payload(payload: dict[str, Any]) -> dict[str, Any]:
     expires_at = str(payload.get("expires_at") or "")
     if (
         SESSION_ID_RE.fullmatch(session_id) is None
-        or not link.startswith(("https://", "http://"))
+        or not link.startswith("https://")
         or ACCESS_CODE_RE.fullmatch(access_code) is None
         or not expires_at
         or payload.get("view_only") is not True

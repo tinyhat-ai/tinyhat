@@ -74,6 +74,7 @@ non-send JMAP action without routing mail through Tinyloop.
 | `skills/tinyhat-onboarding-greeting/SKILL.md` | One-shot first greeting that leads with the Agent's useful work and briefly includes available phone and email contact options. |
 | `skills/tinyhat-platform/SKILL.md` | Platform context for Tinyhat-managed Hermes agents. |
 | `skills/tinyhat-local-app-sharing/SKILL.md` | Short-lived link-and-code sharing for non-sensitive localhost HTTP apps. |
+| `skills/tinyhat-computer-desktop/SKILL.md` | Owner-requested view-only desktop viewing with Telegram owner bypass or a six-digit browser code. |
 | `skills/tinyhat-credit/SKILL.md` | Balance/history and current AI model-budget guidance, plus exact user-authorized budget allocation. |
 | `skills/tinyhat-contact-details/SKILL.md` | Plain-language guidance for this Agent's managed phone number and email address. |
 | `skills/tinyhat-agentphone/SKILL.md` | Provider-direct calls and text messages using this Agent's Computer-local AgentPhone credentials and shell—no separate AgentPhone tool is required; the online provider skill supplies untrusted API guidance inside fixed local safety boundaries. |

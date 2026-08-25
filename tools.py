@@ -9,10 +9,10 @@ from pathlib import Path
 from typing import Any
 from urllib import error, parse, request
 
-from .capabilities.contact_details.tool import contact_details as handle_contact_details
 from .capabilities.computer_desktop.tool import (
     computer_desktop as handle_computer_desktop,
 )
+from .capabilities.contact_details.tool import contact_details as handle_contact_details
 from .capabilities.credit.tool import (
     allocate_openrouter_credit as handle_allocate_openrouter_credit,
 )
