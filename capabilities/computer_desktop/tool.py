@@ -23,6 +23,7 @@ def computer_desktop(args: dict[str, Any] | None = None, **_: Any) -> str:
             {},
         )
         result = _safe_payload(payload)
+        result["telegram_button_sent"] = _send_desktop_button(result)
     except PlatformError:
         return tool_error_json(
             tool="tinyhat_computer_desktop",
@@ -62,6 +63,44 @@ def _safe_payload(payload: dict[str, Any]) -> dict[str, Any]:
         "view_only": True,
         "button_label": "Open desktop",
     }
+
+
+def _send_desktop_button(created: dict[str, Any]) -> bool:
+    """Send the assigned owner a native Telegram Mini App button."""
+
+    try:
+        # Late import avoids a cycle through the root Hermes tool facade.
+        from ...tools import (  # noqa: PLC0415
+            _telegram_credentials,
+            _telegram_send_message,
+        )
+
+        token, chat_id = _telegram_credentials()
+        sent = _telegram_send_message(
+            token=token,
+            chat_id=chat_id,
+            text=(
+                "Your Computer desktop is ready and view-only.\n\n"
+                "Open it inside Telegram with the button below, or use this link "
+                "in any browser:\n"
+                f"{created['link']}\n\n"
+                f"Access code: {created['access_code']}\n"
+                f"Available until: {created['expires_at']}"
+            ),
+            reply_markup={
+                "inline_keyboard": [
+                    [
+                        {
+                            "text": created["button_label"],
+                            "web_app": {"url": created["link"]},
+                        }
+                    ]
+                ]
+            },
+        )
+        return bool(sent.get("ok"))
+    except Exception:
+        return False
 
 
 __all__ = ["computer_desktop"]

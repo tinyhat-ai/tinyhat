@@ -13,8 +13,9 @@ screen. For a single report, chart, dashboard, or web page, use a Visual instead
 1. Call `tinyhat_computer_desktop` with no arguments.
 2. Tell the user the desktop connection is ready and view-only.
 3. Send the returned `link` and the six-digit `access_code`.
-4. Use **Open desktop** as the Telegram button text when the framework supports
-   a native Web App button.
+4. The tool sends an **Open desktop** Mini App button when Telegram delivery is
+   available. Do not send a second button or claim it was sent when
+   `telegram_button_sent` is false.
 5. Mention the expiry in natural language. Do not mention VNC, Guacamole,
    Tailscale, ports, tunnels, or gateway implementation details.
 

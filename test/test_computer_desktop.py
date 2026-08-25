@@ -19,7 +19,9 @@ from tinyhat.capabilities.computer_desktop import tool  # noqa: E402
 class ComputerDesktopToolTests(unittest.TestCase):
     def test_creates_owner_connection_without_transport_details(self) -> None:
         original = tool.build_platform_client
+        original_send = tool._send_desktop_button
         calls: list[tuple[str, dict[str, object]]] = []
+        sent: list[dict[str, object]] = []
 
         class FakeClient:
             def post_json(self, path: str, payload: dict[str, object]) -> dict[str, object]:
@@ -37,9 +39,13 @@ class ComputerDesktopToolTests(unittest.TestCase):
 
         try:
             tool.build_platform_client = lambda: (FakeClient(), "gcloud")
+            tool._send_desktop_button = lambda created: bool(
+                sent.append(created) or True
+            )
             result = json.loads(tool.computer_desktop())
         finally:
             tool.build_platform_client = original
+            tool._send_desktop_button = original_send
 
         self.assertEqual(
             calls,
@@ -47,6 +53,8 @@ class ComputerDesktopToolTests(unittest.TestCase):
         )
         self.assertEqual(result["access_code"], "123456")
         self.assertEqual(result["button_label"], "Open desktop")
+        self.assertTrue(result["telegram_button_sent"])
+        self.assertEqual(sent[0]["link"], result["link"])
         serialized = json.dumps(result)
         self.assertNotIn("tailnet", serialized)
         self.assertNotIn("vnc", serialized.lower())
