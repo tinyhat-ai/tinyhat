@@ -4,6 +4,15 @@ All notable changes to the Tinyhat plugin are documented here.
 
 ## Unreleased
 
+## 0.32.5 - 2026-08-24
+
+- Allow an owner to share an explicitly requested admin or other sensitive
+  local page as a private, code-protected Visual instead of refusing it.
+  Visuals now carry normal interactive HTTP methods, request bodies, redirects,
+  relevant headers, and Computer-local application cookies. The shared page
+  remains responsible for its own authentication, CSRF protection, mutations,
+  and any tighter limits selected by the user.
+
 ## 0.32.4 - 2026-08-24
 
 - Keep a public Visual at the exact link the Agent shared after it opens.
