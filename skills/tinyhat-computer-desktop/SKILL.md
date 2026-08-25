@@ -17,7 +17,8 @@ screen. For a single report, chart, dashboard, or web page, use a Visual instead
    available. Do not send a second button or claim it was sent when
    `telegram_button_sent` is false.
 5. Mention the expiry in natural language. Do not mention VNC, Guacamole,
-   Tailscale, ports, tunnels, or gateway implementation details.
+   Tailscale, ports, tunnels, gateway implementation details, session IDs, or
+   any other internal identifiers.
 
 Inside the assigned Telegram Mini App, the owner is verified automatically and
 does not enter the code. The same link works in any other browser after entering

@@ -65,6 +65,8 @@ class ComputerDesktopToolTests(unittest.TestCase):
         ).read_text(encoding="utf-8")
         self.assertIn("six-digit", skill)
         self.assertIn("view-only", skill)
+        self.assertIn("session IDs", skill)
+        self.assertIn("internal identifiers", skill)
         self.assertNotIn("port number", skill)
 
 
