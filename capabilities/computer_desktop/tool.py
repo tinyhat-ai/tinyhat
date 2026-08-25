@@ -56,7 +56,6 @@ def _safe_payload(payload: dict[str, Any]) -> dict[str, Any]:
         raise ValueError("invalid desktop response")
     return {
         "schema": "tinyhat_computer_desktop_v1",
-        "session_id": session_id,
         "link": link,
         "access_code": access_code,
         "expires_at": expires_at,

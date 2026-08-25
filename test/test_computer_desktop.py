@@ -56,6 +56,7 @@ class ComputerDesktopToolTests(unittest.TestCase):
         self.assertTrue(result["telegram_button_sent"])
         self.assertEqual(sent[0]["link"], result["link"])
         serialized = json.dumps(result)
+        self.assertNotIn("session_id", result)
         self.assertNotIn("tailnet", serialized)
         self.assertNotIn("vnc", serialized.lower())
 
