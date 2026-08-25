@@ -167,8 +167,8 @@ code, while ordinary browsers use the four-digit numeric code. If Telegram
 credentials are absent or invalid, the same code form appears as in any other
 browser. Agents can also explicitly create a public link session; anyone
 holding that complete link opens it immediately in Telegram or any other
-browser. Ordinary, non-sensitive pages
-use plain HTTPS transport by default and render directly inside Telegram,
+browser. Plain HTTPS transport is the default, including for private
+code-protected interactive pages, and renders directly inside Telegram,
 including Telegram on iOS. An agent can explicitly request browser-to-Computer
 encryption; those shares use a Computer-local P-256 private key, carry its
 fingerprint in the URL fragment, and derive an ephemeral AES-256-GCM content
@@ -177,8 +177,15 @@ workers, an encrypted share explains why it must continue through a
 short-lived, one-time browser handoff. Tinyhat's platform API receives only
 authorization and expiry metadata in both modes. Plain content travels through
 the per-Computer Cloudflare HTTPS tunnel; encrypted content stays ciphertext
-through Cloudflare. Upstream app cookies are never forwarded to the browser.
-The viewer remains read-only HTTP and adds no runtime code.
+through Cloudflare. Upstream app cookies stay inside a
+browser-grant-specific cookie jar on the Computer and are never forwarded to
+the browser. The viewer carries normal interactive HTTP methods and request
+bodies, so forms and dashboard controls work while the local page keeps
+ownership of authentication, CSRF protection, mutation behavior, and any
+user-chosen request limits. Owner-requested admin or credential-management
+pages are allowed only as private code-protected Visuals; they are never
+public by default. WebSockets remain outside this HTTP viewer, and the
+capability adds no runtime code.
 
 `tinyhat-credit` answers questions about the owner's Tinyhat credit. The
 `tinyhat_credit` tool calls a fixed Computer-authenticated platform route and

@@ -121,7 +121,7 @@ rel="noopener noreferrer">Open Visual in browser</a></main>
     return serverKey;
   }
 
-  async function configureWorker(session, connection, rawKey) {
+  async function configureWorker(message) {
     if (!('serviceWorker' in navigator)) throw new Error('service-worker-unavailable');
     let registration;
     try {
@@ -142,13 +142,7 @@ rel="noopener noreferrer">Open Visual in browser</a></main>
         if (event.data && event.data.ok) resolve();
         else reject(new Error('service-worker-configuration-failed'));
       };
-      worker.postMessage({
-        type: 'tinyhat-e2ee-configure',
-        protocol,
-        sessionId: session,
-        connectionId: connection,
-        key: bytesToBase64Url(new Uint8Array(rawKey)),
-      }, [channel.port2]);
+      worker.postMessage(message, [channel.port2]);
     });
     if (!navigator.serviceWorker.controller) {
       await new Promise((resolve, reject) => {
@@ -199,12 +193,28 @@ rel="noopener noreferrer">Open Visual in browser</a></main>
     const rawKey = await crypto.subtle.exportKey('raw', key);
     const sessionFragment = `#${protocol}=${expectedFingerprint}`;
     sessionStorage.setItem(`tinyhat-e2ee-fragment:${sessionId}`, sessionFragment);
-    await configureWorker(sessionId, handshake.connection_id, rawKey);
+    await configureWorker({
+      type: 'tinyhat-e2ee-configure',
+      protocol,
+      contentTransport: protocol,
+      sessionId,
+      connectionId: handshake.connection_id,
+      key: bytesToBase64Url(new Uint8Array(rawKey)),
+    });
     location.replace(`/s/${sessionId}/app/${sessionFragment}`);
   }
 
-  function openPlainApp() {
-    location.replace(`/s/${sessionId}`);
+  async function openPlainApp() {
+    try {
+      await configureWorker({
+        type: 'tinyhat-plain-configure',
+        contentTransport: plainTransport,
+        sessionId,
+      });
+    } catch (_) {
+      // Relative URLs and forms still work through the prefixed app route.
+    }
+    location.replace(`/s/${sessionId}/app/`);
   }
 
   function base64UrlToBytes(value) {
@@ -302,7 +312,7 @@ rel="noopener noreferrer">Open Visual in browser</a></main>
 
   async function openAuthorizedApp(authorization) {
     if (authorization && authorization.content_encryption === plainTransport) {
-      openPlainApp();
+      await openPlainApp();
       return true;
     }
     if (!authorization || authorization.content_encryption !== protocol) return false;
@@ -447,11 +457,22 @@ async function loadConfig(sessionId) {
   } finally {
     db.close();
   }
-  if (!stored || !stored.key || !stored.connectionId) return null;
+  if (!stored) return null;
+  if (stored.contentTransport === 'none') {
+    const config = {sessionId, contentTransport: 'none'};
+    CONFIGS.set(sessionId, config);
+    return config;
+  }
+  if (stored.contentTransport !== PROTOCOL || !stored.key || !stored.connectionId) return null;
   const key = await crypto.subtle.importKey(
     'raw', base64UrlToBytes(stored.key), {name: 'AES-GCM'}, false, ['encrypt', 'decrypt']
   );
-  const config = {sessionId, connectionId: stored.connectionId, key};
+  const config = {
+    sessionId,
+    contentTransport: PROTOCOL,
+    connectionId: stored.connectionId,
+    key,
+  };
   CONFIGS.set(sessionId, config);
   return config;
 }
@@ -490,19 +511,30 @@ self.addEventListener('install', () => self.skipWaiting());
 self.addEventListener('activate', event => event.waitUntil(self.clients.claim()));
 
 self.addEventListener('message', event => {
-  if (!event.data || event.data.type !== 'tinyhat-e2ee-configure') return;
+  if (!event.data ||
+      !['tinyhat-e2ee-configure', 'tinyhat-plain-configure'].includes(event.data.type)) return;
   const reply = event.ports && event.ports[0];
   event.waitUntil((async () => {
     try {
-      const {protocol, sessionId, connectionId, key} = event.data;
-      if (protocol !== PROTOCOL || !/^las_[A-Za-z0-9_-]{20,80}$/.test(sessionId) ||
+      const {protocol, contentTransport, sessionId, connectionId, key} = event.data;
+      if (!/^las_[A-Za-z0-9_-]{20,80}$/.test(sessionId)) throw new Error('invalid');
+      if (event.data.type === 'tinyhat-plain-configure') {
+        if (contentTransport !== 'none') throw new Error('invalid');
+        const config = {sessionId, contentTransport};
+        CONFIGS.set(sessionId, config);
+        await persistConfig(config);
+        if (event.source && event.source.id) CLIENT_SESSIONS.set(event.source.id, sessionId);
+        if (reply) reply.postMessage({ok: true});
+        return;
+      }
+      if (protocol !== PROTOCOL || contentTransport !== PROTOCOL ||
           !/^e2e_[A-Za-z0-9_-]{20,80}$/.test(connectionId)) throw new Error('invalid');
       const cryptoKey = await crypto.subtle.importKey(
         'raw', base64UrlToBytes(key), {name: 'AES-GCM'}, false, ['encrypt', 'decrypt']
       );
-      const config = {sessionId, connectionId, key: cryptoKey};
+      const config = {sessionId, contentTransport, connectionId, key: cryptoKey};
       CONFIGS.set(sessionId, config);
-      await persistConfig({sessionId, connectionId, key});
+      await persistConfig({sessionId, contentTransport, connectionId, key});
       if (event.source && event.source.id) CLIENT_SESSIONS.set(event.source.id, sessionId);
       if (reply) reply.postMessage({ok: true});
     } catch (_) {
@@ -546,20 +578,24 @@ async function routeFor(event) {
 
 async function encryptedFetch(event, route) {
   const {config, target} = route;
-  if (!['GET', 'HEAD'].includes(event.request.method)) {
-    return new Response('Read-only Visual', {status: 405});
-  }
   const headers = {};
-  for (const name of ['accept', 'accept-language', 'if-none-match', 'if-modified-since', 'range']) {
-    const value = event.request.headers.get(name);
-    if (value) headers[name] = value;
-  }
+  event.request.headers.forEach((value, name) => {
+    if (!['accept-encoding', 'connection', 'content-length', 'cookie', 'host',
+          'keep-alive', 'proxy-authenticate', 'proxy-authorization', 'te',
+          'trailer', 'transfer-encoding', 'upgrade'].includes(name.toLowerCase())) {
+      headers[name] = value;
+    }
+  });
+  const requestBody = ['GET', 'HEAD'].includes(event.request.method)
+    ? null
+    : bytesToBase64Url(new Uint8Array(await event.request.clone().arrayBuffer()));
   const requestId = randomId();
   const nonce = crypto.getRandomValues(new Uint8Array(12));
   const plaintext = new TextEncoder().encode(JSON.stringify({
     method: event.request.method,
     target,
     headers,
+    body: requestBody,
   }));
   const ciphertext = await crypto.subtle.encrypt(
     {name: 'AES-GCM', iv: nonce, additionalData: requestAad(
@@ -618,12 +654,29 @@ async function encryptedFetch(event, route) {
   return new Response(body, {status: payload.status, statusText: payload.reason || '', headers: responseHeaders});
 }
 
+async function plainFetch(event, route) {
+  const {config, target} = route;
+  const body = ['GET', 'HEAD'].includes(event.request.method)
+    ? undefined
+    : await event.request.clone().arrayBuffer();
+  return fetch(`/s/${config.sessionId}/app${target}`, {
+    method: event.request.method,
+    headers: event.request.headers,
+    body,
+    credentials: 'include',
+    redirect: 'follow',
+  });
+}
+
 self.addEventListener('fetch', event => {
   const url = new URL(event.request.url);
   if (url.origin !== self.location.origin) return;
   event.respondWith((async () => {
     const route = await routeFor(event);
-    return route ? encryptedFetch(event, route) : fetch(event.request);
+    if (!route) return fetch(event.request);
+    return route.config.contentTransport === 'none'
+      ? plainFetch(event, route)
+      : encryptedFetch(event, route);
   })());
 });
 """.replace("__CONTENT_ENCRYPTION_PROTOCOL__", CONTENT_ENCRYPTION_PROTOCOL).encode("utf-8")

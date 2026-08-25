@@ -86,7 +86,9 @@ TINYHAT_LOCAL_APP_SHARING_SCHEMA = {
     "type": "object",
     "description": (
         "Creates, lists, or expires short-lived Tinyhat Visuals: visual pages for "
-        "reports, charts, dashboards, previews, and interactive explanations. "
+        "reports, charts, dashboards, previews, interactive explanations, and "
+        "owner-requested private admin pages. Visuals carry ordinary interactive "
+        "HTTP requests; the local page owns its own authorization and method limits. "
         "Tinyhat platform APIs own Visual identity, access mode, codes where "
         "required, browser grants, expiry, and revocation. Creating a Visual "
         "requires the internal numeric loopback port, never a host or URL; do not "
@@ -143,8 +145,9 @@ TINYHAT_LOCAL_APP_SHARING_SCHEMA = {
             "type": "string",
             "enum": ["plain", "encrypted"],
             "description": (
-                "Optional content transport. plain is the default for ordinary, "
-                "non-sensitive pages and renders directly in Telegram. encrypted adds "
+                "Optional content transport. plain is the default, including for "
+                "private code-protected interactive pages, and renders directly in "
+                "Telegram. encrypted adds "
                 "browser-to-Computer encryption and may require opening an external "
                 "browser on Telegram iOS."
             ),

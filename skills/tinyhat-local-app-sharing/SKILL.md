@@ -1,6 +1,6 @@
 ---
 name: tinyhat-local-app-sharing
-description: Create, list, or expire short-lived Tinyhat Visuals when visual communication would help the user, including reports, charts, dashboards, previews, and interactive explanations. Do not use for files, terminal access, arbitrary URLs or hosts, non-HTTP services, or pages containing secrets.
+description: Create, list, or expire short-lived Tinyhat Visuals when visual communication would help the user, including reports, charts, dashboards, previews, interactive explanations, and owner-requested private admin pages. Do not use for files, terminal access, arbitrary URLs or hosts, or non-HTTP services.
 ---
 
 # Tinyhat Visuals
@@ -28,6 +28,8 @@ Good uses include:
 - an interactive table, timeline, map, or model;
 - a design, document, or feature preview;
 - a small purpose-built page that communicates a result more clearly.
+- an owner-requested local admin or development page that the user needs to
+  review or operate privately.
 
 Do not create a Visual just to repeat a short answer that is already clear in
 text.
@@ -86,12 +88,18 @@ Visual or a Visual anyone with the complete link can open:
 A public Visual returns no access code and opens for anyone holding the complete
 link, in Telegram or any other browser.
 
+Admin consoles, credential-management pages, session inspectors, and other
+potentially sensitive interfaces must use the private `"code"` mode. They are
+valid Visuals when the owner asks to review or use that exact page; do not refuse
+them merely because they are administrative. Never make one public, and do not
+navigate or expose unrelated private sections on the user's behalf.
+
 ### Choose encryption deliberately
 
-Ordinary, non-sensitive Visuals use normal HTTPS transport and render directly
-inside Telegram, including Telegram on iOS. Set `"encryption_mode":
-"encrypted"` only when the user asks for browser-to-Computer encryption or the
-content requires that additional protection:
+Ordinary Visuals use normal HTTPS transport and render directly inside Telegram,
+including Telegram on iOS. This includes code-protected interactive pages unless
+the user asks for browser-to-Computer encryption. Set `"encryption_mode":
+"encrypted"` when the user requests that additional protection:
 
 ```json
 {
@@ -133,10 +141,16 @@ revocation boundary.
 
 - Share only information the user asked to review or an expected visual
   artifact for the current task.
-- Do not share credential pages, secret viewers, admin consoles, personal
-  messages, terminals, or pages containing unrelated user data.
-- Visuals support read-only HTTP `GET` and `HEAD`; writes and WebSockets are not
-  supported.
+- Share an admin, credential-management, or other sensitive page only when the
+  owner asks for that exact page, and always use private code access. Do not
+  silently widen the request to unrelated private data.
+- Visuals carry the page's normal HTTP interactions, including `GET`, `HEAD`,
+  `POST`, `PUT`, `PATCH`, `DELETE`, and `OPTIONS`, along with request bodies and
+  the page's Computer-local session cookies. The shared page itself owns its
+  authorization, CSRF protection, mutation behavior, and any tighter method
+  limits the user chooses.
+- WebSockets and non-HTTP services are not supported. Do not use a Visual as a
+  terminal transport.
 - Treat the link and any code as short-lived access material. A public Visual's
   URL is itself sufficient for access, so use that mode only at the user's
   request. Send access material only in the owner's Telegram chat; do not put
