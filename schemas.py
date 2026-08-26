@@ -85,10 +85,12 @@ TINYHAT_CONTACT_DETAILS_SCHEMA = {
 TINYHAT_COMPUTER_DESKTOP_SCHEMA = {
     "type": "object",
     "description": (
-        "Creates or reuses a short-lived, view-only connection to this "
+        "Creates or reuses a short-lived, interactive connection to this "
         "authenticated Computer's desktop for its assigned owner. Returns one "
         "shareable browser link, a six-digit code for ordinary browsers, and "
-        "an expiry. The assigned Telegram owner is authenticated automatically."
+        "an expiry. The assigned Telegram owner is authenticated automatically. "
+        "Once authorized, the owner can use the mouse, keyboard, applications, "
+        "files, and clipboard through the remote desktop."
     ),
     "properties": {},
     "required": [],

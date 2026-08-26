@@ -51,7 +51,7 @@ def _safe_payload(payload: dict[str, Any]) -> dict[str, Any]:
         or not link.startswith("https://")
         or ACCESS_CODE_RE.fullmatch(access_code) is None
         or not expires_at
-        or payload.get("view_only") is not True
+        or payload.get("view_only") is not False
     ):
         raise ValueError("invalid desktop response")
     return {
@@ -59,7 +59,7 @@ def _safe_payload(payload: dict[str, Any]) -> dict[str, Any]:
         "link": link,
         "access_code": access_code,
         "expires_at": expires_at,
-        "view_only": True,
+        "interactive": True,
         "button_label": "Open desktop",
     }
 
@@ -79,7 +79,7 @@ def _send_desktop_button(created: dict[str, Any]) -> bool:
             token=token,
             chat_id=chat_id,
             text=(
-                "Your Computer desktop is ready and view-only.\n\n"
+                "Your interactive Computer desktop is ready.\n\n"
                 "Open it inside Telegram with the button below, or use this link "
                 "in any browser:\n"
                 f"{created['link']}\n\n"

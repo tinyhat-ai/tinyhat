@@ -1,4 +1,4 @@
-"""Tests for the view-only Computer desktop capability."""
+"""Tests for the interactive Computer desktop capability."""
 
 from __future__ import annotations
 
@@ -29,7 +29,7 @@ def _platform_payload(**overrides: object) -> dict[str, object]:
         "link": LINK,
         "access_code": "123456",
         "expires_at": "2026-08-25T12:00:00Z",
-        "view_only": True,
+        "view_only": False,
     }
     payload.update(overrides)
     return payload
@@ -66,6 +66,7 @@ class ComputerDesktopToolTests(unittest.TestCase):
         )
         self.assertEqual(result["access_code"], "123456")
         self.assertEqual(result["button_label"], "Open desktop")
+        self.assertTrue(result["interactive"])
         self.assertTrue(result["telegram_button_sent"])
         self.assertEqual(sent[0]["link"], result["link"])
         serialized = json.dumps(result)
@@ -73,9 +74,9 @@ class ComputerDesktopToolTests(unittest.TestCase):
         self.assertNotIn("tailnet", serialized)
         self.assertNotIn("vnc", serialized.lower())
 
-    def test_rejects_missing_or_false_view_only_and_non_https_links(self) -> None:
+    def test_rejects_missing_or_true_view_only_and_non_https_links(self) -> None:
         for payload in (
-            _platform_payload(view_only=False),
+            _platform_payload(view_only=True),
             {
                 key: value
                 for key, value in _platform_payload().items()
@@ -156,12 +157,13 @@ class ComputerDesktopToolTests(unittest.TestCase):
         ):
             self.assertFalse(tool._send_desktop_button(created))
 
-    def test_skill_uses_user_language_and_marks_view_only(self) -> None:
+    def test_skill_uses_user_language_and_marks_interactive(self) -> None:
         skill = (
             REPO_ROOT / "skills" / "tinyhat-computer-desktop" / "SKILL.md"
         ).read_text(encoding="utf-8")
         self.assertIn("six-digit", skill)
-        self.assertIn("view-only", skill)
+        self.assertIn("interactive", skill)
+        self.assertIn("open applications", skill)
         self.assertIn("session IDs", skill)
         self.assertIn("internal identifiers", skill)
         self.assertNotIn("port number", skill)

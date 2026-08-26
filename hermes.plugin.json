@@ -130,7 +130,7 @@
       "qualified_name": "tinyhat:tinyhat-computer-desktop",
       "aliases": ["tinyhat-computer-desktop"],
       "path": "skills/tinyhat-computer-desktop/SKILL.md",
-      "purpose": "Creates a short-lived, view-only desktop connection for the assigned owner, with automatic Telegram verification or a six-digit browser code."
+      "purpose": "Creates a short-lived, interactive desktop connection for the assigned owner, with automatic Telegram verification or a six-digit browser code."
     },
     {
       "name": "tinyhat-credit",

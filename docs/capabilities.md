@@ -13,7 +13,7 @@ The current capability list is intentionally small.
 | `tinyhat_mail` | Computer-local mailbox required | Checks, lists, searches, and reads this Agent's isolated Tinyhat inbox and sends one plain-text email when server policy permits it. It never accepts or returns mailbox credentials, server addresses, or account ids. Reads are bounded and sanitized; send retries use a durable request id. |
 | `tinyhat_hats` | Available now | Creates, lists, inspects, renames, and retires one-customer Hats; checks out and syncs private repositories through Computer-scoped GitHub leases; and manages value-blind Hat credentials. Retirement hides a Hat from owner/public/new-install surfaces and deletes creator package state while preserving platform and installation history and already-installed consumer agents. Authorized installation transfers are dispatched automatically to the registered creator Computer, signed there, and decrypted only by the consumer Computer. |
 | `tinyhat_local_app_sharing` | Platform API and viewer edge required | Creates, lists, and expires short-lived Visuals for visual reports, charts, dashboards, explanations, and previews. Four-digit code access is the default; an agent may explicitly choose public access when anyone holding the complete link should be able to open the Visual. The plugin keeps localhost and port details internal. |
-| `tinyhat_computer_desktop` | Platform desktop gateway required | Creates or reuses a short-lived, view-only desktop connection. The Telegram owner opens it without a code; the same link works in another browser with its six-digit code. |
+| `tinyhat_computer_desktop` | Platform desktop gateway required | Creates or reuses a short-lived, interactive desktop connection. The Telegram owner opens it without a code; the same link works in another browser with its six-digit code. |
 | `tinyhat_tell_joke` | Available now | Proves Hermes loaded the Tinyhat plugin and can call a plugin tool. |
 | `tinyhat_skill_catalog` | Available now | Lists Tinyhat plugin skills with `tinyhat:<skill>` qualified names and unqualified aliases. |
 | `tinyhat-skill-authoring` skill | Available now | Teaches agents to write portable user skills with valid names, explicit trigger and non-trigger boundaries, progressive disclosure, and bounded context size. |
@@ -36,11 +36,12 @@ tool or skill, and covered by validation.
 
 ## Computer desktop
 
-`tinyhat_computer_desktop` lets the owner open a short-lived, view-only look at
-their Agent's Computer. The Agent sends a native Telegram **Open desktop**
+`tinyhat_computer_desktop` lets the owner use a short-lived interactive desktop
+on their Agent's Computer. The Agent sends a native Telegram **Open desktop**
 button together with a browser link and six-digit access code. Telegram can
 authenticate the assigned owner directly; other browsers use the same stable
-link and code.
+link and code. After authorization, the owner can move the pointer, type, use
+the clipboard, open applications, and browse files.
 
 ![Native Telegram Open desktop button](assets/computer-desktop/telegram-open-desktop-button.jpg)
 

@@ -132,7 +132,7 @@ def contact_details(args: dict[str, Any] | None = None, **kwargs: Any) -> str:
 
 
 def computer_desktop(args: dict[str, Any] | None = None, **kwargs: Any) -> str:
-    """Create or reuse a short-lived view-only Computer desktop connection."""
+    """Create or reuse a short-lived interactive Computer desktop connection."""
     return handle_computer_desktop(args, **kwargs)
 
 

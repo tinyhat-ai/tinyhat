@@ -34,7 +34,7 @@ This repository is the public Tinyhat plugin package. `main` is Hermes-only.
   pinned per-Computer Cloudflare connector, and thin client for platform-owned
   tunnel and sharing-session APIs.
 - `capabilities/computer_desktop/`: a thin client for the platform-owned,
-  view-only desktop-session broker. Desktop transport and installation remain
+  interactive desktop-session broker. Desktop transport and installation remain
   outside the plugin.
 - `skills/tinyhat-tell-joke/SKILL.md`: deterministic joke proof.
 - `skills/tinyhat-plugin-version/SKILL.md`: live plugin version proof.

@@ -1,4 +1,4 @@
-"""Owner-requested view-only Computer desktop capability."""
+"""Owner-requested interactive Computer desktop capability."""
 
 from .tool import computer_desktop
 
