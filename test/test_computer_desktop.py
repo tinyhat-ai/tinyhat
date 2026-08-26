@@ -139,6 +139,8 @@ class ComputerDesktopToolTests(unittest.TestCase):
 
         self.assertIn(LINK, str(sent["text"]))
         self.assertIn("123456", str(sent["text"]))
+        self.assertIn("interactive", str(sent["text"]))
+        self.assertNotIn("view-only", str(sent["text"]))
         self.assertEqual(
             sent["reply_markup"],
             {

@@ -56,8 +56,8 @@ This repository is the public Tinyhat plugin package. `main` is Hermes-only.
   and email address.
 - `skills/tinyhat-local-app-sharing/SKILL.md`: short-lived Visuals for visual
   reports, charts, dashboards, explanations, and previews.
-- `skills/tinyhat-computer-desktop/SKILL.md`: owner-requested live desktop
-  viewing with Telegram owner bypass or a six-digit browser code.
+- `skills/tinyhat-computer-desktop/SKILL.md`: owner-requested interactive
+  desktop control with Telegram owner bypass or a six-digit browser code.
 - `skills/tinyhat-agentphone/SKILL.md`: direct AgentPhone calls and text
   messages with Computer-local credentials and fixed safety boundaries around
   the provider's online instructions.
