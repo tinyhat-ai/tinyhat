@@ -83,6 +83,12 @@ def register(ctx: Any) -> None:
         handler=tools.contact_details,
     )
     ctx.register_tool(
+        name="tinyhat_computer_desktop",
+        toolset="tinyhat",
+        schema=schemas.TINYHAT_COMPUTER_DESKTOP_SCHEMA,
+        handler=tools.computer_desktop,
+    )
+    ctx.register_tool(
         name="tinyhat_mail",
         toolset="tinyhat",
         schema=schemas.TINYHAT_MAIL_SCHEMA,

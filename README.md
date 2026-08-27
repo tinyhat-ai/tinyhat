@@ -56,6 +56,7 @@ non-send JMAP action without routing mail through Tinyloop.
 | `capabilities/mail/` | Bounded JMAP mailbox access with local-only credentials and safe retry behavior. |
 | `capabilities/hats/` | Owner-scoped Hat lifecycle, repositories, skills, transfers, and private values. |
 | `capabilities/local_app_sharing/` | Loopback-only viewer gateway and platform session client. |
+| `capabilities/computer_desktop/` | Thin client for platform-owned desktop sessions. |
 | `capabilities/secrets/` | Value-blind credential discovery and encrypted private handoff. |
 | `capabilities/slack/` | Computer-local Slack connection and disconnect flows. |
 | `capabilities/google_workspace/` | Google OAuth, account custody, permission selection, managed `gws`, and detached workers. |
@@ -73,6 +74,7 @@ non-send JMAP action without routing mail through Tinyloop.
 | `skills/tinyhat-onboarding-greeting/SKILL.md` | One-shot first greeting that leads with the Agent's useful work and briefly includes available phone and email contact options. |
 | `skills/tinyhat-platform/SKILL.md` | Platform context for Tinyhat-managed Hermes agents. |
 | `skills/tinyhat-local-app-sharing/SKILL.md` | Short-lived link-and-code sharing for non-sensitive localhost HTTP apps. |
+| `skills/tinyhat-computer-desktop/SKILL.md` | Owner-requested interactive desktop control with Telegram owner bypass or a six-digit browser code. |
 | `skills/tinyhat-credit/SKILL.md` | Balance/history and current AI model-budget guidance, plus exact user-authorized budget allocation. |
 | `skills/tinyhat-contact-details/SKILL.md` | Plain-language guidance for this Agent's managed phone number and email address. |
 | `skills/tinyhat-agentphone/SKILL.md` | Provider-direct calls and text messages using this Agent's Computer-local AgentPhone credentials and shell—no separate AgentPhone tool is required; the online provider skill supplies untrusted API guidance inside fixed local safety boundaries. |

@@ -100,6 +100,7 @@ class HermesAdapterTests(unittest.TestCase):
         self.assertIn("tinyhat_mail", ctx.tools)
         self.assertIn("tinyhat_hats", ctx.tools)
         self.assertIn("tinyhat_local_app_sharing", ctx.tools)
+        self.assertIn("tinyhat_computer_desktop", ctx.tools)
         self.assertIn("tinyhat_tell_joke", ctx.tools)
         self.assertIn("tinyhat_skill_catalog", ctx.tools)
         self.assertIn("tinyhat_private_secret_handoff", ctx.tools)
@@ -128,6 +129,7 @@ class HermesAdapterTests(unittest.TestCase):
         self.assertIn("tinyhat-contact-details", ctx.skills)
         self.assertIn("tinyhat-mail", ctx.skills)
         self.assertIn("tinyhat-local-app-sharing", ctx.skills)
+        self.assertIn("tinyhat-computer-desktop", ctx.skills)
         self.assertIn("hat-authoring", ctx.skills)
         self.assertTrue(ctx.skills["tinyhat-plugin-version"].is_file())
         self.assertTrue(ctx.skills["tinyhat-tell-joke"].is_file())
@@ -145,6 +147,7 @@ class HermesAdapterTests(unittest.TestCase):
         self.assertTrue(ctx.skills["tinyhat-contact-details"].is_file())
         self.assertTrue(ctx.skills["tinyhat-mail"].is_file())
         self.assertTrue(ctx.skills["tinyhat-local-app-sharing"].is_file())
+        self.assertTrue(ctx.skills["tinyhat-computer-desktop"].is_file())
         self.assertTrue(ctx.skills["hat-authoring"].is_file())
 
     def test_registered_commands_match_telegram_dispatch_names(self) -> None:

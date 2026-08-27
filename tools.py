@@ -9,6 +9,9 @@ from pathlib import Path
 from typing import Any
 from urllib import error, parse, request
 
+from .capabilities.computer_desktop.tool import (
+    computer_desktop as handle_computer_desktop,
+)
 from .capabilities.contact_details.tool import contact_details as handle_contact_details
 from .capabilities.credit.tool import (
     allocate_openrouter_credit as handle_allocate_openrouter_credit,
@@ -126,6 +129,11 @@ def openrouter_credit_allocate(
 def contact_details(args: dict[str, Any] | None = None, **kwargs: Any) -> str:
     """Return or assign the current Agent's managed phone and email."""
     return handle_contact_details(args, **kwargs)
+
+
+def computer_desktop(args: dict[str, Any] | None = None, **kwargs: Any) -> str:
+    """Create or reuse a short-lived interactive Computer desktop connection."""
+    return handle_computer_desktop(args, **kwargs)
 
 
 def mail(args: dict[str, Any] | None = None, **kwargs: Any) -> str:
