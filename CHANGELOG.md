@@ -4,6 +4,15 @@ All notable changes to the Tinyhat plugin are documented here.
 
 ## Unreleased
 
+## 0.32.6 - 2026-08-27
+
+- Let an Agent share its fully interactive Computer desktop when its owner asks.
+  The owner can open it directly from a native Telegram button or use the same
+  HTTPS link in another browser with a six-digit code, then use the mouse,
+  keyboard, clipboard, applications, files, and browser. The plugin keeps
+  session identifiers and private transport details out of Agent replies and
+  fails closed unless the platform confirms an interactive connection.
+
 ## 0.32.5 - 2026-08-24
 
 - Allow an owner to share an explicitly requested admin or other sensitive
