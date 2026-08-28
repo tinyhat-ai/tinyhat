@@ -200,7 +200,10 @@ This capability is used when the user wants to save an API key, token,
 password, or credential for their agent.
 
 The agent must not ask for the secret in chat. Instead, it calls
-`tinyhat_private_secret_handoff`. The Computer creates a temporary key
+`tinyhat_private_secret_handoff`. Before opening a form, the tool checks the
+value-blind Computer credential inventory. An already-saved name is reused;
+only an explicit user request to update or replace it may set
+`replace_existing=true`. The Computer creates a temporary key
 pair, the Mini App encrypts the entered value with the public key, and the
 Computer decrypts the submitted ciphertext with the temporary private key.
 Tinyhat stores only ciphertext during the short handoff window.

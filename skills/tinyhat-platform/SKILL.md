@@ -48,7 +48,8 @@ When the user says something like "add my Exa API key":
 
 1. Choose the specific env-style name, for example `EXA_API_KEY`.
 2. Call `tinyhat_private_secret_handoff` with `name` and a short
-   description.
+   description. It refuses a duplicate entry when the value-blind inventory
+   already contains that name. Use the saved credential instead.
 3. Let the Tinyhat-sent button stand.
 4. Keep the chat reply short.
 
@@ -77,7 +78,9 @@ Lists contain names and descriptions only. For removal, select one opaque
 `handoff_id` and call the tool once; Tinyhat sends the expiring two-stage
 Telegram confirmation and Hermes performs local deletion. Do not ask for a
 text confirmation or send a duplicate reply. Once deletion succeeds, add the
-same name again with `tinyhat_private_secret_handoff` to replace its value.
+same name again with `tinyhat_private_secret_handoff` and
+`replace_existing=true` to replace its value, but only after the user
+explicitly asks to update or replace it.
 
 ## Privacy And Trust
 

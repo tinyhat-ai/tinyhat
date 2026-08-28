@@ -265,10 +265,14 @@ the correct qualified skill name instead of guessing from a not-found error.
 `tinyhat-private-secret` is the first real capability. When the user asks
 to save an API key, token, password, or credential, the agent calls
 `tinyhat_private_secret_handoff`. The Computer creates a one-time key
-pair, the user enters the value in a Telegram Mini App, the browser
-encrypts the value with the public key, and the Computer decrypts it with
-the temporary private key. Tinyhat stores only short-lived ciphertext for
-the handoff and wipes it after completion, expiration, or failure. When the
+pair only after the value-blind inventory confirms the name is not already
+saved. Existing names are reused without asking again; an encrypted replacement
+form opens only when the user explicitly asks to update the credential and the
+tool sets `replace_existing=true`. The user enters the value in a Telegram
+Mini App, the browser encrypts the value with the public key, and the Computer
+decrypts it with the temporary private key. Tinyhat stores only short-lived
+ciphertext for the handoff and wipes it after completion, expiration, or
+failure. When the
 call includes `hat_identifier`, the Computer re-encrypts the value with that
 Hat's stable local key pair and writes only ciphertext to
 `~/.tinyhat/hats/<owner>/<hat>/secrets.json` instead of Hermes global config.

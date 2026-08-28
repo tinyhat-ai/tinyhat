@@ -265,6 +265,7 @@ class HermesAdapterTests(unittest.TestCase):
             "human-readable",
             secret_schema["properties"]["description"]["description"],
         )
+        self.assertIn("replace_existing", secret_schema["properties"])
 
         codex_schema = schemas.TINYHAT_CODEX_AUTH_SCHEMA
         self.assertEqual(codex_schema["required"], ["action"])
@@ -3094,6 +3095,9 @@ class HermesAdapterTests(unittest.TestCase):
 
     def test_private_secret_handoff_returns_readable_confirmation(self) -> None:
         class FakeClient:
+            def get_json(self, _path: str) -> dict:
+                return {"credentials": []}
+
             def post_json(self, path: str, payload: dict) -> dict:
                 self.path = path
                 self.payload = payload
@@ -3187,6 +3191,9 @@ class HermesAdapterTests(unittest.TestCase):
 
     def test_private_secret_handoff_infers_name_from_user_wording(self) -> None:
         class FakeClient:
+            def get_json(self, _path: str) -> dict:
+                return {"credentials": []}
+
             def post_json(self, path: str, payload: dict) -> dict:
                 self.path = path
                 self.payload = payload
@@ -3226,6 +3233,9 @@ class HermesAdapterTests(unittest.TestCase):
         self,
     ) -> None:
         class FakeClient:
+            def get_json(self, _path: str) -> dict:
+                return {"credentials": []}
+
             def post_json(self, path: str, payload: dict) -> dict:
                 self.path = path
                 self.payload = payload
@@ -3264,6 +3274,98 @@ class HermesAdapterTests(unittest.TestCase):
 
         self.assertEqual(worker_calls, [])
         self.assertIn("EXA_API_KEY", reply)
+
+    def test_private_secret_handoff_does_not_reask_for_saved_credential(self) -> None:
+        class FakeClient:
+            def __init__(self) -> None:
+                self.posts: list[tuple[str, dict]] = []
+
+            def get_json(self, path: str) -> dict:
+                self.path = path
+                return {
+                    "credentials": [
+                        {
+                            "name": "BROWSER_USE_API_KEY",
+                            "description": "Browser automation",
+                            "saved_at": "2026-08-08T15:50:59Z",
+                            "value_available": False,
+                        }
+                    ]
+                }
+
+            def post_json(self, path: str, payload: dict) -> dict:
+                self.posts.append((path, payload))
+                raise AssertionError("must not create a duplicate handoff")
+
+        fake_client = FakeClient()
+        with (
+            mock.patch.object(
+                secret_handoff,
+                "build_platform_client",
+                return_value=(fake_client, "local_dev"),
+            ),
+            mock.patch.object(secret_handoff, "_generate_key_pair") as generate_key,
+            mock.patch.object(secret_handoff, "_start_worker_process") as start_worker,
+        ):
+            payload = json.loads(
+                tools.private_secret_handoff(
+                    {
+                        "name": "BROWSER_USE_API_KEY",
+                        "description": "Browser automation",
+                    }
+                )
+            )
+
+        self.assertEqual(payload["error"], "credential_already_saved")
+        saved = payload["expected"]["saved_credential"]
+        self.assertEqual(saved["name"], "BROWSER_USE_API_KEY")
+        self.assertFalse(saved["value_available"])
+        self.assertIn("without asking the user", payload["message"])
+        self.assertIn("q=BROWSER_USE_API_KEY", fake_client.path)
+        self.assertEqual(fake_client.posts, [])
+        generate_key.assert_not_called()
+        start_worker.assert_not_called()
+
+    def test_private_secret_handoff_allows_explicit_replacement(self) -> None:
+        class FakeClient:
+            def __init__(self) -> None:
+                self.get_paths: list[str] = []
+
+            def get_json(self, path: str) -> dict:
+                self.get_paths.append(path)
+                return {"credentials": [{"name": "BROWSER_USE_API_KEY"}]}
+
+            def post_json(self, _path: str, payload: dict) -> dict:
+                return {
+                    "handoff_id": "sh_replace",
+                    "status": "pending",
+                    "secret_name": payload["name"],
+                }
+
+        fake_client = FakeClient()
+        with (
+            mock.patch.object(
+                secret_handoff,
+                "build_platform_client",
+                return_value=(fake_client, "local_dev"),
+            ),
+            mock.patch.object(
+                secret_handoff,
+                "_generate_key_pair",
+                return_value=("PRIVATE", "PUBLIC"),
+            ),
+            mock.patch.object(secret_handoff, "_start_worker_process"),
+        ):
+            reply = tools.private_secret_handoff(
+                {
+                    "name": "BROWSER_USE_API_KEY",
+                    "description": "Browser automation",
+                    "replace_existing": True,
+                }
+            )
+
+        self.assertIn("Enter secret", reply)
+        self.assertEqual(fake_client.get_paths, [])
 
     def test_private_secret_handoff_rejects_generic_unknown_name(self) -> None:
         with self.assertRaises(secret_handoff.SecretHandoffError) as exc:

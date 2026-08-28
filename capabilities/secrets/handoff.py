@@ -149,12 +149,14 @@ def start_private_secret_handoff(
             ),
         )
     expires_in_seconds = DEFAULT_EXPIRES_IN_SECONDS
+    replace_existing = payload.get("replace_existing") is True
 
     prepared = _request_private_secret_handoff(
         payload=payload,
         secret_name=secret_name,
         description=description,
         expires_in_seconds=expires_in_seconds,
+        replace_existing=replace_existing,
     )
     if isinstance(prepared, str):
         return prepared
@@ -316,9 +318,9 @@ def _request_private_secret_handoff(
     secret_name: str,
     description: str,
     expires_in_seconds: int,
+    replace_existing: bool,
 ) -> tuple[dict[str, Any], str, str | None] | str:
     """Resolve the value-blind target and create one bound handoff."""
-    private_key_pem, public_key_pem = _generate_key_pair()
     client, platform_auth = build_platform_client()
     hat_identifier = str(payload.get("hat_identifier") or "").strip()
     hat_handle: str | None = None
@@ -340,6 +342,57 @@ def _request_private_secret_handoff(
                 ),
                 expected={"hat_identifier": "owner/hats/hat-key"},
             )
+    if hat_handle is None and not replace_existing:
+        try:
+            listed = client.get_json(
+                f"{computer_api_path(platform_auth, 'private-credentials/v1')}?"
+                f"{urlencode({'q': secret_name})}"
+            )
+        except PlatformError as exc:
+            return tool_error_json(
+                tool="tinyhat_private_secret_handoff",
+                error_name="credential_check_failed",
+                message=(
+                    "I could not verify whether this credential is already saved, "
+                    "so I did not open another entry form. Try again shortly. "
+                    f"Platform response: {exc}"
+                ),
+            )
+        credentials = listed.get("credentials")
+        exact_match = (
+            next(
+                (
+                    item
+                    for item in credentials
+                    if isinstance(item, dict)
+                    and str(item.get("name") or "").strip().upper() == secret_name
+                ),
+                None,
+            )
+            if isinstance(credentials, list)
+            else None
+        )
+        if exact_match is not None:
+            return tool_error_json(
+                tool="tinyhat_private_secret_handoff",
+                error_name="credential_already_saved",
+                message=(
+                    f"`{secret_name}` is already saved on this Computer. Use it "
+                    "without asking the user to enter it again. If a real provider "
+                    "request rejects the credential, explain that result and ask "
+                    "whether the user wants to replace it. Only then retry with "
+                    "replace_existing=true."
+                ),
+                expected={
+                    "saved_credential": {
+                        "name": secret_name,
+                        "description": exact_match.get("description"),
+                        "saved_at": exact_match.get("saved_at"),
+                        "value_available": False,
+                    }
+                },
+            )
+    private_key_pem, public_key_pem = _generate_key_pair()
     try:
         handoff = client.post_json(
             computer_api_path(platform_auth, "private-secret-handoffs/v1"),
