@@ -4,6 +4,11 @@ All notable changes to the Tinyhat plugin are documented here.
 
 ## Unreleased
 
+- Reuse an already saved Computer credential by exact name instead of asking
+  the owner to submit the same secret again. Agents only open a replacement
+  handoff when the owner explicitly asks to replace the saved credential, and
+  inventory failures remain fail-closed without exposing secret values.
+
 ## 0.32.6 - 2026-08-27
 
 - Let an Agent share its fully interactive Computer desktop when its owner asks.

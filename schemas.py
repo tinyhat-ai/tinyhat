@@ -528,6 +528,14 @@ TINYHAT_PRIVATE_SECRET_HANDOFF_SCHEMA = {
                 "not Hermes global configuration."
             ),
         },
+        "replace_existing": {
+            "type": "boolean",
+            "description": (
+                "Set true only when the user explicitly asks to replace or update "
+                "a credential already saved on this Computer. Leave false when an "
+                "agent merely needs to use the credential."
+            ),
+        },
     },
     "required": ["name", "description"],
     "additionalProperties": False,

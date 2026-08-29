@@ -22,10 +22,19 @@ secret entry instead:
    `STRIPE_SECRET_KEY`.
 2. Add a short plain-English description that helps the user remember
    why the secret exists.
-3. Call `tinyhat_private_secret_handoff` with `name` and `description`.
+3. Call `tinyhat_private_secret_handoff` with `name` and `description`. The
+   tool checks the Computer's value-blind credential inventory first. If the
+   name is already saved, use the existing credential and do not ask for it
+   again.
 4. Call the tool once. Let the returned message stand. Tinyhat already
    sends the secure button. Do not add a second link or duplicate
    instructions.
+
+If the user explicitly asks to replace or update a saved credential, call the
+same tool with `replace_existing=true`. Never set that flag merely because a
+task needs the credential. If a real provider request rejects a saved
+credential, explain the rejected/invalid result first and ask whether the user
+wants to replace it.
 
 Do not use generic names such as `TINYHAT_SECRET`, `SECRET`, `API_KEY`,
 `TOKEN`, `PASSWORD`, or `CREDENTIAL`. If the provider or purpose is not
