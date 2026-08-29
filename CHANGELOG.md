@@ -4,6 +4,8 @@ All notable changes to the Tinyhat plugin are documented here.
 
 ## Unreleased
 
+## 0.32.8 - 2026-08-29
+
 - Make Hats free to install and audience-controlled. Creators can publish a
   Hat for every Tinyhat user or keep it private to named users, and agents can
   install an accessible Hat directly from its canonical handle or page URL.
