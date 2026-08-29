@@ -97,33 +97,41 @@ def hats(  # noqa: PLR0911, PLR0912, PLR0915 - one public tool dispatches bounde
             else ""
         )
         name = _required_text(payload, "name") if action == "create" else ""
-        customer_email = _required_text(payload, "customer_email") if action == "create" else ""
         update_payload: dict[str, Any] | None = None
         if action == "update":
+            if "allowed_users" in payload:
+                return tool_error_json(
+                    tool="tinyhat_hats",
+                    error_name="invalid_parameter_for_action",
+                    message=(
+                        "Use `add_user` or `remove_user` to change an existing "
+                        "Hat's audience. `allowed_users` is only for create."
+                    ),
+                    expected={
+                        "create": "allowed_users",
+                        "update": "add_user or remove_user",
+                    },
+                    example_call={
+                        "action": "update",
+                        "identifier": identifier,
+                        "add_user": "@buyer",
+                    },
+                )
             update_payload = {"identifier": identifier}
             for field in (
                 "public_title",
-                "customer_email",
+                "access_mode",
+                "add_user",
+                "remove_user",
                 "default_bot_username",
                 "default_bot_display_name",
                 "new_key",
-                "billing_mode",
                 "minimum_plugin_version",
                 "minimum_runtime_version",
             ):
                 value = str(payload.get(field) or "").strip()
                 if value:
                     update_payload[field] = value
-            for field in (
-                "subscription_product_id",
-                "subscription_price_id",
-                "monthly_price_cents",
-                "trial_days",
-                "discount_percent",
-                "discount_duration_months",
-            ):
-                if payload.get(field) is not None:
-                    update_payload[field] = payload[field]
             minimum_computer_type = str(payload.get("minimum_computer_type_key") or "").strip()
             if minimum_computer_type:
                 update_payload["computer_type_key"] = minimum_computer_type
@@ -139,7 +147,7 @@ def hats(  # noqa: PLR0911, PLR0912, PLR0915 - one public tool dispatches bounde
                     example_call={
                         "action": "update",
                         "identifier": "trade-show-sales",
-                        "customer_email": "new-buyer@example.com",
+                        "access_mode": "public",
                     },
                 )
         repository_action = action.startswith("repository_")
@@ -401,13 +409,16 @@ def hats(  # noqa: PLR0911, PLR0912, PLR0915 - one public tool dispatches bounde
                 identifier=identifier if action == "wear" else None,
             )
         else:  # create
-            request_payload = {
-                "name": name,
-                "customer_email": customer_email,
-            }
+            request_payload = {"name": name}
             key = str(payload.get("key") or "").strip()
             if key:
                 request_payload["key"] = key
+            access_mode = str(payload.get("access_mode") or "").strip()
+            if access_mode:
+                request_payload["access_mode"] = access_mode
+            allowed_users = payload.get("allowed_users")
+            if isinstance(allowed_users, list) and allowed_users:
+                request_payload["allowed_users"] = allowed_users
             default_bot_username = str(payload.get("default_bot_username") or "").strip()
             if default_bot_username:
                 request_payload["default_bot_username"] = default_bot_username
@@ -415,15 +426,8 @@ def hats(  # noqa: PLR0911, PLR0912, PLR0915 - one public tool dispatches bounde
             if default_bot_display_name:
                 request_payload["default_bot_display_name"] = default_bot_display_name
             for field in (
-                "billing_mode",
-                "subscription_product_id",
-                "subscription_price_id",
                 "minimum_plugin_version",
                 "minimum_runtime_version",
-                "monthly_price_cents",
-                "trial_days",
-                "discount_percent",
-                "discount_duration_months",
             ):
                 if payload.get(field) is not None and payload.get(field) != "":
                     request_payload[field] = payload[field]
@@ -442,7 +446,7 @@ def hats(  # noqa: PLR0911, PLR0912, PLR0915 - one public tool dispatches bounde
                 {
                     "action": "create",
                     "name": "Trade Show Sales",
-                    "customer_email": "buyer@example.com",
+                    "access_mode": "public",
                 }
                 if action == "create"
                 else {"action": "get", "identifier": "trade-show-sales"}
@@ -500,9 +504,8 @@ def hats(  # noqa: PLR0911, PLR0912, PLR0915 - one public tool dispatches bounde
         )
     elif action == "update":
         result["agent_instruction"] = (
-            "Report only the metadata the user asked to change. If the handle "
-            "changed, report the new canonical handle and share URL; never expose "
-            "customer email unless the user explicitly asked for it. If "
+            "Report only the metadata or access the user asked to change. If the "
+            "handle changed, report the new canonical handle and share URL. If "
             "local_store_rename_error is present, explain that the platform rename "
             "succeeded but Computer-local credentials need recovery."
         )
@@ -543,9 +546,8 @@ def hats(  # noqa: PLR0911, PLR0912, PLR0915 - one public tool dispatches bounde
     elif action in {"wear", "resume_installation"}:
         result["agent_instruction"] = (
             "Send onboarding_message as the immediate progress update when it is "
-            "present. If payment_required is true, send the checkout URL and wait for "
-            "the user to complete it before resuming. If installation_started is "
-            "true, explain that the skills are loaded and any private credentials are "
+            "present. If installation_started is true, explain that the skills are "
+            "loaded and any private credentials are "
             "moving directly between Computers as ciphertext. A status of none means "
             "this Computer has no Hat to install and needs no user-facing warning. "
             "Never claim the Hat is fully ready until status=active or the final "
@@ -554,8 +556,8 @@ def hats(  # noqa: PLR0911, PLR0912, PLR0915 - one public tool dispatches bounde
     else:
         result["agent_instruction"] = (
             "Report the canonical handle and share URL exactly as returned. Tell the "
-            "user that the intended customer can verify their email on the public "
-            "page and create a Telegram agent that wears this hat."
+            "user whether the Hat is public to every Tinyhat user or private to its "
+            "named users. Hats are free to install."
         )
     result_without_telemetry = json.dumps(result, sort_keys=True, separators=(",", ":"))
     input_shape = json.dumps(payload, sort_keys=True, separators=(",", ":"))
@@ -593,10 +595,7 @@ def _wear_hat(
             "installation_started": False,
             "onboarding_message": None,
         }
-    if installation.get("payment_required") or installation.get("status") in {
-        "payment_pending",
-        "assignment_pending",
-    }:
+    if installation.get("status") == "assignment_pending":
         return installation
     if installation.get("status") == "active":
         installation["installation_started"] = False

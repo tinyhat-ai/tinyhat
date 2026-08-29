@@ -269,6 +269,8 @@ TINYHAT_HATS_SCHEMA = {
     "type": "object",
     "description": (
         "Creates, lists, inspects, updates, and retires owner-scoped Tinyhat Hats; "
+        "makes them public or private to named Tinyhat users; installs accessible "
+        "Hats from a canonical handle or public URL; "
         "commits guarded non-secret files to their private repos; and defines, "
         "configures, lists, or removes Computer-local Hat credentials without "
         "returning values. Retirement preserves platform and installation history."
@@ -301,14 +303,36 @@ TINYHAT_HATS_SCHEMA = {
             "maxLength": 127,
             "description": "Required human-readable hat name for create.",
         },
-        "customer_email": {
+        "access_mode": {
             "type": "string",
-            "minLength": 3,
-            "maxLength": 320,
+            "enum": ["public", "private"],
             "description": (
-                "Work email for the one customer this Hat serves. Required for "
-                "create; optional replacement audience for update."
+                "Who may install the Hat. Public allows every Tinyhat user; private "
+                "allows only the creator and explicitly named users. Defaults to "
+                "private on create."
             ),
+        },
+        "allowed_users": {
+            "type": "array",
+            "maxItems": 100,
+            "uniqueItems": True,
+            "items": {"type": "string", "minLength": 1, "maxLength": 320},
+            "description": (
+                "Tinyhat display names, Telegram handles, or verified emails to "
+                "grant when creating a private Hat."
+            ),
+        },
+        "add_user": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 320,
+            "description": "One Tinyhat user name, handle, or email to grant on update.",
+        },
+        "remove_user": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 320,
+            "description": "One Tinyhat user name, handle, or email to remove on update.",
         },
         "key": {
             "type": "string",
@@ -323,7 +347,7 @@ TINYHAT_HATS_SCHEMA = {
             "maxLength": 32,
             "pattern": "^@?[A-Za-z][A-Za-z0-9_]{1,28}bot$",
             "description": (
-                "Optional Telegram bot username to prefill for the customer during "
+                "Optional Telegram bot username to prefill for the user during "
                 "create or replace during update. It must start with a letter and "
                 "end in bot."
             ),
@@ -428,34 +452,6 @@ TINYHAT_HATS_SCHEMA = {
             "minLength": 1,
             "maxLength": 200,
             "description": ("One-line atomic Git commit message for repository_sync."),
-        },
-        "billing_mode": {
-            "type": "string",
-            "enum": ["free", "paid_subscription"],
-            "description": "Optional Hat billing mode for create or update.",
-        },
-        "subscription_product_id": {
-            "type": "integer",
-            "minimum": 1,
-        },
-        "subscription_price_id": {
-            "type": "integer",
-            "minimum": 1,
-        },
-        "monthly_price_cents": {
-            "type": "integer",
-            "minimum": 1,
-        },
-        "trial_days": {"type": "integer", "minimum": 0, "maximum": 730},
-        "discount_percent": {
-            "type": "integer",
-            "minimum": 0,
-            "maximum": 100,
-        },
-        "discount_duration_months": {
-            "type": "integer",
-            "minimum": 1,
-            "maximum": 60,
         },
         "minimum_computer_type_key": {
             "type": "string",

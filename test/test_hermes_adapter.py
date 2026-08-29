@@ -244,8 +244,8 @@ class HermesAdapterTests(unittest.TestCase):
             hats_schema["properties"]["confirmed"]["description"],
         )
         self.assertIn(
-            "optional replacement audience",
-            hats_schema["properties"]["customer_email"]["description"],
+            "display names, Telegram handles, or verified emails",
+            hats_schema["properties"]["allowed_users"]["description"],
         )
         self.assertIn(
             "owner namespace stays server-controlled",
@@ -318,7 +318,7 @@ class HermesAdapterTests(unittest.TestCase):
             ),
             text_between(
                 REPO_ROOT / "README.md",
-                "`hat-authoring` creates and evolves shareable Hats.",
+                "`hat-authoring` creates and evolves free shareable Hats.",
                 "For repositories in `tinyhat-ai`",
             ),
             text_between(

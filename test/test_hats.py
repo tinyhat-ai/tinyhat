@@ -34,7 +34,7 @@ class FakePlatformClient:
             "key": "trade-show-sales",
             "handle": "acme/hats/trade-show-sales",
             "display_name": "Trade Show Sales",
-            "customer_email": "buyer@example.com",
+            "access": {"mode": "private", "users": [], "count": 0},
             "share_url": "https://tinyhat.ai/hats/opaque",
             "repository_created": True,
         }
@@ -135,6 +135,41 @@ class HatToolTests(unittest.TestCase):
         self.assertTrue(result["installation_started"])
         self.assertEqual(client.post_calls[1][1]["head_sha"], "a" * 40)
 
+    def test_wear_forwards_tinyhat_url_unchanged(self) -> None:
+        class ActiveInstallationClient(FakePlatformClient):
+            def post_json(self, path: str, payload: dict[str, str]) -> dict[str, object]:
+                self.post_calls.append((path, payload))
+                return {
+                    "installation_id": "hti_12345678",
+                    "hat_handle": "acme/hats/research",
+                    "hat_title": "Research",
+                    "status": "active",
+                    "source": "existing_agent",
+                }
+
+        client = ActiveInstallationClient()
+        hat_url = "https://tinyhat.ai/acme/hats/research"
+        with mock.patch.object(
+            hats_module,
+            "build_platform_client",
+            return_value=(client, "local_dev"),
+        ):
+            result = json.loads(
+                hats_module.hats({"action": "wear", "identifier": hat_url})
+            )
+
+        self.assertEqual(
+            client.post_calls,
+            [
+                (
+                    "/hapi/v1/computers/local-dev/hats/v1/wear",
+                    {"identifier": hat_url},
+                )
+            ],
+        )
+        self.assertEqual(result["status"], "active")
+        self.assertFalse(result["installation_started"])
+
     def test_repository_checkout_uses_runtime_without_platform_proxy(self) -> None:
         with (
             mock.patch.object(
@@ -222,7 +257,8 @@ class HatToolTests(unittest.TestCase):
                     {
                         "action": "create",
                         "name": "Trade Show Sales",
-                        "customer_email": "buyer@example.com",
+                        "access_mode": "private",
+                        "allowed_users": ["@buyer"],
                         "default_bot_username": "AdaForecastBot",
                         "default_bot_display_name": "Ada Forecasting Agent",
                     }
@@ -236,7 +272,8 @@ class HatToolTests(unittest.TestCase):
                     "/hapi/v1/computers/local-dev/hats/v1",
                     {
                         "name": "Trade Show Sales",
-                        "customer_email": "buyer@example.com",
+                        "access_mode": "private",
+                        "allowed_users": ["@buyer"],
                         "default_bot_username": "AdaForecastBot",
                         "default_bot_display_name": "Ada Forecasting Agent",
                     },
@@ -245,7 +282,7 @@ class HatToolTests(unittest.TestCase):
         )
         self.assertEqual(result["handle"], "acme/hats/trade-show-sales")
         self.assertNotIn("owner_user_id", client.post_calls[0][1])
-        self.assertIn("wears this hat", result["agent_instruction"])
+        self.assertIn("private", result["agent_instruction"])
         self.assertEqual(result["operation_telemetry"]["action"], "create")
         self.assertIsInstance(result["operation_telemetry"]["elapsed_ms"], int)
         self.assertGreater(
@@ -271,12 +308,19 @@ class HatToolTests(unittest.TestCase):
             ],
         )
 
-    def test_create_missing_customer_email_is_self_correcting(self) -> None:
-        result = json.loads(hats_module.hats({"action": "create", "name": "Trade Show Sales"}))
+    def test_create_does_not_require_customer_or_payment(self) -> None:
+        client = FakePlatformClient()
+        with mock.patch.object(
+            hats_module,
+            "build_platform_client",
+            return_value=(client, "local_dev"),
+        ):
+            result = json.loads(
+                hats_module.hats({"action": "create", "name": "Trade Show Sales"})
+            )
 
-        self.assertEqual(result["schema"], "tinyhat_tool_error_v1")
-        self.assertEqual(result["error"], "missing_required_parameter")
-        self.assertEqual(result["missing"], ["customer_email"])
+        self.assertEqual(client.post_calls[0][1], {"name": "Trade Show Sales"})
+        self.assertEqual(result["access"]["mode"], "private")
 
     def test_update_and_repo_file_use_owner_scoped_platform_routes(self) -> None:
         client = FakePlatformClient()
@@ -322,7 +366,28 @@ class HatToolTests(unittest.TestCase):
             ],
         )
 
-    def test_update_can_change_customer_and_handle_without_recreating_hat(
+    def test_update_rejects_allowed_users_replace(self) -> None:
+        client = FakePlatformClient()
+        with mock.patch.object(
+            hats_module,
+            "build_platform_client",
+            return_value=(client, "local_dev"),
+        ):
+            result = json.loads(
+                hats_module.hats(
+                    {
+                        "action": "update",
+                        "identifier": "acme/hats/forecasting",
+                        "allowed_users": ["@buyer"],
+                    }
+                )
+            )
+
+        self.assertEqual(result["error"], "invalid_parameter_for_action")
+        self.assertIn("add_user", result["message"])
+        self.assertEqual(client.post_calls, [])
+
+    def test_update_can_change_audience_and_handle_without_recreating_hat(
         self,
     ) -> None:
         client = FakePlatformClient()
@@ -341,7 +406,7 @@ class HatToolTests(unittest.TestCase):
                 "key": "executive-forecasting",
                 "handle": "acme/hats/executive-forecasting",
                 "display_name": "Trade Show Sales",
-                "customer_email": "new-buyer@example.com",
+                "access": {"mode": "private", "users": [], "count": 0},
                 "share_url": "https://tinyhat.ai/acme/hats/executive-forecasting",
                 "repository_created": True,
             }
@@ -365,7 +430,7 @@ class HatToolTests(unittest.TestCase):
                     {
                         "action": "update",
                         "identifier": "acme/hats/forecasting",
-                        "customer_email": "new-buyer@example.com",
+                        "add_user": "@newbuyer",
                         "new_key": "executive-forecasting",
                     }
                 )
@@ -378,7 +443,7 @@ class HatToolTests(unittest.TestCase):
                     "/hapi/v1/computers/local-dev/hats/v1/update",
                     {
                         "identifier": "acme/hats/forecasting",
-                        "customer_email": "new-buyer@example.com",
+                        "add_user": "@newbuyer",
                         "new_key": "executive-forecasting",
                     },
                 )

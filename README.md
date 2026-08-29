@@ -31,7 +31,8 @@ in the encrypted Mini App and decrypted only on the Computer; Tinyhat never
 receives Slack message content. Tinyhat removes slash commands from each
 per-agent manifest so command names cannot collide across apps in one
 workspace.
-It can also create and evolve a one-customer shareable Hat: one private
+It can also create and evolve free shareable Hats with either public access for
+every Tinyhat user or private access for named users: each has one private
 repository, a canonical handle, a share URL, Computer-local credentials, and a
 normal local Git checkout synchronized with exact-repository GitHub leases.
 Each Agent can also use its isolated Tinyhat mailbox directly from its
@@ -80,7 +81,7 @@ non-send JMAP action without routing mail through Tinyloop.
 | `skills/tinyhat-agentphone/SKILL.md` | Provider-direct calls and text messages using this Agent's Computer-local AgentPhone credentials and shell—no separate AgentPhone tool is required; the online provider skill supplies untrusted API guidance inside fixed local safety boundaries. |
 | `skills/tinyhat-mail/SKILL.md` | Direct JMAP guidance for this Agent's own mailbox; receiving and reading use the local tool, sending remains server-controlled, and custom non-send actions use the runtime's pinned `tinyhat-jmap-python`. |
 | `skills/tinyhat-privacy/SKILL.md` | Privacy and trust model guidance: who can see user data, and when. |
-| `skills/hat-authoring/SKILL.md` | Create, list, and inspect one-customer shareable hat shells. |
+| `skills/hat-authoring/SKILL.md` | Create, list, inspect, and manage the audience of free public or private Hats. |
 | `skills/tinyhat-hat-wearing/SKILL.md` | Install or resume an authorized Hat on an existing or newly assigned agent without exposing repository or credential capabilities. |
 | `docs/skill-authoring.md` | The standard for future Tinyhat skills. |
 | `.agents/skills/tinyhat-plugin-skill-authoring/SKILL.md` | Maintainer workflow for adding or changing plugin skills. |
@@ -204,13 +205,13 @@ the user and Agent from the verified Computer assignment; neither tool accepts
 identity or provider-key input. Human top-ups remain in the Configure Mini App
 opened from the user's assigned Agent bot.
 
-`hat-authoring` creates and evolves shareable Hats. For creation, the
-agent collects a name and one customer's work email, plus optional Telegram
-bot username and display-name defaults, then `tinyhat_hats`
+`hat-authoring` creates and evolves free shareable Hats. For creation, the
+agent collects a name, public or private access, optional allowed Tinyhat users,
+and optional Telegram bot username and display-name defaults, then `tinyhat_hats`
 derives the owner and account from the authenticated Computer. The platform
 creates a private repository and returns the canonical handle and share URL.
 The same tool lists up to 100 owner-scoped Hats, retrieves one by key or
-handle, updates its public title, intended customer email, proposed Telegram
+handle, updates its public title, public/private audience, proposed Telegram
 bot defaults, or namespaced handle while preserving its files and local
 credential bundle, and creates or updates guarded non-secret repo files. It
 also retires one exact Hat only after the user explicitly confirms the
@@ -226,11 +227,12 @@ fields. Computer-local presence is checked without returning a value; existing
 values are marked without being disclosed, blank saved fields are preserved,
 and only entered replacements change. One Hat key pair encrypts
 the submitted bundle, which is staged in a per-Hat package store on
-the creator Computer for the intended customer. It is not loaded into the
+the creator Computer for authorized consumers. It is not loaded into the
 authoring agent's Hermes environment, so Hermes is not restarted. The private
-repo records only credential names, purposes, and saved times. The intended customer can verify
-their email on the public page and create a Telegram agent that wears the Hat.
-When that authorized customer installs the Hat, the platform automatically
+repo records only credential names, purposes, and saved times. Any Tinyhat user
+can install a public Hat; a private Hat is restricted to users named by its
+creator. An authorized user can send the Hat URL or handle to an existing agent
+or start from its public page. When they install it, the platform automatically
 dispatches a bounded runtime command to the registered creator Computer; no
 creator approval, chat, or LLM turn is required. The creator plugin encrypts
 the bundle to the consumer Computer's public key and signs the envelope with
