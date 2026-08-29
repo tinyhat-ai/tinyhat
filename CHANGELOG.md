@@ -4,6 +4,8 @@ All notable changes to the Tinyhat plugin are documented here.
 
 ## Unreleased
 
+## 0.32.7 - 2026-08-28
+
 - Reuse an already saved Computer credential by exact name instead of asking
   the owner to submit the same secret again. Agents only open a replacement
   handoff when the owner explicitly asks to replace the saved credential, and
