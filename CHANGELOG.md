@@ -4,6 +4,12 @@ All notable changes to the Tinyhat plugin are documented here.
 
 ## Unreleased
 
+- Make Hats free to install and audience-controlled. Creators can publish a
+  Hat for every Tinyhat user or keep it private to named users, and agents can
+  install an accessible Hat directly from its canonical handle or page URL.
+  Hat creation and installation no longer ask for subscription, price, trial,
+  or checkout details.
+
 ## 0.32.7 - 2026-08-28
 
 - Reuse an already saved Computer credential by exact name instead of asking

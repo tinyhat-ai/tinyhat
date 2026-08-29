@@ -1,4 +1,4 @@
-"""Encrypted Computer-local secret storage for one-customer Hats.
+"""Encrypted Computer-local secret storage for audience-controlled Hats.
 
 Only the encrypted handoff worker calls ``set_hat_secret`` with plaintext.
 Values are immediately re-encrypted with the Hat's stable local key pair

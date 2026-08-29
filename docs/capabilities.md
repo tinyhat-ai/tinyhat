@@ -11,7 +11,7 @@ The current capability list is intentionally small.
 | `tinyhat_openrouter_credit_allocate` | Platform API required | Adds an exact amount of the owner's credit to this Agent's model budget. |
 | `tinyhat_contact_details` | Platform API required | Returns this Agent's managed phone number and email address, and idempotently assigns missing contacts when the platform enables them. It accepts no identity, contact, or credential input. |
 | `tinyhat_mail` | Computer-local mailbox required | Checks, lists, searches, and reads this Agent's isolated Tinyhat inbox and sends one plain-text email when server policy permits it. It never accepts or returns mailbox credentials, server addresses, or account ids. Reads are bounded and sanitized; send retries use a durable request id. |
-| `tinyhat_hats` | Available now | Creates, lists, inspects, renames, and retires one-customer Hats; checks out and syncs private repositories through Computer-scoped GitHub leases; and manages value-blind Hat credentials. Retirement hides a Hat from owner/public/new-install surfaces and deletes creator package state while preserving platform and installation history and already-installed consumer agents. Authorized installation transfers are dispatched automatically to the registered creator Computer, signed there, and decrypted only by the consumer Computer. |
+| `tinyhat_hats` | Available now | Creates free public or named-user-private Hats, manages their audience, and installs an accessible Hat from its URL or handle; checks out and syncs private repositories through Computer-scoped GitHub leases; and manages value-blind Hat credentials. Retirement hides a Hat from owner/public/new-install surfaces and deletes creator package state while preserving platform and installation history and already-installed consumer agents. Authorized installation transfers are dispatched automatically to the registered creator Computer, signed there, and decrypted only by the consumer Computer. |
 | `tinyhat_local_app_sharing` | Platform API and viewer edge required | Creates, lists, and expires short-lived Visuals for visual reports, charts, dashboards, explanations, and previews. Four-digit code access is the default; an agent may explicitly choose public access when anyone holding the complete link should be able to open the Visual. The plugin keeps localhost and port details internal. |
 | `tinyhat_computer_desktop` | Platform desktop gateway required | Creates or reuses a short-lived, interactive desktop connection. The Telegram owner opens it without a code; the same link works in another browser with its six-digit code. |
 | `tinyhat_tell_joke` | Available now | Proves Hermes loaded the Tinyhat plugin and can call a plugin tool. |
@@ -138,17 +138,18 @@ release or deletion, or a URL the provider will call later.
 ## Shareable Hat Authoring
 
 `tinyhat_hats` uses the authenticated Computer identity to derive the owner and
-account; the model never supplies either id. `action=create` requires a name
-and the one customer's work email, creates a private platform-managed repo,
-and returns the canonical handle plus an opaque share URL. Creation also
-accepts optional Telegram bot username and display-name defaults. Every
+account; the model never supplies either id. `action=create` requires a name,
+defaults to a private creator-only audience, optionally accepts public access
+or named Tinyhat users, creates a private platform-managed repo, and returns
+the canonical handle plus an opaque share URL. Creation also accepts optional
+Telegram bot username and display-name defaults. Every
 successful Hat tool result includes elapsed time and bounded tool-input/output
 token estimates; exact billed model usage remains in the surrounding Hermes
 agent-run trace. `action=list`
 returns no more than 100 hats owned by that user in that account, while
 `action=get` accepts a returned key or handle. `action=update` changes one or
-more of the public title, intended customer email, proposed Telegram bot
-username/display name, or final namespaced handle segment. Handle updates preserve the Hat, private repository contents, old
+more of the public title, public/private audience, named-user access, proposed
+Telegram bot username/display name, or final namespaced handle segment. Handle updates preserve the Hat, private repository contents, old
 public-link aliases, and Computer-local credential bundle. `action=put_file`
 creates or updates one relative text path in a commit; secret-shaped paths,
 credential files, private keys, branch deletion, history rewrites, and repo
@@ -161,14 +162,15 @@ checkouts for the current and former handles and creator Computer-local package
 state are also removed. Tinyhat retains the platform and installation history,
 and already-installed consumer agents and their local state are not deleted.
 
-The intended customer verifies their email on the public page, then opens a
-prefilled Telegram managed-bot dialog to create an agent that wears the hat.
-Its Computer still follows the normal approval flow. The agent uses
+An authorized user can send the Hat URL or canonical handle to an existing
+agent for immediate free installation. A new user can start from the Hat page
+and enters the ordinary credit-first Computer onboarding flow with no Hat
+checkout. The agent uses
 `action=define_credential` for each value-blind name and purpose, then calls
 `action=configure_credentials` once. One Mini App page collects all values and
 encrypts the complete bundle with the Hat's Computer-local key pair. The
 creator Computer decrypts and atomically stages the values only in that Hat's
-local package store for its intended customer. It does not load them into the
+local package store for authorized consumers. It does not load them into the
 authoring agent's Hermes environment, so it does not restart Hermes. The
 private Hat repo stores names, purposes, and saved times only.
 `action=list_credentials` returns that metadata plus value-blind local presence
