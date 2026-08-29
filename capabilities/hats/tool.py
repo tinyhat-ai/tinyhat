@@ -99,6 +99,24 @@ def hats(  # noqa: PLR0911, PLR0912, PLR0915 - one public tool dispatches bounde
         name = _required_text(payload, "name") if action == "create" else ""
         update_payload: dict[str, Any] | None = None
         if action == "update":
+            if "allowed_users" in payload:
+                return tool_error_json(
+                    tool="tinyhat_hats",
+                    error_name="invalid_parameter_for_action",
+                    message=(
+                        "Use `add_user` or `remove_user` to change an existing "
+                        "Hat's audience. `allowed_users` is only for create."
+                    ),
+                    expected={
+                        "create": "allowed_users",
+                        "update": "add_user or remove_user",
+                    },
+                    example_call={
+                        "action": "update",
+                        "identifier": identifier,
+                        "add_user": "@buyer",
+                    },
+                )
             update_payload = {"identifier": identifier}
             for field in (
                 "public_title",

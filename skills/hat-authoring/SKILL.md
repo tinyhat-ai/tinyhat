@@ -55,6 +55,10 @@ Changing a Hat to public does not expose its private repository or credential
 values. Removing a user blocks new installations for that user; it does not
 silently uninstall a Hat already running on their Computer.
 
+If the platform reports an unknown or ambiguous user reference, report that
+exact error and ask the creator for a more specific name, Telegram handle, or
+verified email. Never guess a different user.
+
 The account namespace is derived from the Computer and cannot be changed by
 the model. A handle change renames the existing private repository, preserves
 the Hat and its files, keeps former public links resolving to the Hat, and

@@ -236,7 +236,7 @@ def start_hat_credentials_handoff(hat_identifier: str) -> str:
         f"credential{'s' if count != 1 else ''}. Edit the values together on that page; "
         "saved values can stay blank when they should be kept. "
         "They are encrypted together and staged only in the Hat's local package "
-        "store for its intended customer. They are not loaded into this agent's "
+        "store for authorized consumers. They are not loaded into this agent's "
         "Hermes environment, so Hermes is not restarted."
     )
 

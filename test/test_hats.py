@@ -135,6 +135,41 @@ class HatToolTests(unittest.TestCase):
         self.assertTrue(result["installation_started"])
         self.assertEqual(client.post_calls[1][1]["head_sha"], "a" * 40)
 
+    def test_wear_forwards_tinyhat_url_unchanged(self) -> None:
+        class ActiveInstallationClient(FakePlatformClient):
+            def post_json(self, path: str, payload: dict[str, str]) -> dict[str, object]:
+                self.post_calls.append((path, payload))
+                return {
+                    "installation_id": "hti_12345678",
+                    "hat_handle": "acme/hats/research",
+                    "hat_title": "Research",
+                    "status": "active",
+                    "source": "existing_agent",
+                }
+
+        client = ActiveInstallationClient()
+        hat_url = "https://tinyhat.ai/acme/hats/research"
+        with mock.patch.object(
+            hats_module,
+            "build_platform_client",
+            return_value=(client, "local_dev"),
+        ):
+            result = json.loads(
+                hats_module.hats({"action": "wear", "identifier": hat_url})
+            )
+
+        self.assertEqual(
+            client.post_calls,
+            [
+                (
+                    "/hapi/v1/computers/local-dev/hats/v1/wear",
+                    {"identifier": hat_url},
+                )
+            ],
+        )
+        self.assertEqual(result["status"], "active")
+        self.assertFalse(result["installation_started"])
+
     def test_repository_checkout_uses_runtime_without_platform_proxy(self) -> None:
         with (
             mock.patch.object(
@@ -330,6 +365,27 @@ class HatToolTests(unittest.TestCase):
                 ),
             ],
         )
+
+    def test_update_rejects_allowed_users_replace(self) -> None:
+        client = FakePlatformClient()
+        with mock.patch.object(
+            hats_module,
+            "build_platform_client",
+            return_value=(client, "local_dev"),
+        ):
+            result = json.loads(
+                hats_module.hats(
+                    {
+                        "action": "update",
+                        "identifier": "acme/hats/forecasting",
+                        "allowed_users": ["@buyer"],
+                    }
+                )
+            )
+
+        self.assertEqual(result["error"], "invalid_parameter_for_action")
+        self.assertIn("add_user", result["message"])
+        self.assertEqual(client.post_calls, [])
 
     def test_update_can_change_audience_and_handle_without_recreating_hat(
         self,

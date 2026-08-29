@@ -109,18 +109,20 @@ boundaries, progressive-disclosure structure, length discipline, safety checks,
 and validation checklist used for the plugin itself. `hat-authoring` requires
 this skill before it writes any `SKILL.md` into a Hat repository.
 
-`hat-authoring` is the M1 create/list/inspect path for shareable hats. It gets
-the human name and one customer's work email before create, accepts optional
-Telegram bot username and display-name defaults, can update either default
-later, never asks the model for owner or account ids, calls `tinyhat_hats`, and reports the
-platform-returned handle and share URL. The public page owns email verification
-and Telegram agent creation; the skill must not imply that repository content
-or hat credentials are already populated. Credential authoring defines names
-and purposes without values, then opens one encrypted bundle form after all
-fields are ready. The bundle is staged in the Hat's Computer-local package
-store for its intended customer, not loaded into the authoring Hermes
-environment, and does not trigger a Hermes restart. Credential inspection
-uses Computer-local name presence when available and never turns an unavailable
+`hat-authoring` is the create/list/inspect path for free shareable Hats. It gets
+the human name, asks whether access is public or private, and accepts exact
+Tinyhat user names, Telegram handles, or verified emails in `allowed_users`
+when a new private Hat needs a named audience. It can update access with
+`access_mode`, `add_user`, and `remove_user`, accepts optional Telegram bot
+username and display-name defaults, never asks the model for owner or account
+ids, calls `tinyhat_hats`, and reports the platform-returned handle and share
+URL. An authorized user can install from that URL or the canonical handle; the
+platform resolves identity and enforces the audience. Credential authoring
+defines names and purposes without values, then opens one encrypted bundle form
+after all fields are ready. The bundle is staged in the Hat's Computer-local
+package store for authorized consumers, not loaded into the authoring Hermes
+environment, and does not trigger a Hermes restart. Credential inspection uses
+Computer-local name presence when available and never turns an unavailable
 local check into a false `No`.
 
 For new `tinyhat-ai` Hat repositories, `hat-authoring` checks out a normal
