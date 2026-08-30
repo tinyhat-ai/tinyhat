@@ -9,6 +9,7 @@ import json
 import os
 import re
 import tempfile
+import unicodedata
 from dataclasses import dataclass, field
 from html.parser import HTMLParser
 from pathlib import Path
@@ -25,10 +26,13 @@ DEFAULT_LIMIT = 10
 MAX_LIMIT = 20
 MAX_POSITION = 10_000
 MAX_BODY_CHARS = 6_000
+MAX_BODY_VALUE_BYTES = 1_000_000
 MAX_HTTP_BYTES = 2_000_000
 MAX_ATTACHMENTS = 10
 MAX_RECIPIENTS = 20
 MAX_DISPLAYED_ADDRESSES = 3
+MAX_DISPLAYED_LINKS = 10
+MAX_LINK_URL_CHARS = 2_048
 MAX_TOOL_OUTPUT_CHARS = 24_000
 MIN_IDEMPOTENCY_KEY_CHARS = 8
 MAX_EMAIL_ADDRESS_CHARS = 254
@@ -357,7 +361,7 @@ def _read_message(session: JmapSession, args: dict[str, Any]) -> dict[str, Any]:
                     ],
                     "fetchTextBodyValues": True,
                     "fetchHTMLBodyValues": True,
-                    "maxBodyValueBytes": MAX_BODY_CHARS,
+                    "maxBodyValueBytes": MAX_BODY_VALUE_BYTES,
                     "bodyProperties": ["partId", "type", "name", "size"],
                 },
                 "message",
@@ -689,23 +693,43 @@ def _plain_text_body(item: dict[str, Any]) -> str:
         return _sanitize_content(item.get("preview"), maximum=500)
     plain_parts = _body_part_values(item.get("textBody"), values)
     html_parts = _body_part_values(item.get("htmlBody"), values)
+    parsed_html_parts = [_html_text_and_links(value) for value in html_parts]
+    html_links = [link for _, links in parsed_html_parts for link in links]
     if plain_parts:
         plain_text = "\n\n".join(plain_parts)
-        html_links = [
-            link
-            for value in html_parts
-            for link in _html_text_and_links(value)[1]
-            if link not in plain_text
-        ]
-        if html_links:
-            plain_text += "\n\nLinks from the HTML version:\n" + "\n".join(html_links)
-        return _sanitize_content(plain_text, maximum=MAX_BODY_CHARS)
-    if html_parts:
-        return _sanitize_content(
-            "\n\n".join(_html_to_text(value) for value in html_parts),
-            maximum=MAX_BODY_CHARS,
-        )
+        return _content_with_html_links(plain_text, html_links)
+    if parsed_html_parts:
+        html_text = "\n\n".join(text for text, _ in parsed_html_parts)
+        rendered = _content_with_html_links(html_text, html_links)
+        if rendered:
+            return rendered
     return _sanitize_content(item.get("preview"), maximum=500)
+
+
+def _content_with_html_links(value: str, links: list[str]) -> str:
+    rendered = _sanitize_content(value, maximum=MAX_BODY_CHARS)
+    missing_links: list[str] = []
+    for link in links:
+        if link in rendered or link in missing_links:
+            continue
+        missing_links.append(link)
+        if len(missing_links) == MAX_DISPLAYED_LINKS:
+            break
+    if not missing_links:
+        return rendered
+
+    link_lines = ["Links from the HTML version:"]
+    for link in missing_links:
+        candidate = "\n".join([*link_lines, link])
+        if len(candidate) > MAX_BODY_CHARS:
+            break
+        link_lines.append(link)
+    link_block = "\n".join(link_lines)
+    body_budget = max(0, MAX_BODY_CHARS - len(link_block) - 2)
+    rendered = _sanitize_content(value, maximum=body_budget)
+    if rendered:
+        return f"{rendered}\n\n{link_block}"
+    return link_block
 
 
 def _body_part_values(parts: Any, values: dict[str, Any]) -> list[str]:
@@ -790,15 +814,17 @@ class _EmailHTMLTextExtractor(HTMLParser):
 def _usable_message_link(value: str | None) -> str | None:
     if not isinstance(value, str):
         return None
-    cleaned = html.unescape(value).strip()
+    cleaned = value.strip()
+    if (
+        not cleaned
+        or len(cleaned) > MAX_LINK_URL_CHARS
+        or any(ch.isspace() or unicodedata.category(ch).startswith("C") for ch in cleaned)
+    ):
+        return None
     parsed = parse.urlsplit(cleaned)
     if parsed.scheme.lower() not in {"http", "https"} or not parsed.netloc:
         return None
     return cleaned
-
-
-def _html_to_text(value: str) -> str:
-    return _html_text_and_links(value)[0]
 
 
 def _html_text_and_links(value: str) -> tuple[str, list[str]]:

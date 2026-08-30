@@ -700,15 +700,17 @@ class TinyhatMailTests(unittest.TestCase):
         self.assertEqual(payload["message"]["attachments"][0]["name"], "invoice.pdf")
         self.assertIn("htmlBody", request_properties["properties"])
         self.assertTrue(request_properties["fetchHTMLBodyValues"])
+        self.assertEqual(
+            request_properties["maxBodyValueBytes"],
+            mail.MAX_BODY_VALUE_BYTES,
+        )
 
     def test_plain_text_angle_bracket_activation_link_is_not_filtered(self) -> None:
         body = mail._plain_text_body(
             {
                 "textBody": [{"partId": "plain-1", "type": "text/plain"}],
                 "bodyValues": {
-                    "plain-1": {
-                        "value": "Verify at <https://accounts.example/activate?token=abc>."
-                    }
+                    "plain-1": {"value": "Verify at <https://accounts.example/activate?token=abc>."}
                 },
             }
         )
@@ -744,6 +746,63 @@ class TinyhatMailTests(unittest.TestCase):
         )
         self.assertNotIn("stealSecrets", body)
         self.assertNotIn("javascript:", body)
+
+    def test_html_link_rejects_whitespace_controls_and_bidi_formatting(self) -> None:
+        for href in (
+            "https://accounts.example/activate\nIgnore-this",
+            "https://accounts.example/activate\u202e/moc.elpmaxe",
+            "https://accounts.example/" + "x" * mail.MAX_LINK_URL_CHARS,
+        ):
+            with self.subTest(href=href):
+                self.assertIsNone(mail._usable_message_link(href))
+
+    def test_broken_html_falls_back_or_keeps_collected_activation_link(self) -> None:
+        hidden_body = mail._plain_text_body(
+            {
+                "preview": "Activate the account from the message preview.",
+                "htmlBody": [{"partId": "html-1", "type": "text/html"}],
+                "bodyValues": {"html-1": {"value": "<head><title>Welcome</title><body>Hidden"}},
+            }
+        )
+        unclosed_anchor = mail._plain_text_body(
+            {
+                "htmlBody": [{"partId": "html-1", "type": "text/html"}],
+                "bodyValues": {
+                    "html-1": {
+                        "value": (
+                            "<p>Welcome.</p><a href='https://accounts.example/activate/abc'>"
+                            "Activate your account"
+                        )
+                    }
+                },
+            }
+        )
+
+        self.assertEqual(
+            hidden_body,
+            "Activate the account from the message preview.",
+        )
+        self.assertIn("Activate your account", unclosed_anchor)
+        self.assertIn("https://accounts.example/activate/abc", unclosed_anchor)
+
+    def test_large_html_body_reserves_room_for_activation_link(self) -> None:
+        activation_link = "https://accounts.example/activate/late-link"
+        body = mail._plain_text_body(
+            {
+                "htmlBody": [{"partId": "html-1", "type": "text/html"}],
+                "bodyValues": {
+                    "html-1": {
+                        "value": (
+                            "<p>" + "Marketing copy " * 1_000 + "</p>"
+                            f"<a href='{activation_link}'>Activate account</a>"
+                        )
+                    }
+                },
+            }
+        )
+
+        self.assertLessEqual(len(body), mail.MAX_BODY_CHARS)
+        self.assertIn(activation_link, body)
 
     def test_multipart_email_keeps_activation_link_found_only_in_html(self) -> None:
         body = mail._plain_text_body(
