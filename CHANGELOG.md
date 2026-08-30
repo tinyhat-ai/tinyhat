@@ -4,6 +4,14 @@ All notable changes to the Tinyhat plugin are documented here.
 
 ## Unreleased
 
+## 0.32.9 - 2026-08-29
+
+- Let Agents use their Tinyhat mailbox like a normal email account during an
+  owner-authorized task: read verification codes, follow activation and sign-in
+  links, and use needed attachments. HTML-only, large, and mildly malformed
+  messages keep their safe HTTPS links while scripts, remote content, private
+  blob identifiers, and unrelated sensitive instructions remain inert.
+
 ## 0.32.8 - 2026-08-29
 
 - Make Hats free to install and audience-controlled. Creators can publish a
