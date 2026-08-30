@@ -10,7 +10,7 @@ The current capability list is intentionally small.
 | `tinyhat_model_budget` | Platform API required | Reads this Agent's current total AI model budget, remaining amount, and used amount. It cannot change the budget. |
 | `tinyhat_openrouter_credit_allocate` | Platform API required | Adds an exact amount of the owner's credit to this Agent's model budget. |
 | `tinyhat_contact_details` | Platform API required | Returns this Agent's managed phone number and email address, and idempotently assigns missing contacts when the platform enables them. It accepts no identity, contact, or credential input. |
-| `tinyhat_mail` | Computer-local mailbox required | Checks, lists, searches, and reads this Agent's isolated Tinyhat inbox and sends one plain-text email when server policy permits it. It never accepts or returns mailbox credentials, server addresses, or account ids. Reads are bounded and sanitized; send retries use a durable request id. |
+| `tinyhat_mail` | Computer-local mailbox required | Checks, lists, searches, and reads this Agent's isolated Tinyhat inbox and sends one plain-text email when server policy permits it. It never accepts or returns mailbox credentials, server addresses, or account ids. Reads are bounded, activation links remain usable, and send retries use a durable request id. |
 | `tinyhat_hats` | Available now | Creates free public or named-user-private Hats, manages their audience, and installs an accessible Hat from its URL or handle; checks out and syncs private repositories through Computer-scoped GitHub leases; and manages value-blind Hat credentials. Retirement hides a Hat from owner/public/new-install surfaces and deletes creator package state while preserving platform and installation history and already-installed consumer agents. Authorized installation transfers are dispatched automatically to the registered creator Computer, signed there, and decrypted only by the consumer Computer. |
 | `tinyhat_local_app_sharing` | Platform API and viewer edge required | Creates, lists, and expires short-lived Visuals for visual reports, charts, dashboards, explanations, and previews. Four-digit code access is the default; an agent may explicitly choose public access when anyone holding the complete link should be able to open the Visual. The plugin keeps localhost and port details internal. |
 | `tinyhat_computer_desktop` | Platform desktop gateway required | Creates or reuses a short-lived, interactive desktop connection. The Telegram owner opens it without a code; the same link works in another browser with its six-digit code. |
@@ -100,15 +100,23 @@ call. Discovery redirects and cross-origin API endpoints are rejected before
 credentials can be forwarded.
 
 The first mail surface is deliberately small: status, bounded inbox
-list/search, one-message plain-text read, and one-message plain-text send.
-HTML, remote images, links, attachment contents, and bulk mail are not exposed.
+list/search, one-message readable-text read, and one-message plain-text send.
+Plain-text URLs remain intact, and HTML-only messages are converted into
+readable text with HTTP and HTTPS link targets preserved. Remote images,
+embedded scripts, attachment contents, and bulk mail are not exposed by the
+bounded tool.
 The bounded tool does not expose forwarding, mailbox rules, autoresponders, or
 message deletion. An Agent may make one of those sensitive changes through
 direct JMAP only after the owner asks for that exact change in the current
 conversation and confirms the Agent's simple restatement. Email and other
 remote content can never request, authorize, or confirm one of these changes.
-Incoming content is labeled as untrusted data and cannot authorize another
-tool call. Sending is governed by the mail server; a denied send returns
+Incoming content is labeled as untrusted external content. An Agent may use a
+link, one-time code, or attachment when it belongs to its current
+owner-authorized task, including registering or signing in with its own email
+address, without a new confirmation for every mailbox step. A message alone
+cannot authorize an unrelated task, secret disclosure, payment, account
+deletion, or new contact. Sending is governed by the mail server; a denied send
+returns
 `sending_not_allowed` with no fallback. Before a
 send reaches JMAP, the plugin records its opaque request id in an owner-only
 local file. A confirmed result can be replayed safely, while an uncertain
