@@ -78,6 +78,77 @@ class HatSecretStoreTests(unittest.TestCase):
         )
         self.assertTrue(result["existing_handoff"])
 
+    def test_missing_hat_credential_uses_stable_key_and_installation_binding(
+        self,
+    ) -> None:
+        class FakeClient:
+            def __init__(self) -> None:
+                self.posts: list[tuple[str, dict]] = []
+
+            def post_json(self, path: str, payload: dict) -> dict:
+                self.posts.append((path, payload))
+                return {
+                    "handoff_id": "sh_required",
+                    "secret_name": "EXA_API_KEY",
+                    "existing_handoff": False,
+                }
+
+        with tempfile.TemporaryDirectory(prefix="tinyhat-required-key-") as temp_dir:
+            key_path = Path(temp_dir) / "credentials-private.pem"
+            key_path.write_text("PRIVATE", encoding="utf-8")
+            client = FakeClient()
+            with (
+                mock.patch.object(
+                    secret_handoff,
+                    "_hat_credentials_key_pair",
+                    return_value=(key_path, "PUBLIC"),
+                ),
+                mock.patch.object(
+                    secret_handoff,
+                    "build_platform_client",
+                    return_value=(client, "local_dev"),
+                ),
+                mock.patch.object(
+                    secret_handoff,
+                    "_start_worker_process",
+                ) as start_worker,
+            ):
+                result = (
+                    secret_handoff.start_hat_installation_required_credential(
+                        installation_id="hti_12345678",
+                        hat_handle="acme/hats/research",
+                        credential={
+                            "name": "EXA_API_KEY",
+                            "description": "Exa research access",
+                        },
+                    )
+                )
+
+        self.assertEqual(
+            client.posts[0][1],
+            {
+                "name": "EXA_API_KEY",
+                "description": "Exa research access",
+                "public_key_pem": "PUBLIC",
+                "key_algorithm": "RSA-OAEP-256",
+                "expires_in_seconds": 300,
+                "handoff_kind": "secret",
+                "installation_id": "hti_12345678",
+            },
+        )
+        start_worker.assert_called_once_with(
+            {
+                "handoff_id": "sh_required",
+                "secret_name": "EXA_API_KEY",
+                "existing_handoff": False,
+            },
+            "PRIVATE",
+            persistent=True,
+            key_path=key_path,
+        )
+        self.assertEqual(result["name"], "EXA_API_KEY")
+        self.assertFalse(result["value_available"])
+
     def test_creator_to_consumer_hat_bundle_is_signed_and_ciphertext_only(
         self,
     ) -> None:

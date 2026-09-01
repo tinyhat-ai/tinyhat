@@ -159,9 +159,14 @@ purpose text appear in the public Tools list.
    repository-mutation actions in parallel. If a credential definition changes
    after checkout, call `repository_checkout` again before inspecting status or
    syncing files so the local base matches the new remote head.
-3. After every field is defined, call `tinyhat_hats` once with
-   `action="configure_credentials"` and the Hat `identifier`.
-4. Tinyhat sends one expiring **Enter credentials** button. The user sees every
+3. Ask whether the creator wants to supply shared values or leave the fields for
+   each installer to provide. Do not call `configure_credentials` when the
+   creator leaves them installer-supplied. The value-less definitions are
+   complete: after installation, the consuming agent reuses matching existing
+   Computer credentials and securely guides the user through any missing ones.
+4. Only when the creator chooses to bundle shared values, call `tinyhat_hats`
+   once with `action="configure_credentials"` and the Hat `identifier`. Tinyhat
+   sends one expiring **Enter credentials** button. The user sees every
    field on one page. Fields with a Computer-local value are marked as saved
    without revealing that value; leaving one blank preserves it, while an
    entered value replaces only that field. New fields are required. The browser

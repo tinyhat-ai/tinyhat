@@ -279,6 +279,9 @@ def start_hat_installation_credentials(
                 "existing_handoff": False,
                 "expires_at": None,
                 "value_available": False,
+                "setup_required": bool(handoff.get("setup_required")),
+                "missing_credentials": handoff.get("missing_credentials") or [],
+                "reused_credentials": handoff.get("reused_credentials") or [],
             }
         returned_handle = normalize_hat_handle(str(handoff.get("hat_handle") or ""))
         if returned_handle != clean_handle:
@@ -308,6 +311,62 @@ def start_hat_installation_credentials(
         "credential_count": len(handoff.get("credentials") or []),
         "existing_handoff": bool(handoff.get("existing_handoff")),
         "expires_at": handoff.get("expires_at"),
+        "value_available": False,
+        "setup_required": bool(handoff.get("missing_credentials")),
+        "missing_credentials": handoff.get("missing_credentials") or [],
+        "reused_credentials": handoff.get("reused_credentials") or [],
+    }
+
+
+def start_hat_installation_required_credential(
+    *,
+    installation_id: str,
+    hat_handle: str,
+    credential: dict[str, Any],
+) -> dict[str, Any]:
+    """Open one encrypted form for an installer-provided Hat credential."""
+
+    clean_installation_id = str(installation_id or "").strip()
+    clean_handle = normalize_hat_handle(hat_handle)
+    name = normalize_secret_name(str(credential.get("name") or ""))
+    description = _clean_description(credential.get("description")) or (
+        f"Credential required by {clean_handle}."
+    )
+    if not clean_installation_id:
+        raise SecretHandoffError("The Hat installation id is missing.")
+    private_key_path, public_key_pem = _hat_credentials_key_pair(clean_handle)
+    client, platform_auth = build_platform_client()
+    try:
+        handoff = client.post_json(
+            computer_api_path(platform_auth, "private-secret-handoffs/v1"),
+            {
+                "name": name,
+                "description": description,
+                "public_key_pem": public_key_pem,
+                "key_algorithm": KEY_ALGORITHM,
+                "expires_in_seconds": DEFAULT_EXPIRES_IN_SECONDS,
+                "handoff_kind": "secret",
+                "installation_id": clean_installation_id,
+            },
+        )
+        _start_worker_process(
+            handoff,
+            private_key_path.read_text(encoding="utf-8"),
+            persistent=True,
+            key_path=private_key_path,
+        )
+    except (PlatformError, HatSecretStoreError, OSError) as exc:
+        raise SecretHandoffError(
+            "Could not start the required Hat credential setup.",
+            public_message=(
+                f"I loaded the Hat skills, but could not open secure setup for {name}."
+            ),
+        ) from exc
+    return {
+        "handoff_id": str(handoff.get("handoff_id") or ""),
+        "name": name,
+        "description": description,
+        "existing_handoff": bool(handoff.get("existing_handoff")),
         "value_available": False,
     }
 

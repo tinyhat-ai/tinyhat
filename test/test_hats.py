@@ -132,8 +132,205 @@ class HatToolTests(unittest.TestCase):
             hat_handle="acme/hats/research",
         )
         self.assertEqual(result["status"], "credentials_pending")
+        self.assertEqual(result["outcome"], "creator_credentials_pending")
         self.assertTrue(result["installation_started"])
         self.assertEqual(client.post_calls[1][1]["head_sha"], "a" * 40)
+
+    def test_wear_reuses_existing_credential_without_opening_setup(self) -> None:
+        class ConsumerClient(FakePlatformClient):
+            def post_json(self, path: str, payload: dict[str, str]) -> dict[str, object]:
+                self.post_calls.append((path, payload))
+                if path.endswith("/wear"):
+                    return {
+                        "installation_id": "hti_12345678",
+                        "hat_handle": "acme/hats/research",
+                        "hat_title": "Research",
+                        "status": "skills_pending",
+                    }
+                return {
+                    "installation_id": "hti_12345678",
+                    "hat_handle": "acme/hats/research",
+                    "hat_title": "Research",
+                    "status": "credentials_pending",
+                }
+
+        client = ConsumerClient()
+        with (
+            mock.patch.object(
+                hats_module,
+                "build_platform_client",
+                return_value=(client, "local_dev"),
+            ),
+            mock.patch.object(
+                hats_module,
+                "run_hat_repository",
+                return_value={"path": "/tmp/hat", "head_sha": "a" * 40},
+            ),
+            mock.patch.object(
+                hats_module,
+                "install_hat_skills",
+                return_value={"count": 1},
+            ),
+            mock.patch.object(
+                hats_module,
+                "start_hat_installation_credentials",
+                return_value={
+                    "handoff_id": None,
+                    "credential_count": 0,
+                    "missing_credentials": [],
+                    "reused_credentials": [
+                        {
+                            "name": "EXA_API_KEY",
+                            "description": "Exa research access",
+                            "has_existing_value": True,
+                        }
+                    ],
+                },
+            ),
+            mock.patch.object(
+                hats_module,
+                "start_hat_installation_required_credential",
+            ) as setup,
+        ):
+            result = json.loads(
+                hats_module.hats(
+                    {"action": "wear", "identifier": "acme/hats/research"}
+                )
+            )
+
+        setup.assert_not_called()
+        self.assertEqual(result["status"], "active")
+        self.assertEqual(result["outcome"], "credentials_ready")
+        self.assertEqual(
+            result["credential_transfer"]["reused_credentials"][0]["name"],
+            "EXA_API_KEY",
+        )
+
+    def test_wear_opens_secure_setup_for_first_missing_credential(self) -> None:
+        class ConsumerClient(FakePlatformClient):
+            def post_json(self, path: str, payload: dict[str, str]) -> dict[str, object]:
+                self.post_calls.append((path, payload))
+                if path.endswith("/wear"):
+                    return {
+                        "installation_id": "hti_12345678",
+                        "hat_handle": "acme/hats/research",
+                        "hat_title": "Research",
+                        "status": "skills_pending",
+                    }
+                return {
+                    "installation_id": "hti_12345678",
+                    "hat_handle": "acme/hats/research",
+                    "hat_title": "Research",
+                    "status": "credentials_pending",
+                }
+
+        client = ConsumerClient()
+        missing = {
+            "name": "EXA_API_KEY",
+            "description": "Exa research access",
+            "has_existing_value": False,
+        }
+        with (
+            mock.patch.object(
+                hats_module,
+                "build_platform_client",
+                return_value=(client, "local_dev"),
+            ),
+            mock.patch.object(
+                hats_module,
+                "run_hat_repository",
+                return_value={"path": "/tmp/hat", "head_sha": "a" * 40},
+            ),
+            mock.patch.object(
+                hats_module,
+                "install_hat_skills",
+                return_value={"count": 1},
+            ),
+            mock.patch.object(
+                hats_module,
+                "start_hat_installation_credentials",
+                return_value={
+                    "handoff_id": None,
+                    "credential_count": 0,
+                    "setup_required": True,
+                    "missing_credentials": [missing],
+                    "reused_credentials": [],
+                },
+            ),
+            mock.patch.object(
+                hats_module,
+                "start_hat_installation_required_credential",
+                return_value={
+                    "handoff_id": "sh_setup_12345678",
+                    "name": "EXA_API_KEY",
+                    "description": "Exa research access",
+                    "value_available": False,
+                },
+            ) as setup,
+        ):
+            result = json.loads(
+                hats_module.hats(
+                    {"action": "wear", "identifier": "acme/hats/research"}
+                )
+            )
+
+        setup.assert_called_once_with(
+            installation_id="hti_12345678",
+            hat_handle="acme/hats/research",
+            credential=missing,
+        )
+        self.assertEqual(result["status"], "credentials_pending")
+        self.assertEqual(result["outcome"], "user_credential_required")
+        self.assertEqual(result["credential_setup"]["name"], "EXA_API_KEY")
+        self.assertIn("provider's official site", result["agent_instruction"])
+
+    def test_wear_fails_closed_when_setup_credential_is_not_named(self) -> None:
+        class ConsumerClient(FakePlatformClient):
+            def post_json(self, path: str, payload: dict[str, str]) -> dict[str, object]:
+                self.post_calls.append((path, payload))
+                return {
+                    "installation_id": "hti_12345678",
+                    "hat_handle": "acme/hats/research",
+                    "hat_title": "Research",
+                    "status": "credentials_pending",
+                }
+
+        with (
+            mock.patch.object(
+                hats_module,
+                "build_platform_client",
+                return_value=(ConsumerClient(), "local_dev"),
+            ),
+            mock.patch.object(
+                hats_module,
+                "run_hat_repository",
+                return_value={"path": "/tmp/hat", "head_sha": "a" * 40},
+            ),
+            mock.patch.object(
+                hats_module,
+                "install_hat_skills",
+                return_value={"count": 1},
+            ),
+            mock.patch.object(
+                hats_module,
+                "start_hat_installation_credentials",
+                return_value={
+                    "handoff_id": None,
+                    "credential_count": 0,
+                    "setup_required": True,
+                    "missing_credentials": [],
+                    "reused_credentials": [],
+                },
+            ),
+        ):
+            result = json.loads(
+                hats_module.hats(
+                    {"action": "wear", "identifier": "acme/hats/research"}
+                )
+            )
+
+        self.assertEqual(result["error"], "platform_request_failed")
+        self.assertIn("without naming a credential", result["message"])
 
     def test_wear_forwards_tinyhat_url_unchanged(self) -> None:
         class ActiveInstallationClient(FakePlatformClient):
@@ -984,6 +1181,8 @@ class HatToolTests(unittest.TestCase):
             ),
         )
         self.assertIn("configure_credentials", defined["agent_instruction"])
+        self.assertIn("installer-supplied", defined["agent_instruction"])
+        self.assertIn("do not call it", defined["agent_instruction"])
         start_bundle.assert_called_once_with("acme/hats/forecasting")
         self.assertEqual(configured, "One encrypted form sent.")
 
