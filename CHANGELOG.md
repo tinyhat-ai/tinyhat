@@ -4,6 +4,8 @@ All notable changes to the Tinyhat plugin are documented here.
 
 ## Unreleased
 
+## 0.32.10 - 2026-09-01
+
 - When a Hat creator leaves a tool credential for each installer to provide,
   reuse an existing Computer credential with the same name. If it is missing,
   guide the user to the provider and open Tinyhat's secure Credentials form
