@@ -4,6 +4,12 @@ All notable changes to the Tinyhat plugin are documented here.
 
 ## Unreleased
 
+- When a Hat creator leaves a tool credential for each installer to provide,
+  reuse an existing Computer credential with the same name. If it is missing,
+  guide the user to the provider and open Tinyhat's secure Credentials form
+  instead of asking for a secret in chat. Creator-provided credential bundles
+  continue to transfer as encrypted ciphertext.
+
 ## 0.32.9 - 2026-08-29
 
 - Let Agents use their Tinyhat mailbox like a normal email account during an

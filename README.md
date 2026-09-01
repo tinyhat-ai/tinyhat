@@ -240,7 +240,12 @@ creator approval, chat, or LLM turn is required. The creator plugin encrypts
 the bundle to the consumer Computer's public key and signs the envelope with
 the Hat's local private key. The consumer verifies the registered creator
 public key before decrypting with its own private key. Tinyhat stores and
-relays only the short-lived authenticated ciphertext envelope.
+relays only the short-lived authenticated ciphertext envelope. A credential
+the creator defines but leaves without a value is supplied by the installing
+user instead. Installation first reuses an exact credential already available
+on that Computer. If none exists, the agent sends the ordinary encrypted
+Tinyhat Credentials form, helps the user find the provider's official account
+or credential page, and resumes installation after the value is saved.
 
 For repositories in `tinyhat-ai`, Hat authoring uses the public runtime's local
 Git helper. Tinyhat grants the assigned Computer one short-lived installation

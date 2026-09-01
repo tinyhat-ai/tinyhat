@@ -11,13 +11,13 @@ The current capability list is intentionally small.
 | `tinyhat_openrouter_credit_allocate` | Platform API required | Adds an exact amount of the owner's credit to this Agent's model budget. |
 | `tinyhat_contact_details` | Platform API required | Returns this Agent's managed phone number and email address, and idempotently assigns missing contacts when the platform enables them. It accepts no identity, contact, or credential input. |
 | `tinyhat_mail` | Computer-local mailbox required | Checks, lists, searches, and reads this Agent's isolated Tinyhat inbox and sends one plain-text email when server policy permits it. It never accepts or returns mailbox credentials, server addresses, or account ids. Reads are bounded, activation links remain usable, and send retries use a durable request id. |
-| `tinyhat_hats` | Available now | Creates free public or named-user-private Hats, manages their audience, and installs an accessible Hat from its URL or handle; checks out and syncs private repositories through Computer-scoped GitHub leases; and manages value-blind Hat credentials. Retirement hides a Hat from owner/public/new-install surfaces and deletes creator package state while preserving platform and installation history and already-installed consumer agents. Authorized installation transfers are dispatched automatically to the registered creator Computer, signed there, and decrypted only by the consumer Computer. |
+| `tinyhat_hats` | Available now | Creates free public or named-user-private Hats, manages their audience, and installs an accessible Hat from its URL or handle; checks out and syncs private repositories through Computer-scoped GitHub leases; and manages value-blind Hat credentials. Retirement hides a Hat from owner/public/new-install surfaces and deletes creator package state while preserving platform and installation history and already-installed consumer agents. Authorized creator-provided credentials transfer automatically between Computers. Creator-omitted credentials reuse an exact existing Computer credential or open encrypted Tinyhat Credentials setup for the installing user. |
 | `tinyhat_local_app_sharing` | Platform API and viewer edge required | Creates, lists, and expires short-lived Visuals for visual reports, charts, dashboards, explanations, and previews. Four-digit code access is the default; an agent may explicitly choose public access when anyone holding the complete link should be able to open the Visual. The plugin keeps localhost and port details internal. |
 | `tinyhat_computer_desktop` | Platform desktop gateway required | Creates or reuses a short-lived, interactive desktop connection. The Telegram owner opens it without a code; the same link works in another browser with its six-digit code. |
 | `tinyhat_tell_joke` | Available now | Proves Hermes loaded the Tinyhat plugin and can call a plugin tool. |
 | `tinyhat_skill_catalog` | Available now | Lists Tinyhat plugin skills with `tinyhat:<skill>` qualified names and unqualified aliases. |
 | `tinyhat-skill-authoring` skill | Available now | Teaches agents to write portable user skills with valid names, explicit trigger and non-trigger boundaries, progressive disclosure, and bounded context size. |
-| `tinyhat-hat-wearing` skill | Available now | Authorizes a full Hat handle, checks out its private repository read-only, installs namespaced skills, and coordinates ciphertext-only creator-to-consumer credential delivery. |
+| `tinyhat-hat-wearing` skill | Available now | Authorizes a full Hat handle, checks out its private repository read-only, installs namespaced skills, coordinates ciphertext-only creator delivery, reuses existing credentials, and guides secure setup only for credentials still missing. |
 | `tinyhat-onboarding-greeting` skill | Available now | Guides the newly configured Agent to introduce its broader purpose first, then briefly share its available phone number and email address as optional ways to stay in contact. |
 | `tinyhat-agentphone` skill | Available now | Loads AgentPhone's current online skill and uses this Agent's Computer-local provider credentials directly through the shell for calls and text messages. It does not require a separate AgentPhone tool. |
 | `tinyhat_private_secret_handoff` | Available now | Lets a user enter a secret in a Telegram Mini App while Tinyhat stores only short-lived ciphertext. |
@@ -187,6 +187,14 @@ instead of a false negative when that store cannot be checked.
 `action=remove_credential` deletes the local value and then the metadata. The Hat preview can reopen the
 encrypted bundle form after its first Computer-keyed setup. No runtime change
 or gateway restart is required when credential values change.
+
+When a creator intentionally leaves a defined Hat credential without a value,
+the installing Computer owns that credential. Tinyhat checks its existing
+value-blind credential list by exact env-style name. A match is reused without
+another form. Otherwise the plugin opens one browser-encrypted Tinyhat
+Credentials form, the agent guides the user to the provider's official account
+or credential page when needed, and a durable resume continues installation
+after the Computer saves and reloads the value.
 
 New Hat repositories live in `tinyhat-ai`. For authoring, the assigned
 Computer calls `repository_checkout`, edits a normal local clone, and calls

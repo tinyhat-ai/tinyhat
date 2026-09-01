@@ -13,6 +13,7 @@ from ..secrets.handoff import (
     SecretHandoffError,
     start_hat_credentials_handoff,
     start_hat_installation_credentials,
+    start_hat_installation_required_credential,
 )
 from .repository import HatRepositoryRuntimeError, run_hat_repository
 from .secrets import (
@@ -493,8 +494,11 @@ def hats(  # noqa: PLR0911, PLR0912, PLR0915 - one public tool dispatches bounde
     elif action == "define_credential":
         result["agent_instruction"] = (
             "The credential name and description are defined without a value. "
-            "After defining every requested credential, call configure_credentials "
-            "once so the user receives one encrypted form for all values."
+            "If the creator wants to bundle shared values, call configure_credentials "
+            "once so the user receives one encrypted form for all values. If the "
+            "creator leaves credentials installer-supplied, do not call it; consuming "
+            "agents will reuse matching Computer credentials and securely request only "
+            "the missing ones."
         )
     elif action in {"list_credentials", "remove_credential"}:
         result["agent_instruction"] = (
@@ -546,12 +550,17 @@ def hats(  # noqa: PLR0911, PLR0912, PLR0915 - one public tool dispatches bounde
     elif action in {"wear", "resume_installation"}:
         result["agent_instruction"] = (
             "Send onboarding_message as the immediate progress update when it is "
-            "present. If installation_started is true, explain that the skills are "
-            "loaded and any private credentials are "
-            "moving directly between Computers as ciphertext. A status of none means "
-            "this Computer has no Hat to install and needs no user-facing warning. "
-            "Never claim the Hat is fully ready until status=active or the final "
-            "platform notice arrives."
+            "present. If credential_setup is present, explain that the Hat skills "
+            "are loaded, name the service credential still needed, and tell the user "
+            "to use the secure Tinyhat Credentials button that was sent. If they do "
+            "not yet have an account with that service, guide them to create one at "
+            "the provider's official site; never ask for a value in chat. Mention "
+            "reused_credentials when Tinyhat reused credentials already on this "
+            "Computer. Only say credentials are moving from the creator when "
+            "outcome=creator_credentials_pending. A status of none means this "
+            "Computer has no Hat to install and needs no user-facing warning. Never "
+            "claim the Hat is fully ready until status=active or the final platform "
+            "notice arrives."
         )
     else:
         result["agent_instruction"] = (
@@ -614,6 +623,34 @@ def _wear_hat(
         installation_id=str(installation.get("installation_id") or ""),
         hat_handle=handle,
     )
+    missing_credentials = transfer.get("missing_credentials")
+    missing_credentials = (
+        missing_credentials if isinstance(missing_credentials, list) else []
+    )
+    if transfer.get("setup_required") and not missing_credentials:
+        raise SecretHandoffError(
+            "The platform requested Hat credential setup without naming a credential.",
+            public_message=(
+                "I loaded the Hat skills, but the secure credential setup was "
+                "incomplete. Please retry the installation."
+            ),
+        )
+    credential_setup: dict[str, Any] | None = None
+    if transfer.get("handoff_id") is None and missing_credentials:
+        first_missing = missing_credentials[0]
+        if not isinstance(first_missing, dict):
+            raise SecretHandoffError(
+                "The platform returned an invalid Hat credential requirement.",
+                public_message=(
+                    "I loaded the Hat skills, but the secure credential setup was "
+                    "incomplete. Please retry the installation."
+                ),
+            )
+        credential_setup = start_hat_installation_required_credential(
+            installation_id=str(installation.get("installation_id") or ""),
+            hat_handle=handle,
+            credential=first_missing,
+        )
     installation.update(
         {
             "installation_started": True,
@@ -623,10 +660,17 @@ def _wear_hat(
             },
             "skills": skills,
             "credential_transfer": transfer,
+            "credential_setup": credential_setup,
         }
     )
-    if transfer.get("credential_count") == 0:
+    if credential_setup is not None:
+        installation["status"] = "credentials_pending"
+        installation["outcome"] = "user_credential_required"
+    elif transfer.get("credential_count") == 0:
         installation["status"] = "active"
+        installation["outcome"] = "credentials_ready"
+    else:
+        installation["outcome"] = "creator_credentials_pending"
     return installation
 
 
