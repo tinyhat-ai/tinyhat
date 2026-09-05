@@ -30,8 +30,8 @@ tool schemas, or Hermes adapter registrations. Read the affected capability in
    For general user-authored skills, keep
    `skills/tinyhat-skill-authoring/SKILL.md` aligned with the open Agent Skills
    naming, description, and progressive-disclosure rules.
-2. Keep tool schemas and implementations in the owning `capabilities/` folder;
-   update the thin root `schemas.py` and `tools.py` facades as needed.
+2. Update tool schemas in `schemas.py`. Put product implementation in the
+   owning `capabilities/` folder and update the root `tools.py` facade as needed.
 3. Update `hermes.plugin.json`, `plugin.yaml`, and `__init__.py` when a
    new tool, command, or skill becomes part of the public surface.
 4. Update `docs/skill-authoring.md`, `docs/capabilities.md`, and
