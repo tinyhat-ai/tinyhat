@@ -5,7 +5,6 @@
 ## Testing Performed
 
 - [ ] `git diff --check`
-- [ ] `bash .github/scripts/check_packaging.sh`
 - [ ] `python3 scripts/validate_framework_package.py`
 - [ ] `python3 -m unittest discover -s test -p "*.py"`
 - [ ] `python3 -m compileall -q .`

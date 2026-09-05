@@ -5,21 +5,21 @@ description: Create, modify, or review Tinyhat plugin skills. Use when adding a 
 
 # Tinyhat Plugin Skill Authoring
 
-Use this skill before changing any file under `skills/`, any plugin tool
-schema, or any Hermes adapter registration.
+Use this development workflow before changing or reviewing `skills/`, plugin
+tool schemas, or Hermes adapter registrations. Read the affected capability in
+`capabilities/README.md` and the packaged-skill contract in
+`docs/skill-authoring.md` before editing.
 
 ## Standard
 
-- Keep the runtime boring. New user-facing capabilities belong in this
-  plugin plus versioned Tinyhat platform APIs, not in runtime code.
 - Make one skill do one clear user-visible job.
 - Put the exact trigger in frontmatter `description`; keep the body for
   operational instructions.
 - Include concrete should-trigger wording and nearby non-trigger boundaries in
   the description when another skill could plausibly match.
-- Keep a typical `SKILL.md` under about 200 lines and 2,000 tokens. Treat 500
-  lines or about 5,000 tokens as the maximum recommended size; move long
-  references into `references/` or public `docs/` and link them conditionally.
+- Keep decision-relevant steps and safety constraints in the skill; move
+  extended examples or reference material to directly linked resources with
+  explicit read conditions. Do not remove needed detail just to shorten a file.
 - Register framework-specific details in `plugin.yaml`, `hermes.plugin.json`,
   and `__init__.py`; do not make skill text depend on Hermes-only internals.
 - Keep examples concrete and safe to copy.
@@ -30,24 +30,20 @@ schema, or any Hermes adapter registration.
    For general user-authored skills, keep
    `skills/tinyhat-skill-authoring/SKILL.md` aligned with the open Agent Skills
    naming, description, and progressive-disclosure rules.
-2. Update tool schemas in `schemas.py` when the skill calls a tool.
-3. Update tool implementation in `tools.py` or a small focused module.
-4. Update `hermes.plugin.json`, `plugin.yaml`, and `__init__.py` when a
+2. Update tool schemas in `schemas.py`. Put product implementation in the
+   owning `capabilities/` folder and update the root `tools.py` facade as needed.
+3. Update `hermes.plugin.json`, `plugin.yaml`, and `__init__.py` when a
    new tool, command, or skill becomes part of the public surface.
-5. Update `docs/skill-authoring.md`, `docs/capabilities.md`, and
+4. Update `docs/skill-authoring.md`, `docs/capabilities.md`, and
    `README.md` when behavior changes.
-6. Add or update unit tests in `test/`.
-7. Run:
-
-```bash
-python3 scripts/validate_framework_package.py
-python3 -m unittest discover -s test -p "*.py"
-python3 -m compileall -q .
-```
+5. Add or update unit tests in `test/` for changed behavior, including unsafe
+   inputs and the failure mode being fixed.
+6. Run the checks in `CONTRIBUTING.md` before committing or opening the PR.
 
 ## Secret Skills
 
-Secret and credential skills have stricter requirements:
+When changing secret or credential behavior, apply these requirements before
+editing:
 
 - Never ask the user to paste secret values in chat.
 - Never print, log, snapshot, or include secret values in test fixtures.
