@@ -140,6 +140,13 @@
       "purpose": "Reads the owner's Tinyhat credit history, checks this Agent's current AI model budget, and adds an explicitly requested amount to that budget."
     },
     {
+      "name": "tinyhat-account-upgrade",
+      "qualified_name": "tinyhat:tinyhat-account-upgrade",
+      "aliases": ["tinyhat-account-upgrade"],
+      "path": "skills/tinyhat-account-upgrade/SKILL.md",
+      "purpose": "Prepares the existing owner’s Stripe Projects upgrade using Computer identity; the owner approves on the review page."
+    },
+    {
       "name": "tinyhat-agentphone",
       "qualified_name": "tinyhat:tinyhat-agentphone",
       "aliases": ["tinyhat-agentphone"],
@@ -183,6 +190,11 @@
       "name": "tinyhat_credit",
       "handler": "tools.credit",
       "skill": "tinyhat-credit"
+    },
+    {
+      "name": "tinyhat_account_upgrade",
+      "handler": "tools.account_upgrade",
+      "skill": "tinyhat-account-upgrade"
     },
     {
       "name": "tinyhat_model_budget",

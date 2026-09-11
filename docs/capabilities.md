@@ -619,3 +619,31 @@ arbitrary shell commands in chat.
   printed into chat.
 - Secret values must be entered in dedicated user-facing flows, not chat
   messages or skill instructions.
+
+## Individual account upgrade
+
+`tinyhat_account_upgrade` prepares the assigned individual owner's Stripe
+Projects upgrade using Computer identity. `prepare` saves details and returns
+`awaiting_approval`; in Telegram it sends a native **Review account upgrade**
+button. `review_link` resends it. The private review URL remains in the result
+so an owner in another private channel can also open it. No personal details are included in the button message or tool response.
+
+The owner uses their existing verified email to sign in on the review page,
+checks every field and the terms, and gives one explicit approval. A draft edit
+invalidates prior reviews. The tool cannot accept terms; `submit` and consent
+flags are no longer supported. Existing customers retain the same owner account
+and do not need to register again. Email sign-in is required for final review.
+
+Versioned routes remain `/hapi/v2/computers/me/account/upgrade` (GET status, POST
+draft), `/upgrade/continue` and `/verification-link`. Compatible review APIs
+must deploy first. Computer identity cannot call the browser approval endpoint.
+This tool does not grant spending credit or purchase a service. Raw provider
+errors never echo personal details or credentials.
+
+For a test deployment with separate API and web hosts, the operator sets
+`TINYHAT_ACCOUNT_REVIEW_ORIGIN` in the Computer runtime environment to the web
+app’s HTTPS origin (for example `https://app.example.test`). Production defaults
+to `https://computer.tinyhat.ai`; the configured platform API host is also
+accepted. Tool arguments and API result fields cannot add trusted hosts. The
+review URL must still have the exact upgrade path and revision query, without
+credentials, a fragment or a nonstandard port.

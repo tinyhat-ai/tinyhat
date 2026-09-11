@@ -1,5 +1,47 @@
 """Tinyhat Hermes plugin tool schemas."""
 
+TINYHAT_ACCOUNT_UPGRADE_SCHEMA = {
+    "type": "object",
+    "description": "Prepare an upgrade for this Computer's existing individual owner for Stripe Projects. Check status first. Prepare accurate human-provided details, then send the review button and wait for the owner to approve on the review page. This tool cannot accept terms. Does not purchase services or grant spending credit.",
+    "properties": {
+        "action": {"type": "string", "enum": ["status", "prepare", "review_link", "continue", "verification_link"]},
+        "individual": {
+            "type": "object",
+            "additionalProperties": False,
+            "required": ["given_name", "surname", "date_of_birth", "phone", "country", "address"],
+            "properties": {
+                "given_name": {"type": "string", "maxLength": 100},
+                "surname": {"type": "string", "maxLength": 100},
+                "date_of_birth": {
+                    "type": "string",
+                    "description": "Human's YYYY-MM-DD date of birth, age 18 or older.",
+                },
+                "phone": {"type": "string", "pattern": r"^\+[1-9][0-9]{7,14}$"},
+                "country": {"type": "string", "minLength": 2, "maxLength": 2},
+                "address": {
+                    "type": "object",
+                    "additionalProperties": False,
+                    "required": ["line1", "city", "postal_code"],
+                    "properties": {
+                        "line1": {"type": "string", "maxLength": 200},
+                        "line2": {"type": ["string", "null"], "maxLength": 200},
+                        "city": {"type": "string", "maxLength": 100},
+                        "state": {"type": ["string", "null"], "maxLength": 100},
+                        "postal_code": {"type": "string", "maxLength": 32},
+                    },
+                },
+            },
+        },
+        "revision": {
+            "type": ["string", "null"],
+            "pattern": r"^thur_[A-Za-z0-9_-]{32}$",
+            "description": "Current draft revision from status; required when correcting prepared details.",
+        },
+    },
+    "required": ["action"],
+    "additionalProperties": False,
+}
+
 TINYHAT_PLUGIN_VERSION_SCHEMA = {
     "type": "object",
     "properties": {},
