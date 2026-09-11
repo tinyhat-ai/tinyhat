@@ -9,7 +9,7 @@ from pathlib import Path
 from typing import Any
 from urllib import error, parse, request
 
-from .capabilities.account_upgrade.tool import account_upgrade as account_upgrade
+from .capabilities.account_upgrade import tool as account_upgrade_tools
 from .capabilities.computer_desktop.tool import (
     computer_desktop as handle_computer_desktop,
 )
@@ -45,6 +45,9 @@ from .capabilities.slack.connection import (
 )
 from .platform import PlatformError, build_platform_client, computer_api_path
 from .tool_errors import tool_error_json
+
+# Explicit facade binding remains exported when unused imports are cleaned up.
+account_upgrade = account_upgrade_tools.account_upgrade
 
 CODEX_AUTH_SCREENSHOT = (
     Path(__file__).resolve().parent

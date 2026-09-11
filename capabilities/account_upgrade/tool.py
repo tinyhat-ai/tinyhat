@@ -121,6 +121,8 @@ def _request_failure(action: str, exc: Exception) -> str:
 
 def _verification_link(result: dict[str, Any]) -> str:
     url = result.get("url", "")
+    if not isinstance(url, str):
+        raise ValueError("invalid verification URL")
     parsed = urlparse(url)
     if (
         parsed.scheme != "https"

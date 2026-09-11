@@ -89,7 +89,9 @@ or general account token.
 - `setup_required` or `recovery_required`: explain the returned message. Do not
   substitute payout or merchant accounts, invent data, or recreate the account.
 - `account_upgrade_rate_limited`: pause for at least one minute, then check
-  status. Do not retry submission or describe this as a disabled upgrade.
+  status. If submission was rate-limited and status still shows `not_started`,
+  retry the identical approved request once. Do not retry changed details or
+  describe rate limiting as a disabled upgrade.
 - `account_upgrade_conflict`: check status; keep the existing upgrade and do not
   submit changed details or request verification when it is not needed.
 - An uncertain submission: check `status` first, then retry only the identical

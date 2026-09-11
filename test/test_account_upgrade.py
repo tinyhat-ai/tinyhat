@@ -123,6 +123,14 @@ class AccountUpgradeTests(unittest.TestCase):
         self.client.post_json.return_value = {"url": "https://connect.stripe.com/setup/s/fixture"}
         self.assertIn("url", json.loads(tool.account_upgrade({"action": "verification_link"})))
 
+    def test_verification_link_rejects_non_string_urls_without_raising(self):
+        for url in (None, 123, [], {}, True, b"https://connect.stripe.com/private"):
+            with self.subTest(url_type=type(url).__name__):
+                self.client.post_json.return_value = {"url": url}
+                result = tool.account_upgrade({"action": "verification_link"})
+                self.assertEqual(json.loads(result)["error"], "invalid_platform_response")
+                self.assertNotIn("private", result)
+
     def test_local_token_does_not_masquerade_as_cloud_identity(self):
         self.builder.return_value = (self.client, "local_dev")
         self.assertEqual(
@@ -167,8 +175,8 @@ class AccountUpgradeTests(unittest.TestCase):
             (401, None, "computer_authentication_required"),
             (403, None, "computer_authentication_required"),
             (422, None, "invalid_request"),
-            (409, "computer_owner_unavailable", "computer_owner_unavailable"),
-            (409, "computer_owner_changed", "computer_owner_changed"),
+            (403, "computer_owner_unavailable", "computer_owner_unavailable"),
+            (403, "computer_owner_changed", "computer_owner_changed"),
             (409, "upgrade_already_submitted", "account_upgrade_conflict"),
             (409, "verification_not_required", "account_upgrade_conflict"),
             (429, None, "account_upgrade_rate_limited"),
