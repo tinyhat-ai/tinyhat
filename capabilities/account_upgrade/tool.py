@@ -16,6 +16,7 @@ STATUS_FIELDS = {
     "available",
     "revision",
     "approval_url",
+    "mini_app_url",
     "approval_expires_at",
     "status",
     "stage",
@@ -165,7 +166,7 @@ def _safe_result(action: str, result: dict[str, Any], *, base_url: str = "") -> 
         raise ValueError("invalid status")
     safe = {key: value for key, value in result.items() if key in STATUS_FIELDS}
     if result.get("status") != "awaiting_approval":
-        for field in ("approval_url", "revision", "approval_expires_at"):
+        for field in ("approval_url", "mini_app_url", "revision", "approval_expires_at"):
             safe.pop(field, None)
     if result.get("status") == "awaiting_approval":
         url = result.get("approval_url")
@@ -185,12 +186,26 @@ def _safe_result(action: str, result: dict[str, Any], *, base_url: str = "") -> 
             or parse_qs(parsed.query) != {"review": [result["revision"]]}
         ):
             raise ValueError("invalid review URL")
+        mini_app_url = result.get("mini_app_url")
+        if mini_app_url is not None:
+            if not isinstance(mini_app_url, str):
+                raise ValueError("invalid Mini App review URL")
+            mini = urlsplit(mini_app_url)
+            if (
+                mini.scheme != "https"
+                or mini.hostname not in (_review_hosts(base_url) | {"use.tinyloop.co"})
+                or mini.username or mini.password or mini.port not in {None, 443}
+                or not re.fullmatch(r"/tinyhat/miniapp/agents/[A-Za-z0-9_-]+/account/upgrade", mini.path)
+                or mini.fragment
+                or parse_qs(mini.query) != {"review": [result["revision"]]}
+            ):
+                raise ValueError("invalid Mini App review URL")
         if action in {"prepare", "review_link"}:
-            safe["telegram_button_sent"] = _send_review_button(url)
+            safe["telegram_button_sent"] = _send_review_button(url, mini_app_url=mini_app_url)
     return json.dumps(safe, sort_keys=True)
 
 
-def _send_review_button(url: str) -> bool:
+def _send_review_button(url: str, *, mini_app_url: str | None = None) -> bool:
     try:
         from ...tools import _telegram_credentials, _telegram_send_message
 
@@ -199,7 +214,10 @@ def _send_review_button(url: str) -> bool:
             token=token,
             chat_id=chat_id,
             text="Your account upgrade is ready to review. Open the form, check every detail and the terms, then approve. Ask me for corrections if needed. Setup waits for your approval.",
-            reply_markup={"inline_keyboard": [[{"text": "Review account upgrade", "url": url}]]},
+            reply_markup={"inline_keyboard": [[{
+                "text": "Review account upgrade",
+                **({"web_app": {"url": mini_app_url}} if mini_app_url else {"url": url}),
+            }]]},
         )
         return bool(result.get("ok"))
     except Exception:

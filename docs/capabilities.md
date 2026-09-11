@@ -628,11 +628,16 @@ Projects upgrade using Computer identity. `prepare` saves details and returns
 button. `review_link` resends it. The private review URL remains in the result
 so an owner in another private channel can also open it. No personal details are included in the button message or tool response.
 
-The owner uses their existing verified email to sign in on the review page,
-checks every field and the terms, and gives one explicit approval. A draft edit
+When the platform returns `mini_app_url`, the button opens the Tinyhat Mini App
+with Telegram sign-in, without another email code. With a missing or null
+`mini_app_url`, it opens `approval_url` as a standalone page where the owner may
+need to sign in with their existing verified email. Never send `mini_app_url` as
+an ordinary link; it requires a native Telegram `web_app` button.
+
+The owner checks every field and the terms and gives one explicit approval. A draft edit
 invalidates prior reviews. The tool cannot accept terms; `submit` and consent
 flags are no longer supported. Existing customers retain the same owner account
-and do not need to register again. Email sign-in is required for final review.
+and do not need to register again.
 
 Versioned routes remain `/hapi/v2/computers/me/account/upgrade` (GET status, POST
 draft), `/upgrade/continue` and `/verification-link`. Compatible review APIs
@@ -645,5 +650,13 @@ For a test deployment with separate API and web hosts, the operator sets
 app’s HTTPS origin (for example `https://app.example.test`). Production defaults
 to `https://computer.tinyhat.ai`; the configured platform API host is also
 accepted. Tool arguments and API result fields cannot add trusted hosts. The
-review URL must still have the exact upgrade path and revision query, without
-credentials, a fragment or a nonstandard port.
+standalone review URL must have exactly `/tinyhat/account/upgrade?review=<revision>`.
+Mini App URLs also accept `https://use.tinyloop.co` and must have exactly
+`/tinyhat/miniapp/agents/<agent_identifier>/account/upgrade?review=<revision>`.
+Both require HTTPS, the matching draft revision, and no credentials, fragment
+or nonstandard port. An invalid URL returns `invalid_platform_response` without
+sending a button. Missing or null Mini App URLs use the standalone fallback;
+malformed non-null values fail closed so a bad platform response is visible.
+
+Compatible platform Mini App routes must deploy and pass real Telegram
+verification before releasing or promoting this plugin update.
