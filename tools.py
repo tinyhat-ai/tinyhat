@@ -7,10 +7,9 @@ import os
 import subprocess
 from pathlib import Path
 from typing import Any
-
-from .capabilities.account_upgrade.tool import account_upgrade
 from urllib import error, parse, request
 
+from .capabilities.account_upgrade.tool import account_upgrade as account_upgrade
 from .capabilities.computer_desktop.tool import (
     computer_desktop as handle_computer_desktop,
 )

@@ -16,3 +16,10 @@ Stripe setup using local fixtures. No real Stripe or cloud purchase is tested.
 Release requires compatible platform APIs to be deployed first. No runtime or
 release/channel change is included. On older or disabled platforms, report
 unavailable and do not collect personal details or approvals.
+
+Recovery checks include lost responses, rate limiting and state conflicts. The
+skill limits each polling attempt to ten checks and accepts approval only from
+the owner directly in the current conversation after the current terms are shown.
+Private-form guidance keeps the same Tinyhat environment and verified profile
+email; it does not supply a production sign-up shortcut. Context routing keeps
+existing playbook pointers and excludes unrelated service upgrades.

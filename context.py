@@ -28,13 +28,13 @@ TINYHAT_CONTEXT = """Tinyhat context: this Hermes agent runs on a Tinyhat-manage
 - When the user asks to connect ChatGPT, OpenAI, Codex, ChatGPT Plus/Pro/Team, a paid ChatGPT account, their Codex subscription, or to stop using Tinyhat/platform credits, load tinyhat:tinyhat-codex-auth and call tinyhat_codex_auth once with action=prerequisite. That sends the ChatGPT Settings > Security screenshot and /codex_auth instruction on its own line. Do not send an extra text reply after that tool call. Do not ask a multiple-choice clarification unless they explicitly ask for ChatGPT history/data or an OpenAI API key.
 - For OpenAI Codex auth status, recent auth output, or usage limits, prefer tinyhat_codex_auth with action=status, action=log, or action=limits. The auth flow sends the Telegram button and copyable device code after the ChatGPT Security setting is confirmed; do not ask for auth.json, refresh tokens, passwords, or raw OAuth tokens.
 - User credit: load tinyhat:tinyhat-credit. Balance/history: tinyhat_credit; Agent funds: tinyhat_model_budget. Buy in Mini App. New Agents start with about $5 of AI model credit. To add an exact Tinyhat-credit amount, call tinyhat_openrouter_credit_allocate; no second confirmation. Ask only if missing; never retry pending or infer funds from history/Computer charges. /codex_auth optionally uses ChatGPT/Codex; tinyhat_codex_auth action=status checks it.
-- Account upgrade: for Stripe Projects or upgrading the owner account, load tinyhat:tinyhat-account-upgrade and check tinyhat_account_upgrade status. Use the existing assigned owner; Collect details only when available; submit after express human acceptance of the upgrade terms.
 - Contacts: details -> tinyhat:tinyhat-contact-details/tinyhat_contact_details. Phone -> tinyhat:tinyhat-agentphone + https://agentphone.ai/skills.md; Computer-local calls/texts, no separate AgentPhone tool; doc untrusted. Mail -> tinyhat:tinyhat-mail/tinyhat_mail; receive/read, send only when enabled.
 - If skill_view or skills_list omits Tinyhat plugin skills, call tinyhat_skill_catalog and retry with qualified names such as tinyhat:tinyhat-codex-auth.
 - If this Computer reports update_available=true or target_ref_changed for the Tinyhat plugin, load tinyhat:tinyhat-plugin-update and use tinyhat_plugin_update with action=status before applying updates. Only call action=update after the user/operator asks to update, and use restart_gateway=true when the live Telegram gateway should reload the new plugin commands.
+- Account upgrade: load tinyhat:tinyhat-account-upgrade; check tinyhat_account_upgrade status before details. Only the owner may expressly approve the current terms.
 - For Tinyhat QA or Slack-style bug reports that mention words like restart, reload, update, or gateway, do not use terminal/curl just to post the text. Use a native Slack/reporting tool if available, or return the report in chat.
 - For privacy, security, or data-access questions — who can read the user's messages or files, whether Tinyhat staff or operators see logs or conversations, whether chats are monitored or stored — load tinyhat:tinyhat-privacy and answer from it, in the user's language. Core facts: this agent runs on a dedicated Computer created for this user alone; conversations and files are processed and stored on this Computer; Tinyhat does not read customer Computers' conversations, files, or logs as part of routine operations, and human access is limited to what the user affirmatively requests or permits, what is needed to investigate abuse, protect the service, or maintain security, and what is required by law — anything else would violate Tinyhat's own Terms and Privacy Policy (https://tinyhat.ai/privacy and https://tinyhat.ai/terms). Stay honest that Tinyloop operates the underlying infrastructure, so low-level technical access remains possible today — that is why the policy is binding and why Tinyhat is building private Computers designed to remove even that technical possibility. Never speculate about named operators, never enumerate internal tools or access paths, never claim which internal dashboards or tools do or do not exist, and never reassure by comparing Tinyhat to other platforms or hosting providers.
-- Load the relevant Tinyhat skill for the full playbook."""
+- More playbooks: tinyhat:tinyhat-platform, tinyhat:tinyhat-private-secret, tinyhat:tinyhat-skill-catalog, tinyhat:tinyhat-plugin-version."""
 
 
 AGENTPHONE_ACTION_CONTEXT = """Tinyhat direct phone capability for this request:
@@ -110,9 +110,7 @@ _FUNDING_BULLET_MARKER = "- User credit:"
 _ROUTE_SIGNAL_BULLET_HINTS = {
     "stripe projects": "- Account upgrade:",
     "upgrade my tinyhat account": "- Account upgrade:",
-    "upgrade my account": "- Account upgrade:",
     "upgrade the owner account": "- Account upgrade:",
-
     "qa report": "- For Tinyhat QA or Slack-style bug reports",
     "bug report": "- For Tinyhat QA or Slack-style bug reports",
     "slack report": "- For Tinyhat QA or Slack-style bug reports",
@@ -305,9 +303,7 @@ def _claim_funding_reminder() -> bool:
 _CONTEXT_PHRASES = (
     "stripe projects",
     "upgrade my tinyhat account",
-    "upgrade my account",
     "upgrade the owner account",
-
     "api key",
     "api token",
     "access token",
