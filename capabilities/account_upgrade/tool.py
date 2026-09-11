@@ -188,6 +188,8 @@ def _safe_result(action: str, result: dict[str, Any], *, base_url: str = "") -> 
             raise ValueError("invalid review URL")
         mini_app_url = result.get("mini_app_url")
         if mini_app_url is not None:
+            if not isinstance(mini_app_url, str):
+                raise ValueError("invalid Mini App review URL")
             mini = urlsplit(mini_app_url)
             if (
                 mini.scheme != "https"

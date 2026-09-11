@@ -183,17 +183,35 @@ class AccountUpgradeTests(unittest.TestCase):
 
     def test_invalid_mini_app_link_cannot_send_button(self):
         draft = self.draft()
+        path = "/tinyhat/miniapp/agents/123/account/upgrade"
+        query = f"?review={draft['revision']}"
         for url in (
-            "https://evil.example/tinyhat/miniapp/agents/123/account/upgrade",
+            f"https://evil.example{path}{query}",
+            f"https://use.tinyloop.co.evil.example{path}{query}",
+            f"http://use.tinyloop.co{path}{query}",
+            f"https://user@use.tinyloop.co{path}{query}",
+            f"https://:password@use.tinyloop.co{path}{query}",
+            f"https://use.tinyloop.co:444{path}{query}",
+            f"https://use.tinyloop.co:invalid{path}{query}",
+            f"https://use.tinyloop.co{path}/{query}",
             f"https://use.tinyloop.co/tinyhat/account/upgrade?review={draft['revision']}",
             "https://use.tinyloop.co/tinyhat/miniapp/agents/123/account/upgrade?review=wrong",
             f"https://use.tinyloop.co/tinyhat/miniapp/agents/123/account/upgrade?review={draft['revision']}#token=x",
+            "", [], {}, 42, False,
         ):
-            self.client.get_json.return_value = {**draft, "mini_app_url": url}
-            with patch.object(tool, "_send_review_button") as send:
+            with self.subTest(url=url), patch.object(tool, "_send_review_button") as send:
+                self.client.get_json.return_value = {**draft, "mini_app_url": url}
                 result = json.loads(tool.account_upgrade({"action": "review_link"}))
                 self.assertEqual(result["error"], "invalid_platform_response")
                 send.assert_not_called()
+
+    def test_null_mini_app_link_keeps_standalone_button(self):
+        draft = self.draft()
+        self.client.get_json.return_value = {**draft, "mini_app_url": None}
+        with patch.object(tool, "_send_review_button", return_value=True) as send:
+            result = json.loads(tool.account_upgrade({"action": "review_link"}))
+        self.assertEqual(result["approval_url"], draft["approval_url"])
+        send.assert_called_once_with(draft["approval_url"], mini_app_url=None)
 
     def test_telegram_failure_returns_review_url(self):
         self.client.post_json.return_value = self.draft()

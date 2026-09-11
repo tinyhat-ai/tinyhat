@@ -2,8 +2,10 @@
 
 The assigned Computer prepares an encrypted owner-bound draft. The tool sends a
 Telegram review button when available and always returns its review URL. The
-owner signs in with their existing verified email, reviews all details and the
-terms, and approves using one checkbox and the final approval button. Changes
+button uses Telegram sign-in when the platform supplies `mini_app_url`. A
+missing or null Mini App URL falls back to the standalone review page, which may
+require the owner's existing verified email sign-in. The owner reviews all details
+and the terms and approves using one checkbox and the final approval button. Changes
 invalidate earlier reviews. The tool has no consent or final approval action.
 
 This keeps existing owner accounts and Computer credentials; it does not sign up

@@ -24,7 +24,7 @@ a laptop account token onto the Computer.
 “This optional upgrade creates your individual Stripe account so I can help you
 connect services. Tinyhat funds approved services within your monthly allowance.
 You will review your information and approve Tinyhat and Stripe's terms on a
-review form. In Telegram it opens inside the Mini App without another email sign-in. This does not buy a service or add Computer credit.”
+review form. This does not buy a service or add Computer credit.”
 
 Show the actual allowance, including $0. Never promise free services or immediate
 provider availability. Explain that the one approval includes sharing personal
@@ -50,11 +50,15 @@ This saves a draft only: it does not create a Stripe account or accept terms.
 Do not pass `consent`, `human_authorized`, `approved`, or similar assertions.
 The tool has no final approval action.
 
-- If `telegram_button_sent` is true, the native **Review account upgrade** button
-  opens the owner-authenticated Tinyhat Mini App when supported by the platform.
-  The owner does not need to enter an email code again. Say where it was sent. In another
-  private channel, also give `approval_url` there so the owner can continue.
-- Otherwise give `approval_url` privately to the owner. `review_link` can resend
+- If `telegram_button_sent` is true and `mini_app_url` is present, explain that
+  the native **Review account upgrade** button opens the Tinyhat Mini App using
+  Telegram sign-in, without another email code. Say where it was sent.
+- If `mini_app_url` is missing or null, the button opens the standalone review
+  page instead. Explain that email sign-in may be required. Never promise
+  Telegram sign-in for this fallback.
+- Never paste `mini_app_url` as an ordinary link: only the native Mini App button
+  supplies Telegram launch data. For another private channel use `approval_url`.
+- If no button was sent, give `approval_url` privately to the owner. `review_link` can resend
   the button for an existing draft. The link contains no personal details and
   does not authenticate its holder or approve the upgrade.
 - Telegram verifies the owner from its signed Mini App launch. In a standalone
