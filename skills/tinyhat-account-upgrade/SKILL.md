@@ -24,7 +24,7 @@ a laptop account token onto the Computer.
 “This optional upgrade creates your individual Stripe account so I can help you
 connect services. Tinyhat funds approved services within your monthly allowance.
 You will review your information and approve Tinyhat and Stripe's terms on a
-separate page. This does not buy a service or add Computer credit.”
+review form. In Telegram it opens inside the Mini App without another email sign-in. This does not buy a service or add Computer credit.”
 
 Show the actual allowance, including $0. Never promise free services or immediate
 provider availability. Explain that the one approval includes sharing personal
@@ -51,12 +51,14 @@ Do not pass `consent`, `human_authorized`, `approved`, or similar assertions.
 The tool has no final approval action.
 
 - If `telegram_button_sent` is true, the native **Review account upgrade** button
-  was sent to the assigned owner in Telegram. Say where it was sent. In another
+  opens the owner-authenticated Tinyhat Mini App when supported by the platform.
+  The owner does not need to enter an email code again. Say where it was sent. In another
   private channel, also give `approval_url` there so the owner can continue.
 - Otherwise give `approval_url` privately to the owner. `review_link` can resend
   the button for an existing draft. The link contains no personal details and
   does not authenticate its holder or approve the upgrade.
-- The owner signs in with their existing verified email when required, reviews
+- Telegram verifies the owner from its signed Mini App launch. In a standalone
+  browser, the owner signs in with their existing verified email when required, then reviews
   **all** entered details and the current terms, then checks one consent box and
   clicks **Approve and upgrade account**.
 - If anything is wrong, the owner can edit on the page or return to chat and ask
@@ -68,7 +70,7 @@ The tool has no final approval action.
 
 You do not sign in to the owner’s Tinyhat account or operate the review page
 yourself from this cloud Computer. Never ask for, accept or enter the owner’s
-email sign-in code, or retrieve it from their inbox. Direct them to their own
+email sign-in code, or retrieve it from their inbox. Direct them to the Telegram Mini App or their own
 browser. Delegation means a coding agent the owner runs in their own browser
 session, explicitly instructed to review the complete form and terms and operate
 the same approval step. Do not infer delegation or bypass the page. The recorded

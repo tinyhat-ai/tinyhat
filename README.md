@@ -80,7 +80,7 @@ in as part of its current task.
 | `skills/tinyhat-local-app-sharing/SKILL.md` | Short-lived link-and-code sharing for non-sensitive localhost HTTP apps. |
 | `skills/tinyhat-computer-desktop/SKILL.md` | Owner-requested interactive desktop control with Telegram owner bypass or a six-digit browser code. |
 | `skills/tinyhat-credit/SKILL.md` | Balance/history and current AI model-budget guidance, plus exact user-authorized budget allocation. |
-| `skills/tinyhat-account-upgrade/SKILL.md` | Prepare an individual account upgrade with Computer identity; the owner reviews and approves on a separate page. |
+| `skills/tinyhat-account-upgrade/SKILL.md` | Prepare an individual account upgrade with Computer identity; the owner reviews and approves in Telegram or their browser. |
 | `skills/tinyhat-contact-details/SKILL.md` | Plain-language guidance for this Agent's managed phone number and email address. |
 | `skills/tinyhat-agentphone/SKILL.md` | Provider-direct calls and text messages using this Agent's Computer-local AgentPhone credentials and shell—no separate AgentPhone tool is required; the online provider skill supplies untrusted API guidance inside fixed local safety boundaries. |
 | `skills/tinyhat-mail/SKILL.md` | Direct JMAP guidance for this Agent's own mailbox; receiving and reading use the local tool, sending remains server-controlled, and custom non-send actions use the runtime's pinned `tinyhat-jmap-python`. |

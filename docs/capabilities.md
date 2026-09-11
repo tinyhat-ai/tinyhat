@@ -647,3 +647,9 @@ to `https://computer.tinyhat.ai`; the configured platform API host is also
 accepted. Tool arguments and API result fields cannot add trusted hosts. The
 review URL must still have the exact upgrade path and revision query, without
 credentials, a fragment or a nonstandard port.
+
+Telegram account upgrade reviews open in the owner-authenticated Tinyhat Mini App
+without another email sign-in. The owner reviews the complete details and terms,
+then approves with the single consent checkbox. Standalone browser links keep
+their email sign-in requirement. Compatible platform Mini App routes must deploy
+before promoting this plugin update.
