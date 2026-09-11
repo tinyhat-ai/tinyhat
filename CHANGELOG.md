@@ -4,6 +4,20 @@ All notable changes to the Tinyhat plugin are documented here.
 
 ## Unreleased
 
+## 0.32.11 - 2026-09-11
+
+- Let an Agent prepare its existing owner's individual Stripe Projects
+  account upgrade, update the details, and check progress using the Computer's
+  identity.
+- Send a Telegram review button or private review link. The owner reviews all
+  information and the terms on a separate page before approving; the cloud
+  Agent cannot approve or handle the owner's sign-in code.
+- Keep the review link available for private handoff in other chat channels,
+  including when Telegram button delivery succeeds.
+- Require the compatible Tinyhat account-upgrade preparation, review and
+  approval APIs to be deployed before releasing this version to either
+  managed-Computer channel.
+
 ## 0.32.10 - 2026-09-01
 
 - When a Hat creator leaves a tool credential for each installer to provide,
