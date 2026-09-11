@@ -2,7 +2,7 @@
 
 TINYHAT_ACCOUNT_UPGRADE_SCHEMA = {
     "type": "object",
-    "description": "Upgrade this Computer's existing individual owner for Stripe Projects. Check status first. Prepare accurate human-provided details, then send the review button and wait for the owner to approve on the review page. This tool cannot accept terms. Does not purchase services or grant spending credit.",
+    "description": "Prepare an upgrade for this Computer's existing individual owner for Stripe Projects. Check status first. Prepare accurate human-provided details, then send the review button and wait for the owner to approve on the review page. This tool cannot accept terms. Does not purchase services or grant spending credit.",
     "properties": {
         "action": {"type": "string", "enum": ["status", "prepare", "review_link", "continue", "verification_link"]},
         "individual": {
