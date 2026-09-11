@@ -16,7 +16,7 @@ STATUS_FIELDS = {
     "available",
     "revision",
     "approval_url",
-    "mini_app_url",
+    "telegram_review_url",
     "approval_expires_at",
     "status",
     "stage",
@@ -151,6 +151,16 @@ def _review_hosts(base_url: str) -> set[str | None]:
     return hosts
 
 
+def _review_bots() -> set[str]:
+    bots = {"tinyhatbot"}
+    override = runtime_env().get("TINYHAT_ACCOUNT_REVIEW_BOT_USERNAME", "").strip()
+    if override:
+        if not re.fullmatch(r"[A-Za-z][A-Za-z0-9_]{4,31}", override):
+            raise ValueError("invalid configured review bot")
+        bots.add(override.lower())
+    return bots
+
+
 def _safe_result(action: str, result: dict[str, Any], *, base_url: str = "") -> str:
     if action == "verification_link":
         return _verification_link(result)
@@ -166,7 +176,7 @@ def _safe_result(action: str, result: dict[str, Any], *, base_url: str = "") -> 
         raise ValueError("invalid status")
     safe = {key: value for key, value in result.items() if key in STATUS_FIELDS}
     if result.get("status") != "awaiting_approval":
-        for field in ("approval_url", "mini_app_url", "revision", "approval_expires_at"):
+        for field in ("approval_url", "telegram_review_url", "revision", "approval_expires_at"):
             safe.pop(field, None)
     if result.get("status") == "awaiting_approval":
         url = result.get("approval_url")
@@ -186,37 +196,45 @@ def _safe_result(action: str, result: dict[str, Any], *, base_url: str = "") -> 
             or parse_qs(parsed.query) != {"review": [result["revision"]]}
         ):
             raise ValueError("invalid review URL")
-        mini_app_url = result.get("mini_app_url")
-        if mini_app_url is not None:
-            if not isinstance(mini_app_url, str):
-                raise ValueError("invalid Mini App review URL")
-            mini = urlsplit(mini_app_url)
+        telegram_review_url = result.get("telegram_review_url")
+        if telegram_review_url is not None:
+            if not isinstance(telegram_review_url, str):
+                raise ValueError("invalid Telegram review URL")
+            link = urlsplit(telegram_review_url)
+            query = parse_qs(link.query, keep_blank_values=True, strict_parsing=True)
+            payload = query.get("start", [""])[0]
             if (
-                mini.scheme != "https"
-                or mini.hostname not in (_review_hosts(base_url) | {"use.tinyloop.co"})
-                or mini.username or mini.password or mini.port not in {None, 443}
-                or not re.fullmatch(r"/tinyhat/miniapp/agents/[A-Za-z0-9_-]+/account/upgrade", mini.path)
-                or mini.fragment
-                or parse_qs(mini.query) != {"review": [result["revision"]]}
+                link.scheme != "https" or link.hostname != "t.me"
+                or link.username or link.password or link.port is not None
+                or not re.fullmatch(r"/[A-Za-z][A-Za-z0-9_]{4,31}", link.path)
+                or link.path[1:].lower() not in _review_bots()
+                or link.fragment or query != {"start": [payload]}
+                or not re.fullmatch(r"tu_[1-9][0-9]{0,17}_" + re.escape(result["revision"]), payload)
             ):
-                raise ValueError("invalid Mini App review URL")
+                raise ValueError("invalid Telegram review URL")
+            telegram_review_url = f"https://t.me/{link.path[1:].lower()}?start={payload}"
+            safe["telegram_review_url"] = telegram_review_url
         if action in {"prepare", "review_link"}:
-            safe["telegram_button_sent"] = _send_review_button(url, mini_app_url=mini_app_url)
+            safe["telegram_button_sent"] = _send_review_button(url, telegram_review_url=telegram_review_url)
     return json.dumps(safe, sort_keys=True)
 
 
-def _send_review_button(url: str, *, mini_app_url: str | None = None) -> bool:
+def _send_review_button(url: str, *, telegram_review_url: str | None = None) -> bool:
     try:
         from ...tools import _telegram_credentials, _telegram_send_message
 
         token, chat_id = _telegram_credentials()
+        opening = (
+            "Open Tinyhat, tap Start if asked, then tap its Review account upgrade button. "
+            if telegram_review_url else "Open the form and sign in if asked. "
+        )
         result = _telegram_send_message(
             token=token,
             chat_id=chat_id,
-            text="Your account upgrade is ready to review. Open the form, check every detail and the terms, then approve. Ask me for corrections if needed. Setup waits for your approval.",
+            text="Your account upgrade is ready to review. " + opening + "Check every detail and the terms, then approve. Ask me for corrections if needed. Setup waits for your approval.",
             reply_markup={"inline_keyboard": [[{
                 "text": "Review account upgrade",
-                **({"web_app": {"url": mini_app_url}} if mini_app_url else {"url": url}),
+                "url": telegram_review_url or url,
             }]]},
         )
         return bool(result.get("ok"))

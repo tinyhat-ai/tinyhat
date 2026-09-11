@@ -628,11 +628,13 @@ Projects upgrade using Computer identity. `prepare` saves details and returns
 button. `review_link` resends it. The private review URL remains in the result
 so an owner in another private channel can also open it. No personal details are included in the button message or tool response.
 
-When the platform returns `mini_app_url`, the button opens the Tinyhat Mini App
-with Telegram sign-in, without another email code. With a missing or null
-`mini_app_url`, it opens `approval_url` as a standalone page where the owner may
-need to sign in with their existing verified email. Never send `mini_app_url` as
-an ordinary link; it requires a native Telegram `web_app` button.
+When the platform returns `telegram_review_url`, the customer bot sends an
+ordinary URL button to the platform Tinyhat bot. The owner taps **Start** if
+prompted, then the platform bot sends a native Mini App review button. Its
+Telegram launch authenticates the owner without another email code. The
+platform bot token stays on the backend; a customer-bot launch cannot approve.
+Missing or null `telegram_review_url` uses the standalone `approval_url` and
+existing email sign-in when required. Legacy `mini_app_url` is ignored.
 
 The owner checks every field and the terms and gives one explicit approval. A draft edit
 invalidates prior reviews. The tool cannot accept terms; `submit` and consent
@@ -651,12 +653,22 @@ app’s HTTPS origin (for example `https://app.example.test`). Production defaul
 to `https://computer.tinyhat.ai`; the configured platform API host is also
 accepted. Tool arguments and API result fields cannot add trusted hosts. The
 standalone review URL must have exactly `/tinyhat/account/upgrade?review=<revision>`.
-Mini App URLs also accept `https://use.tinyloop.co` and must have exactly
-`/tinyhat/miniapp/agents/<agent_identifier>/account/upgrade?review=<revision>`.
-Both require HTTPS, the matching draft revision, and no credentials, fragment
-or nonstandard port. An invalid URL returns `invalid_platform_response` without
-sending a button. Missing or null Mini App URLs use the standalone fallback;
-malformed non-null values fail closed so a bad platform response is visible.
+The Telegram handoff must be HTTPS on `t.me`, with a single bot username path
+and exactly `start=tu_<agent_id>_<revision>`. The revision must match the draft;
+credentials, ports, fragments and extra query parameters are rejected. Invalid
+non-null handoffs fail closed without sending a button. Neither handoff nor
+standalone review URLs carry personal information or approval authority.
 
-Compatible platform Mini App routes must deploy and pass real Telegram
-verification before releasing or promoting this plugin update.
+The production bot is pinned to `tinyhatbot`. Operators can add a development
+bot with `TINYHAT_ACCOUNT_REVIEW_BOT_USERNAME` (a username without `@`) in the
+runtime environment; tool arguments and response fields cannot expand trust.
+The validated URL is rebuilt into a canonical URL before returning or sending it.
+Malformed non-null handoffs deliberately fail the call, including status, so a
+bad deployment is visible rather than silently directing an owner elsewhere.
+
+Before release/promotion, deploy and verify the platform's decimal-agent-id
+handoff producer, platform-bot `/start` handler and platform-only final-consent
+authentication, including real Telegram delivery. The new platform returns null
+for legacy `mini_app_url`, so older plugins issue fresh standalone review buttons.
+Previously sent customer-bot Mini App buttons cannot approve; request a fresh
+review link after deployment.
