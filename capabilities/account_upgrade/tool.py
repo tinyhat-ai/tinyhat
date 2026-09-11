@@ -151,6 +151,16 @@ def _review_hosts(base_url: str) -> set[str | None]:
     return hosts
 
 
+def _review_bots() -> set[str]:
+    bots = {"tinyhatbot"}
+    override = runtime_env().get("TINYHAT_ACCOUNT_REVIEW_BOT_USERNAME", "").strip()
+    if override:
+        if not re.fullmatch(r"[A-Za-z][A-Za-z0-9_]{4,31}", override):
+            raise ValueError("invalid configured review bot")
+        bots.add(override.lower())
+    return bots
+
+
 def _safe_result(action: str, result: dict[str, Any], *, base_url: str = "") -> str:
     if action == "verification_link":
         return _verification_link(result)
@@ -197,10 +207,13 @@ def _safe_result(action: str, result: dict[str, Any], *, base_url: str = "") -> 
                 link.scheme != "https" or link.hostname != "t.me"
                 or link.username or link.password or link.port is not None
                 or not re.fullmatch(r"/[A-Za-z][A-Za-z0-9_]{4,31}", link.path)
+                or link.path[1:].lower() not in _review_bots()
                 or link.fragment or query != {"start": [payload]}
                 or not re.fullmatch(r"tu_[1-9][0-9]{0,17}_" + re.escape(result["revision"]), payload)
             ):
                 raise ValueError("invalid Telegram review URL")
+            telegram_review_url = f"https://t.me/{link.path[1:].lower()}?start={payload}"
+            safe["telegram_review_url"] = telegram_review_url
         if action in {"prepare", "review_link"}:
             safe["telegram_button_sent"] = _send_review_button(url, telegram_review_url=telegram_review_url)
     return json.dumps(safe, sort_keys=True)
@@ -211,10 +224,14 @@ def _send_review_button(url: str, *, telegram_review_url: str | None = None) -> 
         from ...tools import _telegram_credentials, _telegram_send_message
 
         token, chat_id = _telegram_credentials()
+        opening = (
+            "Open Tinyhat, tap Start if asked, then tap its Review account upgrade button. "
+            if telegram_review_url else "Open the form and sign in if asked. "
+        )
         result = _telegram_send_message(
             token=token,
             chat_id=chat_id,
-            text="Your account upgrade is ready to review. Open the form, check every detail and the terms, then approve. Ask me for corrections if needed. Setup waits for your approval.",
+            text="Your account upgrade is ready to review. " + opening + "Check every detail and the terms, then approve. Ask me for corrections if needed. Setup waits for your approval.",
             reply_markup={"inline_keyboard": [[{
                 "text": "Review account upgrade",
                 "url": telegram_review_url or url,

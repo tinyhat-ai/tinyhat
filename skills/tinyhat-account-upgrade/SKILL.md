@@ -57,6 +57,7 @@ The tool has no final approval action.
 - The customer agent sends an ordinary URL button to the platform bot. Never
   replace it with a customer-bot `web_app` button: final approval authenticates
   the platform bot, whose credentials are not available to this Computer.
+- Use only the tool-returned handoff; do not invent or replace its bot username.
 - If `telegram_review_url` is missing or null, the button opens `approval_url`
   in a standalone browser where existing email sign-in may be required.
 - If no button was sent, give `telegram_review_url` privately to the Telegram

@@ -659,5 +659,16 @@ credentials, ports, fragments and extra query parameters are rejected. Invalid
 non-null handoffs fail closed without sending a button. Neither handoff nor
 standalone review URLs carry personal information or approval authority.
 
-Compatible platform Mini App routes must deploy and pass real Telegram
-verification before releasing or promoting this plugin update.
+The production bot is pinned to `tinyhatbot`. Operators can add a development
+bot with `TINYHAT_ACCOUNT_REVIEW_BOT_USERNAME` (a username without `@`) in the
+runtime environment; tool arguments and response fields cannot expand trust.
+The validated URL is rebuilt into a canonical URL before returning or sending it.
+Malformed non-null handoffs deliberately fail the call, including status, so a
+bad deployment is visible rather than silently directing an owner elsewhere.
+
+Before release/promotion, deploy and verify the platform's decimal-agent-id
+handoff producer, platform-bot `/start` handler and platform-only final-consent
+authentication, including real Telegram delivery. The new platform returns null
+for legacy `mini_app_url`, so older plugins issue fresh standalone review buttons.
+Previously sent customer-bot Mini App buttons cannot approve; request a fresh
+review link after deployment.

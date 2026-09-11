@@ -168,7 +168,7 @@ class AccountUpgradeTests(unittest.TestCase):
 
     def test_review_hands_off_to_platform_bot_as_an_ordinary_link(self):
         draft = self.draft()
-        link = f"https://t.me/tinyhatdevbot?start=tu_123_{draft['revision']}"
+        link = f"https://t.me/tinyhatbot?start=tu_123_{draft['revision']}"
         self.client.get_json.return_value = {**draft, "telegram_review_url": link}
         with (
             patch("tinyhat.tools._telegram_credentials", return_value=("test-token", "test-chat")),
@@ -179,17 +179,39 @@ class AccountUpgradeTests(unittest.TestCase):
         self.assertEqual(send.call_args.kwargs["reply_markup"]["inline_keyboard"][0][0], {
             "text": "Review account upgrade", "url": link
         })
+        self.assertIn("tap Start if asked", send.call_args.kwargs["text"])
         self.assertEqual(result["telegram_review_url"], link)
         self.assertEqual(result["approval_url"], draft["approval_url"])
 
+    def test_review_bot_must_be_pinned_by_operator_configuration(self):
+        draft = self.draft()
+        for name in ("evilbot", "tinyhatdevbot"):
+            self.client.get_json.return_value = {**draft, "telegram_review_url": f"https://t.me/{name}?start=tu_123_{draft['revision']}"}
+            self.assertEqual(json.loads(tool.account_upgrade())["error"], "invalid_platform_response")
+        self.runtime_env.return_value = {"TINYHAT_ACCOUNT_REVIEW_BOT_USERNAME": "tinyhatdevbot"}
+        self.assertEqual(json.loads(tool.account_upgrade())["status"], "awaiting_approval")
+        for name in ("@tinyhatdevbot", "evil/path", "bad", "tinyhatdevbot?x=y"):
+            self.runtime_env.return_value = {"TINYHAT_ACCOUNT_REVIEW_BOT_USERNAME": name}
+            self.assertEqual(json.loads(tool.account_upgrade())["error"], "invalid_platform_response")
+
+    def test_validated_handoff_is_canonical_in_output_and_button(self):
+        draft = self.draft()
+        canonical = f"https://t.me/tinyhatbot?start=tu_123_{draft['revision']}"
+        for url in (canonical.replace("?start", "?%73tart"), canonical.replace("t.me/", "t.\nme/"), canonical.replace("tinyhatbot", "TinyHatBot")):
+            self.client.get_json.return_value = {**draft, "telegram_review_url": url}
+            with patch.object(tool, "_send_review_button", return_value=True) as send:
+                result = json.loads(tool.account_upgrade({"action": "review_link"}))
+            self.assertEqual(result["telegram_review_url"], canonical)
+            send.assert_called_once_with(draft["approval_url"], telegram_review_url=canonical)
+
     def test_invalid_platform_bot_link_cannot_send_button(self):
         draft = self.draft()
-        good = f"https://t.me/tinyhatdevbot?start=tu_123_{draft['revision']}"
+        good = f"https://t.me/tinyhatbot?start=tu_123_{draft['revision']}"
         for url in (
             good.replace("t.me", "evil.example"), good.replace("t.me", "t.me.evil.example"),
             good.replace("https:", "http:"), good.replace("t.me", "user@t.me"),
             good.replace("t.me", "t.me:443"), good.replace("t.me", "t.me:invalid"),
-            good.replace("tinyhatdevbot?", "tinyhatdevbot/?"), good + "#fragment",
+            good.replace("tinyhatbot?", "tinyhatbot/?"), good + "#fragment",
             good + "&start=other", good + "&url=https://evil.example", good + "&empty=",
             good.replace(draft["revision"], "thur_" + "b" * 32),
             good.replace("tu_123_", "tu_0_"), good.replace("tu_123_", "tu_-1_"),
