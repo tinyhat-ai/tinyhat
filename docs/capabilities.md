@@ -619,3 +619,24 @@ arbitrary shell commands in chat.
   printed into chat.
 - Secret values must be entered in dedicated user-facing flows, not chat
   messages or skill instructions.
+
+## Individual account upgrade
+
+`tinyhat_account_upgrade` checks and submits the existing individual owner's
+Stripe Projects upgrade using the assigned Computer identity. The skill explains
+one combined approval for Tinyhat and Stripe terms, personal-data sharing and
+identity verification; submission still requires every explicit consent field.
+Existing customers with a verified email do not need another sign-in. Those
+without one verify it in their existing Profile; the tool never registers a new
+user or guesses an account identifier.
+
+The versioned platform routes are `/hapi/v2/computers/me/account/upgrade`
+(GET status, POST submit), `/upgrade/continue` (POST), and
+`/hapi/v2/computers/me/account/verification-link` (POST). Deployment of those
+routes and Stripe activation are prerequisites. An older or disabled platform
+returns an unavailable result; no positive spending grant or purchase occurs.
+The local-development bearer is not supported by these cloud-identity routes.
+
+Details are forwarded for the authorized request and are not written to local
+files by this tool. Provider or transport errors never echo the request, token,
+or raw upstream response. The owner can choose the private browser form instead.

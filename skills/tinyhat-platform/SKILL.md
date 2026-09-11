@@ -13,6 +13,7 @@ Use this as the default routing map:
 
 | User intent | Default Tinyhat route |
 | --- | --- |
+| Upgrade the owner account or enable Stripe Projects services | Load `tinyhat:tinyhat-account-upgrade`; check `tinyhat_account_upgrade` status before collecting details or approval. |
 | Add or save an API key, token, password, webhook secret, or credential | Call `tinyhat_private_secret_handoff` once. |
 | Connect this agent to Slack | Load `tinyhat:tinyhat-slack` and call `tinyhat_slack_connect` once. The tool sends the Hermes Agent-view manifest, create-app guide, and encrypted token form. Do not send a duplicate reply. |
 | Disconnect this agent from Slack | Load `tinyhat:tinyhat-slack` and call `tinyhat_slack_disconnect` once. The tool sends the two-stage Telegram confirmation, then a detached plugin worker revokes the bot token and removes the complete local bundle before the platform uses its generic Hermes restart path. Do not send a duplicate reply. |

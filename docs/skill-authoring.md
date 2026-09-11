@@ -294,3 +294,11 @@ comparison-free caveat that Tinyloop operates the underlying
 infrastructure today, the private-Computers direction, and links to
 https://tinyhat.ai/privacy and https://tinyhat.ai/terms. It forbids
 speculating about named operators or claiming which internal tools exist.
+
+## Account-upgrade consent
+
+Use `tinyhat:tinyhat-account-upgrade` for individual Stripe Projects onboarding.
+Keep this distinct from adding Computer credit or AI model budget. Check live
+availability before offering the upgrade; one express approval covers all
+disclosed points, while each API consent flag records that approval. Machine
+authentication identifies the assigned owner and is never evidence of consent.

@@ -1,5 +1,7 @@
 """Tinyhat Hermes plugin tool schemas."""
 
+from .capabilities.account_upgrade.schema import SCHEMA as TINYHAT_ACCOUNT_UPGRADE_SCHEMA
+
 TINYHAT_PLUGIN_VERSION_SCHEMA = {
     "type": "object",
     "properties": {},
