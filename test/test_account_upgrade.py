@@ -12,16 +12,17 @@ from package_support import load_local_tinyhat
 
 load_local_tinyhat(REPO_ROOT)
 
+import tinyhat
+from test_hermes_adapter import FakeHermesContext
 from tinyhat import context, schemas
 from tinyhat.capabilities.account_upgrade import tool
 from tinyhat.platform import PlatformError
-from test_hermes_adapter import FakeHermesContext
-import tinyhat
 
 
 class AccountUpgradeTests(unittest.TestCase):
     def setUp(self):
         self.client = Mock()
+        self.client.base_url = "https://api.tinyhat.ai"
         self.client.get_json.return_value = {
             "status": "not_started",
             "available": True,
@@ -36,12 +37,8 @@ class AccountUpgradeTests(unittest.TestCase):
 
     def payload(self):
         return {
-            "action": "submit",
+            "action": "prepare",
             "individual": {"given_name": "Synthetic"},
-            "consent": {
-                "terms_version": "2026-09-11",
-                **{key: True for key in tool.APPROVALS},
-            },
         }
 
     def test_registration_and_existing_customer_discovery(self):
@@ -65,20 +62,66 @@ class AccountUpgradeTests(unittest.TestCase):
             f"{tool.BASE}/upgrade",
             {
                 "individual": payload["individual"],
-                "consent": payload["consent"],
+                "revision": None,
             },
         )
         self.builder.assert_called_with(timeout_seconds=45)
 
-    def test_unapproved_or_coerced_consent_makes_no_network_request(self):
-        for key in tool.APPROVALS:
-            for invalid in (False, 1, "true", None):
-                with self.subTest(key=key, invalid=invalid):
-                    payload = self.payload()
-                    payload["consent"][key] = invalid
-                    result = json.loads(tool.account_upgrade(payload))
-                    self.assertEqual(result["error"], "human_approval_required")
+    def test_agent_cannot_supply_consent_or_an_approval_action(self):
+        for field in ("consent", "human_authorized", "approved"):
+            result = json.loads(tool.account_upgrade({**self.payload(), field: True}))
+            self.assertEqual(result["error"], "invalid_arguments")
+        for action in ("submit", "approve"):
+            self.assertEqual(
+                json.loads(tool.account_upgrade({"action": action}))["error"], "invalid_action"
+            )
         self.builder.assert_not_called()
+
+    def test_review_button_is_sent_without_exposing_details_or_duplicate_url(self):
+        revision = "thur_" + "a" * 32
+        url = f"https://computer.tinyhat.ai/tinyhat/account/upgrade?review={revision}"
+        self.client.post_json.return_value = {
+            "status": "awaiting_approval",
+            "revision": revision,
+            "approval_url": url,
+            "individual": {"given_name": "private"},
+        }
+        with (
+            patch("tinyhat.tools._telegram_credentials", return_value=("test-token", "test-chat")),
+            patch("tinyhat.tools._telegram_send_message", return_value={"ok": True}) as send,
+        ):
+            result = json.loads(tool.account_upgrade(self.payload()))
+        self.assertTrue(result["telegram_button_sent"])
+        self.assertNotIn("approval_url", result)
+        self.assertNotIn("individual", result)
+        self.assertEqual(
+            send.call_args.kwargs["reply_markup"]["inline_keyboard"][0][0],
+            {"text": "Review account upgrade", "url": url},
+        )
+        self.assertNotIn("private", send.call_args.kwargs["text"])
+
+    def test_review_url_and_revision_are_validated(self):
+        revision = "thur_" + "a" * 32
+        for url in (
+            "https://evil.example/",
+            "https://computer.tinyhat.ai/tinyhat/account/upgrade?review=wrong",
+            "javascript:alert(1)",
+        ):
+            self.client.get_json.return_value = {
+                "status": "awaiting_approval",
+                "revision": revision,
+                "approval_url": url,
+            }
+            result = json.loads(tool.account_upgrade({"action": "status"}))
+            self.assertEqual(result["error"], "invalid_platform_response")
+
+    def test_correction_sends_current_revision_without_consent(self):
+        revision = "thur_" + "a" * 32
+        tool.account_upgrade({**self.payload(), "revision": revision})
+        self.assertEqual(
+            self.client.post_json.call_args.args[1],
+            {"individual": self.payload()["individual"], "revision": revision},
+        )
 
     def test_targeting_another_owner_is_rejected_before_network(self):
         for key in ("account_id", "user_id", "computer_id", "payment_method"):
@@ -152,18 +195,18 @@ class AccountUpgradeTests(unittest.TestCase):
         from http.client import RemoteDisconnected
 
         for failure in (TimeoutError, RemoteDisconnected, ConnectionResetError):
-            for action in ("submit", "continue", "verification_link", "status"):
+            for action in ("prepare", "continue", "verification_link", "status"):
                 with self.subTest(failure=failure.__name__, action=action):
                     self.client.get_json.side_effect = failure("private-details")
                     self.client.post_json.side_effect = failure("private-details")
-                    payload = self.payload() if action == "submit" else {"action": action}
+                    payload = self.payload() if action == "prepare" else {"action": action}
                     result = tool.account_upgrade(payload)
                     self.assertNotIn("private-details", result)
                     parsed = json.loads(result)
                     self.assertEqual(
                         parsed["error"],
                         "upgrade_submission_uncertain"
-                        if action == "submit"
+                        if action == "prepare"
                         else "account_upgrade_unavailable",
                     )
                     self.assertIn("status", parsed["message"])

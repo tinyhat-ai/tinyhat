@@ -1,25 +1,17 @@
-# Individual owner account upgrade
+# Reviewed individual account upgrade
 
-Adds the `tinyhat-account-upgrade` skill and `tinyhat_account_upgrade` tool for
-existing customers on assigned cloud Computers. The platform derives the owner;
-no account IDs or laptop tokens are supplied. A single express human approval
-covers terms, sharing, and identity verification. Paid-service activation and
-provider purchases remain separate.
+The assigned Computer prepares an encrypted owner-bound draft. The tool sends a
+Telegram review button when available, otherwise returns its review URL. The
+owner signs in with their existing verified email, reviews all details and the
+terms, and approves using one checkbox and the final approval button. Changes
+invalidate earlier reviews. The tool has no consent or final approval action.
 
-Verification: package validator, full unittest suite, and compileall. The tool
-tests cover schema/adapter registration, current-owner routes, strictly affirmative
-consent, injected account IDs, sanitized errors, unverified owner guidance and
-verification URL restrictions. Platform HTTP/DB tests separately exercise the
-actual assignment and membership boundary, revoked email proof, and resumable
-Stripe setup using local fixtures. No real Stripe or cloud purchase is tested.
+This keeps existing owner accounts and Computer credentials; it does not sign up
+another user, grant spending credit, or purchase a service. Compatible platform
+review APIs must deploy before this plugin is released. No runtime or channel
+change is included.
 
-Release requires compatible platform APIs to be deployed first. No runtime or
-release/channel change is included. On older or disabled platforms, report
-unavailable and do not collect personal details or approvals.
-
-Recovery checks include lost responses, rate limiting and state conflicts. The
-skill limits each polling attempt to ten checks and accepts approval only from
-the owner directly in the current conversation after the current terms are shown.
-Private-form guidance keeps the same Tinyhat environment and verified profile
-email; it does not supply a production sign-up shortcut. Context routing keeps
-existing playbook pointers and excludes unrelated service upgrades.
+Verification covers allowed actions, revision handling, removal of attested
+consent, safe review URLs, Telegram message/button generation and no duplicate
+link output, transport errors, owner identity and package registration. Real
+Telegram and coding-agent review evidence is recorded in the PR.

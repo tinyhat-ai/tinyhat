@@ -622,21 +622,20 @@ arbitrary shell commands in chat.
 
 ## Individual account upgrade
 
-`tinyhat_account_upgrade` checks and submits the existing individual owner's
-Stripe Projects upgrade using the assigned Computer identity. The skill explains
-one combined approval for Tinyhat and Stripe terms, personal-data sharing and
-identity verification; submission still requires every explicit consent field.
-Existing customers with a verified email do not need another sign-in. Those
-without one verify it in their existing Profile; the tool never registers a new
-user or guesses an account identifier.
+`tinyhat_account_upgrade` prepares the assigned individual owner's Stripe
+Projects upgrade using Computer identity. `prepare` saves details and returns
+`awaiting_approval`; in Telegram it sends a native **Review account upgrade**
+button. `review_link` resends it. Otherwise the tool returns the private review
+URL. No personal details are included in the button message or tool response.
 
-The versioned platform routes are `/hapi/v2/computers/me/account/upgrade`
-(GET status, POST submit), `/upgrade/continue` (POST), and
-`/hapi/v2/computers/me/account/verification-link` (POST). Deployment of those
-routes and Stripe activation are prerequisites. An older or disabled platform
-returns an unavailable result; no positive spending grant or purchase occurs.
-The local-development bearer is not supported by these cloud-identity routes.
+The owner uses their existing verified email to sign in on the review page,
+checks every field and the terms, and gives one explicit approval. A draft edit
+invalidates prior reviews. The tool cannot accept terms; `submit` and consent
+flags are no longer supported. Existing customers retain the same owner account
+and do not need to register again. Email sign-in is required for final review.
 
-Details are forwarded for the authorized request and are not written to local
-files by this tool. Provider or transport errors never echo the request, token,
-or raw upstream response. The owner can choose the private browser form instead.
+Versioned routes remain `/hapi/v2/computers/me/account/upgrade` (GET status, POST
+draft), `/upgrade/continue` and `/verification-link`. Compatible review APIs
+must deploy first. Computer identity cannot call the browser approval endpoint.
+This tool does not grant spending credit or purchase a service. Raw provider
+errors never echo personal details or credentials.

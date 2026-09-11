@@ -3,23 +3,20 @@
 from __future__ import annotations
 
 import json
+import re
 from http.client import HTTPException
 from typing import Any
-from urllib.parse import urlparse
+from urllib.parse import parse_qs, urlparse
 
 from ...platform import PlatformError, build_platform_client
 from ...tool_errors import tool_error_json
 
 BASE = "/hapi/v2/computers/me/account"
-APPROVALS = (
-    "tinyhat_terms_accepted",
-    "stripe_terms_accepted",
-    "personal_data_sharing_accepted",
-    "identity_verification_accepted",
-    "human_authorized",
-)
 STATUS_FIELDS = {
     "available",
+    "revision",
+    "approval_url",
+    "approval_expires_at",
     "status",
     "stage",
     "message",
@@ -44,23 +41,20 @@ def _error(code: str, message: str) -> str:
 
 
 def _validate(payload: dict[str, Any], action: str) -> str | None:
-    allowed = {"action", "individual", "consent"} if action == "submit" else {"action"}
+    allowed = {"action", "individual", "revision"} if action == "prepare" else {"action"}
     if set(payload) - allowed:
         return _error(
             "invalid_arguments",
-            "This tool uses only the currently assigned owner; do not supply account or user identifiers.",
+            "Prepare details only. Final approval belongs on the owner's review page; do not supply consent or account identifiers.",
         )
-    if action == "submit":
-        consent = payload.get("consent")
-        if (
-            not isinstance(consent, dict)
-            or any(consent.get(key) is not True for key in APPROVALS)
-            or not isinstance(consent.get("terms_version"), str)
-            or not consent["terms_version"]
+    if action == "prepare":
+        revision = payload.get("revision")
+        if revision is not None and (
+            not isinstance(revision, str) or not re.fullmatch(r"thur_[A-Za-z0-9_-]{32}", revision)
         ):
             return _error(
-                "human_approval_required",
-                "Explain the current upgrade terms and obtain the human's express approval before submitting.",
+                "invalid_arguments",
+                "Use the current revision returned by status when correcting a draft.",
             )
         if not isinstance(payload.get("individual"), dict):
             return _error(
@@ -91,7 +85,7 @@ def _request_failure(action: str, exc: Exception) -> str:
         ),
         409: (
             "account_upgrade_conflict",
-            "Check status before proceeding. Keep the existing upgrade and do not submit changed details.",
+            "Check status for the latest revision. Correct only an unapproved draft, then ask the owner to review again. Approved requests need support for changes.",
         ),
         422: (
             "invalid_request",
@@ -108,7 +102,7 @@ def _request_failure(action: str, exc: Exception) -> str:
     }
     if status in statuses:
         return _error(*statuses[status])
-    if action == "submit":
+    if action == "prepare":
         return _error(
             "upgrade_submission_uncertain",
             "The upgrade was not confirmed. Check status before retrying the identical request; do not create another account.",
@@ -135,11 +129,12 @@ def _verification_link(result: dict[str, Any]) -> str:
     return json.dumps({"url": url})
 
 
-def _safe_result(action: str, result: dict[str, Any]) -> str:
+def _safe_result(action: str, result: dict[str, Any], *, base_url: str = "") -> str:
     if action == "verification_link":
         return _verification_link(result)
     if result.get("status") not in {
         "not_started",
+        "awaiting_approval",
         "pending",
         "needs_information",
         "ready",
@@ -147,9 +142,46 @@ def _safe_result(action: str, result: dict[str, Any]) -> str:
         "recovery_required",
     }:
         raise ValueError("invalid status")
-    return json.dumps(
-        {key: value for key, value in result.items() if key in STATUS_FIELDS}, sort_keys=True
-    )
+    safe = {key: value for key, value in result.items() if key in STATUS_FIELDS}
+    if result.get("status") == "awaiting_approval":
+        url = result.get("approval_url")
+        if not isinstance(url, str):
+            raise ValueError("missing review URL")
+        parsed = urlparse(url)
+        if (
+            parsed.scheme != "https"
+            or parsed.hostname not in {"computer.tinyhat.ai", urlparse(base_url).hostname}
+            or parsed.username
+            or parsed.password
+            or parsed.port not in {None, 443}
+            or parsed.path != "/tinyhat/account/upgrade"
+            or parsed.fragment
+            or not isinstance(result.get("revision"), str)
+            or not re.fullmatch(r"thur_[A-Za-z0-9_-]{32}", result["revision"])
+            or parse_qs(parsed.query) != {"review": [result["revision"]]}
+        ):
+            raise ValueError("invalid review URL")
+        if action in {"prepare", "review_link"}:
+            safe["telegram_button_sent"] = _send_review_button(url)
+            if safe["telegram_button_sent"]:
+                safe.pop("approval_url", None)
+    return json.dumps(safe, sort_keys=True)
+
+
+def _send_review_button(url: str) -> bool:
+    try:
+        from ...tools import _telegram_credentials, _telegram_send_message
+
+        token, chat_id = _telegram_credentials()
+        result = _telegram_send_message(
+            token=token,
+            chat_id=chat_id,
+            text="Your account upgrade is ready to review. Open the form, check every detail and the terms, then approve. Ask me for corrections if needed. Nothing is submitted to Stripe before approval.",
+            reply_markup={"inline_keyboard": [[{"text": "Review account upgrade", "url": url}]]},
+        )
+        return bool(result.get("ok"))
+    except Exception:
+        return False
 
 
 def account_upgrade(args: dict[str, Any] | None = None, **_: Any) -> str:
@@ -157,11 +189,14 @@ def account_upgrade(args: dict[str, Any] | None = None, **_: Any) -> str:
     action = payload.get("action", "status")
     if not isinstance(action, str) or action not in {
         "status",
-        "submit",
+        "prepare",
+        "review_link",
         "continue",
         "verification_link",
     }:
-        return _error("invalid_action", "Use status, submit, continue, or verification_link.")
+        return _error(
+            "invalid_action", "Use status, prepare, review_link, continue, or verification_link."
+        )
     invalid = _validate(payload, action)
     if invalid:
         return invalid
@@ -172,17 +207,17 @@ def account_upgrade(args: dict[str, Any] | None = None, **_: Any) -> str:
                 "computer_identity_required",
                 "Use this tool from the assigned Tinyhat cloud Computer.",
             )
-        if action == "status":
+        if action in {"status", "review_link"}:
             result = client.get_json(f"{BASE}/upgrade")
-        elif action == "submit":
+        elif action == "prepare":
             result = client.post_json(
                 f"{BASE}/upgrade",
-                {"individual": payload["individual"], "consent": payload["consent"]},
+                {"individual": payload["individual"], "revision": payload.get("revision")},
             )
         else:
             suffix = "verification-link" if action == "verification_link" else "upgrade/continue"
             result = client.post_json(f"{BASE}/{suffix}", {})
-        return _safe_result(action, result)
+        return _safe_result(action, result, base_url=client.base_url)
     except (PlatformError, OSError, HTTPException) as exc:
         # A response may be lost after acceptance. Never echo or retry a write.
         return _request_failure(action, exc)
