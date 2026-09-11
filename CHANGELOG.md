@@ -4,6 +4,15 @@ All notable changes to the Tinyhat plugin are documented here.
 
 ## Unreleased
 
+## 0.32.12 - 2026-09-11
+
+- Send account-upgrade reviews through the official Tinyhat Telegram bot,
+  where the owner can review their details and terms before approving.
+- Validate the review destination and explain the handoff and browser sign-in
+  fallback when a Telegram review is unavailable.
+- Deploy and verify the compatible platform-bot review flow before publishing
+  this release or promoting either managed-Computer channel.
+
 ## 0.32.11 - 2026-09-11
 
 - Let an Agent prepare its existing owner's individual Stripe Projects
