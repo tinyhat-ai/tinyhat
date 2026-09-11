@@ -299,6 +299,8 @@ speculating about named operators or claiming which internal tools exist.
 
 Use `tinyhat:tinyhat-account-upgrade` for individual Stripe Projects onboarding.
 Keep this distinct from adding Computer credit or AI model budget. Check live
-availability before offering the upgrade; one express approval covers all
-disclosed points, while each API consent flag records that approval. Machine
-authentication identifies the assigned owner and is never evidence of consent.
+availability before offering the upgrade. The agent prepares a draft and sends
+a review button; the owner checks the full profile and terms and approves on
+the review page. No tool field records consent. Machine authentication identifies
+the assigned owner and never authorizes final approval. Cloud agents must not
+collect email sign-in codes or sign in to the owner’s account.

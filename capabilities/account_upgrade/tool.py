@@ -6,9 +6,9 @@ import json
 import re
 from http.client import HTTPException
 from typing import Any
-from urllib.parse import parse_qs, urlparse
+from urllib.parse import parse_qs, urlparse, urlsplit
 
-from ...platform import PlatformError, build_platform_client
+from ...platform import PlatformError, build_platform_client, runtime_env
 from ...tool_errors import tool_error_json
 
 BASE = "/hapi/v2/computers/me/account"
@@ -129,6 +129,27 @@ def _verification_link(result: dict[str, Any]) -> str:
     return json.dumps({"url": url})
 
 
+def _review_hosts(base_url: str) -> set[str | None]:
+    hosts = {"computer.tinyhat.ai", urlsplit(base_url).hostname}
+    # Operator/runtime configuration, never a tool argument or returned profile.
+    origin = runtime_env().get("TINYHAT_ACCOUNT_REVIEW_ORIGIN", "").strip()
+    if origin:
+        parsed = urlsplit(origin)
+        if (
+            parsed.scheme != "https"
+            or not parsed.hostname
+            or parsed.username
+            or parsed.password
+            or parsed.port not in {None, 443}
+            or parsed.path not in {"", "/"}
+            or parsed.query
+            or parsed.fragment
+        ):
+            raise ValueError("invalid configured review origin")
+        hosts.add(parsed.hostname)
+    return hosts
+
+
 def _safe_result(action: str, result: dict[str, Any], *, base_url: str = "") -> str:
     if action == "verification_link":
         return _verification_link(result)
@@ -143,14 +164,17 @@ def _safe_result(action: str, result: dict[str, Any], *, base_url: str = "") -> 
     }:
         raise ValueError("invalid status")
     safe = {key: value for key, value in result.items() if key in STATUS_FIELDS}
+    if result.get("status") != "awaiting_approval":
+        for field in ("approval_url", "revision", "approval_expires_at"):
+            safe.pop(field, None)
     if result.get("status") == "awaiting_approval":
         url = result.get("approval_url")
         if not isinstance(url, str):
             raise ValueError("missing review URL")
-        parsed = urlparse(url)
+        parsed = urlsplit(url)
         if (
             parsed.scheme != "https"
-            or parsed.hostname not in {"computer.tinyhat.ai", urlparse(base_url).hostname}
+            or parsed.hostname not in _review_hosts(base_url)
             or parsed.username
             or parsed.password
             or parsed.port not in {None, 443}
@@ -163,8 +187,6 @@ def _safe_result(action: str, result: dict[str, Any], *, base_url: str = "") -> 
             raise ValueError("invalid review URL")
         if action in {"prepare", "review_link"}:
             safe["telegram_button_sent"] = _send_review_button(url)
-            if safe["telegram_button_sent"]:
-                safe.pop("approval_url", None)
     return json.dumps(safe, sort_keys=True)
 
 
@@ -176,7 +198,7 @@ def _send_review_button(url: str) -> bool:
         result = _telegram_send_message(
             token=token,
             chat_id=chat_id,
-            text="Your account upgrade is ready to review. Open the form, check every detail and the terms, then approve. Ask me for corrections if needed. Nothing is submitted to Stripe before approval.",
+            text="Your account upgrade is ready to review. Open the form, check every detail and the terms, then approve. Ask me for corrections if needed. Setup waits for your approval.",
             reply_markup={"inline_keyboard": [[{"text": "Review account upgrade", "url": url}]]},
         )
         return bool(result.get("ok"))

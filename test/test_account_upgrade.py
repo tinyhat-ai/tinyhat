@@ -34,6 +34,9 @@ class AccountUpgradeTests(unittest.TestCase):
         )
         self.builder = self.patch.start()
         self.addCleanup(self.patch.stop)
+        env_patch = patch.object(tool, "runtime_env", return_value={})
+        self.runtime_env = env_patch.start()
+        self.addCleanup(env_patch.stop)
 
     def payload(self):
         return {
@@ -77,7 +80,7 @@ class AccountUpgradeTests(unittest.TestCase):
             )
         self.builder.assert_not_called()
 
-    def test_review_button_is_sent_without_exposing_details_or_duplicate_url(self):
+    def test_review_button_is_sent_without_details_and_keeps_link_for_other_channels(self):
         revision = "thur_" + "a" * 32
         url = f"https://computer.tinyhat.ai/tinyhat/account/upgrade?review={revision}"
         self.client.post_json.return_value = {
@@ -92,7 +95,7 @@ class AccountUpgradeTests(unittest.TestCase):
         ):
             result = json.loads(tool.account_upgrade(self.payload()))
         self.assertTrue(result["telegram_button_sent"])
-        self.assertNotIn("approval_url", result)
+        self.assertEqual(result["approval_url"], url)
         self.assertNotIn("individual", result)
         self.assertEqual(
             send.call_args.kwargs["reply_markup"]["inline_keyboard"][0][0],
@@ -106,6 +109,8 @@ class AccountUpgradeTests(unittest.TestCase):
             "https://evil.example/",
             "https://computer.tinyhat.ai/tinyhat/account/upgrade?review=wrong",
             "javascript:alert(1)",
+            f"https://computer.tinyhat.ai/tinyhat/account/upgrade;x?review={revision}",
+            f"https://computer.tinyhat.ai.evil.example/tinyhat/account/upgrade?review={revision}",
         ):
             self.client.get_json.return_value = {
                 "status": "awaiting_approval",
@@ -114,6 +119,70 @@ class AccountUpgradeTests(unittest.TestCase):
             }
             result = json.loads(tool.account_upgrade({"action": "status"}))
             self.assertEqual(result["error"], "invalid_platform_response")
+
+    def draft(self, origin="https://computer.tinyhat.ai"):
+        revision = "thur_" + "a" * 32
+        return {
+            "status": "awaiting_approval",
+            "revision": revision,
+            "approval_url": f"{origin}/tinyhat/account/upgrade?review={revision}",
+        }
+
+    def test_separate_web_origin_requires_runtime_configuration(self):
+        self.client.base_url = "https://api.example.test"
+        self.client.get_json.return_value = self.draft("https://app.example.test")
+        self.assertEqual(json.loads(tool.account_upgrade())["error"], "invalid_platform_response")
+        self.runtime_env.return_value = {
+            "TINYHAT_ACCOUNT_REVIEW_ORIGIN": "https://app.example.test"
+        }
+        self.assertEqual(json.loads(tool.account_upgrade())["status"], "awaiting_approval")
+        self.client.get_json.return_value = self.draft("https://other.example.test")
+        self.assertEqual(json.loads(tool.account_upgrade())["error"], "invalid_platform_response")
+
+    def test_invalid_runtime_origin_cannot_expand_trust(self):
+        self.client.get_json.return_value = self.draft("https://app.example.test")
+        for origin in (
+            "http://app.example.test", "https://user@app.example.test",
+            "https://app.example.test/path", "https://app.example.test#fragment",
+            "https://app.example.test:444", "https://app.example.test?x=y",
+        ):
+            with self.subTest(origin=origin):
+                self.runtime_env.return_value = {"TINYHAT_ACCOUNT_REVIEW_ORIGIN": origin}
+                self.assertEqual(json.loads(tool.account_upgrade())["error"], "invalid_platform_response")
+
+    def test_status_accepts_platform_host_without_sending_button(self):
+        self.client.get_json.return_value = self.draft(self.client.base_url)
+        with patch.object(tool, "_send_review_button") as send:
+            result = json.loads(tool.account_upgrade())
+        self.assertEqual(result["status"], "awaiting_approval")
+        send.assert_not_called()
+
+    def test_review_link_gets_existing_draft_and_sends_button(self):
+        self.client.get_json.return_value = self.draft()
+        with patch.object(tool, "_send_review_button", return_value=True) as send:
+            result = json.loads(tool.account_upgrade({"action": "review_link"}))
+        self.client.get_json.assert_called_once_with(f"{tool.BASE}/upgrade")
+        self.client.post_json.assert_not_called()
+        send.assert_called_once_with(result["approval_url"])
+        self.assertTrue(result["telegram_button_sent"])
+
+    def test_telegram_failure_returns_review_url(self):
+        self.client.post_json.return_value = self.draft()
+        with (
+            patch("tinyhat.tools._telegram_credentials", return_value=("test-token", "test-chat")),
+            patch("tinyhat.tools._telegram_send_message", side_effect=OSError("private")),
+        ):
+            result = json.loads(tool.account_upgrade(self.payload()))
+        self.assertFalse(result["telegram_button_sent"])
+        self.assertEqual(result["approval_url"], self.draft()["approval_url"])
+        self.assertNotIn("private", json.dumps(result))
+
+    def test_approval_fields_are_removed_from_other_states(self):
+        self.client.get_json.return_value = {
+            "status": "pending", "approval_url": "javascript:alert(1)",
+            "revision": "untrusted", "approval_expires_at": "untrusted",
+        }
+        self.assertEqual(json.loads(tool.account_upgrade()), {"status": "pending"})
 
     def test_correction_sends_current_revision_without_consent(self):
         revision = "thur_" + "a" * 32

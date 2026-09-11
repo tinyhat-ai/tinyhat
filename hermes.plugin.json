@@ -144,7 +144,7 @@
       "qualified_name": "tinyhat:tinyhat-account-upgrade",
       "aliases": ["tinyhat-account-upgrade"],
       "path": "skills/tinyhat-account-upgrade/SKILL.md",
-      "purpose": "Upgrades the existing individual owner for Stripe Projects after explicit human approval, using the Computer identity."
+      "purpose": "Prepares the existing owner’s Stripe Projects upgrade using Computer identity; the owner approves on the review page."
     },
     {
       "name": "tinyhat-agentphone",
