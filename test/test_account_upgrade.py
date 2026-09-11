@@ -163,13 +163,13 @@ class AccountUpgradeTests(unittest.TestCase):
             result = json.loads(tool.account_upgrade({"action": "review_link"}))
         self.client.get_json.assert_called_once_with(f"{tool.BASE}/upgrade")
         self.client.post_json.assert_not_called()
-        send.assert_called_once_with(result["approval_url"], mini_app_url=None)
+        send.assert_called_once_with(result["approval_url"], telegram_review_url=None)
         self.assertTrue(result["telegram_button_sent"])
 
-    def test_review_opens_owner_authenticated_mini_app(self):
+    def test_review_hands_off_to_platform_bot_as_an_ordinary_link(self):
         draft = self.draft()
-        mini_url = f"https://use.tinyloop.co/tinyhat/miniapp/agents/123/account/upgrade?review={draft['revision']}"
-        self.client.get_json.return_value = {**draft, "mini_app_url": mini_url}
+        link = f"https://t.me/tinyhatdevbot?start=tu_123_{draft['revision']}"
+        self.client.get_json.return_value = {**draft, "telegram_review_url": link}
         with (
             patch("tinyhat.tools._telegram_credentials", return_value=("test-token", "test-chat")),
             patch("tinyhat.tools._telegram_send_message", return_value={"ok": True}) as send,
@@ -177,41 +177,37 @@ class AccountUpgradeTests(unittest.TestCase):
             result = json.loads(tool.account_upgrade({"action": "review_link"}))
         self.assertTrue(result["telegram_button_sent"])
         self.assertEqual(send.call_args.kwargs["reply_markup"]["inline_keyboard"][0][0], {
-            "text": "Review account upgrade", "web_app": {"url": mini_url}
+            "text": "Review account upgrade", "url": link
         })
+        self.assertEqual(result["telegram_review_url"], link)
         self.assertEqual(result["approval_url"], draft["approval_url"])
 
-    def test_invalid_mini_app_link_cannot_send_button(self):
+    def test_invalid_platform_bot_link_cannot_send_button(self):
         draft = self.draft()
-        path = "/tinyhat/miniapp/agents/123/account/upgrade"
-        query = f"?review={draft['revision']}"
+        good = f"https://t.me/tinyhatdevbot?start=tu_123_{draft['revision']}"
         for url in (
-            f"https://evil.example{path}{query}",
-            f"https://use.tinyloop.co.evil.example{path}{query}",
-            f"http://use.tinyloop.co{path}{query}",
-            f"https://user@use.tinyloop.co{path}{query}",
-            f"https://:password@use.tinyloop.co{path}{query}",
-            f"https://use.tinyloop.co:444{path}{query}",
-            f"https://use.tinyloop.co:invalid{path}{query}",
-            f"https://use.tinyloop.co{path}/{query}",
-            f"https://use.tinyloop.co/tinyhat/account/upgrade?review={draft['revision']}",
-            "https://use.tinyloop.co/tinyhat/miniapp/agents/123/account/upgrade?review=wrong",
-            f"https://use.tinyloop.co/tinyhat/miniapp/agents/123/account/upgrade?review={draft['revision']}#token=x",
+            good.replace("t.me", "evil.example"), good.replace("t.me", "t.me.evil.example"),
+            good.replace("https:", "http:"), good.replace("t.me", "user@t.me"),
+            good.replace("t.me", "t.me:443"), good.replace("t.me", "t.me:invalid"),
+            good.replace("tinyhatdevbot?", "tinyhatdevbot/?"), good + "#fragment",
+            good + "&start=other", good + "&url=https://evil.example", good + "&empty=",
+            good.replace(draft["revision"], "thur_" + "b" * 32),
+            good.replace("tu_123_", "tu_0_"), good.replace("tu_123_", "tu_-1_"),
             "", [], {}, 42, False,
         ):
             with self.subTest(url=url), patch.object(tool, "_send_review_button") as send:
-                self.client.get_json.return_value = {**draft, "mini_app_url": url}
+                self.client.get_json.return_value = {**draft, "telegram_review_url": url}
                 result = json.loads(tool.account_upgrade({"action": "review_link"}))
                 self.assertEqual(result["error"], "invalid_platform_response")
                 send.assert_not_called()
 
-    def test_null_mini_app_link_keeps_standalone_button(self):
+    def test_legacy_customer_bot_mini_app_is_never_used_for_approval(self):
         draft = self.draft()
-        self.client.get_json.return_value = {**draft, "mini_app_url": None}
+        self.client.get_json.return_value = {**draft, "mini_app_url": "https://use.tinyloop.co/old", "telegram_review_url": None}
         with patch.object(tool, "_send_review_button", return_value=True) as send:
             result = json.loads(tool.account_upgrade({"action": "review_link"}))
-        self.assertEqual(result["approval_url"], draft["approval_url"])
-        send.assert_called_once_with(draft["approval_url"], mini_app_url=None)
+        self.assertNotIn("mini_app_url", result)
+        send.assert_called_once_with(draft["approval_url"], telegram_review_url=None)
 
     def test_telegram_failure_returns_review_url(self):
         self.client.post_json.return_value = self.draft()
@@ -228,6 +224,7 @@ class AccountUpgradeTests(unittest.TestCase):
         self.client.get_json.return_value = {
             "status": "pending", "approval_url": "javascript:alert(1)",
             "revision": "untrusted", "approval_expires_at": "untrusted",
+            "telegram_review_url": "untrusted", "mini_app_url": "untrusted",
         }
         self.assertEqual(json.loads(tool.account_upgrade()), {"status": "pending"})
 

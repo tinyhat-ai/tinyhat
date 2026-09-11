@@ -50,21 +50,21 @@ This saves a draft only: it does not create a Stripe account or accept terms.
 Do not pass `consent`, `human_authorized`, `approved`, or similar assertions.
 The tool has no final approval action.
 
-- If `telegram_button_sent` is true and `mini_app_url` is present, explain that
-  the native **Review account upgrade** button opens the Tinyhat Mini App using
-  Telegram sign-in, without another email code. Say where it was sent.
-- If `mini_app_url` is missing or null, the button opens the standalone review
-  page instead. Explain that email sign-in may be required. Never promise
-  Telegram sign-in for this fallback.
-- Never paste `mini_app_url` as an ordinary link: only the native Mini App button
-  supplies Telegram launch data. For another private channel use `approval_url`.
-- If no button was sent, give `approval_url` privately to the owner. `review_link` can resend
-  the button for an existing draft. The link contains no personal details and
-  does not authenticate its holder or approve the upgrade.
-- Telegram verifies the owner from its signed Mini App launch. In a standalone
-  browser, the owner signs in with their existing verified email when required, then reviews
-  **all** entered details and the current terms, then checks one consent box and
-  clicks **Approve and upgrade account**.
+- If `telegram_button_sent` is true and `telegram_review_url` is present, explain
+  that **Review account upgrade** opens the platform Tinyhat bot. The owner taps
+  **Start** if Telegram asks, then taps that bot's **Review account upgrade**
+  button to open the form with Telegram sign-in, without another email code.
+- The customer agent sends an ordinary URL button to the platform bot. Never
+  replace it with a customer-bot `web_app` button: final approval authenticates
+  the platform bot, whose credentials are not available to this Computer.
+- If `telegram_review_url` is missing or null, the button opens `approval_url`
+  in a standalone browser where existing email sign-in may be required.
+- If no button was sent, give `telegram_review_url` privately to the Telegram
+  owner, or `approval_url` for another private channel. `review_link` resends
+  the existing draft. Neither URL authenticates its holder or approves anything.
+- The owner reviews **all** details and current terms, checks one consent box,
+  and clicks **Approve and upgrade account**. A forwarded link cannot authorize
+  another user to review or approve the owner's account.
 - If anything is wrong, the owner can edit on the page or return to chat and ask
   you for corrections. Check status, prepare corrected details with that
   revision, and send the new review. A change invalidates earlier reviews.
