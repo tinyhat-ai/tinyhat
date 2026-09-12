@@ -12,10 +12,10 @@ import json
 import logging
 import os
 import re
+import secrets
 import time
 from datetime import datetime, timezone
 from pathlib import Path
-from uuid import uuid4
 
 from gateway.config import Platform
 from gateway.platforms.base import BasePlatformAdapter, MessageEvent, SendResult
@@ -41,7 +41,7 @@ class TinyhatEmailAdapter(BasePlatformAdapter):
         super().__init__(config, Platform(PLATFORM))
         self._poll_task = None
         self._waiters = {}
-        self._status_checked = 0
+        self._status_checked = None
         self._client = None
         self._channel = None
         self._state = None
@@ -168,7 +168,10 @@ class TinyhatEmailAdapter(BasePlatformAdapter):
         self._state.ingest(messages, next_cursor)
 
     async def _refresh_status(self):
-        if time.monotonic() - self._status_checked < STATUS_SECONDS:
+        if (
+            self._status_checked is not None
+            and time.monotonic() - self._status_checked < STATUS_SECONDS
+        ):
             return
         channel = await asyncio.to_thread(owner.request, "status")
         if channel.get("status") != "ready":
@@ -310,7 +313,7 @@ class TinyhatEmailAdapter(BasePlatformAdapter):
             # queued turn in another task. Never use task-local turn context.
             key, context = reply_to, json.loads(state[2])["metadata"]
         else:
-            key = "notification-" + uuid4().hex
+            key = "notification-" + secrets.token_hex(16)
             context = {"subject": "A message from your Tinyhat agent"}
         if context.get("welcome") and re.match(
             r"^[\W_]*(?:the model provider|provider authentication|api .*failed|http \d{3})",

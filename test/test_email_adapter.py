@@ -247,7 +247,10 @@ class EmailAdapterTests(unittest.IsolatedAsyncioTestCase):
             "address": "renamed@example.test",
             "authserv_id": "other-mx.example.test",
         }
-        with patch.object(owner, "request", return_value=updated) as request:
+        with (
+            patch.object(channel.time, "monotonic", return_value=0),
+            patch.object(owner, "request", return_value=updated) as request,
+        ):
             await self.adapter._refresh_status()
             await self.adapter._refresh_status()
         request.assert_called_once()
