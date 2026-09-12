@@ -1,8 +1,10 @@
 """Assignment-authenticated owner mail; submission has no recipient parameter."""
 
+import contextlib
 import json
 import re
 from http import HTTPStatus
+from urllib.error import HTTPError
 from urllib.parse import quote
 
 from ...platform import PlatformError, build_platform_client
@@ -29,6 +31,9 @@ def error_details(exc):
     if not isinstance(code, str) or not re.fullmatch(r"[a-z][a-z0-9_]{0,79}", code):
         code = "email_service_unavailable"
     delay = detail.get("retry_after", 60)
+    if isinstance(exc.__cause__, HTTPError):
+        with contextlib.suppress(ValueError, TypeError, AttributeError):
+            delay = int(exc.__cause__.headers.get("Retry-After", delay))
     if not isinstance(delay, int) or isinstance(delay, bool):
         delay = 60
     return code, max(60, min(delay, 86400))

@@ -746,8 +746,14 @@ Tinyhat inbox. It polls JMAP every 15 seconds, retains message and reply state
 on the Computer, and sends through the platform only to the verified owner.
 Mailbox credentials cannot submit mail directly. SMTP credentials never reach
 the Computer. Owner replies require aligned DMARC from the receiving server;
-other incoming mail wakes an inbox notification, without treating its contents
-as instructions. Automated messages are excluded to prevent reply loops.
+only the Inbox is polled. Other incoming mail is coalesced into at most one
+owner notice per day, without treating its contents as instructions. Junk,
+Trash and automated messages are excluded to protect the conversation budget.
+
+Replies wait through a pending rename. Uncertain SMTP acceptance triggers only
+an hourly receipt lookup, never a blind resend. If the server cannot resolve
+acceptance, the durable `uncertain` record requires operator reconciliation;
+the adapter logs that state rather than claiming the welcome was delivered.
 
 `tinyhat-email-onboarding` writes the first brief welcome.
 `tinyhat-email-address` checks the address and guides a confirmed rename with

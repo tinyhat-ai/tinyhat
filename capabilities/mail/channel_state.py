@@ -80,6 +80,16 @@ class InboxState:
         row = self.db.execute("SELECT value FROM cursor WHERE id=1").fetchone()
         return json.loads(row[0]) if row else {}
 
+    def uncertain(self):
+        return self.db.execute(
+            "SELECT id,payload FROM messages WHERE state='uncertain' AND retry_at<=? ORDER BY retry_at LIMIT 20",
+            (time.time(),),
+        ).fetchall()
+
+    def defer_lookup(self, key):
+        self.db.execute("UPDATE messages SET retry_at=? WHERE id=?", (time.time() + 3600, key))
+        self.db.commit()
+
     def ingest(self, messages, cursor):
         with self.db:
             for message in messages:

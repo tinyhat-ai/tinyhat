@@ -10,6 +10,7 @@ import unittest
 from dataclasses import dataclass
 from pathlib import Path
 from unittest.mock import AsyncMock, patch
+from urllib.error import HTTPError
 
 from tinyhat.capabilities.mail import owner
 from tinyhat.capabilities.mail.channel_state import InboxState
@@ -83,6 +84,7 @@ class EmailAdapterTests(unittest.IsolatedAsyncioTestCase):
         }
         self.adapter._authserv_id = "mx.example.test"
         self.adapter._created_at = "2026-01-01T00:00:00Z"
+        self.adapter._inbox_id = "inbox-fixture"
         self.sent = []
 
     def deliver(self, action, payload):
@@ -150,6 +152,18 @@ class EmailAdapterTests(unittest.IsolatedAsyncioTestCase):
             await asyncio.wait_for(self.adapter._dispatch("dropped", {"subject": "Later"}, "Hi"), 1)
         self.assertEqual(self.adapter._state.get("dropped")[0], "processing")
 
+    async def test_provider_billing_error_is_not_sent_as_a_welcome(self):
+        self.adapter._state.put(channel.WELCOME, "processing", {"metadata": {"welcome": True}})
+        with patch.object(owner, "request") as send:
+            result = await self.adapter.send(
+                "owner",
+                "Billing or credits exhausted: HTTP 402 private provider details",
+                reply_to=channel.WELCOME,
+            )
+        self.assertFalse(result.success)
+        send.assert_not_called()
+        self.assertEqual(self.adapter._state.get(channel.WELCOME)[0], "processing")
+
     async def test_autoresponse_self_sender_and_untrusted_owner_spoof(self):
         self.adapter._dispatch = AsyncMock()
         for key, extra in (
@@ -172,6 +186,80 @@ class EmailAdapterTests(unittest.IsolatedAsyncioTestCase):
         self.assertTrue(call.kwargs["internal"])
         self.assertNotIn("dangerous", call.args[2])
         self.assertEqual(call.args[1]["subject"], "New email in your Tinyhat inbox")
+        for number in range(10):
+            await self.adapter._receive(
+                {"id": f"spam-{number}", "from": [{"email": "unknown@example.test"}]}
+            )
+        self.adapter._dispatch.assert_awaited_once()
+
+    async def test_long_message_id_does_not_reject_legitimate_reply(self):
+        self.adapter._dispatch = AsyncMock()
+        await self.adapter._receive(
+            {
+                "id": "long",
+                "from": [{"email": "owner@example.test"}],
+                "messageId": ["x" * 260 + "@example.test"],
+                "header:Authentication-Results:asText:all": [
+                    "mx.example.test; dmarc=pass header.from=example.test"
+                ],
+            }
+        )
+        self.assertNotIn("in_reply_to", self.adapter._dispatch.call_args.args[1])
+
+    async def test_slash_command_reply_releases_waiter_without_completion_hook(self):
+        async def handle(event):
+            await self.adapter.send("owner", "Command completed.", reply_to=event.message_id)
+
+        self.adapter.handle_message = handle
+        with patch.object(owner, "request", side_effect=self.deliver):
+            await asyncio.wait_for(
+                self.adapter._dispatch("command", {"subject": "Re: Command"}, "/status"), 0.2
+            )
+
+    async def test_generic_gateway_error_does_not_forward_raw_exception(self):
+        with patch.object(owner, "request", side_effect=self.deliver):
+            await self.adapter.send(
+                "owner", "Sorry, I encountered an error (PlatformError). private-fixture-secret"
+            )
+        self.assertNotIn("private-fixture", self.sent[0]["body"])
+
+    async def test_rename_pending_retries_but_idempotency_conflict_does_not(self):
+        payload = {"subject": "Hi", "body": "Hi", "idempotency_key": "pending-fixture"}
+        self.adapter._state.put("rename", "outbox", payload)
+        error = owner.PlatformError(
+            "private", status_code=409, response={"error": {"code": "email_channel_not_ready"}}
+        )
+        with patch.object(owner, "request", side_effect=error):
+            await self.adapter._deliver("rename", payload)
+        self.assertEqual(self.adapter._state.get("rename")[0], "outbox")
+        with patch.object(owner, "request", side_effect=self.deliver):
+            await self.adapter._deliver("rename", payload)
+        self.assertEqual(self.adapter._state.get("rename")[0], "done")
+
+    async def test_uncertain_welcome_reconciles_receipt_without_resending(self):
+        payload = {"idempotency_key": channel.WELCOME, "body": "Welcome"}
+        self.adapter._state.put(channel.WELCOME, "uncertain", payload)
+        with patch.object(owner, "request", return_value={"status": "unknown"}) as lookup:
+            await self.adapter._recover_outbox()
+            lookup.assert_called_once_with("deliveries/" + channel.WELCOME)
+            await self.adapter._recover_outbox()
+            self.assertEqual(lookup.call_count, 1)
+        self.adapter._state.db.execute("UPDATE messages SET retry_at=0")
+        self.adapter._state.db.commit()
+        with patch.object(owner, "request", return_value={"status": "sent"}) as lookup:
+            await self.adapter._recover_outbox()
+            lookup.assert_called_once_with("deliveries/" + channel.WELCOME)
+        self.assertEqual(self.adapter._state.get(channel.WELCOME)[0], "done")
+        self.assertTrue(self.adapter._channel["welcome_sent_at"])
+
+    def test_retry_after_comes_from_http_header(self):
+        error = owner.PlatformError(
+            "private", status_code=429, response={"error": {"code": "email_send_limit"}}
+        )
+        error.__cause__ = HTTPError(
+            "https://example.test", 429, "limit", {"Retry-After": "3600"}, None
+        )
+        self.assertEqual(owner.error_details(error), ("email_send_limit", 3600))
 
     async def test_identical_notifications_are_distinct_and_progress_is_not_mail(self):
         with patch.object(owner, "request", side_effect=self.deliver):
@@ -211,6 +299,7 @@ class EmailAdapterTests(unittest.IsolatedAsyncioTestCase):
             method, args, tag = methods[0]
             calls.append((method, args))
             if method == "Email/query":
+                self.assertEqual(args["filter"]["inMailbox"], "inbox-fixture")
                 ids = [str(n) for n in range(args["position"], min(51, args["position"] + 50))]
                 result = {"ids": ids, "queryState": "initial"}
             elif method == "Email/get":
@@ -255,6 +344,13 @@ class EmailAdapterTests(unittest.IsolatedAsyncioTestCase):
             await self.adapter._refresh_status()
         request.assert_called_once()
         self.assertEqual(self.adapter._channel["address"], "renamed@example.test")
+        self.assertEqual(self.adapter._authserv_id, "other-mx.example.test")
+        self.adapter._status_checked = None
+        with (
+            patch.object(owner, "request", return_value={**updated, "authserv_id": ""}),
+            self.assertRaisesRegex(ValueError, "authserv_id_missing"),
+        ):
+            await self.adapter._refresh_status()
         self.assertEqual(self.adapter._authserv_id, "other-mx.example.test")
 
     async def test_processing_payload_and_cursor_survive_restart(self):
