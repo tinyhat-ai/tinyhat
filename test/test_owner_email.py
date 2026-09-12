@@ -57,6 +57,10 @@ class OwnerMailTests(unittest.TestCase):
         good = "mail.example.com; dmarc=pass header.from=example.com policy.dmarc=none"
         m["header:Authentication-Results:asText:all"] = [good]
         self.assertTrue(authenticated_owner(m, "owner@example.com", "mail.example.com"))
+        m["header:Authentication-Results:asText:all"] = [
+            good.replace("mail.example.com;", "mail.example.com 1;")
+        ]
+        self.assertTrue(authenticated_owner(m, "owner@example.com", "mail.example.com"))
         for values in (
             [good.replace("mail.example.com;", "attacker.example;")],
             [good.replace("header.from=example.com", "header.from=badexample.com")],
@@ -67,6 +71,20 @@ class OwnerMailTests(unittest.TestCase):
         m["header:Authentication-Results:asText:all"] = [good]
         m["from"].append({"email": "other@example.com"})
         self.assertFalse(authenticated_owner(m, "owner@example.com", "mail.example.com"))
+
+    def test_safe_platform_limit_is_explained_without_provider_text(self):
+        exc = owner.PlatformError(
+            "secret provider response",
+            status_code=429,
+            response={
+                "error": {"code": "email_send_limit", "retry_after": 3600, "message": "private"}
+            },
+        )
+        result = json.loads(owner.platform_error_json("tinyhat_mail", exc))
+        self.assertEqual(result["error"], "email_send_limit")
+        self.assertEqual(result["expected"]["retry_after_seconds"], 3600)
+        self.assertNotIn("private", json.dumps(result))
+        self.assertNotIn("secret", json.dumps(result))
 
     def test_outbox_and_processed_ids_survive_restart_privately(self):
         with tempfile.TemporaryDirectory() as root:

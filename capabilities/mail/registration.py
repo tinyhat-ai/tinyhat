@@ -1,12 +1,11 @@
 """Lazy gateway registration keeps ordinary Tinyhat tools framework neutral."""
 
 import os
+from importlib import import_module
 
 
 def build_adapter(config):
-    from .channel import TinyhatEmailAdapter
-
-    return TinyhatEmailAdapter(config)
+    return import_module(".channel", __package__).TinyhatEmailAdapter(config)
 
 
 def register(ctx):

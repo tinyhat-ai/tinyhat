@@ -6,7 +6,8 @@ description: Use when the owner says "check your inbox," "I sent you an email, d
 # Tinyhat Mail
 
 This Computer receives this Agent's mailbox credentials and connects directly
-to the configured JMAP server. Tinyhat is not a mail proxy.
+to the configured JMAP server for reading. Email-onboarding channels send
+through the authenticated Tinyhat owner-mail API.
 
 Use `tinyhat_mail` for common mailbox actions. It is a Computer-local JMAP
 client, so the mailbox password stays on this Computer. For another
@@ -23,8 +24,16 @@ standard at `https://jmap.io/` and the configured server's documentation.
 - For another page, repeat list/search with the returned `next_position` as
   `position`. Stop when `next_position` is null.
 - `read`: read one message using the `email_id` returned by list or search.
-- `send`: send one plain-text email. Supply recipients, subject, body, and a
-  new stable `idempotency_key` for this exact send request.
+- `send`: send one plain-text email with subject, body, and a new stable
+  `idempotency_key` for this exact send request. When status says
+  `sending: owner_only`, omit `to` or supply only its verified `owner_email`.
+  No other recipient, cc, bcc, or attachment is allowed. Other mailboxes with
+  sending enabled require explicit recipients.
+
+Owner-email delivery is limited to 20 sends per hour and 100 per day. On
+`email_send_limit`, explain the limit and wait the returned retry interval.
+Do not bypass it with JMAP or SMTP. An uncertain delivery is not permission
+to resend with a new key.
 
 The user's request to send is the authorization. Do not add a second
 confirmation. If the recipients, subject, or intended message are unclear,

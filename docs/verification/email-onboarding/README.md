@@ -1,16 +1,16 @@
 # Local email onboarding verification
 
 The real Hermes gateway, Stalwart 0.16.15 and a bounded live model key ran against
-a disposable owner mailbox. The owner received a welcome, replied over SMTP,
-and received a generated response. Restarting Hermes did not duplicate either
-message. Renaming preserved mailbox ID/history; the old alias was removed after
+a disposable owner mailbox. The owner received a welcome, sent two emails
+before the next poll, and received separate generated replies with matching
+subjects and reply headers. Restarting Hermes did not duplicate any message. Renaming preserved mailbox ID/history; the old alias was removed after
 simulated expiry. The platform enforced the fixed verified-owner recipient.
 All addresses shown are disposable fixtures.
 
 ![Actual received welcome](welcome.png)
 
-The welcome arrived 9.54 seconds after the conversation test started; the reply
-arrived at 26.86 seconds. These measure local email onboarding, not VM creation.
+The welcome arrived 12.65 seconds after the conversation test started; both replies
+arrived by 32.19 seconds. These measure local email onboarding, not VM creation.
 Internet delivery and production inbox placement have not been tested here.
 
 Linux verification used a Python 3.13 container with Hermes installed, this
@@ -32,3 +32,6 @@ for rollout; this evidence does not claim a production release or deployment.
 ![Confirmed rename API result presented for review](rename.png)
 
 The rename image presents API results; it is not a new user interface.
+
+The conversation also passed against the runtime-pinned Hermes source commit
+`646761c7831ff4c4cd0d6ac711ed791d487fb665`.

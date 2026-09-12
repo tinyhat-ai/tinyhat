@@ -36,8 +36,8 @@ from .capabilities.hats.tool import hats as handle_hats
 from .capabilities.local_app_sharing.tool import (
     local_app_sharing as handle_local_app_sharing,
 )
-from .capabilities.mail.tool import tinyhat_mail as handle_mail
 from .capabilities.mail import owner as owner_email_tools
+from .capabilities.mail.tool import tinyhat_mail as handle_mail
 from .capabilities.secrets.credentials import credentials as handle_credentials
 from .capabilities.secrets.handoff import start_private_secret_handoff
 from .capabilities.slack.connection import (
@@ -332,7 +332,7 @@ def codex_auth(args: dict[str, Any] | None = None, **_: Any) -> str:
             "chat_response_required": False,
             "prerequisite": prerequisite,
             "next_user_action": (
-                "After enabling the ChatGPT setting, the user taps /codex_auth " "in Telegram."
+                "After enabling the ChatGPT setting, the user taps /codex_auth in Telegram."
             ),
             "agent_instruction": (
                 "The user-facing Telegram message has already been sent. Do not "
@@ -672,7 +672,7 @@ def _telegram_send_photo(
 
 def _multipart_field(boundary: str, name: str, value: str) -> bytes:
     return (
-        f"--{boundary}\r\n" f'Content-Disposition: form-data; name="{name}"\r\n\r\n' f"{value}\r\n"
+        f'--{boundary}\r\nContent-Disposition: form-data; name="{name}"\r\n\r\n{value}\r\n'
     ).encode()
 
 

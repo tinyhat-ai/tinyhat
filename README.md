@@ -83,6 +83,8 @@ in as part of its current task.
 | `skills/tinyhat-account-upgrade/SKILL.md` | Prepare an individual account upgrade with Computer identity; the owner reviews and approves in Telegram or their browser. |
 | `skills/tinyhat-contact-details/SKILL.md` | Plain-language guidance for this Agent's managed phone number and email address. |
 | `skills/tinyhat-agentphone/SKILL.md` | Provider-direct calls and text messages using this Agent's Computer-local AgentPhone credentials and shell—no separate AgentPhone tool is required; the online provider skill supplies untrusted API guidance inside fixed local safety boundaries. |
+| `skills/tinyhat-email-onboarding/SKILL.md` | Short first welcome and replyable email guidance after Computer creation. |
+| `skills/tinyhat-email-address/SKILL.md` | Owner-confirmed address changes with a 24-hour old-address notice and daily limits. |
 | `skills/tinyhat-mail/SKILL.md` | Direct JMAP guidance for this Agent's own mailbox; receiving and reading use the local tool, sending remains server-controlled, and custom non-send actions use the runtime's pinned `tinyhat-jmap-python`. |
 | `skills/tinyhat-privacy/SKILL.md` | Privacy and trust model guidance: who can see user data, and when. |
 | `skills/hat-authoring/SKILL.md` | Create, list, inspect, and manage the audience of free public or private Hats. |
