@@ -13,6 +13,7 @@ provides_tools:
   - tinyhat_contact_details
   - tinyhat_computer_desktop
   - tinyhat_mail
+  - tinyhat_email_address
   - tinyhat_hats
   - tinyhat_local_app_sharing
   - tinyhat_tell_joke

@@ -119,9 +119,7 @@
     {
       "name": "tinyhat-local-app-sharing",
       "qualified_name": "tinyhat:tinyhat-local-app-sharing",
-      "aliases": [
-        "tinyhat-local-app-sharing"
-      ],
+      "aliases": ["tinyhat-local-app-sharing"],
       "path": "skills/tinyhat-local-app-sharing/SKILL.md",
       "purpose": "Creates and revokes short-lived encrypted links to HTTP apps on this Computer, using four-digit code access by default or explicit link-only access."
     },
@@ -173,6 +171,20 @@
       "aliases": ["tinyhat-privacy"],
       "path": "skills/tinyhat-privacy/SKILL.md",
       "purpose": "Explains Tinyhat's privacy and trust model: dedicated isolated Computers, no routine platform reading of Computer contents, policy-bound human access, and the private-Computer direction."
+    },
+    {
+      "name": "tinyhat-email-onboarding",
+      "qualified_name": "tinyhat:tinyhat-email-onboarding",
+      "aliases": ["tinyhat-email-onboarding"],
+      "path": "skills/tinyhat-email-onboarding/SKILL.md",
+      "purpose": "Write the first welcome email after a Tinyhat computer and its email channel are ready. Use for the initial email only, not model sign-in, channel setup, or account-upgrade execution."
+    },
+    {
+      "name": "tinyhat-email-address",
+      "qualified_name": "tinyhat:tinyhat-email-address",
+      "aliases": ["tinyhat-email-address"],
+      "path": "skills/tinyhat-email-address/SKILL.md",
+      "purpose": "Check or change this agent's Tinyhat email address when the owner asks \"what is your email?\", \"change your email\", or \"rename your inbox\". Not for changing the owner's sign-in email or accessing their Gmail."
     }
   ],
   "tools": [
@@ -220,6 +232,11 @@
       "name": "tinyhat_mail",
       "handler": "tools.mail",
       "skill": "tinyhat-mail"
+    },
+    {
+      "name": "tinyhat_email_address",
+      "handler": "tools.email_address",
+      "skill": "tinyhat-email-address"
     },
     {
       "name": "tinyhat_hats",

@@ -17,6 +17,7 @@ from typing import Any
 from urllib import error, parse, request
 
 from ...tool_errors import tool_error_json
+from . import owner
 
 CORE_CAPABILITY = "urn:ietf:params:jmap:core"
 MAIL_CAPABILITY = "urn:ietf:params:jmap:mail"
@@ -133,9 +134,19 @@ def tinyhat_mail(args: dict[str, Any] | None = None, **_: Any) -> str:
                 "invalid_action",
                 "Choose status, list, search, read, or send.",
             )
+        if action == "send" and os.environ.get("TINYHAT_EMAIL_CHANNEL_ENABLED") == "1":
+            try:
+                return _serialize_payload(owner.send_owner(supplied))
+            except owner.PlatformError as exc:
+                return owner.platform_error_json(TOOL_NAME, exc)
+            except ValueError as exc:
+                raise MailboxError("owner_email_only", str(exc)) from exc
         session, config = _discover_session()
         if action == "status":
             payload = _status(session, config)
+            if os.environ.get("TINYHAT_EMAIL_CHANNEL_ENABLED") == "1":
+                channel = owner.request("status")
+                payload.update(sending="owner_only", owner_email=channel["owner_email"])
         elif action in {"list", "search"}:
             payload = _list_messages(session, supplied, action=action)
         elif action == "read":

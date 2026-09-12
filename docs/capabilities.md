@@ -672,3 +672,7 @@ authentication, including real Telegram delivery. The new platform returns null
 for legacy `mini_app_url`, so older plugins issue fresh standalone review buttons.
 Previously sent customer-bot Mini App buttons cannot approve; request a fresh
 review link after deployment.
+
+## Email onboarding
+
+The `tinyhat_email` Hermes channel and `tinyhat_email_address` tool provide a replyable owner-only welcome and confirmed mailbox renaming. See [email onboarding](../README.md#email-onboarding) for delivery, authentication, and rename limits.

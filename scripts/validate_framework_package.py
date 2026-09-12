@@ -23,6 +23,7 @@ REQUIRED_TOOLS = [
     "tinyhat_contact_details",
     "tinyhat_computer_desktop",
     "tinyhat_mail",
+    "tinyhat_email_address",
     "tinyhat_hats",
     "tinyhat_local_app_sharing",
     "tinyhat_tell_joke",
@@ -66,6 +67,8 @@ REQUIRED_SKILLS = [
     "tinyhat-contact-details",
     "tinyhat-mail",
     "tinyhat-privacy",
+    "tinyhat-email-onboarding",
+    "tinyhat-email-address",
 ]
 FORBIDDEN_PATHS = (
     "openclaw.plugin.json",
@@ -863,6 +866,8 @@ def validate_hermes_adapter(root: Path) -> None:
         "tinyhat-contact-details": "skills/tinyhat-contact-details/SKILL.md",
         "tinyhat-mail": "skills/tinyhat-mail/SKILL.md",
         "tinyhat-privacy": "skills/tinyhat-privacy/SKILL.md",
+        "tinyhat-email-onboarding": "skills/tinyhat-email-onboarding/SKILL.md",
+        "tinyhat-email-address": "skills/tinyhat-email-address/SKILL.md",
     }
     for skill in skills:
         require(isinstance(skill, dict), "skill declaration must be an object")
