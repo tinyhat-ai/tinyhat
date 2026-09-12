@@ -127,6 +127,26 @@ class OwnerMailTests(unittest.TestCase):
         }
         self.assertFalse(authenticated_owner(message, "owner@example.com", "mail.example.com"))
 
+    def test_receiver_grammar_requires_ascii_and_a_final_dmarc_verdict(self):
+        good = "mail.example.test; dmarc=pass header.from=example.tesk"
+        message = {
+            "from": [{"email": "owner@example.tesk"}],
+            "header:From:all": ["owner@example.tesk"],
+        }
+        for result in (
+            good + "; spf=pass smtp.mailfrom=example.tesk",
+            good.replace("pass header", "pass\u00a0header"),
+            good.replace("example.tesk", "example.tes\u212a"),
+            good.replace("mail.example.test", "mail.example.te\u017ft"),
+        ):
+            with self.subTest(result=result):
+                message["header:Authentication-Results:all"] = [result]
+                self.assertFalse(
+                    authenticated_owner(message, "owner@example.tesk", "mail.example.test")
+                )
+        message["header:Authentication-Results:all"] = [good]
+        self.assertTrue(authenticated_owner(message, "owner@example.tesk", "mail.example.test"))
+
     def test_outbox_and_processed_ids_survive_restart_privately(self):
         with tempfile.TemporaryDirectory() as root:
             p = Path(root) / "mail" / "state.sqlite3"

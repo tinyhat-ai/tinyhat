@@ -49,8 +49,8 @@ def _auth_clauses(value):
     return clauses
 
 
-def authenticated_owner(message, owner_email, authserv_id):
-    """Accept only an unambiguous owner From and the managed MTA's DMARC pass.
+def authentication_failure(message, owner_email, authserv_id):
+    """Return a fixed rejection reason, or None for authenticated owner mail.
 
     The MTA MUST strip all incoming Authentication-Results, verify mail, and
     insert exactly one result on every SMTP delivery (including submission).
@@ -58,7 +58,7 @@ def authenticated_owner(message, owner_email, authserv_id):
     authenticated ingress path; mailbox credentials are a trusted boundary.
     """
     if not isinstance(owner_email, str) or "@" not in owner_email or not authserv_id:
-        return False
+        return "invalid_owner_configuration"
     senders = message.get("from") or []
     from_headers = message.get("header:From:all")
     if (
@@ -69,18 +69,30 @@ def authenticated_owner(message, owner_email, authserv_id):
         or not isinstance(from_headers, list)
         or len(from_headers) != 1
     ):
-        return False
-    values = message.get("header:Authentication-Results:all") or []
+        return "owner_from_mismatch_or_ambiguity"
+    return _result_failure(
+        message.get("header:Authentication-Results:all") or [],
+        authserv_id,
+        owner_email.rsplit("@", 1)[1].lower(),
+    )
+
+
+def _result_failure(values, authserv_id, domain):
     if not isinstance(values, list) or len(values) != 1:
-        return False
+        return "missing_or_ambiguous_authentication_results"
     clauses = _auth_clauses(values[0])
-    if not clauses[1:] or not re.fullmatch(re.escape(authserv_id) + r"(?:\s+1)?", clauses[0], re.I):
-        return False
-    domain = owner_email.rsplit("@", 1)[1].lower()
-    dmarc = [part for part in clauses[1:] if re.match(r"dmarc\b", part, re.I)]
+    if not clauses[1:]:
+        return "malformed_authentication_results"
+    if not re.fullmatch(re.escape(authserv_id) + r"(?:\s+1)?", clauses[0], re.I | re.A):
+        return "authserv_mismatch"
+    dmarc = [part for part in clauses[1:] if re.match(r"dmarc\b", part, re.I | re.A)]
     # Deliberately accept the receiving Stalwart formatter's pass grammar,
     # not a search for pass inside reason text, comments or unknown properties.
-    return len(dmarc) == 1 and bool(
+    # Stalwart 0.16.15 / mail-auth 0.11.3 emits DMARC last. Fail closed if
+    # that formatter contract changes, rather than swallowing a later claim.
+    if len(dmarc) != 1 or dmarc != clauses[-1:]:
+        return "missing_ambiguous_or_nonfinal_dmarc"
+    if not (
         re.fullmatch(
             r"dmarc\s*=\s*pass\s+header\.from\s*=\s*(?:"
             + re.escape(domain)
@@ -89,9 +101,15 @@ def authenticated_owner(message, owner_email, authserv_id):
             + r'")'
             + r"(?:\s+policy\.dmarc=(?:none|quarantine|reject))?",
             dmarc[0],
-            re.I,
+            re.I | re.A,
         )
-    )
+    ):
+        return "dmarc_not_pass"
+    return None
+
+
+def authenticated_owner(message, owner_email, authserv_id):
+    return authentication_failure(message, owner_email, authserv_id) is None
 
 
 class InboxState:

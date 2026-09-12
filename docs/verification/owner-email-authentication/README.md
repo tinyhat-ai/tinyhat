@@ -6,14 +6,19 @@ inbox without generating an agent turn or an automatic response. Raw headers
 avoid MIME decoding of authentication claims. Duplicate From/result headers,
 quoted/commented claims, failed results and missing evidence fail closed.
 Retries recheck the source against the current owner; older pending turns that
-have no authentication evidence are dropped.
+have no authentication evidence are dropped. This includes owner mail queued
+by the old plugin's header format during the upgrade: the owner must resend it.
+Rejections log a fixed reason class at most once per minute, without message
+contents, addresses or identifiers, so authentication drift is diagnosable.
 
 The MTA must first strip supplied Authentication-Results and insert its own on
 all SMTP paths, including submission. Install that server policy before releasing
 this plugin. Never rely on a sender-supplied header with the server's hostname.
 Mailbox credentials, server administration and Computer-local state are trusted;
 this change does not defend against a compromised owner email account or stolen
-mailbox credentials. DMARC authenticates the domain through SPF/DKIM, while the
+mailbox credentials. The parser requires ASCII grammar and the final DMARC clause
+emitted by Stalwart 0.16.15 with mail-auth 0.11.3; a changed formatter fails closed.
+DMARC authenticates the domain through SPF/DKIM, while the
 sending provider is responsible for enforcing the mailbox identity.
 
 ## Local evidence
@@ -41,7 +46,8 @@ All eleven messages remained in the inbox. Sender-supplied authentication
 headers were removed; exactly one receiving-MTA result remained. Disposable
 containers, volumes and network were removed after the run.
 
-Package validation, byte compilation and 585 unit tests passed (one existing
+Package validation, byte compilation and 588 unit tests passed (one existing
 skip). Additional regressions cover quoted/commented false claims, result
-ambiguity, old pending notification turns and owner changes during recovery.
+ambiguity, ASCII-only grammar, final-verdict ordering, private throttled rejection
+logs, old queued/pending turns and owner changes during recovery.
 No production deployment or release is claimed by this evidence.

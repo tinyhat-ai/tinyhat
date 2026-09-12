@@ -98,7 +98,7 @@ With the compatible platform API and desktop image deployed, the
 compatible Computers and guides private standard-client setup. Its authenticated
 settings API supplies IMAP 993 and SMTP 465 with validated SSL/TLS, reports
 whether SMTP is enabled, and states the allowed recipient. Credentials stay in
-a client store or private file outside repositories. Tinyhat's inbox notice and
+a client store or private file outside repositories. Tinyhat's platform-sent inbox welcome and
 the agent's owner welcome are separate; automated notices never start an agent turn.
 
 
