@@ -4,6 +4,12 @@ All notable changes to the Tinyhat plugin are documented here.
 
 ## Unreleased
 
+## 0.32.14 - 2026-09-12
+
+- Refresh the plugin release metadata for the companion email-onboarding rollout.
+  Plugin behavior is unchanged from 0.32.13; the email configuration repair ships
+  separately in Tinyhat Hermes runtime 0.0.64.
+
 ## 0.32.13 - 2026-09-12
 
 - Welcome new Computer owners by email and continue conversations when they reply,
