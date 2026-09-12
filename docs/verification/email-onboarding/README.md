@@ -9,8 +9,9 @@ All addresses shown are disposable fixtures.
 
 ![Actual received welcome](welcome.png)
 
-The welcome arrived 12.65 seconds after the conversation test started; both replies
-arrived by 32.19 seconds. These measure local email onboarding, not VM creation.
+The welcome arrived 72.91 seconds after the conversation test started; both replies
+arrived by 92.46 seconds. This run includes a deliberate address collision and the 60-second retry
+cooldown. These measure local email onboarding, not VM creation.
 Internet delivery and production inbox placement have not been tested here.
 
 Linux verification used a Python 3.13 container with Hermes installed, this
