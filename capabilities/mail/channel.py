@@ -48,8 +48,8 @@ class TinyhatEmailAdapter(BasePlatformAdapter):
         self._channel = None
         self._state = None
         self._inbox_id = None
-        self._auth_drop_log_at = None
-        self._auth_drop_count = 0
+        self._auth_drop_log_at = {}
+        self._auth_drop_count = {}
 
     def set_busy_session_handler(self, handler):
         # Email arrivals are durable individual turns. Use the SDK's silent
@@ -228,16 +228,18 @@ class TinyhatEmailAdapter(BasePlatformAdapter):
 
     def _discard_untrusted(self, key, reason):
         self._state.put(key, "done")
-        self._auth_drop_count += 1
+        self._auth_drop_count[reason] = self._auth_drop_count.get(reason, 0) + 1
         now = time.monotonic()
-        if self._auth_drop_log_at is None or now - self._auth_drop_log_at >= STATUS_SECONDS:
-            # Fixed reason classes only: no sender, subject, body or provider text.
+        last_log = self._auth_drop_log_at.get(reason)
+        if last_log is None or now - last_log >= STATUS_SECONDS:
+            # Each fixed reason has its own budget, so spam cannot hide an
+            # owner-authentication outage. No sender, subject or provider text.
             logger.warning(
                 "Tinyhat email authentication rejected (%s; %d since last log)",
                 reason,
-                self._auth_drop_count,
+                self._auth_drop_count[reason],
             )
-            self._auth_drop_log_at, self._auth_drop_count = now, 0
+            self._auth_drop_log_at[reason], self._auth_drop_count[reason] = now, 0
 
     async def _welcome(self):
         state = self._state.get(WELCOME)

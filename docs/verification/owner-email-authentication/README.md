@@ -8,7 +8,7 @@ quoted/commented claims, failed results and missing evidence fail closed.
 Retries recheck the source against the current owner; older pending turns that
 have no authentication evidence are dropped. This includes owner mail queued
 by the old plugin's header format during the upgrade: the owner must resend it.
-Rejections log a fixed reason class at most once per minute, without message
+Rejections log each fixed reason class at most once per minute, without message
 contents, addresses or identifiers, so authentication drift is diagnosable.
 
 The MTA must first strip supplied Authentication-Results and insert its own on
