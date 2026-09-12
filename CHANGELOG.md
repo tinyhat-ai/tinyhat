@@ -4,6 +4,17 @@ All notable changes to the Tinyhat plugin are documented here.
 
 ## Unreleased
 
+## 0.32.13 - 2026-09-12
+
+- Welcome new Computer owners by email and continue conversations when they reply,
+  with persistent reply deduplication and verified-owner-only sending.
+- Let owners rename their Agent address with a confirmed 24-hour transition and
+  retrieve standard IMAP/SMTP settings through a private credential handoff.
+- Guide desktop Mail setup and keep mailbox passwords out of Agent replies,
+  project files, and logs.
+- Deploy and verify the compatible owner-email and mail-client platform APIs
+  before publishing this release or promoting either managed-Computer channel.
+
 - Add private mail-client setup guidance. With the compatible platform and image,
   mailbox credentials can submit through owner-only SMTP; privileged platform
   and delivery-provider credentials remain server-side. Earlier receive-only
