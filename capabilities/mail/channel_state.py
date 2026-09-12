@@ -51,6 +51,7 @@ class InboxState:
         columns = {row[1] for row in self.db.execute("PRAGMA table_info(messages)")}
         for name, definition in (
             ("attempts", "INTEGER NOT NULL DEFAULT 0"),
+            ("turn_attempts", "INTEGER NOT NULL DEFAULT 0"),
             ("error", "TEXT"),
             ("retry_at", "REAL NOT NULL DEFAULT 0"),
         ):
@@ -75,6 +76,37 @@ class InboxState:
             "SELECT id, state, updated, payload FROM messages WHERE state='outbox' AND retry_at<=? ORDER BY updated LIMIT 20",
             (time.time(),),
         ).fetchall()
+
+    def start_turn(self, key, payload, limit, notice):
+        """Persist the model budget independently of SMTP retries.
+
+        Quarantine and enqueue the fixed owner notice together, so a restart
+        cannot lose the notice or reset the budget for a failing message.
+        """
+        with self.db:
+            row = self.db.execute(
+                "SELECT state,turn_attempts FROM messages WHERE id=?", (key,)
+            ).fetchone()
+            if row and row[0] not in {"queued", "processing"}:
+                return False
+            attempts = row[1] if row else 0
+            now = time.time()
+            if attempts >= limit:
+                self.db.execute(
+                    "UPDATE messages SET state='failed',error='email_model_attempts_exhausted',updated=? WHERE id=?",
+                    (now, key),
+                )
+                self.db.execute(
+                    "INSERT OR IGNORE INTO messages (id,state,updated,payload) VALUES (?,'outbox',?,?)",
+                    ("turn-failure-" + _hash(key), now, json.dumps(notice)),
+                )
+                return False
+            self.db.execute(
+                "INSERT INTO messages (id,state,updated,payload,turn_attempts) VALUES (?,'processing',?,?,?) "
+                "ON CONFLICT(id) DO UPDATE SET state='processing',updated=excluded.updated,payload=excluded.payload,turn_attempts=excluded.turn_attempts",
+                (key, now, json.dumps(payload), attempts + 1),
+            )
+        return True
 
     def cursor(self):
         row = self.db.execute("SELECT value FROM cursor WHERE id=1").fetchone()

@@ -32,6 +32,7 @@ POLL_SECONDS = 15
 STATUS_SECONDS = 60
 TURN_WAIT_SECONDS = 120
 RETRY_TURN_SECONDS = 600
+MAX_TURN_ATTEMPTS = 5
 PAGE_SIZE = 50
 MAX_DELIVERY_ATTEMPTS = 8
 EXTERNAL_NOTICE_SECONDS = 86400
@@ -278,12 +279,26 @@ class TinyhatEmailAdapter(BasePlatformAdapter):
         await self._dispatch(key, metadata, text, internal=not authorized)
 
     async def _dispatch(self, key, metadata, text, *, skill=None, internal=True):
-        done = self._waiters.setdefault(key, asyncio.Event())
-        self._state.put(
+        notice = {
+            "subject": metadata["subject"],
+            "idempotency_key": "email-turn-failure-" + _hash(key),
+            "body": (
+                "Your computer and email address are ready, but I couldn't finish the welcome message. "
+                if key == WELCOME
+                else "I couldn't finish your request. "
+            )
+            + "I've stopped retrying to protect your credit. Reply to try again, or ask your coding agent to check the model connection.",
+        }
+        if metadata.get("in_reply_to"):
+            notice["in_reply_to"] = metadata["in_reply_to"]
+        if not self._state.start_turn(
             key,
-            "processing",
             {"metadata": metadata, "text": text, "skill": skill, "internal": internal},
-        )
+            MAX_TURN_ATTEMPTS,
+            notice,
+        ):
+            return
+        done = self._waiters.setdefault(key, asyncio.Event())
         event = MessageEvent(
             text=text,
             message_id=key,

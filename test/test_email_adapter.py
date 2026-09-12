@@ -3,6 +3,7 @@
 import asyncio
 import importlib.util
 import json
+import sqlite3
 import sys
 import tempfile
 import types
@@ -164,6 +165,118 @@ class EmailAdapterTests(unittest.IsolatedAsyncioTestCase):
         self.assertFalse(result.success)
         send.assert_not_called()
         self.assertEqual(self.adapter._state.get(channel.WELCOME)[0], "processing")
+
+    async def test_failed_turn_budget_survives_restart_and_sends_one_fixed_notice(self):
+        async def fail(event):
+            # The real gateway omits notify on its error notification.
+            await self.adapter.send(
+                "owner",
+                "HTTP 402 private-fixture-secret",
+                metadata={"thread_id": "conversation"},
+            )
+            await self.adapter.on_processing_complete(event, "error")
+
+        self.adapter.handle_message = AsyncMock(side_effect=fail)
+        metadata = {"subject": "Re: Question", "in_reply_to": "<question@example.test>"}
+        restart_after = 3
+        with patch.object(owner, "request", side_effect=self.deliver):
+            for attempt in range(channel.MAX_TURN_ATTEMPTS + 3):
+                if attempt == restart_after:
+                    self.adapter._state.close()
+                    self.adapter._state = InboxState(Path(self.temp.name) / "state.sqlite3")
+                    self.addCleanup(self.adapter._state.close)
+                await self.adapter._dispatch("question", metadata, "Help me", internal=False)
+                await self.adapter._recover_outbox()
+        self.assertEqual(self.adapter.handle_message.await_count, channel.MAX_TURN_ATTEMPTS)
+        self.assertEqual(self.adapter._state.get("question")[0], "failed")
+        self.assertEqual(self.adapter._state.arrivals(0), [])
+        self.assertEqual(len(self.sent), 1)
+        self.assertEqual(self.sent[0]["in_reply_to"], "<question@example.test>")
+        self.assertIn("stopped retrying", self.sent[0]["body"])
+        self.assertNotIn("private-fixture", self.sent[0]["body"])
+        self.assertNotIn("welcome", self.sent[0])
+        # A late completion cannot replace the notice with another reply.
+        self.assertFalse(
+            (await self.adapter.send("owner", "Late answer", reply_to="question")).success
+        )
+
+    async def test_exhausted_welcome_does_not_claim_success_or_block_new_owner_mail(self):
+        async def empty(event):
+            await self.adapter.on_processing_complete(event, "error")
+
+        self.adapter.handle_message = AsyncMock(side_effect=empty)
+        with (
+            patch.object(channel.time, "time", return_value=100_000) as clock,
+            patch.object(owner, "request", side_effect=self.deliver),
+        ):
+            for _ in range(channel.MAX_TURN_ATTEMPTS + 3):
+                await self.adapter._welcome()
+                await self.adapter._recover_outbox()
+                clock.return_value += channel.RETRY_TURN_SECONDS + 1
+        self.assertEqual(self.adapter.handle_message.await_count, channel.MAX_TURN_ATTEMPTS)
+        self.assertEqual(self.adapter._state.get(channel.WELCOME)[0], "failed")
+        self.assertFalse(self.adapter._channel.get("welcome_sent_at"))
+        self.assertEqual(len(self.sent), 1)
+        self.assertIn("couldn't finish the welcome", self.sent[0]["body"])
+        self.assertNotEqual(self.sent[0]["idempotency_key"], channel.WELCOME)
+
+        async def recovered(event):
+            await self.adapter.send("owner", "I'm ready to help.", reply_to=event.message_id)
+
+        self.adapter.handle_message = recovered
+        with patch.object(owner, "request", side_effect=self.deliver):
+            await self.adapter._dispatch("new-question", {"subject": "Re: Try again"}, "Hello")
+        self.assertEqual(self.adapter._state.get("new-question")[0], "done")
+        self.assertEqual(len(self.sent), 2)
+
+    async def test_model_recovery_keeps_separate_full_smtp_retry_budget(self):
+        async def empty(event):
+            await self.adapter.on_processing_complete(event, "error")
+
+        self.adapter.handle_message = empty
+        for _ in range(channel.MAX_TURN_ATTEMPTS - 1):
+            await self.adapter._dispatch("slow", {"subject": "Re: Question"}, "Help")
+
+        async def recovered(event):
+            await self.adapter.send("owner", "Recovered answer", reply_to=event.message_id)
+            await self.adapter.on_processing_complete(event, "success")
+
+        self.adapter.handle_message = recovered
+        error = owner.PlatformError("private", status_code=429)
+        with patch.object(owner, "request", side_effect=error):
+            await self.adapter._dispatch("slow", {"subject": "Re: Question"}, "Help")
+            self.assertEqual(self.adapter._state.get("slow")[0], "outbox")
+            payload = json.loads(self.adapter._state.get("slow")[2])
+            for _ in range(channel.MAX_DELIVERY_ATTEMPTS - 2):
+                await self.adapter._deliver("slow", payload)
+                self.assertEqual(self.adapter._state.get("slow")[0], "outbox")
+            await self.adapter._deliver("slow", payload)
+        self.assertEqual(self.adapter._state.get("slow")[0], "failed")
+        self.assertEqual(
+            self.adapter._state.db.execute(
+                "SELECT turn_attempts,attempts FROM messages WHERE id='slow'"
+            ).fetchone(),
+            (channel.MAX_TURN_ATTEMPTS, channel.MAX_DELIVERY_ATTEMPTS),
+        )
+
+    def test_upgrade_adds_turn_budget_without_resetting_existing_delivery_state(self):
+        path = Path(self.temp.name) / "previous.sqlite3"
+        with sqlite3.connect(path) as db:
+            db.execute(
+                "CREATE TABLE messages (id TEXT PRIMARY KEY, state TEXT NOT NULL, updated REAL NOT NULL, payload TEXT, attempts INTEGER NOT NULL DEFAULT 0, error TEXT, retry_at REAL NOT NULL DEFAULT 0)"
+            )
+            db.execute(
+                "INSERT INTO messages VALUES ('pending','outbox',10,'{}',3,'email_send_limit',9000)"
+            )
+        db.close()
+        state = InboxState(path)
+        self.addCleanup(state.close)
+        self.assertEqual(
+            state.db.execute(
+                "SELECT state,attempts,turn_attempts,error,retry_at FROM messages WHERE id='pending'"
+            ).fetchone(),
+            ("outbox", 3, 0, "email_send_limit", 9000),
+        )
 
     async def test_autoresponse_self_sender_and_untrusted_owner_spoof(self):
         self.adapter._dispatch = AsyncMock()

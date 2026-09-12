@@ -759,6 +759,12 @@ the receiving server accepted the message. The durable `uncertain` record and
 warning remain rather than claiming the welcome was delivered. A confirmed
 failed receipt returns immediately to the bounded outbox retry path.
 
+An unanswered email, including the welcome, gets at most five model attempts,
+spaced ten minutes apart. The budget survives gateway restarts. If all attempts
+fail, the channel stops that turn and sends one fixed notice to the owner,
+without another model call or raw provider errors. A new reply starts a new
+turn. Model attempts and the eight-attempt SMTP delivery budget are separate.
+
 `tinyhat-email-onboarding` writes the first brief welcome.
 `tinyhat-email-address` checks the address and guides a confirmed rename with
 24-hour forwarding overlap and three changes per day. Retired addresses stay
