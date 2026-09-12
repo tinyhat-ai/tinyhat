@@ -937,3 +937,15 @@ TINYHAT_PLUGIN_UPDATE_SCHEMA = {
     "required": ["action"],
     "additionalProperties": False,
 }
+
+TINYHAT_EMAIL_ADDRESS_SCHEMA = {
+    "type": "object", "additionalProperties": False,
+    "description": "Check or rename this agent's Tinyhat email. Prepare first, show the returned 24-hour old-address expiry notice, then confirm only after owner approval. Three confirmed changes per 24 hours across the owner's agents.",
+    "required": ["action"],
+    "properties": {
+        "action": {"type": "string", "enum": ["status", "prepare", "confirm"]},
+        "local_part": {"type": "string", "minLength": 1, "maxLength": 63},
+        "confirmation_token": {"type": "string", "minLength": 20, "maxLength": 128},
+        "acknowledge_old_address_expires_in_24_hours": {"type": "boolean"},
+    },
+}

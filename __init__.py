@@ -46,6 +46,12 @@ def _register_skills(ctx: Any) -> list[str]:
 
 def register(ctx: Any) -> None:
     """Register Tinyhat skills and the first Hermes smoke-test tool."""
+    ctx.register_tool(name="tinyhat_email_address", toolset="tinyhat",
+        schema=schemas.TINYHAT_EMAIL_ADDRESS_SCHEMA, handler=tools.email_address)
+    # Gateway platform APIs are provided by Hermes, not required by CLI tools.
+    if hasattr(ctx, "register_platform"):
+        from .capabilities.mail.registration import register as register_email
+        register_email(ctx)
     ctx.register_tool(
         name="tinyhat_account_upgrade",
         toolset="tinyhat",

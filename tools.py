@@ -37,6 +37,7 @@ from .capabilities.local_app_sharing.tool import (
     local_app_sharing as handle_local_app_sharing,
 )
 from .capabilities.mail.tool import tinyhat_mail as handle_mail
+from .capabilities.mail import owner as owner_email_tools
 from .capabilities.secrets.credentials import credentials as handle_credentials
 from .capabilities.secrets.handoff import start_private_secret_handoff
 from .capabilities.slack.connection import (
@@ -48,6 +49,7 @@ from .tool_errors import tool_error_json
 
 # Explicit facade binding remains exported when unused imports are cleaned up.
 account_upgrade = account_upgrade_tools.account_upgrade
+email_address = owner_email_tools.email_address
 
 CODEX_AUTH_SCREENSHOT = (
     Path(__file__).resolve().parent

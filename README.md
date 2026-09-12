@@ -736,3 +736,20 @@ python3 -m compileall -q .
 The next skills will continue this pattern: small, inspectable plugin
 tools that call versioned Tinyhat platform APIs through the Computer's
 attested identity. Runtime code should stay boring and stable.
+
+## Email onboarding
+
+New Computers can run the `tinyhat_email` Hermes channel using their managed
+Tinyhat inbox. It polls JMAP every 15 seconds, retains message and reply state
+on the Computer, and sends through the platform only to the verified owner.
+Mailbox credentials cannot submit mail directly. SMTP credentials never reach
+the Computer. Owner replies require aligned DMARC from the receiving server;
+other incoming mail wakes an inbox notification, without treating its contents
+as instructions. Automated messages are excluded to prevent reply loops.
+
+`tinyhat-email-onboarding` writes the first brief welcome.
+`tinyhat-email-address` checks the address and guides a confirmed rename with
+24-hour forwarding overlap and three changes per day. Retired addresses stay
+reserved, and the mailbox history survives a rename. These require compatible
+platform email APIs and runtime configuration; existing mailboxes keep their
+current behavior until explicitly enrolled.
