@@ -60,6 +60,10 @@ by the current task, including downloading an attachment, use
 
 ## Keep mail accounts distinct
 
+- To open the desktop Mail app or configure a client on another device, use
+  `tinyhat:tinyhat-mail-client`. It owns the explicit, private credential export
+  workflow; ordinary inbox actions never reveal credentials.
+
 - For **this Agent's Tinyhat mailbox**, use `tinyhat_mail`.
 - For the user's connected Gmail or Google Workspace account, use
   `tinyhat:tinyhat-google-workspace` and keep its confirmation rules.
@@ -74,7 +78,10 @@ direct script, or use another account or transport. All sends must use
 ## Boundaries
 
 - Never ask for or reveal a mailbox username, password, server URL, token,
-  account id, or another Agent's mailbox.
+  account id, or another Agent's mailbox. Explicit owner-requested client setup
+  is the only exception, using the private handoff in `tinyhat:tinyhat-mail-client`.
+  Never ask the owner to paste a credential in chat; never expose it in logs,
+  URLs, other services, or tool output.
 - Use only `TINYHAT_MAILBOX_ADDRESS`, `TINYHAT_MAILBOX_USERNAME`,
   `TINYHAT_MAILBOX_PASSWORD`, and `TINYHAT_MAILBOX_JMAP_URL` already supplied
   to this Computer. Read values from the environment inside the process.

@@ -11,6 +11,10 @@ reply button, and sends once; do not call a mail or messaging tool.
 
 - Say you are their agent, running on an always-on Tinyhat cloud computer.
 - Explain they can reply to this email to work with you right away.
+- Mention the Mail shortcut only if the launcher is executable and the desktop
+  entry and private settings file exist, using the existence-only check in
+  `tinyhat:tinyhat-mail-client`. Never read that file into the transcript. Do not send the separate platform-to-inbox
+  welcome yourself; the platform owns it.
 - Briefly name the next steps: choose Telegram or Slack for chatting; connect
   their ChatGPT, Claude Code or Grok model; then optionally enable autonomous
   services with their details, agreement and a monthly spending limit.

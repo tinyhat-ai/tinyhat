@@ -86,6 +86,7 @@ in as part of its current task.
 | `skills/tinyhat-email-onboarding/SKILL.md` | Short first welcome and replyable email guidance after Computer creation. |
 | `skills/tinyhat-email-address/SKILL.md` | Owner-confirmed address changes with a 24-hour old-address notice and daily limits. |
 | `skills/tinyhat-mail/SKILL.md` | Direct JMAP guidance for this Agent's own mailbox; receiving and reading use the local tool, sending remains server-controlled, and custom non-send actions use the runtime's pinned `tinyhat-jmap-python`. |
+| `skills/tinyhat-mail-client/SKILL.md` | Open the preconfigured desktop Mail app or privately configure a standard IMAP/SMTP client on the owner's device. |
 | `skills/tinyhat-privacy/SKILL.md` | Privacy and trust model guidance: who can see user data, and when. |
 | `skills/hat-authoring/SKILL.md` | Create, list, inspect, and manage the audience of free public or private Hats. |
 | `skills/tinyhat-hat-wearing/SKILL.md` | Install or resume an authorized Hat on an existing or newly assigned agent without exposing repository or credential capabilities. |
@@ -744,8 +745,10 @@ attested identity. Runtime code should stay boring and stable.
 New Computers can run the `tinyhat_email` Hermes channel using their managed
 Tinyhat inbox. It polls JMAP every 15 seconds, retains message and reply state
 on the Computer, and sends through the platform only to the verified owner.
-Mailbox credentials cannot submit mail directly. SMTP credentials never reach
-the Computer. Owner replies require aligned DMARC from the receiving server;
+The backend's privileged SMTP credential never reaches the Computer. Standard
+mail clients use their own mailbox credentials only when that mailbox's SMTP
+policy is enabled; the setup API reports this explicitly. Owner replies require
+aligned DMARC from the receiving server;
 only the Inbox is polled. Other incoming mail is coalesced into at most one
 owner notice per day, without treating its contents as instructions. Junk,
 Trash and automated messages are excluded to protect the conversation budget.
@@ -766,6 +769,12 @@ without another model call or raw provider errors. A new reply starts a new
 turn. Model attempts and the eight-attempt SMTP delivery budget are separate.
 
 `tinyhat-email-onboarding` writes the first brief welcome.
+The platform separately sends a notice to the agent's inbox; that automated
+message does not start a Hermes session. On compatible desktop images,
+`tinyhat-mail-client` explains the preconfigured Thunderbird Mail shortcut and
+the authenticated settings API for other clients. Credential exports stay in
+the client's credential store or a private file outside repositories, never in
+chat. IMAP and SMTP use validated TLS; sending remains subject to mailbox policy.
 `tinyhat-email-address` checks the address and guides a confirmed rename with
 24-hour forwarding overlap and three changes per day. Retired addresses stay
 reserved, and the mailbox history survives a rename. These require compatible
