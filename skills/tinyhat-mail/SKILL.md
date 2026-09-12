@@ -77,9 +77,11 @@ direct script, or use another account or transport. All sends must use
 
 ## Boundaries
 
-- Never reveal a mailbox password, token, account id, or another Agent's mailbox
-  in chat or tool output. Explicit owner-requested client setup uses only the
-  private handoff described by `tinyhat:tinyhat-mail-client`.
+- Never ask for or reveal a mailbox username, password, server URL, token,
+  account id, or another Agent's mailbox. Explicit owner-requested client setup
+  is the only exception, using the private handoff in `tinyhat:tinyhat-mail-client`.
+  Never ask the owner to paste a credential in chat; never expose it in logs,
+  URLs, other services, or tool output.
 - Use only `TINYHAT_MAILBOX_ADDRESS`, `TINYHAT_MAILBOX_USERNAME`,
   `TINYHAT_MAILBOX_PASSWORD`, and `TINYHAT_MAILBOX_JMAP_URL` already supplied
   to this Computer. Read values from the environment inside the process.

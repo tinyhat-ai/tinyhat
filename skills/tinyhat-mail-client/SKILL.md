@@ -6,10 +6,14 @@ description: "Help the owner open Mail on their Tinyhat desktop or connect their
 # Open your Tinyhat inbox
 
 On a compatible Computer, the **Mail** desktop shortcut opens Thunderbird with
-the agent mailbox already configured. Use the existing desktop-access skill to
+the agent mailbox already configured. Use `tinyhat:tinyhat-computer-desktop` to
 open the Computer when needed. The client software is included in the image;
 do not install packages during assignment or invent a working shortcut on an
-older runtime.
+older runtime. Before promising it, check only that
+`/usr/local/bin/tinyhat-mail` is executable, `~/Desktop/Tinyhat Mail.desktop`
+exists, and `~/.config/tinyhat/mail/settings.json` exists. Do not read the settings
+file into the transcript. If any are absent, report that Mail setup is pending
+or the Computer needs a compatible image.
 
 There are two welcome messages: Tinyhat sends a notice to the agent's inbox,
 and the agent sends the owner a separate welcome. The owner replies to the
@@ -24,36 +28,74 @@ username, IMAP port **993** and SMTP port **465**, both with **SSL/TLS** and
 normal password authentication. Use the server hostname supplied by Tinyhat;
 do not guess it from the address or disable certificate validation.
 
-A coding agent on the owner's laptop can explicitly request settings with
-`POST /hapi/v2/agents/{agent_id}/email/client-credentials`, using the account
-access token it already holds. The assigned Computer has the equivalent
-`POST /hapi/v2/computers/me/email/client-credentials` endpoint. Never collect an
-owner's sign-in code in the cloud agent or transfer a machine identity to a laptop.
+On the Computer, use the existing authenticated platform client to request
+`POST /hapi/v2/computers/me/email/client-credentials`. Keep the response inside
+one process that writes it directly into a private file. Do not run a raw HTTP
+command that prints the response. Never ask the owner to paste credentials.
 
-Credentials are returned only to an authenticated owner or assigned Computer.
-When the owner asks to configure a client, save them directly into that client's
-credential store, or a private file outside any repository, with a 0700 parent
-directory and 0600 file. Do not print the response into a transcript, copy it to
-a project `.env`, send it by email/chat, or put credentials in a URL. For manual
-setup, let the owner open the private file on their own device. Never upload it
-to a sharing service. Delete a temporary export after the owner has saved it.
+Run this from the installed plugin package root (the directory containing
+`hermes.plugin.json` and `platform.py`), using the Computer's Python:
 
-Check `smtp_enabled` before claiming sending works. If false, report that SMTP
-submission is not enabled for this mailbox; do not bypass it with another
-account, JMAP submission, or a different server. When `sending` is `owner_only`,
-only `allowed_recipient` is permitted. Standard client access does not grant
-permission to email other people.
+```sh
+python - <<'PYTHON'
+import importlib.util, json, os, sys, tempfile
+from pathlib import Path
+output = None
+try:
+    spec = importlib.util.spec_from_file_location("tinyhat_mail_export", "platform.py")
+    module = importlib.util.module_from_spec(spec)
+    sys.modules[spec.name] = module
+    spec.loader.exec_module(module)
+    client, _ = module.build_platform_client()
+    settings = client.post_json("/hapi/v2/computers/me/email/client-credentials", {})
+    for directory in (Path.home()/".config", Path.home()/".config/tinyhat",
+                      Path.home()/".config/tinyhat/mail-client"):
+        if directory.is_symlink():
+            raise ValueError("Unsafe export directory")
+        directory.mkdir(mode=0o700, exist_ok=True)
+        if directory.stat().st_uid != os.getuid():
+            raise ValueError("Unexpected directory owner")
+        directory.chmod(0o700)
+    fd, output = tempfile.mkstemp(prefix="settings-", suffix=".json", dir=directory)
+    with os.fdopen(fd, "w") as file:
+        json.dump(settings, file)
+    print("Private settings saved:", output)
+    print("SMTP enabled." if settings.get("smtp_enabled") else "SMTP is not enabled.")
+except Exception:
+    if output:
+        Path(output).unlink(missing_ok=True)
+    print("Private mail setup failed; no credentials displayed.", file=sys.stderr)
+    sys.exit(1)
+PYTHON
+```
 
-After a confirmed address change, reopen Mail so it loads the new username.
+Never `cat`, echo, or re-read that file into the transcript. The owner can open
+it themselves through the desktop and enter the settings into their client.
+Delete the export after use. The file lives on this Computer, not automatically
+on their laptop; do not upload it to a sharing service or send it by chat/email.
+
+For setup directly on the owner's laptop, their coding agent can call
+`POST /hapi/v2/agents/{agent_id}/email/client-credentials` with its existing
+account token. Apply the same single-process private-file/client-store rule
+there. Never transfer a Computer identity token to the laptop or ask the cloud
+agent to collect an owner sign-in code.
+
+`SMTP enabled` above comes from `smtp_enabled` in the **client-credentials
+response**. Its `sending: owner_only` permits only `allowed_recipient`; these
+fields are separate from `tinyhat_mail status`, which calls the recipient
+`owner_email`. If SMTP is disabled, explain that setup is pending. Do not bypass
+policy with another account, JMAP submission, or a different server.
+
+After a confirmed address change, fully close and reopen Mail so it loads the new username.
 Existing messages and drafts remain in the same profile. The old address stops
 receiving after the disclosed 24-hour overlap; do not delete the mail profile.
 
+## Server-managed delivery
 
-The mail server may use an explicit Resend delivery route. Clients still use
-only their Tinyhat mailbox login. The recipient sees an agent-specific verified
-sender; Reply-To points to the original Tinyhat inbox. Never request or install
-Resend credentials on the Computer, or configure a provider SMTP host in a
-user's client. The verified-owner recipient restriction is unchanged.
+Clients always connect to Tinyhat's own mail server with their mailbox login.
+The server controls outbound delivery and the original-mailbox Reply-To. Never
+request or install provider credentials on the Computer, or configure a delivery
+provider's SMTP host in the owner's client. Owner-only sending remains enforced.
 
 Gmail mobile supports adding external IMAP accounts. Gmail web is removing
 external POP/Gmailify and SMTP Send as, so do not promise permanent Gmail web

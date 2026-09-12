@@ -4,6 +4,11 @@ All notable changes to the Tinyhat plugin are documented here.
 
 ## Unreleased
 
+- Add private mail-client setup guidance. With the compatible platform and image,
+  mailbox credentials can submit through owner-only SMTP; privileged platform
+  and delivery-provider credentials remain server-side. Earlier receive-only
+  mailboxes remain unable to submit until the server policy is enabled.
+
 ## 0.32.12 - 2026-09-11
 
 - Send account-upgrade reviews through the official Tinyhat Telegram bot,

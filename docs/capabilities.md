@@ -2,13 +2,6 @@
 
 The current capability list is intentionally small.
 
-The `tinyhat-mail-client` skill opens the preconfigured Thunderbird Mail app on
-compatible Computers and guides private standard-client setup. Its authenticated
-settings API supplies IMAP 993 and SMTP 465 with validated SSL/TLS, reports
-whether SMTP is enabled, and states the allowed recipient. Credentials stay in
-a client store or private file outside repositories. Tinyhat's inbox notice and
-the agent's owner welcome are separate; automated notices never start an agent turn.
-
 | Capability | Status | Why it exists |
 | --- | --- | --- |
 | `tinyhat_plugin_version` | Available now | Proves which Tinyhat plugin version Hermes has loaded for the live agent. |
@@ -17,6 +10,7 @@ the agent's owner welcome are separate; automated notices never start an agent t
 | `tinyhat_model_budget` | Platform API required | Reads this Agent's current total AI model budget, remaining amount, and used amount. It cannot change the budget. |
 | `tinyhat_openrouter_credit_allocate` | Platform API required | Adds an exact amount of the owner's credit to this Agent's model budget. |
 | `tinyhat_contact_details` | Platform API required | Returns this Agent's managed phone number and email address, and idempotently assigns missing contacts when the platform enables them. It accepts no identity, contact, or credential input. |
+| `tinyhat-mail-client` skill | Platform API and compatible image required | Opens the configured desktop inbox and provides private standard-client setup without exposing credential values. |
 | `tinyhat_mail` | Computer-local mailbox required | Checks, lists, searches, and reads this Agent's isolated Tinyhat inbox and sends one plain-text email when server policy permits it. It never accepts or returns mailbox credentials, server addresses, or account ids. Reads are bounded, activation links remain usable, and send retries use a durable request id. |
 | `tinyhat_hats` | Available now | Creates free public or named-user-private Hats, manages their audience, and installs an accessible Hat from its URL or handle; checks out and syncs private repositories through Computer-scoped GitHub leases; and manages value-blind Hat credentials. Retirement hides a Hat from owner/public/new-install surfaces and deletes creator package state while preserving platform and installation history and already-installed consumer agents. Authorized creator-provided credentials transfer automatically between Computers. Creator-omitted credentials reuse an exact existing Computer credential or open encrypted Tinyhat Credentials setup for the installing user. |
 | `tinyhat_local_app_sharing` | Platform API and viewer edge required | Creates, lists, and expires short-lived Visuals for visual reports, charts, dashboards, explanations, and previews. Four-digit code access is the default; an agent may explicitly choose public access when anyone holding the complete link should be able to open the Visual. The plugin keeps localhost and port details internal. |
@@ -98,6 +92,15 @@ owner Mini App reconstruct the same complete link for later opening or copying;
 the private key remains on the Computer.
 
 ## Private Agent Mail
+
+With the compatible platform API and desktop image deployed, the
+`tinyhat-mail-client` skill opens the preconfigured Thunderbird Mail app on
+compatible Computers and guides private standard-client setup. Its authenticated
+settings API supplies IMAP 993 and SMTP 465 with validated SSL/TLS, reports
+whether SMTP is enabled, and states the allowed recipient. Credentials stay in
+a client store or private file outside repositories. Tinyhat's inbox notice and
+the agent's owner welcome are separate; automated notices never start an agent turn.
+
 
 `tinyhat_mail` reads the mailbox values already supplied to the assigned
 Computer. The model supplies only an action and safe message fields; it cannot
