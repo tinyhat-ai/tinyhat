@@ -14,6 +14,7 @@ from urllib.error import HTTPError
 
 from tinyhat.capabilities.mail import owner
 from tinyhat.capabilities.mail.channel_state import InboxState
+from tinyhat.capabilities.mail.tool import MailboxError
 
 
 class FakeBase:
@@ -223,6 +224,44 @@ class EmailAdapterTests(unittest.IsolatedAsyncioTestCase):
             )
         self.assertNotIn("private-fixture", self.sent[0]["body"])
 
+    async def test_real_answers_about_errors_are_delivered_unchanged(self):
+        replies = (
+            "HTTP 404 means that page was not found. Check the address.",
+            "Rate limited means the server rejected the burst. Space out retries.",
+            "Authentication failed means the credentials need checking.",
+        )
+        with patch.object(owner, "request", side_effect=self.deliver):
+            for index, body in enumerate(replies):
+                key = "answer-" + str(index)
+                self.adapter._state.put(key, "processing", {"metadata": {"subject": "Re: Logs"}})
+                result = await self.adapter.send("owner", body, reply_to=key)
+                self.assertTrue(result.success)
+                self.assertEqual(self.sent[-1]["body"], body)
+
+    async def test_gateway_error_rewrite_is_logged_without_raw_details(self):
+        with (
+            patch.object(owner, "request", side_effect=self.deliver),
+            self.assertLogs(channel.logger, level="WARNING") as logs,
+        ):
+            await self.adapter.send("owner", "HTTP 402 private-fixture-secret")
+        self.assertNotIn("private-fixture", self.sent[0]["body"])
+        self.assertNotIn("private-fixture", " ".join(logs.output))
+        self.assertIn("screened", " ".join(logs.output))
+
+    async def test_confirmed_failed_receipt_can_retry_without_another_hour_delay(self):
+        payload = {"idempotency_key": "failed-fixture", "body": "Reply"}
+        self.adapter._state.put("failed", "uncertain", payload)
+
+        def request(action, value=None):
+            if action == "deliveries/failed-fixture":
+                return {"status": "failed"}
+            return self.deliver(action, value)
+
+        with patch.object(owner, "request", side_effect=request) as call:
+            await self.adapter._recover_outbox()
+        self.assertEqual(call.call_count, 2)
+        self.assertEqual(self.adapter._state.get("failed")[0], "done")
+
     async def test_rename_pending_retries_but_idempotency_conflict_does_not(self):
         payload = {"subject": "Hi", "body": "Hi", "idempotency_key": "pending-fixture"}
         self.adapter._state.put("rename", "outbox", payload)
@@ -291,6 +330,27 @@ class EmailAdapterTests(unittest.IsolatedAsyncioTestCase):
             for _ in range(channel.MAX_DELIVERY_ATTEMPTS):
                 await self.adapter._deliver("transient", payload)
         self.assertEqual(self.adapter._state.get("transient")[0], "failed")
+
+    async def test_inbox_role_discovery_retries_after_a_missing_folder(self):
+        self.adapter._inbox_id = None
+        available = False
+
+        def call(methods):
+            method, args, tag = methods[0]
+            if method == "Mailbox/get":
+                rows = [{"id": "real-inbox", "role": "inbox"}] if available else []
+                return {"methodResponses": [[method, {"list": rows}, tag]]}
+            self.assertEqual(method, "Email/query")
+            self.assertEqual(args["filter"]["inMailbox"], "real-inbox")
+            return {"methodResponses": [[method, {"ids": [], "queryState": "ready"}, tag]]}
+
+        self.adapter._client = types.SimpleNamespace(account_id="fixture", call=call)
+        with self.assertRaisesRegex(MailboxError, "mailbox_not_available"):
+            await self.adapter._messages()
+        self.assertIsNone(self.adapter._inbox_id)
+        available = True
+        await self.adapter._messages()
+        self.assertEqual(self.adapter._inbox_id, "real-inbox")
 
     async def test_incremental_cursor_persists_arrivals_before_advancing(self):
         calls = []

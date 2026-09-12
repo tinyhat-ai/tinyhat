@@ -749,11 +749,15 @@ the Computer. Owner replies require aligned DMARC from the receiving server;
 only the Inbox is polled. Other incoming mail is coalesced into at most one
 owner notice per day, without treating its contents as instructions. Junk,
 Trash and automated messages are excluded to protect the conversation budget.
+An owner reply filed into Junk will need to be moved to Inbox to start a turn.
 
 Replies wait through a pending rename. Uncertain SMTP acceptance triggers only
-an hourly receipt lookup, never a blind resend. If the server cannot resolve
-acceptance, the durable `uncertain` record requires operator reconciliation;
-the adapter logs that state rather than claiming the welcome was delivered.
+an hourly receipt lookup, never a blind resend. A late API acknowledgement can
+resolve automatically. An SMTP disconnect after DATA leaves acceptance unknown
+until an operator reconciles it; receipt polling alone cannot determine whether
+the receiving server accepted the message. The durable `uncertain` record and
+warning remain rather than claiming the welcome was delivered. A confirmed
+failed receipt returns immediately to the bounded outbox retry path.
 
 `tinyhat-email-onboarding` writes the first brief welcome.
 `tinyhat-email-address` checks the address and guides a confirmed rename with

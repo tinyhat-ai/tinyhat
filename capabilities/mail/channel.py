@@ -331,14 +331,17 @@ class TinyhatEmailAdapter(BasePlatformAdapter):
         else:
             key = "notification-" + secrets.token_hex(16)
             context = {"subject": "A message from your Tinyhat agent"}
-            if re.match(r"^[\W_]*Sorry, I encountered an error", content.strip(), re.I):
-                content = "I couldn't finish that request. Please reply to try again."
         provider_error = re.match(
             r"^[\W_]*(?:the model provider|provider authentication|api .*failed|http \d{3}|billing or credits exhausted|authentication failed|rate limited|provider overloaded|sorry, i encountered an error)",
             content.strip(),
             re.I,
         )
-        if provider_error:
+        if provider_error and (context.get("welcome") or not reply_to):
+            # Ordinary model answers may explain HTTP errors. Only screen the
+            # first welcome and unthreaded gateway-generated notifications.
+            logger.warning(
+                "Tinyhat email gateway error screened (welcome=%s)", bool(context.get("welcome"))
+            )
             if context.get("welcome"):
                 return SendResult(success=False, error="welcome_model_unavailable")
             content = "I'm having trouble completing that request right now. Please reply to try again shortly."
@@ -403,7 +406,8 @@ class TinyhatEmailAdapter(BasePlatformAdapter):
                     "Tinyhat email receipt needs reconciliation (%s)", type(exc).__name__
                 )
             finally:
-                self._state.defer_lookup(key)
+                if self._state.get(key)[0] == "uncertain":
+                    self._state.defer_lookup(key)
         for key, _, _, raw in self._state.pending():
             # Exact body/key survive restarts. Unknown SMTP acceptance is never
             # resubmitted; permanent rejection/attempt exhaustion is quarantined.
