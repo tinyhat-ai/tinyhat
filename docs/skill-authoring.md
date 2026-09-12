@@ -102,6 +102,11 @@ inside skills so the plugin stays readable and token efficient.
 
 ## Current Skills
 
+`tinyhat-mail-client` owns explicit mail-client setup and private credential
+export. Ordinary mailbox read/send tools must never expose passwords. The new
+skill is loaded from the same packaged skill directory as other Tinyhat skills;
+it adds no tool or framework-specific adapter.
+
 `tinyhat-skill-authoring` is the general playbook an agent loads before it
 creates, reviews, or revises a user skill. It gives customer-authored Hat skills
 the same portable name and folder rules, explicit trigger and non-trigger

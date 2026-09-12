@@ -166,6 +166,13 @@
       "purpose": "Checks, searches, and reads this Agent's private Tinyhat inbox and sends governed plain-text email without exposing mailbox credentials."
     },
     {
+      "name": "tinyhat-mail-client",
+      "qualified_name": "tinyhat:tinyhat-mail-client",
+      "aliases": ["tinyhat-mail-client"],
+      "path": "skills/tinyhat-mail-client/SKILL.md",
+      "purpose": "Open the preconfigured desktop Mail app or privately configure the owner's standard IMAP/SMTP client."
+    },
+    {
       "name": "tinyhat-privacy",
       "qualified_name": "tinyhat:tinyhat-privacy",
       "aliases": ["tinyhat-privacy"],

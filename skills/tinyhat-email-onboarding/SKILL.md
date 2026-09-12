@@ -11,6 +11,9 @@ reply button, and sends once; do not call a mail or messaging tool.
 
 - Say you are their agent, running on an always-on Tinyhat cloud computer.
 - Explain they can reply to this email to work with you right away.
+- If the runtime reports Mail is configured, briefly mention that the desktop
+  Mail shortcut opens the agent's inbox. Do not send the separate platform-to-inbox
+  welcome yourself; the platform owns it.
 - Briefly name the next steps: choose Telegram or Slack for chatting; connect
   their ChatGPT, Claude Code or Grok model; then optionally enable autonomous
   services with their details, agreement and a monthly spending limit.

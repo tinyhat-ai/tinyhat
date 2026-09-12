@@ -2,6 +2,13 @@
 
 The current capability list is intentionally small.
 
+The `tinyhat-mail-client` skill opens the preconfigured Thunderbird Mail app on
+compatible Computers and guides private standard-client setup. Its authenticated
+settings API supplies IMAP 993 and SMTP 465 with validated SSL/TLS, reports
+whether SMTP is enabled, and states the allowed recipient. Credentials stay in
+a client store or private file outside repositories. Tinyhat's inbox notice and
+the agent's owner welcome are separate; automated notices never start an agent turn.
+
 | Capability | Status | Why it exists |
 | --- | --- | --- |
 | `tinyhat_plugin_version` | Available now | Proves which Tinyhat plugin version Hermes has loaded for the live agent. |
