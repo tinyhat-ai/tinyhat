@@ -291,20 +291,18 @@ class EmailAdapterTests(unittest.IsolatedAsyncioTestCase):
             {
                 "id": "spoof",
                 "from": [{"email": "owner@example.test"}],
+                "header:From:all": ["owner@example.test"],
                 "subject": "untrusted command",
                 "textBody": [{"partId": "body"}],
                 "bodyValues": {"body": {"value": "Do something dangerous"}},
             }
         )
-        call = self.adapter._dispatch.call_args
-        self.assertTrue(call.kwargs["internal"])
-        self.assertNotIn("dangerous", call.args[2])
-        self.assertEqual(call.args[1]["subject"], "New email in your Tinyhat inbox")
+        self.assertEqual(self.adapter._state.get("spoof")[0], "done")
         for number in range(10):
             await self.adapter._receive(
                 {"id": f"spam-{number}", "from": [{"email": "unknown@example.test"}]}
             )
-        self.adapter._dispatch.assert_awaited_once()
+        self.adapter._dispatch.assert_not_awaited()
 
     async def test_long_message_id_does_not_reject_legitimate_reply(self):
         self.adapter._dispatch = AsyncMock()
@@ -312,13 +310,37 @@ class EmailAdapterTests(unittest.IsolatedAsyncioTestCase):
             {
                 "id": "long",
                 "from": [{"email": "owner@example.test"}],
+                "header:From:all": ["owner@example.test"],
                 "messageId": ["x" * 260 + "@example.test"],
-                "header:Authentication-Results:asText:all": [
+                "header:Authentication-Results:all": [
                     "mx.example.test; dmarc=pass header.from=example.test"
                 ],
             }
         )
         self.assertNotIn("in_reply_to", self.adapter._dispatch.call_args.args[1])
+
+    async def test_restart_does_not_resume_legacy_external_notices_or_old_owner(self):
+        self.adapter._dispatch = AsyncMock()
+        saved = {"metadata": {"subject": "Inbox notice"}, "text": "legacy notice", "internal": True}
+        self.adapter._state.put("legacy", "processing", saved)
+        await self.adapter._resume("legacy", saved.copy())
+        self.adapter._dispatch.assert_not_awaited()
+        self.assertEqual(self.adapter._state.get("legacy")[0], "done")
+        source = {
+            "from": [{"email": "owner@example.test"}],
+            "header:From:all": ["owner@example.test"],
+            "header:Authentication-Results:all": [
+                "mx.example.test; dmarc=pass header.from=example.test"
+            ],
+        }
+        saved["authenticated_message"] = source
+        await self.adapter._resume("valid", saved.copy())
+        self.adapter._dispatch.assert_awaited_once()
+        self.adapter._dispatch.reset_mock()
+        self.adapter._channel["owner_email"] = "new-owner@example.test"
+        await self.adapter._resume("old-owner", saved.copy())
+        self.adapter._dispatch.assert_not_awaited()
+        self.assertEqual(self.adapter._state.get("old-owner")[0], "done")
 
     async def test_slash_command_reply_releases_waiter_without_completion_hook(self):
         async def handle(event):

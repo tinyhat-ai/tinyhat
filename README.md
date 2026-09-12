@@ -748,9 +748,11 @@ on the Computer, and sends through the platform only to the verified owner.
 The backend's privileged SMTP credential never reaches the Computer. Standard
 mail clients use their own mailbox credentials only when that mailbox's SMTP
 policy is enabled; the setup API reports this explicitly. Owner replies require
-aligned DMARC from the receiving server;
-only the Inbox is polled. Other incoming mail is coalesced into at most one
-owner notice per day, without treating its contents as instructions. Junk,
+an exact match to the verified owner address and aligned DMARC from the
+receiving server. The managed MTA strips sender-supplied Authentication-Results
+and inserts exactly one result on every SMTP path. Missing, ambiguous or failed
+authentication never starts a session, including notification sessions. Other
+mail remains available in the inbox for the owner to review. Only the Inbox is polled. Junk,
 Trash and automated messages are excluded to protect the conversation budget.
 An owner reply filed into Junk will need to be moved to Inbox to start a turn.
 

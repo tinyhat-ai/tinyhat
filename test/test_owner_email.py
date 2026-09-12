@@ -52,12 +52,12 @@ class OwnerMailTests(unittest.TestCase):
             self.assertEqual(request.call_args.args[0], "rename/confirm")
 
     def test_owner_from_is_not_enough_and_lower_forged_results_do_not_authorize(self):
-        m = {"from": [{"email": "owner@example.com"}]}
+        m = {"from": [{"email": "owner@example.com"}], "header:From:all": ["owner@example.com"]}
         self.assertFalse(authenticated_owner(m, "owner@example.com", "mail.example.com"))
         good = "mail.example.com; dmarc=pass header.from=example.com policy.dmarc=none"
-        m["header:Authentication-Results:asText:all"] = [good]
+        m["header:Authentication-Results:all"] = [good]
         self.assertTrue(authenticated_owner(m, "owner@example.com", "mail.example.com"))
-        m["header:Authentication-Results:asText:all"] = [
+        m["header:Authentication-Results:all"] = [
             good.replace("mail.example.com;", "mail.example.com 1;")
         ]
         self.assertTrue(authenticated_owner(m, "owner@example.com", "mail.example.com"))
@@ -66,9 +66,9 @@ class OwnerMailTests(unittest.TestCase):
             [good.replace("header.from=example.com", "header.from=badexample.com")],
             ["mail.example.com; dmarc=fail header.from=example.com", good],
         ):
-            m["header:Authentication-Results:asText:all"] = values
+            m["header:Authentication-Results:all"] = values
             self.assertFalse(authenticated_owner(m, "owner@example.com", "mail.example.com"))
-        m["header:Authentication-Results:asText:all"] = [good]
+        m["header:Authentication-Results:all"] = [good]
         m["from"].append({"email": "other@example.com"})
         self.assertFalse(authenticated_owner(m, "owner@example.com", "mail.example.com"))
 
@@ -85,6 +85,47 @@ class OwnerMailTests(unittest.TestCase):
         self.assertEqual(result["expected"]["retry_after_seconds"], 3600)
         self.assertNotIn("private", json.dumps(result))
         self.assertNotIn("secret", json.dumps(result))
+
+    def test_authentication_claims_in_comments_or_quoted_text_never_authorize(self):
+        good = "mail.example.com; dmarc=pass header.from=example.com"
+        message = {
+            "from": [{"email": "owner@example.com"}],
+            "header:From:all": ["owner@example.com"],
+        }
+        for result in (
+            'mail.example.com; spf=fail reason="; dmarc=pass header.from=example.com;"',
+            "mail.example.com; spf=fail (outer (nested; dmarc=pass header.from=example.com;))",
+            'mail.example.com; dmarc=fail reason="dmarc=pass header.from=example.com"',
+            "mail.example.com; dmarc=fail (dmarc=pass) header.from=example.com",
+            good + "; dmarc=fail header.from=example.com",
+            good + " header.from=attacker.example",
+            good.replace("example.com", "example.com.attacker.test"),
+            good.replace("mail.example.com;", "mail.example.com 2;"),
+            good + ' reason="unterminated',
+            good + " (unterminated",
+            good + "\x00",
+        ):
+            with self.subTest(result=result):
+                message["header:Authentication-Results:all"] = [result]
+                self.assertFalse(
+                    authenticated_owner(message, "owner@example.com", "mail.example.com")
+                )
+        message["header:Authentication-Results:all"] = [good, good]
+        self.assertFalse(authenticated_owner(message, "owner@example.com", "mail.example.com"))
+        message["header:Authentication-Results:all"] = [good]
+        message["header:From:all"] *= 2
+        self.assertFalse(authenticated_owner(message, "owner@example.com", "mail.example.com"))
+
+    def test_authenticated_other_sender_and_reply_to_owner_are_not_owner_commands(self):
+        message = {
+            "from": [{"email": "other@example.com"}],
+            "replyTo": [{"email": "owner@example.com"}],
+            "header:From:all": ["Owner <other@example.com>"],
+            "header:Authentication-Results:all": [
+                "mail.example.com; dmarc=pass header.from=example.com"
+            ],
+        }
+        self.assertFalse(authenticated_owner(message, "owner@example.com", "mail.example.com"))
 
     def test_outbox_and_processed_ids_survive_restart_privately(self):
         with tempfile.TemporaryDirectory() as root:
