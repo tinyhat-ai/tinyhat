@@ -9,8 +9,8 @@ All addresses shown are disposable fixtures.
 
 ![Actual received welcome](welcome.png)
 
-The welcome arrived 72.91 seconds after the conversation test started; both replies
-arrived by 92.46 seconds. This run includes a deliberate address collision and the 60-second retry
+The welcome arrived 74.45 seconds after the conversation test started; both replies
+arrived by 104.99 seconds. This run includes a deliberate address collision and the 60-second retry
 cooldown. These measure local email onboarding, not VM creation.
 Internet delivery and production inbox placement have not been tested here.
 
@@ -36,3 +36,7 @@ The rename image presents API results; it is not a new user interface.
 
 The conversation also passed against the runtime-pinned Hermes source commit
 `646761c7831ff4c4cd0d6ac711ed791d487fb665`.
+
+The final 126.25-second live walk used plugin `5352f6e23345ddcb345d23269b42b065fb2c6dbd`
+and runtime `5820f24dad3c3f82cf9ef7b246ec2d9c107d20a3`, with the compatible
+platform email APIs. This evidence-only commit changes no runtime behavior.
