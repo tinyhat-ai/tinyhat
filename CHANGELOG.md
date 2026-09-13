@@ -4,6 +4,19 @@ All notable changes to the Tinyhat plugin are documented here.
 
 ## Unreleased
 
+## 0.32.15 - 2026-09-12
+
+- Require incoming email to match the verified owner and pass receiver-verified
+  DMARC authentication before starting a Hermes conversation. Ignore forged,
+  ambiguous, unauthenticated, or non-owner messages without an automatic reply.
+- Recheck queued messages after restart and record rate-limited authentication
+  failure reasons without logging email addresses or message contents.
+- Deploy the compatible platform and receiving-mail-server policy before
+  publishing this release or promoting channels. The receiver must strip
+  sender-supplied authentication claims and stamp its own results. Older queued
+  messages without trusted authentication evidence are discarded; owners can
+  resend their message after the upgrade.
+
 ## 0.32.14 - 2026-09-12
 
 - Refresh the plugin release metadata for the companion email-onboarding rollout.
