@@ -291,20 +291,18 @@ class EmailAdapterTests(unittest.IsolatedAsyncioTestCase):
             {
                 "id": "spoof",
                 "from": [{"email": "owner@example.test"}],
+                "header:From:all": ["owner@example.test"],
                 "subject": "untrusted command",
                 "textBody": [{"partId": "body"}],
                 "bodyValues": {"body": {"value": "Do something dangerous"}},
             }
         )
-        call = self.adapter._dispatch.call_args
-        self.assertTrue(call.kwargs["internal"])
-        self.assertNotIn("dangerous", call.args[2])
-        self.assertEqual(call.args[1]["subject"], "New email in your Tinyhat inbox")
+        self.assertEqual(self.adapter._state.get("spoof")[0], "done")
         for number in range(10):
             await self.adapter._receive(
                 {"id": f"spam-{number}", "from": [{"email": "unknown@example.test"}]}
             )
-        self.adapter._dispatch.assert_awaited_once()
+        self.adapter._dispatch.assert_not_awaited()
 
     async def test_long_message_id_does_not_reject_legitimate_reply(self):
         self.adapter._dispatch = AsyncMock()
@@ -312,13 +310,82 @@ class EmailAdapterTests(unittest.IsolatedAsyncioTestCase):
             {
                 "id": "long",
                 "from": [{"email": "owner@example.test"}],
+                "header:From:all": ["owner@example.test"],
                 "messageId": ["x" * 260 + "@example.test"],
-                "header:Authentication-Results:asText:all": [
+                "header:Authentication-Results:all": [
                     "mx.example.test; dmarc=pass header.from=example.test"
                 ],
             }
         )
         self.assertNotIn("in_reply_to", self.adapter._dispatch.call_args.args[1])
+
+    async def test_authentication_drop_logs_are_private_and_rate_limited(self):
+        self.adapter._dispatch = AsyncMock()
+        message = {
+            "id": "private-message-id",
+            "from": [{"email": "owner@example.test"}],
+            "header:From:all": ["owner@example.test"],
+            "subject": "private subject",
+            "textBody": [{"partId": "body"}],
+            "bodyValues": {"body": {"value": "private body"}},
+        }
+        with (
+            patch.object(channel.logger, "warning") as log,
+            patch.object(channel.time, "monotonic", return_value=100) as now,
+        ):
+            await self.adapter._receive(message)
+            self.assertEqual(log.call_args.args[1], "missing_or_ambiguous_authentication_results")
+            await self.adapter._receive({**message, "id": "second-private-id"})
+            self.assertEqual(log.call_count, 1)
+            await self.adapter._resume("legacy-private-id", {})
+            self.assertEqual(log.call_count, 2)
+            self.assertEqual(log.call_args.args[1:], ("legacy_missing_authentication", 1))
+            await self.adapter._resume("repeated-legacy-private-id", {})
+            self.assertEqual(log.call_count, 2)
+            now.return_value += channel.STATUS_SECONDS
+            await self.adapter._resume("another-private-id", {})
+            self.assertEqual(log.call_count, 3)
+            self.assertEqual(log.call_args.args[1:], ("legacy_missing_authentication", 2))
+        self.adapter._dispatch.assert_not_awaited()
+        for private in ("private", "owner@example.test"):
+            self.assertNotIn(private, str(log.call_args_list))
+
+    async def test_old_queued_header_format_cannot_start_a_turn_after_upgrade(self):
+        self.adapter._dispatch = AsyncMock()
+        await self.adapter._receive(
+            {
+                "id": "old-queued",
+                "from": [{"email": "owner@example.test"}],
+                "header:Authentication-Results:asText:all": [
+                    "mx.example.test; dmarc=pass header.from=example.test"
+                ],
+            }
+        )
+        self.adapter._dispatch.assert_not_awaited()
+        self.assertEqual(self.adapter._state.get("old-queued")[0], "done")
+
+    async def test_restart_does_not_resume_legacy_external_notices_or_old_owner(self):
+        self.adapter._dispatch = AsyncMock()
+        saved = {"metadata": {"subject": "Inbox notice"}, "text": "legacy notice", "internal": True}
+        self.adapter._state.put("legacy", "processing", saved)
+        await self.adapter._resume("legacy", saved.copy())
+        self.adapter._dispatch.assert_not_awaited()
+        self.assertEqual(self.adapter._state.get("legacy")[0], "done")
+        source = {
+            "from": [{"email": "owner@example.test"}],
+            "header:From:all": ["owner@example.test"],
+            "header:Authentication-Results:all": [
+                "mx.example.test; dmarc=pass header.from=example.test"
+            ],
+        }
+        saved["authenticated_message"] = source
+        await self.adapter._resume("valid", saved.copy())
+        self.adapter._dispatch.assert_awaited_once()
+        self.adapter._dispatch.reset_mock()
+        self.adapter._channel["owner_email"] = "new-owner@example.test"
+        await self.adapter._resume("old-owner", saved.copy())
+        self.adapter._dispatch.assert_not_awaited()
+        self.assertEqual(self.adapter._state.get("old-owner")[0], "done")
 
     async def test_slash_command_reply_releases_waiter_without_completion_hook(self):
         async def handle(event):

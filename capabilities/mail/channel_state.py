@@ -7,34 +7,109 @@ import re
 import sqlite3
 import time
 
+MAX_AUTH_HEADER_BYTES = 16_384
+FIRST_PRINTABLE_ASCII = 32
+
 
 def _hash(value):
     return hashlib.sha256(value.encode()).hexdigest()
 
 
-def authenticated_owner(message, owner_email, authserv_id):
-    """Only the receiving MTA's first authentication result can authorize From.
+def _auth_clauses(value):
+    """Split machine-generated results without interpreting quoted claims.
 
-    Requires the managed receiving MTA to verify DMARC and prepend its own
-    Authentication-Results on every delivery. A public authserv-id alone does
-    not authenticate a header supplied by the sender.
+    Semicolons inside a quoted property or nested comment are data, not a
+    second authentication method. Reject malformed or oversized headers.
     """
+    if not isinstance(value, str) or len(value) > MAX_AUTH_HEADER_BYTES:
+        return []
+    clauses, start, depth, quoted, escaped = [], 0, 0, False, False
+    for index, char in enumerate(value):
+        if ord(char) < FIRST_PRINTABLE_ASCII and char not in "\r\n\t":
+            return []
+        if escaped:
+            escaped = False
+        elif char == "\\" and (quoted or depth):
+            escaped = True
+        elif char == '"' and not depth:
+            quoted = not quoted
+        elif not quoted:
+            if char == "(":
+                depth += 1
+            elif char == ")":
+                if not depth:
+                    return []
+                depth -= 1
+            elif char == ";" and not depth:
+                clauses.append(value[start:index].strip())
+                start = index + 1
+    if depth or quoted or escaped:
+        return []
+    clauses.append(value[start:].strip())
+    return clauses
+
+
+def authentication_failure(message, owner_email, authserv_id):
+    """Return a fixed rejection reason, or None for authenticated owner mail.
+
+    The MTA MUST strip all incoming Authentication-Results, verify mail, and
+    insert exactly one result on every SMTP delivery (including submission).
+    Its configured hostname alone is not proof. Mailbox imports are not an
+    authenticated ingress path; mailbox credentials are a trusted boundary.
+    """
+    if not isinstance(owner_email, str) or "@" not in owner_email or not authserv_id:
+        return "invalid_owner_configuration"
     senders = message.get("from") or []
-    if len(senders) != 1 or senders[0].get("email", "").lower() != owner_email.lower():
-        return False
-    values = message.get("header:Authentication-Results:asText:all") or []
-    if not values or not isinstance(values[0], str):
-        return False
-    result = values[0].lower()
-    server = result.split(";", 1)[0].strip()
-    if re.sub(r"\s+\d+$", "", server) != authserv_id.lower():
-        return False
-    domain = owner_email.rsplit("@", 1)[1].lower()
-    return any(
-        re.search(r"\bdmarc\s*=\s*pass\b", part)
-        and re.search(r"\bheader\.from\s*=\s*" + re.escape(domain) + r"(?:\s|;|$)", part)
-        for part in result.split(";")
+    from_headers = message.get("header:From:all")
+    if (
+        not isinstance(senders, list)
+        or len(senders) != 1
+        or not isinstance(senders[0], dict)
+        or str(senders[0].get("email", "")).lower() != owner_email.lower()
+        or not isinstance(from_headers, list)
+        or len(from_headers) != 1
+    ):
+        return "owner_from_mismatch_or_ambiguity"
+    return _result_failure(
+        message.get("header:Authentication-Results:all") or [],
+        authserv_id,
+        owner_email.rsplit("@", 1)[1].lower(),
     )
+
+
+def _result_failure(values, authserv_id, domain):
+    if not isinstance(values, list) or len(values) != 1:
+        return "missing_or_ambiguous_authentication_results"
+    clauses = _auth_clauses(values[0])
+    if not clauses[1:]:
+        return "malformed_authentication_results"
+    if not re.fullmatch(re.escape(authserv_id) + r"(?:\s+1)?", clauses[0], re.I | re.A):
+        return "authserv_mismatch"
+    dmarc = [part for part in clauses[1:] if re.match(r"dmarc\b", part, re.I | re.A)]
+    # Deliberately accept the receiving Stalwart formatter's pass grammar,
+    # not a search for pass inside reason text, comments or unknown properties.
+    # Stalwart 0.16.15 / mail-auth 0.11.3 emits DMARC last. Fail closed if
+    # that formatter contract changes, rather than swallowing a later claim.
+    if len(dmarc) != 1 or dmarc != clauses[-1:]:
+        return "missing_ambiguous_or_nonfinal_dmarc"
+    if not (
+        re.fullmatch(
+            r"dmarc\s*=\s*pass\s+header\.from\s*=\s*(?:"
+            + re.escape(domain)
+            + r'|"'
+            + re.escape(domain)
+            + r'")'
+            + r"(?:\s+policy\.dmarc=(?:none|quarantine|reject))?",
+            dmarc[0],
+            re.I | re.A,
+        )
+    ):
+        return "dmarc_not_pass"
+    return None
+
+
+def authenticated_owner(message, owner_email, authserv_id):
+    return authentication_failure(message, owner_email, authserv_id) is None
 
 
 class InboxState:
