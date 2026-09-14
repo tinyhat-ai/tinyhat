@@ -71,6 +71,7 @@ REQUIRED_SKILLS = [
     "tinyhat-privacy",
     "tinyhat-email-onboarding",
     "tinyhat-email-address",
+    "tinyhat-complete-setup",
     "tinyhat-connect-channel",
 ]
 FORBIDDEN_PATHS = (
@@ -873,6 +874,7 @@ def validate_hermes_adapter(root: Path) -> None:
         "tinyhat-email-onboarding": "skills/tinyhat-email-onboarding/SKILL.md",
         "tinyhat-email-address": "skills/tinyhat-email-address/SKILL.md",
         "tinyhat-connect-channel": "skills/tinyhat-connect-channel/SKILL.md",
+        "tinyhat-complete-setup": "skills/tinyhat-complete-setup/SKILL.md",
     }
     for skill in skills:
         require(isinstance(skill, dict), "skill declaration must be an object")

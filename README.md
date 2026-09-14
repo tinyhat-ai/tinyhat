@@ -69,7 +69,9 @@ in as part of its current task.
 | `skills/tinyhat-skill-catalog/SKILL.md` | Skill discovery guidance for plugin-qualified Tinyhat skill names. |
 | `skills/tinyhat-skill-authoring/SKILL.md` | Portable skill-writing guidance for names, trigger boundaries, progressive disclosure, and context limits. |
 | `skills/tinyhat-private-secret/SKILL.md` | Browser-encrypted secret handoff guidance. |
-| `skills/tinyhat-slack/SKILL.md` | Hermes-native Slack Agent-view and Socket Mode onboarding. |
+| `skills/tinyhat-connect-channel/SKILL.md` | Telegram/Slack setup on an existing Computer, including guided manifest creation and private handoff to another device. |
+| `skills/tinyhat-complete-setup/SKILL.md` | Finish the selected system's CLI/desktop login and verify a working channel conversation. |
+| `skills/tinyhat-slack/SKILL.md` | Legacy Slack disconnect guidance; new connections use `tinyhat-connect-channel`. |
 | `skills/tinyhat-credentials/SKILL.md` | Value-blind credential discovery and confirmed Computer-side removal guidance. |
 | `skills/tinyhat-google-workspace/SKILL.md` | Existing-account Google identity connection guidance. |
 | `skills/tinyhat-google-workspace-app-manager/SKILL.md` | Approval-gated managed `gws` installation guidance. |

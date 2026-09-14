@@ -194,6 +194,13 @@
       "purpose": "Check or change this agent's Tinyhat email address when the owner asks \"what is your email?\", \"change your email\", or \"rename your inbox\". Not for changing the owner's sign-in email or accessing their Gmail."
     },
     {
+      "name": "tinyhat-complete-setup",
+      "qualified_name": "tinyhat:tinyhat-complete-setup",
+      "aliases": ["tinyhat-complete-setup"],
+      "path": "skills/tinyhat-complete-setup/SKILL.md",
+      "purpose": "Finish selected-system and messaging-channel setup with verified Computer, CLI, desktop and channel results."
+    },
+    {
       "name": "tinyhat-connect-channel",
       "qualified_name": "tinyhat:tinyhat-connect-channel",
       "aliases": ["tinyhat-connect-channel"],
