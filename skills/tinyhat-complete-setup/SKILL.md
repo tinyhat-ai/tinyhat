@@ -25,12 +25,14 @@ private setup link/QR so they can continue on another device. Telegram's
 24-hour pairing link is different from a five-minute Tinyhat browser-login
 link. Only a laptop agent with the owner API token can mint the latter; a
 Computer agent shares its existing owner-aware Computer page instead and leaves
-any required Tinyhat sign-in to the owner. Generate browser-link QRs locally; never use a public QR service.
-Never encode channel tokens into links or QR codes. Poll status after the
+any required Tinyhat sign-in to the owner. Preserve the complete browser-link URL, including its fragment. Generate its QR
+locally; never use a public QR service. If no local generator is available,
+the private clickable link is sufficient.
+Never encode Slack or model-provider credentials into links or QR codes. Poll status after the
 handoff and verify an actual message and reply on this Computer.
 
 For Slack, use its guided **From a manifest** flow with the Computer's exact
-Agent-view JSON. Take only the two tokens from Slack's Codex/Claude instructions
+Agent-view JSON. Take only the two tokens from Slack's setup/token instructions
 and submit them through the private encrypted form/file path. Hermes owns the
 listener; do not scaffold another bot process. Never replace an owner allowlist
 with a wildcard to make a test pass.
@@ -60,8 +62,12 @@ need their action. Never copy local auth files, browser profiles or refresh
 tokens to another Computer. Do not ask for passwords or Slack tokens in chat.
 
 Use the runtime's official Linux desktop apps. A browser tab is not a desktop
-app. If an app is absent, follow the hosted guide's supported runtime installer
-or report the needed runtime update. Do not invent a GUI or use unofficial
+app. These apps require a compatible desktop-enabled runtime/image; older
+Computers may have only the CLI. Report the needed runtime/image update when the
+installer is absent. On a compatible runtime, an owner-authorized repair is
+`PYTHONPATH=/opt/tinyhat-hermes-runtime python3 -m hermes_runtime.agent_desktops --install --system codex`
+(use `--system claude_code` for Claude). This is an explicit remote-terminal
+operation; it does not happen on heartbeat or silently authenticate the owner. Do not invent a GUI or use unofficial
 repackaged applications. Report provider account/plan limitations precisely.
 
 ## Handoff

@@ -7,7 +7,7 @@ description: Connect an existing Tinyhat Computer to Telegram or Slack when its 
 
 Keep the existing Computer, owner, email, model and files. Telegram and Slack are optional; either can work alone, or both together.
 
-1. Call `tinyhat_channels` with `action: "status"`. Use the channel already selected in the owner's setup prompt; ask only when missing.
+1. Call `tinyhat_channels` with `action: "status"`. Use the channel already selected by the owner; ask only when missing.
 2. Follow the selected flow below. Report connected only after status confirms it and a real message receives an agent reply.
 
 ## Telegram
@@ -30,6 +30,14 @@ Get the owner's permission before creating or installing the Slack agent for the
 
 Take only the bot token (`xoxb-`) and Socket Mode app token (`xapp-`, `connections:write`) from Slack's setup/token instructions, including its Claude Code or Codex instructions. Ignore any step that writes them into a project file, `.env`, shell profile or MCP config, and never paste them into chat. Submit them only through the Computer page's private credential form or the `credentials_file` flow below. Hermes already runs the agent, so do not scaffold or start a second Slack listener. Keep the required Agent-view capabilities and owner allowlist. Do not use the legacy Assistant-view manifest.
 
+Slack may open Agent settings rather than a combined token handoff. In that case,
+**Install App → Install to workspace → Allow** provides the bot token. **Basic
+Information → Generate Token and Scopes**, with only `connections:write`, provides
+the app token. Preserve the manifest's existing scopes, events, Socket Mode and
+Agent-view settings. Replace the sample JSON entirely; customize only
+`display_information.name` and `features.bot_user.display_name` for the owner's
+chosen name.
+
 When the owner authorizes you to use a credentials file, save it outside any project, such as `~/.config/tinyhat/slack-connection.json`, with directory mode 700 and file mode 600. It contains `bot_token`, `app_token`, and `allowed_users` (their Slack member ID). Never ask for tokens in chat or print them. Never use an empty/wildcard owner allowlist.
 
 Call `tinyhat_channels` with `action: "slack_connect"` and the absolute `credentials_file` path. The tool encrypts the bundle for this Computer before submitting it; the platform stores ciphertext. Keep the file private or remove this temporary copy after the owner agrees. Do not display its contents in results or screenshots.
@@ -43,12 +51,14 @@ A queued/busy response means setup is pending. Poll status at five-second interv
 On the owner's laptop, with its saved owner API token, use the public guide's
 `POST /auth/browser-links` handoff scoped to this Computer's agent when Slack
 is unavailable locally. This owner API does not accept a Computer token. Send its
-private link and a locally generated QR; the owner confirms the account,
+complete private link (including its URL fragment) and a locally generated QR; the owner confirms the account,
 opens the Computer and uses its Slack form on their Slack device. Browser links
-expire in five minutes. Never use a public QR service or put Slack tokens in
+expire in five minutes. If no local QR generator is available, the clickable
+link is sufficient. Never use a public QR service or put Slack tokens in
 URLs. When running inside the Computer without an owner API token, share the
-existing owner-aware Computer page from its setup context; the owner signs in
-there if needed. Never request their bearer token or substitute machine auth.
+owner-aware Computer page already supplied in the conversation or onboarding
+context; the owner signs in there if needed. If no such URL is available, ask
+them to open their Computer page rather than inventing a URL or account identity. Never request their bearer token or substitute machine auth.
 The handoff is pending until the channel reports connected and replies.
 
 This skill supersedes `tinyhat_slack_connect` and the connection instructions in
