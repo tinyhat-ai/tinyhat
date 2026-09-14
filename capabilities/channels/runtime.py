@@ -20,8 +20,7 @@ from urllib.parse import urlsplit
 from ..secrets.handoff import (
     _decrypt_ciphertext,
     _generate_key_pair,
-    _hermes_env_path,
-    _parse_env_value,
+    _hermes_python_executable,
     _set_hermes_secret,
 )
 from ..slack.connection import (
@@ -100,7 +99,10 @@ def prepare_key(assignment: str) -> dict[str, str]:
             _atomic_private_write(public_path, result.stdout)
         # No public key has been returned, so no credentials can be bound
         # to a partial write. Never rotate a key with a published public half.
-        elif private_path.read_bytes() == b"":
+        elif not re.search(
+            rb"-----BEGIN (?:RSA |EC |ENCRYPTED )?PRIVATE KEY-----",
+            private_path.read_bytes(),
+        ):
             private_path.unlink()
         else:
             raise ValueError("The unpublished channel key could not be read; retry or recover it.")
@@ -223,20 +225,51 @@ def snapshot_channel(provider: str) -> dict[str, str | None]:
     hermes = shutil.which("hermes")
     if not hermes:
         raise ValueError("Hermes CLI is required to read the current channel settings.")
-    path = _hermes_env_path(hermes)
-    # Do not use the best-effort getter: missing, unreadable, or invalid UTF-8
-    # must not be interpreted as five absent credentials during recovery.
-    lines = path.read_text(encoding="utf-8").splitlines()
-    snapshot = dict.fromkeys(keys)
-    for line in lines:
-        clean = line.strip()
-        if not clean or clean.startswith("#") or "=" not in clean:
-            continue
-        name, raw = clean.split("=", 1)
-        name = name.strip()
-        if name in snapshot:
-            snapshot[name] = _parse_env_value(raw.strip())
-    return snapshot
+    python = _hermes_python_executable(hermes)
+    if not python:
+        raise ValueError("Hermes Python is required to read channel settings.")
+    # Delegate parsing to the same Hermes configuration API used by writes.
+    # In particular, export prefixes and Hermes' treatment of ambiguous env lines must
+    # not turn live credentials into an apparently empty recovery snapshot.
+    script = """
+import contextlib, io, json, sys
+with contextlib.redirect_stdout(io.StringIO()):
+    from hermes_cli.config import get_env_path, load_env
+    path = get_env_path()
+    def signature():
+        try:
+            stat = path.stat()
+            return (stat.st_ino, stat.st_mtime_ns, stat.st_size)
+        except FileNotFoundError:
+            return None
+    before = signature()
+    if before is not None:
+        path.read_text(encoding='utf-8-sig')
+    values = load_env()
+    if before != signature():
+        raise RuntimeError('Channel settings changed during snapshot')
+print(json.dumps({key: values.get(key) for key in sys.argv[1:]}))
+"""
+    try:
+        result = subprocess.run(
+            [python, "-c", script, *keys],
+            capture_output=True,
+            text=True,
+            timeout=20,
+            check=False,
+        )
+        if result.returncode != 0:
+            raise ValueError()
+        snapshot = json.loads(result.stdout)
+        if (
+            not isinstance(snapshot, dict)
+            or set(snapshot) != set(keys)
+            or any(value is not None and not isinstance(value, str) for value in snapshot.values())
+        ):
+            raise ValueError()
+        return snapshot
+    except (OSError, ValueError, subprocess.TimeoutExpired):
+        raise ValueError("Could not read the current Hermes channel settings.") from None
 
 
 def restore_channel(snapshot: dict[str, str | None]) -> None:

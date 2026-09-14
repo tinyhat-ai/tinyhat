@@ -83,36 +83,54 @@ class ChannelTests(unittest.TestCase):
                     runtime.install_channel("assignment", {**channel, "owner_id": owner})
             save.assert_not_called()
 
-    def test_snapshot_distinguishes_unset_keys_from_unreadable_state(self):
-        with tempfile.TemporaryDirectory() as directory:
-            path = Path(directory) / ".env"
-            with (
-                patch.object(runtime, "_hermes_env_path", return_value=path),
-                patch.object(runtime.shutil, "which", return_value="hermes"),
-            ):
-                with self.assertRaises(FileNotFoundError):
+    def test_snapshot_uses_hermes_values_and_aborts_on_loader_failure(self):
+        snapshot = dict.fromkeys(runtime.CHANNEL_KEYS["telegram"])
+        snapshot["TELEGRAM_BOT_TOKEN"] = "previous"
+        with (
+            patch.object(runtime.shutil, "which", return_value="hermes"),
+            patch.object(runtime, "_hermes_python_executable", return_value="hermes-python"),
+            patch.object(
+                runtime.subprocess,
+                "run",
+                return_value=Mock(returncode=0, stdout=json.dumps(snapshot)),
+            ) as load,
+            patch.object(runtime, "_set_hermes_secret") as save,
+        ):
+            self.assertEqual(runtime.snapshot_channel("telegram"), snapshot)
+            self.assertEqual(load.call_args.args[0][0], "hermes-python")
+            for result in [
+                Mock(returncode=1, stdout=""),
+                Mock(returncode=0, stdout="invalid"),
+                Mock(returncode=0, stdout="{}"),
+            ]:
+                load.return_value = result
+                with self.assertRaises(ValueError):
                     runtime.snapshot_channel("telegram")
-                path.write_text("TELEGRAM_BOT_TOKEN='previous'\nOTHER_VALUE=untouched\n")
-                snapshot = runtime.snapshot_channel("telegram")
-                self.assertEqual(snapshot["TELEGRAM_BOT_TOKEN"], "previous")
-                self.assertIsNone(snapshot["TELEGRAM_ALLOWED_USERS"])
-                with (
-                    patch.object(Path, "read_text", side_effect=PermissionError("unreadable")),
-                    self.assertRaises(PermissionError),
-                ):
-                    runtime.snapshot_channel("telegram")
-                with patch.object(runtime, "_set_hermes_secret") as save:
-                    runtime.restore_channel(snapshot)
-                    self.assertEqual(
-                        save.call_args_list[-1].args, ("TELEGRAM_BOT_TOKEN", "previous")
-                    )
-                    save.reset_mock()
-                    with self.assertRaises(ValueError):
-                        runtime.restore_channel({**snapshot, "OTHER_VALUE": "never-write"})
-                    save.assert_not_called()
-                    with self.assertRaises(ValueError):
-                        runtime.restore_channel({**snapshot, "TELEGRAM_BOT_TOKEN": 3})
-                    save.assert_not_called()
+            save.assert_not_called()
+            runtime.restore_channel(snapshot)
+            self.assertEqual(save.call_args_list[-1].args, ("TELEGRAM_BOT_TOKEN", "previous"))
+            save.reset_mock()
+            for invalid in [
+                {**snapshot, "OTHER_VALUE": "never-write"},
+                {**snapshot, "TELEGRAM_BOT_TOKEN": 3},
+            ]:
+                with self.assertRaises(ValueError):
+                    runtime.restore_channel(invalid)
+                save.assert_not_called()
+
+    def test_corrupt_unpublished_key_recovers_but_published_key_is_preserved(self):
+        with (
+            tempfile.TemporaryDirectory() as directory,
+            patch.dict(os.environ, {"XDG_CONFIG_HOME": directory}),
+        ):
+            folder = runtime._directory("corrupt")
+            private = folder / "private.pem"
+            private.write_text("interrupted-write")
+            key = runtime.prepare_key("corrupt")
+            self.assertTrue(key["public_key_pem"].startswith("-----BEGIN PUBLIC KEY"))
+            private.write_text("corrupt-published")
+            self.assertEqual(runtime.prepare_key("corrupt"), key)
+            self.assertEqual(private.read_text(), "corrupt-published")
 
     def test_nonzero_openssl_does_not_delete_a_nonempty_private_key(self):
         with (
@@ -120,7 +138,9 @@ class ChannelTests(unittest.TestCase):
             patch.dict(os.environ, {"XDG_CONFIG_HOME": directory}),
         ):
             private = runtime._directory("unpublished") / "private.pem"
-            private.write_text("possibly-valid-but-unreadable-to-openssl")
+            private.write_text(
+                "-----BEGIN PRIVATE KEY-----\npossibly-valid-but-unreadable-to-openssl"
+            )
             with (
                 patch.object(runtime.subprocess, "run", return_value=Mock(returncode=1)),
                 self.assertRaises(ValueError),
