@@ -7,22 +7,78 @@ import hashlib
 import json
 import os
 import re
+import shutil
 import stat
 import subprocess
 import tempfile
 from pathlib import Path
 from urllib.parse import urlsplit
 
-from ...platform import PlatformError, build_platform_client
+from ...platform import PlatformError, build_platform_client, computer_api_path
 from ...tool_errors import tool_error_json
 from ..secrets.handoff import SecretHandoffError
 from ..slack.connection import _parse_connection_bundle
 
 TOOL = "tinyhat_channels"
 MAX_BUNDLE_BYTES = 8192
+SAFE_CHANNEL_ERRORS = {
+    "owner_unavailable",
+    "setup_failed",
+    "invalid_credentials",
+    "gateway_unavailable",
+    "readiness_unknown",
+    "settings_unavailable",
+    "network_unavailable",
+}
+
+
+class ChannelInputError(ValueError):
+    def __init__(self, code, message):
+        self.code, self.public_message = code, message
+        super().__init__(message)
+
+
+def pairing_result(payload):
+    try:
+        url, qr = urlsplit(payload["url"]), urlsplit(payload["qr_url"])
+        token = url.path.rsplit("/", 1)[-1]
+        for link in (url, qr):
+            if (
+                (
+                    link.scheme != "https"
+                    and not (
+                        link.scheme == "http" and link.hostname in {"localhost", "127.0.0.1", "::1"}
+                    )
+                )
+                or link.username
+                or link.password
+                or link.query
+                or link.fragment
+            ):
+                raise ValueError()
+        if (
+            not re.fullmatch(r"/tinyhat/connect/telegram/thch_[A-Za-z0-9_-]{43}", url.path)
+            or (url.scheme, url.netloc) != (qr.scheme, qr.netloc)
+            or qr.path != f"/hapi/v2/channel-links/telegram/{token}/qr"
+        ):
+            raise ValueError()
+        return {
+            key: payload.get(key)
+            for key in ["url", "qr_url", "expires_at", "bot_name", "bot_username"]
+        }
+    except (KeyError, ValueError, TypeError):
+        raise ChannelInputError(
+            "invalid_pairing_link",
+            "Tinyhat returned an invalid pairing link. Request a fresh link.",
+        ) from None
 
 
 def encrypt_bundle(public_key: str, bundle: dict) -> dict:
+    if not shutil.which("openssl"):
+        raise ChannelInputError(
+            "encryption_unavailable",
+            "OpenSSL is required to encrypt the credentials on this Computer.",
+        )
     plaintext = json.dumps(bundle).encode()
     if len(plaintext) > MAX_BUNDLE_BYTES:
         raise ValueError("Credentials file is too large.")
@@ -89,7 +145,12 @@ def _credentials_file(value: object) -> dict:
 def _public_status(payload: dict) -> dict:
     return {
         "channels": [
-            {"provider": row["provider"], "status": row["status"], "name": row.get("name")}
+            {
+                "provider": row["provider"],
+                "status": row["status"],
+                "name": row.get("name"),
+                "error": row.get("error") if row.get("error") in SAFE_CHANNEL_ERRORS else None,
+            }
             for row in payload.get("channels", [])
             if row.get("provider") in {"email", "slack", "telegram"}
         ],
@@ -108,8 +169,7 @@ def channels(args: dict | None = None, **_) -> str:
         if set(args) - allowed:
             raise ValueError("Unexpected fields. Credentials must be provided in a private file.")
         client, authentication = build_platform_client()
-        kind = "me" if authentication == "gcloud" else "local-dev"
-        base = f"/hapi/v2/computers/{kind}/channels"
+        base = computer_api_path(authentication, "channels", version="v2")
         if action == "status":
             result = _public_status(client.get_json(base + "/status"))
         elif action == "prepare":
@@ -117,24 +177,22 @@ def channels(args: dict | None = None, **_) -> str:
         elif action == "telegram_link":
             body = {key: args[key] for key in ["bot_name", "bot_username"] if key in args}
             result = client.post_json(base + "/telegram/link", body)
-            url = urlsplit(result.get("url", ""))
-            if (
-                url.scheme != "https"
-                or url.username
-                or url.password
-                or not re.fullmatch(r"/tinyhat/connect/telegram/thch_[A-Za-z0-9_-]{43}", url.path)
-            ):
-                raise ValueError("Invalid pairing link.")
-            result = {
-                key: result[key]
-                for key in ["url", "qr_url", "expires_at", "bot_name", "bot_username"]
-            }
+            result = pairing_result(result)
         else:
             status = client.get_json(base + "/status")
             public_key, fingerprint = status.get("public_key_pem"), status.get("key_fingerprint")
             if not public_key or hashlib.sha256(public_key.encode()).hexdigest() != fingerprint:
-                raise ValueError("Prepare the Computer first, then retry once its key is ready.")
-            bundle = _credentials_file(args.get("credentials_file"))
+                raise ChannelInputError(
+                    "computer_not_prepared",
+                    "Prepare the Computer first, then retry once its key is ready.",
+                )
+            try:
+                bundle = _credentials_file(args.get("credentials_file"))
+            except (ValueError, OSError, SecretHandoffError):
+                raise ChannelInputError(
+                    "credentials_file_invalid",
+                    "Use an absolute path to a private, owned file (mode 600, at most 8 KB) containing both Slack tokens and your member ID.",
+                ) from None
             try:
                 bundle["schema"] = "tinyhat_slack_connection_bundle_v1"
                 encrypted = encrypt_bundle(public_key, bundle)
@@ -144,8 +202,18 @@ def channels(args: dict | None = None, **_) -> str:
                 base + "/slack", {"key_fingerprint": fingerprint, "ciphertext": encrypted}
             )
         return json.dumps(result)
+    except ChannelInputError as exc:
+        return tool_error_json(tool=TOOL, error_name=exc.code, message=exc.public_message)
+    except PlatformError as exc:
+        invalid = exc.status_code in {400, 422}
+        return tool_error_json(
+            tool=TOOL,
+            error_name="invalid_channel_request" if invalid else "platform_unavailable",
+            message="Check the supplied channel fields and bot username."
+            if invalid
+            else "Tinyhat could not complete the request. Check channel status before retrying.",
+        )
     except (
-        PlatformError,
         SecretHandoffError,
         ValueError,
         TypeError,

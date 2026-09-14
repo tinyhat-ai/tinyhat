@@ -201,11 +201,11 @@ def build_platform_client(
     )
 
 
-def computer_api_path(platform_auth: str, suffix: str) -> str:
+def computer_api_path(platform_auth: str, suffix: str, *, version: str = "v1") -> str:
     clean_suffix = suffix.lstrip("/")
     if platform_auth == "gcloud":
-        return f"/hapi/v1/computers/me/{clean_suffix}"
-    return f"/hapi/v1/computers/local-dev/{clean_suffix}"
+        return f"/hapi/{version}/computers/me/{clean_suffix}"
+    return f"/hapi/{version}/computers/local-dev/{clean_suffix}"
 
 
 def runtime_env(env: dict[str, str] | None = None) -> dict[str, str]:

@@ -33,3 +33,7 @@ Call `tinyhat_channels` with `action: "slack_connect"` and the absolute `credent
 For Codex or Claude Code running on the owner's laptop, use the current public guide at https://tinyhat.ai/agents.md and its authenticated `/hapi/v2/computers/{computer_id}/channels` endpoints. The API supports status, prepare, Telegram pairing and encrypted Slack submission. Use the existing owner session stored outside the project; do not copy a machine token from a Computer to the laptop.
 
 A queued/busy response means setup is pending. Poll status at five-second intervals briefly, then slow down. If setup fails, show a short retry instruction; never disclose provider token errors or claim the channel is already connected.
+
+This skill supersedes `tinyhat_slack_connect` and the connection instructions in
+`tinyhat-slack`. Always use `tinyhat_channels` for new Slack setup, including
+Computers that already use Telegram.

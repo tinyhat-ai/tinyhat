@@ -10,10 +10,19 @@ from __future__ import annotations
 import hashlib
 import json
 import os
+import re
+import shutil
 import subprocess
+import tempfile
 from pathlib import Path
 
-from ..secrets.handoff import _decrypt_ciphertext, _generate_key_pair, _set_hermes_secret
+from ..secrets.handoff import (
+    _decrypt_ciphertext,
+    _generate_key_pair,
+    _hermes_env_path,
+    _read_env_value,
+    _set_hermes_secret,
+)
 from ..slack.connection import (
     _app_id_from_app_token,
     _generate_hermes_slack_manifest,
@@ -24,6 +33,40 @@ from ..slack.connection import (
 )
 
 MAX_ASSIGNMENT_LENGTH = 160
+MAX_BUNDLE_BYTES = 8192
+MAX_CIPHER_CHUNKS = 44
+MAX_ENCODED_CHUNK_BYTES = 1024
+CHANNEL_KEYS = {
+    "telegram": (
+        "TELEGRAM_ALLOWED_USERS",
+        "TELEGRAM_HOME_CHANNEL",
+        "TELEGRAM_HOME_CHANNEL_NAME",
+        "TINYHAT_SETTINGS_MINIAPP_URL",
+        "TELEGRAM_BOT_TOKEN",
+    ),
+    "slack": (
+        "SLACK_ALLOWED_USERS",
+        "SLACK_HOME_CHANNEL",
+        "SLACK_HOME_CHANNEL_NAME",
+        "SLACK_BOT_TOKEN",
+        "SLACK_APP_TOKEN",
+    ),
+}
+
+
+def _atomic_private_write(path: Path, value: str, *, exclusive=False):
+    fd, temporary = tempfile.mkstemp(dir=path.parent)
+    try:
+        with os.fdopen(fd, "w") as target:
+            target.write(value)
+            target.flush()
+            os.fsync(target.fileno())
+        if exclusive:
+            os.link(temporary, path)
+        else:
+            os.replace(temporary, path)
+    finally:
+        Path(temporary).unlink(missing_ok=True)
 
 
 def _directory(assignment: str) -> Path:
@@ -44,25 +87,28 @@ def _directory(assignment: str) -> Path:
 def prepare_key(assignment: str) -> dict[str, str]:
     directory = _directory(assignment)
     private_path, public_path = directory / "private.pem", directory / "public.pem"
-    if not private_path.exists():
-        private, public = _generate_key_pair()
-        # Exclusive create prevents replacing the only key able to decrypt a
-        # previously submitted bundle. Runtime commands serialize this adapter.
-        fd = os.open(private_path, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
-        with os.fdopen(fd, "w") as target:
-            target.write(private)
-        public_path.write_text(public, encoding="utf-8")
-        public_path.chmod(0o600)
-    if not public_path.exists():
-        # Recover a crash after saving the private key; never rotate that key.
+    if private_path.exists() and not public_path.exists():
         result = subprocess.run(
             ["openssl", "pkey", "-in", str(private_path), "-pubout"],
             capture_output=True,
             text=True,
-            check=True,
+            timeout=10,
+            check=False,
         )
-        public_path.write_text(result.stdout, encoding="utf-8")
-        public_path.chmod(0o600)
+        if result.returncode == 0:
+            _atomic_private_write(public_path, result.stdout)
+        else:
+            # No public key has been returned, so no credentials can be bound
+            # to a partial write. Never rotate a key with a published public half.
+            private_path.unlink()
+    if not private_path.exists():
+        if public_path.exists():
+            raise ValueError("The published channel key needs recovery.")
+        private, public = _generate_key_pair()
+        # Exclusive create prevents replacing the only key able to decrypt a
+        # previously submitted bundle. Runtime commands serialize this adapter.
+        _atomic_private_write(private_path, private, exclusive=True)
+        _atomic_private_write(public_path, public)
     public = public_path.read_text(encoding="utf-8")
     return {
         "public_key_pem": public,
@@ -94,12 +140,17 @@ def install_channel(assignment: str, channel: dict) -> dict:
     provider = channel.get("provider")
     if provider == "telegram":
         token, owner = str(channel.get("bot_token") or ""), str(channel.get("owner_id") or "")
-        if not token or not owner.isdigit() or int(owner) <= 0:
+        if (
+            not re.fullmatch(r"[1-9][0-9]*:[A-Za-z0-9_-]{20,}", token)
+            or not owner.isdigit()
+            or int(owner) <= 0
+        ):
             raise ValueError("Telegram credentials or owner are invalid.")
         values = {
             "TELEGRAM_ALLOWED_USERS": owner,
             "TELEGRAM_HOME_CHANNEL": owner,
             "TELEGRAM_HOME_CHANNEL_NAME": "Owner DM",
+            "TINYHAT_SETTINGS_MINIAPP_URL": str(channel.get("settings_miniapp_url") or ""),
             "TELEGRAM_BOT_TOKEN": token,
         }
         for name, value in values.items():
@@ -111,9 +162,24 @@ def install_channel(assignment: str, channel: dict) -> dict:
     if channel.get("key_fingerprint") != key["key_fingerprint"]:
         raise ValueError("Slack credentials belong to another Computer key.")
     private = (_directory(assignment) / "private.pem").read_text(encoding="utf-8")
-    plaintext = _decrypt_ciphertext(private, channel["ciphertext"])
-    bundle = _parse_connection_bundle(plaintext)
+    envelope = channel.get("ciphertext")
+    chunks = envelope.get("ciphertext_chunks_b64") if isinstance(envelope, dict) else None
+    if (
+        not isinstance(chunks, list)
+        or not 1 <= len(chunks) <= MAX_CIPHER_CHUNKS
+        or any(
+            not isinstance(chunk, str) or len(chunk) > MAX_ENCODED_CHUNK_BYTES for chunk in chunks
+        )
+    ):
+        raise ValueError("Invalid channel credential envelope.")
     plaintext = ""
+    try:
+        plaintext = _decrypt_ciphertext(private, envelope)
+        if len(plaintext.encode()) > MAX_BUNDLE_BYTES:
+            raise ValueError("Channel credentials are too large.")
+        bundle = _parse_connection_bundle(plaintext)
+    finally:
+        plaintext = ""
     try:
         metadata = _validate_slack_credentials(bundle)
         # auth.test can omit app_id. bots.info binds the bot token to the app
@@ -146,3 +212,17 @@ def install_channel(assignment: str, channel: dict) -> dict:
 
 def slack_manifest() -> dict:
     return _generate_hermes_slack_manifest()
+
+
+def snapshot_channel(provider: str) -> dict[str, str | None]:
+    """Keep only this provider's previous values in memory for activation recovery."""
+    path = _hermes_env_path(shutil.which("hermes") or "hermes")
+    return {name: _read_env_value(path, name) for name in CHANNEL_KEYS[provider]}
+
+
+def restore_channel(snapshot: dict[str, str | None]) -> None:
+    """Restore a failed activation; empty values disable newly added providers."""
+    for name, value in snapshot.items():
+        if name not in {key for keys in CHANNEL_KEYS.values() for key in keys}:
+            raise ValueError("Invalid channel recovery key.")
+        _set_hermes_secret(name, value or "")

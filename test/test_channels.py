@@ -16,7 +16,9 @@ load_local_tinyhat = importlib.import_module("package_support").load_local_tinyh
 load_local_tinyhat(ROOT)
 runtime = importlib.import_module("tinyhat.capabilities.channels.runtime")
 tool = importlib.import_module("tinyhat.capabilities.channels.tool")
-_decrypt_ciphertext = importlib.import_module("tinyhat.capabilities.secrets.handoff")._decrypt_ciphertext
+_decrypt_ciphertext = importlib.import_module(
+    "tinyhat.capabilities.secrets.handoff"
+)._decrypt_ciphertext
 
 
 class ChannelTests(unittest.TestCase):
@@ -41,6 +43,61 @@ class ChannelTests(unittest.TestCase):
             self.assertNotEqual(other["key_fingerprint"], key["key_fingerprint"])
             (private.parent / "public.pem").unlink()
             self.assertEqual(runtime.prepare_key("owner:computer:assignment"), key)
+
+    def test_partial_key_recovers_only_before_publication(self):
+        with (
+            tempfile.TemporaryDirectory() as directory,
+            patch.dict(os.environ, {"XDG_CONFIG_HOME": directory}),
+        ):
+            folder = runtime._directory("partial")
+            private = folder / "private.pem"
+            private.write_text("")
+            key = runtime.prepare_key("partial")
+            self.assertTrue(key["public_key_pem"].startswith("-----BEGIN PUBLIC KEY"))
+            private.unlink()
+            with self.assertRaises(ValueError):
+                runtime.prepare_key("partial")
+
+    def test_telegram_validates_owner_and_writes_allowlist_first(self):
+        channel = {"provider": "telegram", "bot_token": "12345:" + "a" * 35, "owner_id": "12345"}
+        with patch.object(runtime, "_set_hermes_secret") as save:
+            runtime.install_channel("assignment", channel)
+            self.assertEqual(
+                [c.args[0] for c in save.call_args_list], list(runtime.CHANNEL_KEYS["telegram"])
+            )
+            save.reset_mock()
+            for owner in ["0", "-1", "not-an-id"]:
+                with self.assertRaises(ValueError):
+                    runtime.install_channel("assignment", {**channel, "owner_id": owner})
+            save.assert_not_called()
+
+    def test_pairing_urls_share_origin_token_and_safe_transport(self):
+        token = "thch_" + "a" * 43
+
+        def payload(origin):
+            return {
+                "url": origin + "/tinyhat/connect/telegram/" + token,
+                "qr_url": origin + "/hapi/v2/channel-links/telegram/" + token + "/qr",
+            }
+
+        for origin in ["https://example.com", "http://localhost:8012"]:
+            self.assertEqual(tool.pairing_result(payload(origin))["url"], payload(origin)["url"])
+        for bad in [
+            {**payload("https://example.com"), "qr_url": "https://other.example/qr"},
+            payload("http://example.com"),
+        ]:
+            with self.assertRaises(tool.ChannelInputError):
+                tool.pairing_result(bad)
+
+    def test_not_prepared_and_platform_errors_are_actionable_without_secrets(self):
+        client = Mock()
+        client.get_json.return_value = {}
+        with patch.object(tool, "build_platform_client", return_value=(client, "local_dev")):
+            self.assertIn("computer_not_prepared", tool.channels({"action": "slack_connect"}))
+            client.get_json.side_effect = tool.PlatformError("secret-token", status_code=503)
+            result = tool.channels()
+            self.assertIn("platform_unavailable", result)
+            self.assertNotIn("secret-token", result)
 
     def test_private_file_accepts_plain_bundle_but_rejects_shared_or_symlink(self):
         with tempfile.TemporaryDirectory() as directory:
@@ -99,14 +156,14 @@ class ChannelTests(unittest.TestCase):
             ):
                 runtime.install_channel("assignment", channel)
                 self.assertEqual(
-                    {call.args[0] for call in save.call_args_list},
-                    {
-                        "SLACK_BOT_TOKEN",
-                        "SLACK_APP_TOKEN",
+                    [call.args[0] for call in save.call_args_list],
+                    [
                         "SLACK_ALLOWED_USERS",
                         "SLACK_HOME_CHANNEL",
                         "SLACK_HOME_CHANNEL_NAME",
-                    },
+                        "SLACK_BOT_TOKEN",
+                        "SLACK_APP_TOKEN",
+                    ],
                 )
             with (
                 patch.object(runtime, "_validate_slack_credentials", return_value={}),

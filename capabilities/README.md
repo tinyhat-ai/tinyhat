@@ -21,8 +21,4 @@ the repository root.
 
 ## Computer channels
 
-`tinyhat_channels` and the `tinyhat-connect-channel` skill connect an existing
-Computer to Telegram, Slack, or both. Telegram uses a private 24-hour pairing
-link/QR; Slack uses the Computer's public key and a private credentials file.
-The platform retains encrypted credentials; the runtime applies them through
-`configure_channels` without changing the owner, email, model or user files.
+See [Computer channel setup](../docs/capabilities.md#computer-channels).

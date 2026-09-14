@@ -589,9 +589,9 @@ TINYHAT_SLACK_CONNECT_SCHEMA = {
     "required": [],
     "additionalProperties": False,
     "description": (
-        "Start Tinyhat's Hermes-native Slack setup. Sends the current Hermes "
-        "Agent-view manifest, Slack app creation guide, and browser-encrypted "
-        "credential bundle to Telegram."
+        "Deprecated compatibility path for legacy Telegram-managed sessions only. "
+        "Use tinyhat_channels and tinyhat-connect-channel for every new Slack "
+        "connection, with or without Telegram."
     ),
 }
 

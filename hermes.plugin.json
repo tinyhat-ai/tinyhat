@@ -72,7 +72,7 @@
       "qualified_name": "tinyhat:tinyhat-slack",
       "aliases": ["tinyhat-slack"],
       "path": "skills/tinyhat-slack/SKILL.md",
-      "purpose": "Connects this Hermes agent to Slack through an Agent-view manifest and browser-encrypted local token handoff."
+      "purpose": "Disconnects legacy Telegram-managed Slack connections. Use tinyhat-connect-channel for all new connections."
     },
     {
       "name": "tinyhat-credentials",
@@ -142,7 +142,7 @@
       "qualified_name": "tinyhat:tinyhat-account-upgrade",
       "aliases": ["tinyhat-account-upgrade"],
       "path": "skills/tinyhat-account-upgrade/SKILL.md",
-      "purpose": "Prepares the existing owner\u2019s Stripe Projects upgrade using Computer identity; the owner approves on the review page."
+      "purpose": "Prepares the existing owner’s Stripe Projects upgrade using Computer identity; the owner approves on the review page."
     },
     {
       "name": "tinyhat-agentphone",

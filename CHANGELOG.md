@@ -4,6 +4,8 @@ All notable changes to the Tinyhat plugin are documented here.
 
 ## Unreleased
 
+- Connect an existing Computer to Telegram, Slack or both through `tinyhat_channels`. Slack credentials remain encrypted to the Computer; owner allowlists are installed before tokens. New setup does not require Telegram or an invitation.
+
 ## 0.32.15 - 2026-09-12
 
 - Require incoming email to match the verified owner and pass receiver-verified
