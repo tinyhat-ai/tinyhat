@@ -10,6 +10,7 @@ The current capability list is intentionally small.
 | `tinyhat_model_budget` | Platform API required | Reads this Agent's current total AI model budget, remaining amount, and used amount. It cannot change the budget. |
 | `tinyhat_openrouter_credit_allocate` | Platform API required | Adds an exact amount of the owner's credit to this Agent's model budget. |
 | `tinyhat_contact_details` | Platform API required | Returns this Agent's managed phone number and email address, and idempotently assigns missing contacts when the platform enables them. It accepts no identity, contact, or credential input. |
+| `tinyhat-complete-setup` skill | Compatible channel APIs and desktop-enabled runtime required | Guides setup through Computer access, a working Telegram/Slack conversation, and separate CLI/desktop provider sign-in. |
 | `tinyhat-mail-client` skill | Platform API and compatible image required | Opens the configured desktop inbox and provides private standard-client setup without exposing credential values. |
 | `tinyhat_mail` | Computer-local mailbox required | Checks, lists, searches, and reads this Agent's isolated Tinyhat inbox and sends one plain-text email when server policy permits it. It never accepts or returns mailbox credentials, server addresses, or account ids. Reads are bounded, activation links remain usable, and send retries use a durable request id. |
 | `tinyhat_hats` | Available now | Creates free public or named-user-private Hats, manages their audience, and installs an accessible Hat from its URL or handle; checks out and syncs private repositories through Computer-scoped GitHub leases; and manages value-blind Hat credentials. Retirement hides a Hat from owner/public/new-install surfaces and deletes creator package state while preserving platform and installation history and already-installed consumer agents. Authorized creator-provided credentials transfer automatically between Computers. Creator-omitted credentials reuse an exact existing Computer credential or open encrypted Tinyhat Credentials setup for the installing user. |
@@ -22,8 +23,9 @@ The current capability list is intentionally small.
 | `tinyhat-onboarding-greeting` skill | Available now | Guides the newly configured Agent to introduce its broader purpose first, then briefly share its available phone number and email address as optional ways to stay in contact. |
 | `tinyhat-agentphone` skill | Available now | Loads AgentPhone's current online skill and uses this Agent's Computer-local provider credentials directly through the shell for calls and text messages. It does not require a separate AgentPhone tool. |
 | `tinyhat_private_secret_handoff` | Available now | Lets a user enter a secret in a Telegram Mini App while Tinyhat stores only short-lived ciphertext. |
-| `tinyhat_slack_connect` | Available now | Sends Hermes' current Agent-view manifest and transfers the Slack bot token, Socket Mode app token, and allowed member IDs as one browser-encrypted Computer-local bundle. |
-| `tinyhat_slack_disconnect` | Available now | Sends an owner-confirmed Telegram ceremony, revokes active Slack bot access when possible, removes the complete Computer-local Slack bundle, and restarts Hermes. |
+| `tinyhat_channels` | Available now | Connects this Computer to Telegram or Slack with private pairing and encrypted credential submission. |
+| `tinyhat_slack_connect` | Legacy | New Slack connections use `tinyhat_channels`; retained for compatibility only. |
+| `tinyhat_slack_disconnect` | Legacy Telegram-managed bundles only | Sends an owner-confirmed Telegram ceremony, revokes active Slack bot access when possible, removes the complete Computer-local Slack bundle, and restarts Hermes. |
 | `tinyhat_google_workspace` | Available now | Connects Google identity, composes implemented access presets and requestable Custom scopes, lets Google handle its pending-verification warning, blocks unimplemented requests before OAuth, and starts an account-targeted local disconnect ceremony. |
 | `tinyhat_google_workspace_app` | Available now | Lends one selected account's assignment-verified Google access to one bounded `gws` invocation. |
 | `tinyhat_google_workspace_app_manager` | Available now | After approval, installs or removes the pinned integrity-verified `gws` app; Hermes supplies the operation skill. |
@@ -241,6 +243,9 @@ one-shot gateway restart and sends the final ready-or-failed confirmation
 after that restart settles. The worker never restarts the gateway itself.
 
 ## Slack
+
+For new connections, use [Computer channels](#computer-channels). The following
+legacy transfer flow applies only to existing connections created that way.
 
 The agent calls `tinyhat_slack_connect` once. The tool sends the current
 Hermes-generated Agent-view manifest, a highlighted Slack app-creation guide,
@@ -700,3 +705,9 @@ coding-tool instructions: never put them in chat, project files, shell profiles
 or MCP configs. Hermes supplies the listener; no separate agent scaffold is needed.
 The platform retains encrypted credentials; the runtime applies them through
 `configure_channels` without changing the owner, email, model or user files.
+
+`tinyhat-complete-setup` coordinates the selected system and channel through
+actual replies, including separate CLI and Linux desktop login checks for
+Codex/Claude. The public guide at https://tinyhat.ai/agents.md serves laptop
+coding agents. Login requires the provider's official flow and sometimes the
+owner's action; the plugin does not copy credentials between devices.
