@@ -243,13 +243,15 @@ def install_submitted_slack_connection(
         metadata = _validate_slack_credentials(bundle)
         home_channel = _open_slack_home_channel(bundle)
         try:
-            _save_connection_values({
-                "SLACK_ALLOWED_USERS": bundle["allowed_users"],
-                "SLACK_HOME_CHANNEL": home_channel,
-                "SLACK_HOME_CHANNEL_NAME": SLACK_HOME_CHANNEL_NAME,
-                "SLACK_BOT_TOKEN": bundle["bot_token"],
-                "SLACK_APP_TOKEN": bundle["app_token"],
-            })
+            _save_connection_values(
+                {
+                    "SLACK_ALLOWED_USERS": bundle["allowed_users"],
+                    "SLACK_HOME_CHANNEL": home_channel,
+                    "SLACK_HOME_CHANNEL_NAME": SLACK_HOME_CHANNEL_NAME,
+                    "SLACK_BOT_TOKEN": bundle["bot_token"],
+                    "SLACK_APP_TOKEN": bundle["app_token"],
+                }
+            )
         except Exception as exc:
             raise SlackConnectionError(
                 "Hermes could not save the validated Slack credentials.",
