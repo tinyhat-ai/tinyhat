@@ -152,7 +152,7 @@ class ChannelTests(unittest.TestCase):
 from pathlib import Path
 assert callable(platform.system)
 def get_env_path():
-    target = Path(os.environ['HERMES_ENV_FILE'])
+    target = Path(os.environ['HERMES_HOME']) / '.env'
     return target.parent / 'wrong.env' if os.environ.get('TEST_WRONG_TARGET') else target
 def load_env():
     path = get_env_path()
@@ -161,6 +161,10 @@ def load_env():
         path.write_text(json.dumps({**values, 'CONCURRENT': 'update'}))
     return values
 def save_env_value(key, value):
+    if os.environ.get('TEST_MANAGED'):
+        return
+    with open(os.environ['TEST_ORDER_LOG'], 'a') as log:
+        log.write(key + chr(10))
     path = get_env_path()
     values = load_env()
     values[key] = value
@@ -171,7 +175,8 @@ def save_env_value(key, value):
                 f"#!{sys.executable}\nimport os\nfrom pathlib import Path\nroot=Path(os.environ['HERMES_HOME'])\nprint(root/'profiles'/(root/'active_profile').read_text().strip()/'.env')\n"
             )
             cli.chmod(0o700)
-            env = {"PYTHONPATH": str(root), "HERMES_HOME": str(root)}
+            order_log = root / "order.log"
+            env = {"PYTHONPATH": str(root), "HERMES_HOME": str(root), "TEST_ORDER_LOG": str(order_log)}
             with (
                 patch.dict(os.environ, env),
                 patch.object(runtime.shutil, "which", return_value=str(cli)),
@@ -191,10 +196,18 @@ def save_env_value(key, value):
                 changed = json.loads(env_file.read_text())
                 self.assertEqual(changed["TELEGRAM_ALLOWED_USERS"], "67890")
                 self.assertEqual(changed["TELEGRAM_BOT_TOKEN"], "12345:" + "a" * 35)
+                self.assertEqual(order_log.read_text().splitlines(), list(runtime.CHANNEL_KEYS["telegram"]))
+                order_log.write_text("")
                 runtime.restore_channel(snapshot)
+                self.assertEqual(order_log.read_text().splitlines(), list(runtime.CHANNEL_KEYS["telegram"]))
                 self.assertEqual(
                     json.loads(env_file.read_text())["TELEGRAM_BOT_TOKEN"], "synthetic-before"
                 )
+                for flag in ("TEST_WRONG_TARGET", "TEST_MANAGED"):
+                    before = env_file.read_text()
+                    with patch.dict(os.environ, {flag: "1"}), self.assertRaises(ValueError):
+                        runtime._write_channel_values({"TELEGRAM_BOT_TOKEN": "must-not-be-saved"})
+                    self.assertEqual(env_file.read_text(), before)
                 self.assertEqual((root / ".env").read_text(), "root-profile-must-stay-untouched")
                 for flag in ("TEST_WRONG_TARGET", "TEST_CONCURRENT_WRITE"):
                     with patch.dict(os.environ, {flag: "1"}), self.assertRaises(ValueError):

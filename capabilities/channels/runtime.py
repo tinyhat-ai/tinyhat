@@ -221,7 +221,7 @@ def slack_manifest() -> dict:
 def _configuration_target():
     hermes = shutil.which("hermes")
     if not hermes:
-        raise ValueError("Hermes CLI is required to read channel settings.")
+        raise ValueError("Hermes CLI is required to manage channel settings.")
     try:
         resolved = subprocess.run(
             [hermes, "config", "env-path"],
@@ -241,7 +241,8 @@ def _configuration_target():
             raise ValueError()
     except (OSError, ValueError, subprocess.TimeoutExpired):
         raise ValueError("Could not resolve the active Hermes configuration.") from None
-    env = dict(os.environ, HERMES_HOME=str(path.parent), HERMES_ENV_FILE=str(path))
+    # Hermes resolves .env from HERMES_HOME; HERMES_ENV_FILE is not a Hermes setting.
+    env = dict(os.environ, HERMES_HOME=str(path.parent), PYTHONSAFEPATH="1")
     return python, path, env
 
 
@@ -250,12 +251,16 @@ def _write_channel_values(values):
     script = """
 import contextlib, io, json, sys
 with contextlib.redirect_stdout(io.StringIO()):
-    from hermes_cli.config import get_env_path, save_env_value
+    from hermes_cli.config import get_env_path, load_env, save_env_value
     from pathlib import Path
     if get_env_path().resolve() != Path(sys.argv[1]).resolve():
         raise RuntimeError('Hermes configuration target changed')
-    for key, value in json.load(sys.stdin).items():
+    values = json.load(sys.stdin)
+    for key, value in values.items():
         save_env_value(key, value)
+    saved = load_env()
+    if any(saved.get(key, '') != value for key, value in values.items()):
+        raise RuntimeError('Hermes did not save the channel settings')
 """
     try:
         result = subprocess.run(
