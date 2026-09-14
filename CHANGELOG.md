@@ -2,7 +2,13 @@
 
 All notable changes to the Tinyhat plugin are documented here.
 
-## Unreleased
+## 0.32.16 - 2026-09-14
+
+- New channel connections require the compatible Computer-channel APIs in
+  [tinyloophub/tinyloop#1315](https://github.com/tinyloophub/tinyloop/pull/1315)
+  and Tinyhat Hermes runtime 0.0.66. Publishing or promoting this plugin does
+  not deploy the platform APIs or update existing Computers. Install the
+  coordinated stack before enabling channel setup.
 
 - Read and restore channel settings in the active Hermes profile using its own configuration API; keep allowlists and tokens together and reject uncertain snapshots before writing.
 
