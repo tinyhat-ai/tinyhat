@@ -256,10 +256,18 @@ with contextlib.redirect_stdout(io.StringIO()):
     if get_env_path().resolve() != Path(sys.argv[1]).resolve():
         raise RuntimeError('Hermes configuration target changed')
     values = json.load(sys.stdin)
+    before = load_env()
     for key, value in values.items():
         save_env_value(key, value)
     saved = load_env()
-    if any(saved.get(key, '') != value for key, value in values.items()):
+    for key, value in values.items():
+        actual = saved.get(key, '')
+        if actual == value:
+            continue
+        # Hermes may sanitize a restored display label. Security-bearing values
+        # must still round-trip exactly; unchanged rejected writes always fail.
+        if key in {'TELEGRAM_HOME_CHANNEL_NAME', 'SLACK_HOME_CHANNEL_NAME'} and actual != before.get(key, ''):
+            continue
         raise RuntimeError('Hermes did not save the channel settings')
 """
     try:

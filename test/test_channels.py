@@ -167,7 +167,7 @@ def save_env_value(key, value):
         log.write(key + chr(10))
     path = get_env_path()
     values = load_env()
-    values[key] = value
+    values[key] = value.encode('ascii', 'ignore').decode() if os.environ.get('TEST_SANITIZE') else value
     path.write_text(json.dumps(values))
 """)
             cli = root / "hermes"
@@ -176,7 +176,11 @@ def save_env_value(key, value):
             )
             cli.chmod(0o700)
             order_log = root / "order.log"
-            env = {"PYTHONPATH": str(root), "HERMES_HOME": str(root), "TEST_ORDER_LOG": str(order_log)}
+            env = {
+                "PYTHONPATH": str(root),
+                "HERMES_HOME": str(root),
+                "TEST_ORDER_LOG": str(order_log),
+            }
             with (
                 patch.dict(os.environ, env),
                 patch.object(runtime.shutil, "which", return_value=str(cli)),
@@ -196,13 +200,30 @@ def save_env_value(key, value):
                 changed = json.loads(env_file.read_text())
                 self.assertEqual(changed["TELEGRAM_ALLOWED_USERS"], "67890")
                 self.assertEqual(changed["TELEGRAM_BOT_TOKEN"], "12345:" + "a" * 35)
-                self.assertEqual(order_log.read_text().splitlines(), list(runtime.CHANNEL_KEYS["telegram"]))
+                self.assertEqual(
+                    order_log.read_text().splitlines(), list(runtime.CHANNEL_KEYS["telegram"])
+                )
                 order_log.write_text("")
                 runtime.restore_channel(snapshot)
-                self.assertEqual(order_log.read_text().splitlines(), list(runtime.CHANNEL_KEYS["telegram"]))
+                self.assertEqual(
+                    order_log.read_text().splitlines(), list(runtime.CHANNEL_KEYS["telegram"])
+                )
                 self.assertEqual(
                     json.loads(env_file.read_text())["TELEGRAM_BOT_TOKEN"], "synthetic-before"
                 )
+                # Hermes sanitizes labels during restore; a changed label is
+                # accepted, while credentials still require exact fidelity.
+                with patch.dict(os.environ, {"TEST_SANITIZE": "1"}):
+                    restored = {**snapshot, "TELEGRAM_HOME_CHANNEL_NAME": "Café — Owner DM"}
+                    runtime.restore_channel(restored)
+                    self.assertEqual(
+                        runtime.snapshot_channel("telegram")["TELEGRAM_HOME_CHANNEL_NAME"],
+                        "Caf  Owner DM",
+                    )
+                    with self.assertRaises(ValueError):
+                        runtime._write_channel_values({"TELEGRAM_BOT_TOKEN": "must-stay-exact-é"})
+                with patch.dict(os.environ, {"TEST_MANAGED": "1"}), self.assertRaises(ValueError):
+                    runtime._write_channel_values({"TELEGRAM_HOME_CHANNEL_NAME": "Not saved"})
                 for flag in ("TEST_WRONG_TARGET", "TEST_MANAGED"):
                     before = env_file.read_text()
                     with patch.dict(os.environ, {flag: "1"}), self.assertRaises(ValueError):
@@ -220,6 +241,35 @@ def save_env_value(key, value):
                     runtime.snapshot_channel("telegram"),
                     dict.fromkeys(runtime.CHANNEL_KEYS["telegram"]),
                 )
+
+    def test_configuration_subprocesses_use_neutral_directory_and_safe_path(self):
+        with (
+            patch.object(runtime.shutil, "which", return_value="/bin/hermes"),
+            patch.object(runtime, "_hermes_python_executable", return_value=sys.executable),
+            patch.object(
+                runtime.subprocess, "run", return_value=Mock(returncode=0, stdout="/profile/.env")
+            ) as run,
+        ):
+            _, path, env = runtime._configuration_target()
+            self.assertEqual(run.call_args.kwargs["cwd"], tempfile.gettempdir())
+            self.assertEqual(env["PYTHONSAFEPATH"], "1")
+            with patch.object(
+                runtime, "_configuration_target", return_value=(sys.executable, path, env)
+            ):
+                runtime._write_channel_values({"TELEGRAM_ALLOWED_USERS": "12345"})
+                self.assertEqual(run.call_args.kwargs["cwd"], tempfile.gettempdir())
+                run.return_value.stdout = json.dumps(
+                    dict.fromkeys(runtime.CHANNEL_KEYS["telegram"])
+                )
+                runtime.snapshot_channel("telegram")
+                self.assertEqual(run.call_args.kwargs["cwd"], tempfile.gettempdir())
+
+    def test_compatible_slack_writer_delegates_to_verified_channel_writer(self):
+        connection = importlib.import_module("tinyhat.capabilities.slack.connection")
+        values = {"SLACK_ALLOWED_USERS": "U12345678", "SLACK_BOT_TOKEN": "synthetic"}
+        with patch.object(runtime, "_write_channel_values") as write:
+            connection._save_connection_values(values)
+        write.assert_called_once_with(values)
 
     def test_nonzero_openssl_does_not_delete_a_nonempty_private_key(self):
         with (
