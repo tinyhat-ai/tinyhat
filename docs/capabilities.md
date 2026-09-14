@@ -693,5 +693,10 @@ The `tinyhat_email` Hermes channel and `tinyhat_email_address` tool provide a re
 `tinyhat_channels` and the `tinyhat-connect-channel` skill connect an existing
 Computer to Telegram, Slack, or both. Telegram uses a private 24-hour pairing
 link/QR; Slack uses the Computer's public key and a private credentials file.
+For Slack creation, follow the guided **From a manifest** dialog with the
+Computer's Agent-view JSON, then submit the tokens through the private Computer
+form or the skill's `credentials_file` flow. Take only token values from Slack's
+coding-tool instructions: never put them in chat, project files, shell profiles
+or MCP configs. Hermes supplies the listener; no separate agent scaffold is needed.
 The platform retains encrypted credentials; the runtime applies them through
 `configure_channels` without changing the owner, email, model or user files.

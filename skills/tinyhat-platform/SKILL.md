@@ -15,7 +15,7 @@ Use this as the default routing map:
 | --- | --- |
 | Upgrade the owner account or enable Stripe Projects services | Load `tinyhat:tinyhat-account-upgrade`; check `tinyhat_account_upgrade` status before preparing details; the owner approves only on the review page. |
 | Add or save an API key, token, password, webhook secret, or credential | Call `tinyhat_private_secret_handoff` once. |
-| Connect this agent to Slack | Load `tinyhat:tinyhat-slack` and call `tinyhat_slack_connect` once. The tool sends the Hermes Agent-view manifest, create-app guide, and encrypted token form. Do not send a duplicate reply. |
+| Connect this agent to Slack or Telegram | Load `tinyhat:tinyhat-connect-channel` and call `tinyhat_channels` with `action: "status"`, then follow the chosen channel's setup. Keep the existing Computer and owner. |
 | Disconnect this agent from Slack | Load `tinyhat:tinyhat-slack` and call `tinyhat_slack_disconnect` once. The tool sends the two-stage Telegram confirmation, then a detached plugin worker revokes the bot token and removes the complete local bundle before the platform uses its generic Hermes restart path. Do not send a duplicate reply. |
 | Say "Connect Google", add a personal/work Google account, or sign in with Google | Load `tinyhat:tinyhat-google-workspace` and call `tinyhat_google_workspace` with `{"action": "connect"}`. This adds an account; it does not replace another account. The tool sends the native Telegram button itself. |
 | Use Gmail, Calendar, Drive, or another granted Google Workspace service | Load `tinyhat:tinyhat-google-workspace`, get safe status, and select the intended `account_id`. Use Hermes's built-in `google-workspace` skill for operation guidance and run the operation through `tinyhat_google_workspace_app`. |
@@ -59,10 +59,12 @@ failure-handling rules.
 
 ## Slack
 
-For "connect to Slack", use `tinyhat_slack_connect`, not three generic secret
-handoffs. The tool generates the manifest through Hermes, sends the Slack
-create-from-manifest guide, and accepts both tokens plus allowed member IDs in
-one browser-encrypted bundle. Hermes owns Socket Mode and Slack messages.
+For "connect to Slack", load `tinyhat:tinyhat-connect-channel` and use
+`tinyhat_channels` instead of the legacy `tinyhat_slack_connect`. Its
+`prepare`/`status` flow supplies the Computer's Agent-view
+manifest, and `slack_connect` encrypts a private credential file containing both
+tokens and the owner allowlist before submission. The Computer page also offers
+a private credential form. Hermes owns Socket Mode and Slack messages.
 Tinyhat receives only ciphertext and safe app/workspace metadata.
 Tinyhat removes Hermes slash commands and the `commands` OAuth scope before
 sending the manifest so multiple per-agent Slack apps cannot compete for the
