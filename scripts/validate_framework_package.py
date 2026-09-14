@@ -37,6 +37,7 @@ REQUIRED_TOOLS = [
     "tinyhat_google_workspace_app_manager",
     "tinyhat_codex_auth",
     "tinyhat_plugin_update",
+    "tinyhat_channels",
 ]
 REQUIRED_COMMANDS = [
     "tinyhat-joke",
@@ -70,6 +71,7 @@ REQUIRED_SKILLS = [
     "tinyhat-privacy",
     "tinyhat-email-onboarding",
     "tinyhat-email-address",
+    "tinyhat-connect-channel",
 ]
 FORBIDDEN_PATHS = (
     "openclaw.plugin.json",
@@ -870,6 +872,7 @@ def validate_hermes_adapter(root: Path) -> None:
         "tinyhat-privacy": "skills/tinyhat-privacy/SKILL.md",
         "tinyhat-email-onboarding": "skills/tinyhat-email-onboarding/SKILL.md",
         "tinyhat-email-address": "skills/tinyhat-email-address/SKILL.md",
+        "tinyhat-connect-channel": "skills/tinyhat-connect-channel/SKILL.md",
     }
     for skill in skills:
         require(isinstance(skill, dict), "skill declaration must be an object")

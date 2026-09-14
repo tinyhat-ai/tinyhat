@@ -782,3 +782,12 @@ chat. IMAP and SMTP use validated TLS; sending remains subject to mailbox policy
 reserved, and the mailbox history survives a rename. These require compatible
 platform email APIs and runtime configuration; existing mailboxes keep their
 current behavior until explicitly enrolled.
+
+
+## Computer channels
+
+`tinyhat_channels` and the `tinyhat-connect-channel` skill connect an existing
+Computer to Telegram, Slack, or both. Telegram uses a private 24-hour pairing
+link/QR; Slack uses the Computer's public key and a private credentials file.
+The platform retains encrypted credentials; the runtime applies them through
+`configure_channels` without changing the owner, email, model or user files.

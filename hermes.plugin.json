@@ -142,7 +142,7 @@
       "qualified_name": "tinyhat:tinyhat-account-upgrade",
       "aliases": ["tinyhat-account-upgrade"],
       "path": "skills/tinyhat-account-upgrade/SKILL.md",
-      "purpose": "Prepares the existing owner’s Stripe Projects upgrade using Computer identity; the owner approves on the review page."
+      "purpose": "Prepares the existing owner\u2019s Stripe Projects upgrade using Computer identity; the owner approves on the review page."
     },
     {
       "name": "tinyhat-agentphone",
@@ -192,6 +192,13 @@
       "aliases": ["tinyhat-email-address"],
       "path": "skills/tinyhat-email-address/SKILL.md",
       "purpose": "Check or change this agent's Tinyhat email address when the owner asks \"what is your email?\", \"change your email\", or \"rename your inbox\". Not for changing the owner's sign-in email or accessing their Gmail."
+    },
+    {
+      "name": "tinyhat-connect-channel",
+      "qualified_name": "tinyhat:tinyhat-connect-channel",
+      "aliases": ["tinyhat-connect-channel"],
+      "path": "skills/tinyhat-connect-channel/SKILL.md",
+      "purpose": "Connect an existing Computer to Telegram, Slack, or both without changing its owner."
     }
   ],
   "tools": [
@@ -309,6 +316,11 @@
       "name": "tinyhat_plugin_update",
       "handler": "tools.plugin_update",
       "skill": "tinyhat-plugin-update"
+    },
+    {
+      "name": "tinyhat_channels",
+      "handler": "tools.channels",
+      "skill": "tinyhat-connect-channel"
     }
   ],
   "commands": [

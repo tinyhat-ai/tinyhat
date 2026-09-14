@@ -637,7 +637,8 @@ class HermesAdapterTests(unittest.TestCase):
         self.assertIsNotNone(injected)
         assert injected is not None
         self.assertIn("tinyhat_private_secret_handoff", injected["context"])
-        self.assertIn("tinyhat_slack_connect", injected["context"])
+        self.assertIn("tinyhat_channels", injected["context"])
+        self.assertIn("tinyhat:tinyhat-connect-channel", injected["context"])
         self.assertIn("Do not ask the user to paste secrets", injected["context"])
         self.assertIn("/codex_auth", injected["context"])
         self.assertIn("tinyhat:tinyhat-codex-auth", injected["context"])

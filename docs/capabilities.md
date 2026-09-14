@@ -686,3 +686,12 @@ review link after deployment.
 ## Email onboarding
 
 The `tinyhat_email` Hermes channel and `tinyhat_email_address` tool provide a replyable owner-only welcome and confirmed mailbox renaming. See [email onboarding](../README.md#email-onboarding) for delivery, authentication, and rename limits.
+
+
+## Computer channels
+
+`tinyhat_channels` and the `tinyhat-connect-channel` skill connect an existing
+Computer to Telegram, Slack, or both. Telegram uses a private 24-hour pairing
+link/QR; Slack uses the Computer's public key and a private credentials file.
+The platform retains encrypted credentials; the runtime applies them through
+`configure_channels` without changing the owner, email, model or user files.

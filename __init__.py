@@ -48,6 +48,10 @@ def _register_skills(ctx: Any) -> list[str]:
 def register(ctx: Any) -> None:
     """Register Tinyhat skills and the first Hermes smoke-test tool."""
     ctx.register_tool(
+        name="tinyhat_channels", toolset="tinyhat",
+        schema=schemas.TINYHAT_CHANNELS_SCHEMA, handler=tools.channels,
+    )
+    ctx.register_tool(
         name="tinyhat_email_address",
         toolset="tinyhat",
         schema=schemas.TINYHAT_EMAIL_ADDRESS_SCHEMA,
