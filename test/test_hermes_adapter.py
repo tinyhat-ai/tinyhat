@@ -2310,8 +2310,8 @@ class HermesAdapterTests(unittest.TestCase):
             ),
             mock.patch.object(
                 slack_connection,
-                "_set_hermes_secret",
-                side_effect=lambda name, value: saved.append((name, value)),
+                "_save_connection_values",
+                side_effect=lambda values: saved.extend(values.items()),
             ),
             mock.patch.object(
                 slack_connection,
@@ -2343,15 +2343,15 @@ class HermesAdapterTests(unittest.TestCase):
         self.assertEqual(
             [name for name, _ in saved],
             [
-                "SLACK_BOT_TOKEN",
-                "SLACK_APP_TOKEN",
                 "SLACK_ALLOWED_USERS",
                 "SLACK_HOME_CHANNEL",
                 "SLACK_HOME_CHANNEL_NAME",
+                "SLACK_BOT_TOKEN",
+                "SLACK_APP_TOKEN",
             ],
         )
         self.assertEqual(
-            saved[-2:],
+            saved[1:3],
             [
                 ("SLACK_HOME_CHANNEL", "D012ABCDEF"),
                 ("SLACK_HOME_CHANNEL_NAME", "Owner DM"),
@@ -2426,7 +2426,7 @@ class HermesAdapterTests(unittest.TestCase):
             ),
             mock.patch.object(
                 slack_connection,
-                "_set_hermes_secret",
+                "_save_connection_values",
                 side_effect=AssertionError("must not save failed details"),
             ),
         ):
@@ -2547,7 +2547,7 @@ class HermesAdapterTests(unittest.TestCase):
                 "_open_slack_home_channel",
                 return_value="D012ABCDEF",
             ),
-            mock.patch.object(slack_connection, "_set_hermes_secret"),
+            mock.patch.object(slack_connection, "_save_connection_values"),
             mock.patch.object(
                 slack_connection,
                 "_slack_api_call",
