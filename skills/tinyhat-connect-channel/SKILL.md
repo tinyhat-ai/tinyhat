@@ -22,7 +22,20 @@ If assisting from Codex or Claude Code on a laptop with Telegram already signed 
 
 Call `tinyhat_channels` with `action: "prepare"`. Wait for `status` to show `slack_ready`; its `slack_manifest` is the current Agent-view manifest to use. The Computer page's Slack section provides its Hermes-generated Agent-view manifest and private credential form. Open that section for the owner if they prefer entering credentials themselves.
 
-The owner creates a Slack **agent** from that manifest, installs it in their workspace, and creates an app token with `connections:write`. Keep the required Agent-view capabilities and owner allowlist. Do not use the legacy Assistant-view manifest.
+Use Slack's guided agent creation dialog at https://api.slack.com/apps?new_app=1.
+Slack still hosts the new dialog at that address. Choose **From a manifest**,
+add the Computer's Agent-view JSON, select the owner's workspace, and finish
+the guided setup. The Computer page provides a JSON download/copy and an
+illustrated guide. Do not send the owner through the manual Apps settings
+checklist or replace this manifest with the generic AI-agent template.
+
+Use the bot token (`xoxb-`) and Socket Mode app token (`xapp-`,
+`connections:write`) from Slack's setup/token instructions, including its
+Claude Code or Codex instructions. Return these credentials to Tinyhat;
+Hermes already runs the agent, so do not scaffold or start a second Slack
+listener. Keep the required Agent-view capabilities and owner allowlist.
+Do not use the legacy Assistant-view manifest. Get the owner's permission
+before creating or installing the Slack agent for them.
 
 When the owner authorizes you to use a credentials file, save it outside any project, such as `~/.config/tinyhat/slack-connection.json`, with directory mode 700 and file mode 600. It contains `bot_token`, `app_token`, and `allowed_users` (their Slack member ID). Never ask for tokens in chat or print them. Never use an empty/wildcard owner allowlist.
 
