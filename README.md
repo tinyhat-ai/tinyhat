@@ -782,3 +782,8 @@ chat. IMAP and SMTP use validated TLS; sending remains subject to mailbox policy
 reserved, and the mailbox history survives a rename. These require compatible
 platform email APIs and runtime configuration; existing mailboxes keep their
 current behavior until explicitly enrolled.
+
+
+## Computer channels
+
+See [Computer channel setup](docs/capabilities.md#computer-channels).

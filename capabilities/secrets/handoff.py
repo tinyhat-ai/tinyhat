@@ -1410,6 +1410,7 @@ def _python_can_import_hermes_cli(python: Path) -> bool:
             text=True,
             timeout=10,
             check=False,
+            cwd=tempfile.gettempdir(),
         )
     except (OSError, subprocess.TimeoutExpired):
         return False

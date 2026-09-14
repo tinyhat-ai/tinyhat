@@ -27,5 +27,6 @@ provides_tools:
   - tinyhat_google_workspace_app_manager
   - tinyhat_codex_auth
   - tinyhat_plugin_update
+  - tinyhat_channels
 provides_hooks:
   - pre_llm_call

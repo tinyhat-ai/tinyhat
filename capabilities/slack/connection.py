@@ -18,7 +18,6 @@ from ..secrets.handoff import (
     _decrypt_ciphertext,
     _generate_key_pair,
     _send_secret_notice,
-    _set_hermes_secret,
     _start_worker_process,
 )
 from .disconnect import start_slack_disconnect_worker
@@ -209,6 +208,13 @@ def _ensure_connection_scopes(manifest: dict[str, Any]) -> None:
     scopes["bot"] = normalized
 
 
+def _save_connection_values(values: dict[str, str]) -> None:
+    # Lazy import: the shared adapter reuses the Slack validation helpers above.
+    from ..channels.runtime import _write_channel_values
+
+    _write_channel_values(values)
+
+
 def install_submitted_slack_connection(
     *,
     client: Any,
@@ -237,14 +243,15 @@ def install_submitted_slack_connection(
         metadata = _validate_slack_credentials(bundle)
         home_channel = _open_slack_home_channel(bundle)
         try:
-            for name, value in (
-                ("SLACK_BOT_TOKEN", bundle["bot_token"]),
-                ("SLACK_APP_TOKEN", bundle["app_token"]),
-                ("SLACK_ALLOWED_USERS", bundle["allowed_users"]),
-                ("SLACK_HOME_CHANNEL", home_channel),
-                ("SLACK_HOME_CHANNEL_NAME", SLACK_HOME_CHANNEL_NAME),
-            ):
-                _set_hermes_secret(name, value)
+            _save_connection_values(
+                {
+                    "SLACK_ALLOWED_USERS": bundle["allowed_users"],
+                    "SLACK_HOME_CHANNEL": home_channel,
+                    "SLACK_HOME_CHANNEL_NAME": SLACK_HOME_CHANNEL_NAME,
+                    "SLACK_BOT_TOKEN": bundle["bot_token"],
+                    "SLACK_APP_TOKEN": bundle["app_token"],
+                }
+            )
         except Exception as exc:
             raise SlackConnectionError(
                 "Hermes could not save the validated Slack credentials.",

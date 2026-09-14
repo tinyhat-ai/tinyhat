@@ -10,6 +10,7 @@ from typing import Any
 from urllib import error, parse, request
 
 from .capabilities.account_upgrade import tool as account_upgrade_tools
+from .capabilities.channels.tool import channels as channels
 from .capabilities.computer_desktop.tool import (
     computer_desktop as handle_computer_desktop,
 )

@@ -17,3 +17,8 @@ workers, and private helpers together.
 The root `tools.py` and `schemas.py` files remain thin Hermes adapter facades.
 New product behavior belongs in the matching capability folder rather than in
 the repository root.
+
+
+## Computer channels
+
+See [Computer channel setup](../docs/capabilities.md#computer-channels).

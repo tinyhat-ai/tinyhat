@@ -311,3 +311,8 @@ the assigned owner and never authorizes final approval. Cloud agents must not
 collect email sign-in codes or sign in to the owner’s account.
 
 For the welcome and confirmed mailbox rename, see [email onboarding](../README.md#email-onboarding) and the packaged `tinyhat-email-onboarding` and `tinyhat-email-address` skills.
+
+
+## Computer channels
+
+See [Computer channel setup](capabilities.md#computer-channels).

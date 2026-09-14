@@ -589,9 +589,9 @@ TINYHAT_SLACK_CONNECT_SCHEMA = {
     "required": [],
     "additionalProperties": False,
     "description": (
-        "Start Tinyhat's Hermes-native Slack setup. Sends the current Hermes "
-        "Agent-view manifest, Slack app creation guide, and browser-encrypted "
-        "credential bundle to Telegram."
+        "Deprecated compatibility path for legacy Telegram-managed sessions only. "
+        "Use tinyhat_channels and tinyhat-connect-channel for every new Slack "
+        "connection, with or without Telegram."
     ),
 }
 
@@ -953,4 +953,18 @@ TINYHAT_EMAIL_ADDRESS_SCHEMA = {
         "confirmation_token": {"type": "string", "minLength": 20, "maxLength": 128},
         "acknowledge_old_address_expires_in_24_hours": {"type": "boolean"},
     },
+}
+
+
+TINYHAT_CHANNELS_SCHEMA = {
+    "type": "object",
+    "description": "Connect this Computer to Telegram or Slack at its owner's request. Neither channel requires the other. Return an expiring Telegram pairing link/QR, or encrypt a private Slack credentials file for this Computer. Never accept tokens as tool arguments.",
+    "properties": {
+        "action": {"type": "string", "enum": ["status", "prepare", "telegram_link", "slack_connect"]},
+        "bot_name": {"type": "string", "maxLength": 64},
+        "bot_username": {"type": "string", "minLength": 5, "maxLength": 32},
+        "credentials_file": {"type": "string", "description": "Absolute path to a private JSON file, mode 600, containing bot_token, app_token and allowed_users. Only read a file the owner authorized."},
+    },
+    "required": ["action"],
+    "additionalProperties": False,
 }
