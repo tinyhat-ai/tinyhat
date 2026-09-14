@@ -33,7 +33,7 @@ SAFE_CHANNEL_ERRORS = {
 
 
 class ChannelInputError(ValueError):
-    def __init__(self, code, message):
+    def __init__(self, code: str, message: str) -> None:
         self.code, self.public_message = code, message
         super().__init__(message)
 
