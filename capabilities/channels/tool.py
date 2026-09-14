@@ -149,7 +149,11 @@ def _public_status(payload: dict) -> dict:
                 "provider": row["provider"],
                 "status": row["status"],
                 "name": row.get("name"),
-                "error": row.get("error") if row.get("error") in SAFE_CHANNEL_ERRORS else None,
+                "error": row.get("error")
+                if row.get("error") in SAFE_CHANNEL_ERRORS
+                else "setup_failed"
+                if row.get("error")
+                else None,
             }
             for row in payload.get("channels", [])
             if row.get("provider") in {"email", "slack", "telegram"}

@@ -59,16 +59,82 @@ class ChannelTests(unittest.TestCase):
                 runtime.prepare_key("partial")
 
     def test_telegram_validates_owner_and_writes_allowlist_first(self):
-        channel = {"provider": "telegram", "bot_token": "12345:" + "a" * 35, "owner_id": "12345"}
+        channel = {
+            "provider": "telegram",
+            "bot_token": "12345:" + "a" * 35,
+            "owner_id": "12345",
+            "settings_miniapp_url": "https://example.com/computer",
+        }
         with patch.object(runtime, "_set_hermes_secret") as save:
             runtime.install_channel("assignment", channel)
             self.assertEqual(
-                [c.args[0] for c in save.call_args_list], list(runtime.CHANNEL_KEYS["telegram"])
+                [c.args[0] for c in save.call_args_list],
+                [
+                    "TELEGRAM_ALLOWED_USERS",
+                    "TELEGRAM_HOME_CHANNEL",
+                    "TELEGRAM_HOME_CHANNEL_NAME",
+                    "TINYHAT_SETTINGS_MINIAPP_URL",
+                    "TELEGRAM_BOT_TOKEN",
+                ],
             )
             save.reset_mock()
             for owner in ["0", "-1", "not-an-id"]:
                 with self.assertRaises(ValueError):
                     runtime.install_channel("assignment", {**channel, "owner_id": owner})
+            save.assert_not_called()
+
+    def test_snapshot_distinguishes_unset_keys_from_unreadable_state(self):
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / ".env"
+            with (
+                patch.object(runtime, "_hermes_env_path", return_value=path),
+                patch.object(runtime.shutil, "which", return_value="hermes"),
+            ):
+                with self.assertRaises(FileNotFoundError):
+                    runtime.snapshot_channel("telegram")
+                path.write_text("TELEGRAM_BOT_TOKEN='previous'\nOTHER_VALUE=untouched\n")
+                snapshot = runtime.snapshot_channel("telegram")
+                self.assertEqual(snapshot["TELEGRAM_BOT_TOKEN"], "previous")
+                self.assertIsNone(snapshot["TELEGRAM_ALLOWED_USERS"])
+                with (
+                    patch.object(Path, "read_text", side_effect=PermissionError("unreadable")),
+                    self.assertRaises(PermissionError),
+                ):
+                    runtime.snapshot_channel("telegram")
+                with patch.object(runtime, "_set_hermes_secret") as save:
+                    runtime.restore_channel(snapshot)
+                    self.assertEqual(
+                        save.call_args_list[-1].args, ("TELEGRAM_BOT_TOKEN", "previous")
+                    )
+                    save.reset_mock()
+                    with self.assertRaises(ValueError):
+                        runtime.restore_channel({**snapshot, "OTHER_VALUE": "never-write"})
+                    save.assert_not_called()
+                    with self.assertRaises(ValueError):
+                        runtime.restore_channel({**snapshot, "TELEGRAM_BOT_TOKEN": 3})
+                    save.assert_not_called()
+
+    def test_nonzero_openssl_does_not_delete_a_nonempty_private_key(self):
+        with (
+            tempfile.TemporaryDirectory() as directory,
+            patch.dict(os.environ, {"XDG_CONFIG_HOME": directory}),
+        ):
+            private = runtime._directory("unpublished") / "private.pem"
+            private.write_text("possibly-valid-but-unreadable-to-openssl")
+            with (
+                patch.object(runtime.subprocess, "run", return_value=Mock(returncode=1)),
+                self.assertRaises(ValueError),
+            ):
+                runtime.prepare_key("unpublished")
+            self.assertTrue(private.exists())
+
+    def test_telegram_missing_settings_never_blanks_existing_values(self):
+        with patch.object(runtime, "_set_hermes_secret") as save:
+            with self.assertRaises(ValueError):
+                runtime.install_channel(
+                    "assignment",
+                    {"provider": "telegram", "bot_token": "12345:" + "a" * 35, "owner_id": "12345"},
+                )
             save.assert_not_called()
 
     def test_pairing_urls_share_origin_token_and_safe_transport(self):

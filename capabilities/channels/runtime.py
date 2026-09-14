@@ -15,12 +15,13 @@ import shutil
 import subprocess
 import tempfile
 from pathlib import Path
+from urllib.parse import urlsplit
 
 from ..secrets.handoff import (
     _decrypt_ciphertext,
     _generate_key_pair,
     _hermes_env_path,
-    _read_env_value,
+    _parse_env_value,
     _set_hermes_secret,
 )
 from ..slack.connection import (
@@ -54,7 +55,7 @@ CHANNEL_KEYS = {
 }
 
 
-def _atomic_private_write(path: Path, value: str, *, exclusive=False):
+def _atomic_private_write(path: Path, value: str, *, exclusive: bool = False) -> None:
     fd, temporary = tempfile.mkstemp(dir=path.parent)
     try:
         with os.fdopen(fd, "w") as target:
@@ -97,10 +98,12 @@ def prepare_key(assignment: str) -> dict[str, str]:
         )
         if result.returncode == 0:
             _atomic_private_write(public_path, result.stdout)
-        else:
-            # No public key has been returned, so no credentials can be bound
-            # to a partial write. Never rotate a key with a published public half.
+        # No public key has been returned, so no credentials can be bound
+        # to a partial write. Never rotate a key with a published public half.
+        elif private_path.read_bytes() == b"":
             private_path.unlink()
+        else:
+            raise ValueError("The unpublished channel key could not be read; retry or recover it.")
     if not private_path.exists():
         if public_path.exists():
             raise ValueError("The published channel key needs recovery.")
@@ -129,11 +132,7 @@ def record_applied(assignment: str, provider: str, revision: str) -> None:
     if provider not in {"telegram", "slack"}:
         raise ValueError("Unknown channel.")
     path = _directory(assignment) / f"{provider}.json"
-    temporary = path.with_suffix(".tmp")
-    descriptor = os.open(temporary, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
-    with os.fdopen(descriptor, "w") as target:
-        json.dump({"revision": revision}, target)
-    temporary.replace(path)
+    _atomic_private_write(path, json.dumps({"revision": revision}))
 
 
 def install_channel(assignment: str, channel: dict) -> dict:
@@ -146,11 +145,15 @@ def install_channel(assignment: str, channel: dict) -> dict:
             or int(owner) <= 0
         ):
             raise ValueError("Telegram credentials or owner are invalid.")
+        settings_url = str(channel.get("settings_miniapp_url") or "")
+        url = urlsplit(settings_url)
+        if url.scheme != "https" or not url.hostname or url.username or url.password:
+            raise ValueError("A valid Telegram settings URL is required.")
         values = {
             "TELEGRAM_ALLOWED_USERS": owner,
             "TELEGRAM_HOME_CHANNEL": owner,
             "TELEGRAM_HOME_CHANNEL_NAME": "Owner DM",
-            "TINYHAT_SETTINGS_MINIAPP_URL": str(channel.get("settings_miniapp_url") or ""),
+            "TINYHAT_SETTINGS_MINIAPP_URL": settings_url,
             "TELEGRAM_BOT_TOKEN": token,
         }
         for name, value in values.items():
@@ -215,14 +218,33 @@ def slack_manifest() -> dict:
 
 
 def snapshot_channel(provider: str) -> dict[str, str | None]:
-    """Keep only this provider's previous values in memory for activation recovery."""
-    path = _hermes_env_path(shutil.which("hermes") or "hermes")
-    return {name: _read_env_value(path, name) for name in CHANNEL_KEYS[provider]}
+    """Read one complete snapshot; unknown prior state aborts before any write."""
+    keys = CHANNEL_KEYS[provider]
+    hermes = shutil.which("hermes")
+    if not hermes:
+        raise ValueError("Hermes CLI is required to read the current channel settings.")
+    path = _hermes_env_path(hermes)
+    # Do not use the best-effort getter: missing, unreadable, or invalid UTF-8
+    # must not be interpreted as five absent credentials during recovery.
+    lines = path.read_text(encoding="utf-8").splitlines()
+    snapshot = dict.fromkeys(keys)
+    for line in lines:
+        clean = line.strip()
+        if not clean or clean.startswith("#") or "=" not in clean:
+            continue
+        name, raw = clean.split("=", 1)
+        name = name.strip()
+        if name in snapshot:
+            snapshot[name] = _parse_env_value(raw.strip())
+    return snapshot
 
 
 def restore_channel(snapshot: dict[str, str | None]) -> None:
-    """Restore a failed activation; empty values disable newly added providers."""
-    for name, value in snapshot.items():
-        if name not in {key for keys in CHANNEL_KEYS.values() for key in keys}:
-            raise ValueError("Invalid channel recovery key.")
-        _set_hermes_secret(name, value or "")
+    """Validate the entire snapshot before restoring allowlists, then tokens."""
+    keys = next((keys for keys in CHANNEL_KEYS.values() if set(snapshot) == set(keys)), None)
+    if keys is None or any(
+        value is not None and not isinstance(value, str) for value in snapshot.values()
+    ):
+        raise ValueError("Invalid channel recovery snapshot.")
+    for name in keys:
+        _set_hermes_secret(name, snapshot[name] or "")
