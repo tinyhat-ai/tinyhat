@@ -2,6 +2,18 @@
 
 All notable changes to the Tinyhat plugin are documented here.
 
+## 0.32.17 - 2026-09-14
+
+- Guide coding agents through Computer creation, Telegram or Slack connection,
+  provider sign-in, and a real reply check with the new complete-setup skill.
+- Use Slack's guided agent creation and private token-file handoff. Keep
+  cross-device setup links private and require permission before using the
+  owner's signed-in messaging app.
+- Complete setup uses the existing Computer-channel APIs and runtime 0.0.66 or
+  newer. Native Linux desktop app setup requires runtime 0.0.67 and a newly
+  prepared Computer image; promoting the plugin alone does not install apps
+  or sign in to a provider account.
+
 ## 0.32.16 - 2026-09-14
 
 - New channel connections require the compatible Computer-channel APIs in
