@@ -21,7 +21,6 @@ from ..secrets.handoff import (
     _decrypt_ciphertext,
     _generate_key_pair,
     _hermes_python_executable,
-    _set_hermes_secret,
 )
 from ..slack.connection import (
     _app_id_from_app_token,
@@ -158,8 +157,7 @@ def install_channel(assignment: str, channel: dict) -> dict:
             "TINYHAT_SETTINGS_MINIAPP_URL": settings_url,
             "TELEGRAM_BOT_TOKEN": token,
         }
-        for name, value in values.items():
-            _set_hermes_secret(name, value)
+        _write_channel_values(values)
         return {"provider": provider}
     if provider != "slack":
         raise ValueError("Unknown channel.")
@@ -202,14 +200,15 @@ def install_channel(assignment: str, channel: dict) -> dict:
         if not bot.get("app_id") or bot["app_id"] != _app_id_from_app_token(bundle["app_token"]):
             raise ValueError("Slack tokens must belong to the same agent.")
         home = _open_slack_home_channel(bundle)
-        for name, value in (
-            ("SLACK_ALLOWED_USERS", bundle["allowed_users"]),
-            ("SLACK_HOME_CHANNEL", home),
-            ("SLACK_HOME_CHANNEL_NAME", "Owner DM"),
-            ("SLACK_BOT_TOKEN", bundle["bot_token"]),
-            ("SLACK_APP_TOKEN", bundle["app_token"]),
-        ):
-            _set_hermes_secret(name, value)
+        _write_channel_values(
+            {
+                "SLACK_ALLOWED_USERS": bundle["allowed_users"],
+                "SLACK_HOME_CHANNEL": home,
+                "SLACK_HOME_CHANNEL_NAME": "Owner DM",
+                "SLACK_BOT_TOKEN": bundle["bot_token"],
+                "SLACK_APP_TOKEN": bundle["app_token"],
+            }
+        )
         return {"provider": provider, **metadata}
     finally:
         bundle.clear()
@@ -219,15 +218,68 @@ def slack_manifest() -> dict:
     return _generate_hermes_slack_manifest()
 
 
-def snapshot_channel(provider: str) -> dict[str, str | None]:
-    """Read one complete snapshot; unknown prior state aborts before any write."""
-    keys = CHANNEL_KEYS[provider]
+def _configuration_target():
     hermes = shutil.which("hermes")
     if not hermes:
-        raise ValueError("Hermes CLI is required to read the current channel settings.")
-    python = _hermes_python_executable(hermes)
-    if not python:
-        raise ValueError("Hermes Python is required to read channel settings.")
+        raise ValueError("Hermes CLI is required to read channel settings.")
+    try:
+        resolved = subprocess.run(
+            [hermes, "config", "env-path"],
+            capture_output=True,
+            text=True,
+            timeout=10,
+            check=False,
+            cwd=tempfile.gettempdir(),
+        )
+        if resolved.returncode != 0 or not resolved.stdout.strip():
+            raise ValueError()
+        path = Path(resolved.stdout.strip()).expanduser()
+        if not path.is_absolute():
+            raise ValueError()
+        python = _hermes_python_executable(hermes)
+        if not python:
+            raise ValueError()
+    except (OSError, ValueError, subprocess.TimeoutExpired):
+        raise ValueError("Could not resolve the active Hermes configuration.") from None
+    env = dict(os.environ, HERMES_HOME=str(path.parent), HERMES_ENV_FILE=str(path))
+    return python, path, env
+
+
+def _write_channel_values(values):
+    python, path, env = _configuration_target()
+    script = """
+import contextlib, io, json, sys
+with contextlib.redirect_stdout(io.StringIO()):
+    from hermes_cli.config import get_env_path, save_env_value
+    from pathlib import Path
+    if get_env_path().resolve() != Path(sys.argv[1]).resolve():
+        raise RuntimeError('Hermes configuration target changed')
+    for key, value in json.load(sys.stdin).items():
+        save_env_value(key, value)
+"""
+    try:
+        result = subprocess.run(
+            [python, "-c", script, str(path)],
+            input=json.dumps(values),
+            capture_output=True,
+            text=True,
+            timeout=45,
+            check=False,
+            env=env,
+            cwd=tempfile.gettempdir(),
+        )
+        if result.returncode != 0:
+            raise ValueError()
+    except (OSError, ValueError, subprocess.TimeoutExpired):
+        raise ValueError("Could not save Hermes channel settings.") from None
+
+
+def snapshot_channel(provider: str) -> dict[str, str | None]:
+    """Read one complete snapshot; unknown prior state aborts before any write."""
+    if provider not in CHANNEL_KEYS:
+        raise ValueError("Unknown channel.")
+    keys = CHANNEL_KEYS[provider]
+    python, path, env = _configuration_target()
     # Delegate parsing to the same Hermes configuration API used by writes.
     # In particular, export prefixes and Hermes' treatment of ambiguous env lines must
     # not turn live credentials into an apparently empty recovery snapshot.
@@ -235,7 +287,10 @@ def snapshot_channel(provider: str) -> dict[str, str | None]:
 import contextlib, io, json, sys
 with contextlib.redirect_stdout(io.StringIO()):
     from hermes_cli.config import get_env_path, load_env
+    from pathlib import Path
     path = get_env_path()
+    if path.resolve() != Path(sys.argv[1]).resolve():
+        raise RuntimeError('Hermes configuration target changed')
     def signature():
         try:
             stat = path.stat()
@@ -243,20 +298,24 @@ with contextlib.redirect_stdout(io.StringIO()):
         except FileNotFoundError:
             return None
     before = signature()
+    # Intentionally reject even unrelated invalid bytes rather than preserve
+    # a snapshot containing replacement characters inside live credentials.
     if before is not None:
         path.read_text(encoding='utf-8-sig')
     values = load_env()
     if before != signature():
         raise RuntimeError('Channel settings changed during snapshot')
-print(json.dumps({key: values.get(key) for key in sys.argv[1:]}))
+print(json.dumps({key: values.get(key) for key in sys.argv[2:]}))
 """
     try:
         result = subprocess.run(
-            [python, "-c", script, *keys],
+            [python, "-c", script, str(path), *keys],
             capture_output=True,
             text=True,
             timeout=20,
             check=False,
+            env=env,
+            cwd=tempfile.gettempdir(),
         )
         if result.returncode != 0:
             raise ValueError()
@@ -279,5 +338,4 @@ def restore_channel(snapshot: dict[str, str | None]) -> None:
         value is not None and not isinstance(value, str) for value in snapshot.values()
     ):
         raise ValueError("Invalid channel recovery snapshot.")
-    for name in keys:
-        _set_hermes_secret(name, snapshot[name] or "")
+    _write_channel_values({name: snapshot[name] or "" for name in keys})

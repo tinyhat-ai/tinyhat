@@ -65,10 +65,10 @@ class ChannelTests(unittest.TestCase):
             "owner_id": "12345",
             "settings_miniapp_url": "https://example.com/computer",
         }
-        with patch.object(runtime, "_set_hermes_secret") as save:
+        with patch.object(runtime, "_write_channel_values") as save:
             runtime.install_channel("assignment", channel)
             self.assertEqual(
-                [c.args[0] for c in save.call_args_list],
+                list(save.call_args.args[0]),
                 [
                     "TELEGRAM_ALLOWED_USERS",
                     "TELEGRAM_HOME_CHANNEL",
@@ -87,14 +87,17 @@ class ChannelTests(unittest.TestCase):
         snapshot = dict.fromkeys(runtime.CHANNEL_KEYS["telegram"])
         snapshot["TELEGRAM_BOT_TOKEN"] = "previous"
         with (
-            patch.object(runtime.shutil, "which", return_value="hermes"),
-            patch.object(runtime, "_hermes_python_executable", return_value="hermes-python"),
+            patch.object(
+                runtime,
+                "_configuration_target",
+                return_value=("hermes-python", Path("/test/.env"), {}),
+            ),
             patch.object(
                 runtime.subprocess,
                 "run",
                 return_value=Mock(returncode=0, stdout=json.dumps(snapshot)),
             ) as load,
-            patch.object(runtime, "_set_hermes_secret") as save,
+            patch.object(runtime, "_write_channel_values") as save,
         ):
             self.assertEqual(runtime.snapshot_channel("telegram"), snapshot)
             self.assertEqual(load.call_args.args[0][0], "hermes-python")
@@ -108,7 +111,7 @@ class ChannelTests(unittest.TestCase):
                     runtime.snapshot_channel("telegram")
             save.assert_not_called()
             runtime.restore_channel(snapshot)
-            self.assertEqual(save.call_args_list[-1].args, ("TELEGRAM_BOT_TOKEN", "previous"))
+            self.assertEqual(save.call_args.args[0]["TELEGRAM_BOT_TOKEN"], "previous")
             save.reset_mock()
             for invalid in [
                 {**snapshot, "OTHER_VALUE": "never-write"},
@@ -132,6 +135,79 @@ class ChannelTests(unittest.TestCase):
             self.assertEqual(runtime.prepare_key("corrupt"), key)
             self.assertEqual(private.read_text(), "corrupt-published")
 
+    def test_snapshot_and_restore_execute_against_cli_selected_profile(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            profile = root / "profiles" / "coder"
+            profile.mkdir(parents=True)
+            env_file = profile / ".env"
+            original = {"TELEGRAM_BOT_TOKEN": "synthetic-before", "TELEGRAM_ALLOWED_USERS": "12345"}
+            env_file.write_text(json.dumps(original))
+            (root / ".env").write_text("root-profile-must-stay-untouched")
+            (root / "active_profile").write_text("coder")
+            stub = root / "hermes_cli"
+            stub.mkdir()
+            (stub / "__init__.py").write_text("")
+            (stub / "config.py").write_text("""import json, os, platform
+from pathlib import Path
+assert callable(platform.system)
+def get_env_path():
+    target = Path(os.environ['HERMES_ENV_FILE'])
+    return target.parent / 'wrong.env' if os.environ.get('TEST_WRONG_TARGET') else target
+def load_env():
+    path = get_env_path()
+    values = json.loads(path.read_text()) if path.exists() else {}
+    if os.environ.get('TEST_CONCURRENT_WRITE'):
+        path.write_text(json.dumps({**values, 'CONCURRENT': 'update'}))
+    return values
+def save_env_value(key, value):
+    path = get_env_path()
+    values = load_env()
+    values[key] = value
+    path.write_text(json.dumps(values))
+""")
+            cli = root / "hermes"
+            cli.write_text(
+                f"#!{sys.executable}\nimport os\nfrom pathlib import Path\nroot=Path(os.environ['HERMES_HOME'])\nprint(root/'profiles'/(root/'active_profile').read_text().strip()/'.env')\n"
+            )
+            cli.chmod(0o700)
+            env = {"PYTHONPATH": str(root), "HERMES_HOME": str(root)}
+            with (
+                patch.dict(os.environ, env),
+                patch.object(runtime.shutil, "which", return_value=str(cli)),
+                patch.object(runtime, "_hermes_python_executable", return_value=sys.executable),
+            ):
+                snapshot = runtime.snapshot_channel("telegram")
+                self.assertEqual(snapshot["TELEGRAM_BOT_TOKEN"], "synthetic-before")
+                runtime.install_channel(
+                    "assignment",
+                    {
+                        "provider": "telegram",
+                        "bot_token": "12345:" + "a" * 35,
+                        "owner_id": "67890",
+                        "settings_miniapp_url": "https://example.com/computer",
+                    },
+                )
+                changed = json.loads(env_file.read_text())
+                self.assertEqual(changed["TELEGRAM_ALLOWED_USERS"], "67890")
+                self.assertEqual(changed["TELEGRAM_BOT_TOKEN"], "12345:" + "a" * 35)
+                runtime.restore_channel(snapshot)
+                self.assertEqual(
+                    json.loads(env_file.read_text())["TELEGRAM_BOT_TOKEN"], "synthetic-before"
+                )
+                self.assertEqual((root / ".env").read_text(), "root-profile-must-stay-untouched")
+                for flag in ("TEST_WRONG_TARGET", "TEST_CONCURRENT_WRITE"):
+                    with patch.dict(os.environ, {flag: "1"}), self.assertRaises(ValueError):
+                        runtime.snapshot_channel("telegram")
+                env_file.write_bytes(b"INVALID=\xff")
+                with self.assertRaises(ValueError):
+                    runtime.snapshot_channel("telegram")
+                env_file.unlink()
+                self.assertEqual(
+                    runtime.snapshot_channel("telegram"),
+                    dict.fromkeys(runtime.CHANNEL_KEYS["telegram"]),
+                )
+
     def test_nonzero_openssl_does_not_delete_a_nonempty_private_key(self):
         with (
             tempfile.TemporaryDirectory() as directory,
@@ -149,7 +225,7 @@ class ChannelTests(unittest.TestCase):
             self.assertTrue(private.exists())
 
     def test_telegram_missing_settings_never_blanks_existing_values(self):
-        with patch.object(runtime, "_set_hermes_secret") as save:
+        with patch.object(runtime, "_write_channel_values") as save:
             with self.assertRaises(ValueError):
                 runtime.install_channel(
                     "assignment",
@@ -238,11 +314,11 @@ class ChannelTests(unittest.TestCase):
                     "_slack_api_call",
                     side_effect=[{"bot_id": "B12345678"}, {"bot": {"app_id": "A12345678"}}],
                 ),
-                patch.object(runtime, "_set_hermes_secret") as save,
+                patch.object(runtime, "_write_channel_values") as save,
             ):
                 runtime.install_channel("assignment", channel)
                 self.assertEqual(
-                    [call.args[0] for call in save.call_args_list],
+                    list(save.call_args.args[0]),
                     [
                         "SLACK_ALLOWED_USERS",
                         "SLACK_HOME_CHANNEL",
@@ -258,7 +334,7 @@ class ChannelTests(unittest.TestCase):
                     "_slack_api_call",
                     side_effect=[{"bot_id": "B12345678"}, {"bot": {"app_id": "A99999999"}}],
                 ),
-                patch.object(runtime, "_set_hermes_secret") as save,
+                patch.object(runtime, "_write_channel_values") as save,
             ):
                 with self.assertRaises(ValueError):
                     runtime.install_channel("assignment", channel)
