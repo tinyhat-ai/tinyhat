@@ -151,19 +151,24 @@ to retry with names like `tinyhat:tinyhat-codex-auth`.
 It should be triggered before generic `.env` advice whenever a user asks
 to add or save an API key, token, password, or credential.
 
-`tinyhat-slack` is the dedicated way to connect the current Hermes agent to
-Slack. It must call `tinyhat_slack_connect` once and let the tool own the
-Telegram response. Do not split the two tokens into generic secret handoffs,
+`tinyhat-connect-channel` is the way to connect the current Hermes agent to
+Slack or Telegram, using `tinyhat_channels`; `tinyhat_slack_connect` is legacy.
+Do not split Slack's two tokens into generic secret handoffs,
 ask for token values in chat, enable open workspace access, or add a parallel
 Slack adapter. Hermes supplies the manifest and owns Socket Mode.
 Tinyhat removes slash-command definitions and the `commands` OAuth scope from
 that manifest because Slack command names are workspace-global and per-agent
 apps must not collide.
-For disconnect, the same skill calls `tinyhat_slack_disconnect` once. The
+For a legacy connection only, `tinyhat-slack` calls `tinyhat_slack_disconnect` once. The
 platform owns the expiring two-stage Telegram confirmation, and a detached
 plugin worker revokes Slack and removes the whole bundle only after
 confirmation. The runtime adds no Slack-specific command; generic credential
-removal must remain blocked for individual Slack names.
+removal must remain blocked for individual Slack names. New channel bindings
+use `configure_channels` and cannot be disconnected by that legacy tool.
+
+`tinyhat-complete-setup` coordinates the owner's existing system/channel choices.
+Require an actual channel reply and separate CLI/desktop responses for provider
+login. Never report a CLI version probe or credential submission as completion.
 
 `tinyhat-credentials` is the value-blind discovery and removal path for those
 new secure credentials. It lists names, descriptions, and opaque handoff ids,

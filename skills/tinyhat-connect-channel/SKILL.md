@@ -7,7 +7,7 @@ description: Connect an existing Tinyhat Computer to Telegram or Slack when its 
 
 Keep the existing Computer, owner, email, model and files. Telegram and Slack are optional; either can work alone, or both together.
 
-1. Call `tinyhat_channels` with `action: "status"`. Ask which missing channel the owner wants.
+1. Call `tinyhat_channels` with `action: "status"`. Use the channel already selected in the owner's setup prompt; ask only when missing.
 2. Follow the selected flow below. Report connected only after status confirms it and a real message receives an agent reply.
 
 ## Telegram
@@ -17,6 +17,10 @@ Call `tinyhat_channels` with `action: "telegram_link"`, plus the owner's preferr
 Tell them: **Open the link to create your bot. Start it, then send it this same link or QR image.** The bot also has a Connect Computer button that opens a QR scanner. No email sign-in or invitation is needed.
 
 If assisting from Codex or Claude Code on a laptop with Telegram already signed in, ask permission before using Telegram to create the bot and send the pairing link. Stay in the setup/test bot chat; never sign in or switch the human's Telegram account. Report the resulting bot username. Never send the pairing capability to another person or publish it.
+
+If Telegram is unavailable locally, show the returned QR image and clickable
+link. The owner continues on a phone or another device with Telegram. Wait for
+the status to become connected and verify a reply before finishing.
 
 ## Slack
 
@@ -35,6 +39,17 @@ Call `tinyhat_channels` with `action: "slack_connect"` and the absolute `credent
 For Codex or Claude Code running on the owner's laptop, use the current public guide at https://tinyhat.ai/agents.md and its authenticated `/hapi/v2/computers/{computer_id}/channels` endpoints. The API supports status, prepare, Telegram pairing and encrypted Slack submission. Use the existing owner session stored outside the project; do not copy a machine token from a Computer to the laptop.
 
 A queued/busy response means setup is pending. Poll status at five-second intervals briefly, then slow down. If setup fails, show a short retry instruction; never disclose provider token errors or claim the channel is already connected.
+
+On the owner's laptop, with its saved owner API token, use the public guide's
+`POST /auth/browser-links` handoff scoped to this Computer's agent when Slack
+is unavailable locally. This owner API does not accept a Computer token. Send its
+private link and a locally generated QR; the owner confirms the account,
+opens the Computer and uses its Slack form on their Slack device. Browser links
+expire in five minutes. Never use a public QR service or put Slack tokens in
+URLs. When running inside the Computer without an owner API token, share the
+existing owner-aware Computer page from its setup context; the owner signs in
+there if needed. Never request their bearer token or substitute machine auth.
+The handoff is pending until the channel reports connected and replies.
 
 This skill supersedes `tinyhat_slack_connect` and the connection instructions in
 `tinyhat-slack`. Always use `tinyhat_channels` for new Slack setup, including

@@ -22,7 +22,8 @@ The current capability list is intentionally small.
 | `tinyhat-onboarding-greeting` skill | Available now | Guides the newly configured Agent to introduce its broader purpose first, then briefly share its available phone number and email address as optional ways to stay in contact. |
 | `tinyhat-agentphone` skill | Available now | Loads AgentPhone's current online skill and uses this Agent's Computer-local provider credentials directly through the shell for calls and text messages. It does not require a separate AgentPhone tool. |
 | `tinyhat_private_secret_handoff` | Available now | Lets a user enter a secret in a Telegram Mini App while Tinyhat stores only short-lived ciphertext. |
-| `tinyhat_slack_connect` | Available now | Sends Hermes' current Agent-view manifest and transfers the Slack bot token, Socket Mode app token, and allowed member IDs as one browser-encrypted Computer-local bundle. |
+| `tinyhat_channels` | Available now | Connects this Computer to Telegram or Slack with private pairing and encrypted credential submission. |
+| `tinyhat_slack_connect` | Legacy | New Slack connections use `tinyhat_channels`; retained for compatibility only. |
 | `tinyhat_slack_disconnect` | Available now | Sends an owner-confirmed Telegram ceremony, revokes active Slack bot access when possible, removes the complete Computer-local Slack bundle, and restarts Hermes. |
 | `tinyhat_google_workspace` | Available now | Connects Google identity, composes implemented access presets and requestable Custom scopes, lets Google handle its pending-verification warning, blocks unimplemented requests before OAuth, and starts an account-targeted local disconnect ceremony. |
 | `tinyhat_google_workspace_app` | Available now | Lends one selected account's assignment-verified Google access to one bounded `gws` invocation. |
@@ -241,6 +242,9 @@ one-shot gateway restart and sends the final ready-or-failed confirmation
 after that restart settles. The worker never restarts the gateway itself.
 
 ## Slack
+
+For new connections, use [Computer channels](#computer-channels). The following
+legacy transfer flow applies only to existing connections created that way.
 
 The agent calls `tinyhat_slack_connect` once. The tool sends the current
 Hermes-generated Agent-view manifest, a highlighted Slack app-creation guide,
@@ -700,3 +704,9 @@ coding-tool instructions: never put them in chat, project files, shell profiles
 or MCP configs. Hermes supplies the listener; no separate agent scaffold is needed.
 The platform retains encrypted credentials; the runtime applies them through
 `configure_channels` without changing the owner, email, model or user files.
+
+`tinyhat-complete-setup` coordinates the selected system and channel through
+actual replies, including separate CLI and Linux desktop login checks for
+Codex/Claude. The public guide at https://tinyhat.ai/agents.md serves laptop
+coding agents. Login requires the provider's official flow and sometimes the
+owner's action; the plugin does not copy credentials between devices.
