@@ -65,7 +65,7 @@ Use the runtime's official Linux desktop apps. A browser tab is not a desktop
 app. These apps require a compatible desktop-enabled runtime/image; older
 Computers may have only the CLI. Report the needed runtime/image update when the
 installer is absent. On a compatible runtime, an owner-authorized repair is
-`PYTHONPATH=/opt/tinyhat-hermes-runtime python3 -m hermes_runtime.agent_desktops --install --system codex`
+`PYTHONPATH="${TINYHAT_RUNTIME_PREFIX:-/opt/tinyhat-hermes-runtime}:${PYTHONPATH:-}" python3 -m hermes_runtime.agent_desktops --install --system codex`
 (use `--system claude_code` for Claude). This is an explicit remote-terminal
 operation; it does not happen on heartbeat or silently authenticate the owner. Do not invent a GUI or use unofficial
 repackaged applications. Report provider account/plan limitations precisely.
