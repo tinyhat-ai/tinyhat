@@ -2,6 +2,16 @@
 
 All notable changes to the Tinyhat plugin are documented here.
 
+## 0.32.18 - 2026-09-15
+
+- Return verified Slack conversation links after connecting a Computer so
+  owners can open their agent directly from the Computer page or coding agent.
+- Add the Slack identity adapter used by Tinyhat Hermes runtime 0.0.68 to
+  discover links for existing connections without restarting Hermes.
+- Requires the compatible channel APIs in
+  [tinyloophub/tinyloop#1327](https://github.com/tinyloophub/tinyloop/pull/1327)
+  to display the links. Older platforms keep existing channel behavior.
+
 ## 0.32.17 - 2026-09-14
 
 - Guide coding agents through Computer creation, Telegram or Slack connection,
