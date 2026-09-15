@@ -789,3 +789,6 @@ current behavior until explicitly enrolled.
 ## Computer channels
 
 See [Computer channel setup](docs/capabilities.md#computer-channels).
+Connected Slack channels return a verified chat link that the agent can share
+with the owner. Slack messages are handled by Hermes, including on Computers
+with Codex or Claude Code installed.

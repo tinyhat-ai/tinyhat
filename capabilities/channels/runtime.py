@@ -218,6 +218,33 @@ def slack_manifest() -> dict:
     return _generate_hermes_slack_manifest()
 
 
+def slack_identity() -> dict[str, str]:
+    """Identify the installed Slack bot without rewriting settings or restarting Hermes."""
+    values = snapshot_channel("slack")
+    try:
+        auth = _slack_api_call("auth.test", token=values["SLACK_BOT_TOKEN"] or "", stage="bot_auth")
+        bot = (
+            _slack_api_call(
+                "bots.info",
+                token=values["SLACK_BOT_TOKEN"] or "",
+                params={"bot": auth.get("bot_id", "")},
+                stage="app_identity",
+            ).get("bot")
+            or {}
+        )
+        app_id = bot.get("app_id", "")
+        workspace_id = auth.get("team_id", "")
+        if (
+            not re.fullmatch(r"A[A-Z0-9]{5,39}", app_id)
+            or not re.fullmatch(r"T[A-Z0-9]{5,39}", workspace_id)
+            or app_id != _app_id_from_app_token(values["SLACK_APP_TOKEN"] or "")
+        ):
+            raise ValueError("Slack tokens must identify the same agent and workspace.")
+        return {"workspace_id": workspace_id, "app_id": app_id}
+    finally:
+        values.clear()
+
+
 def _configuration_target():
     hermes = shutil.which("hermes")
     if not hermes:

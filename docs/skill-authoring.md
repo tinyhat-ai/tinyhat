@@ -321,3 +321,6 @@ For the welcome and confirmed mailbox rename, see [email onboarding](../README.m
 ## Computer channels
 
 See [Computer channel setup](capabilities.md#computer-channels).
+Return the platform's connected `chat_url` when sharing a Slack conversation.
+Never construct a link from unverified credentials or expose tokens. The runtime
+may read the installed Slack identity without rewriting channel settings.

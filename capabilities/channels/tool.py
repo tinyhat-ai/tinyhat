@@ -149,6 +149,14 @@ def _public_status(payload: dict) -> dict:
                 "provider": row["provider"],
                 "status": row["status"],
                 "name": row.get("name"),
+                "chat_url": row.get("chat_url")
+                if row.get("provider") == "slack"
+                and row.get("status") == "connected"
+                and re.fullmatch(
+                    r"https://slack\.com/app_redirect\?app=A[A-Z0-9]{5,39}&team=T[A-Z0-9]{5,39}",
+                    str(row.get("chat_url") or ""),
+                )
+                else None,
                 "error": row.get("error")
                 if row.get("error") in SAFE_CHANNEL_ERRORS
                 else "setup_failed"

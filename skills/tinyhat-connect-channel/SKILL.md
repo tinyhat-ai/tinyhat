@@ -9,6 +9,10 @@ Keep the existing Computer, owner, email, model and files. Telegram and Slack ar
 
 1. Call `tinyhat_channels` with `action: "status"`. Use the channel already selected by the owner; ask only when missing.
 2. Follow the selected flow below. Report connected only after status confirms it and a real message receives an agent reply.
+3. For a connected Slack channel, give the human the returned `chat_url` to open
+   their conversation. Never guess a workspace or app ID. If an older connection
+   has no link, call `prepare` once and check status again; compatible runtimes
+   discover the link without restarting Hermes.
 
 ## Telegram
 
@@ -45,6 +49,13 @@ Call `tinyhat_channels` with `action: "slack_connect"` and the absolute `credent
 ## External coding-agent APIs
 
 For Codex or Claude Code running on the owner's laptop, use the current public guide at https://tinyhat.ai/agents.md and its authenticated `/hapi/v2/computers/{computer_id}/channels` endpoints. The API supports status, prepare, Telegram pairing and encrypted Slack submission. Use the existing owner session stored outside the project; do not copy a machine token from a Computer to the laptop.
+
+Use authenticated `GET /hapi/v2/computers/{computer_id}/channels/slack/manifest`
+for the JSON directly, then encrypted `POST /hapi/v2/computers/{computer_id}/channels/slack`
+for credentials. The public guide specifies the encryption envelope. Opening
+the Computer form is optional; the API supports the complete handoff. Slack
+always uses the Hermes gateway, including Computers with Codex or Claude Code
+installed. Do not infer the Slack model from the selected coding-system label.
 
 A queued/busy response means setup is pending. Poll status at five-second intervals briefly, then slow down. If setup fails, show a short retry instruction; never disclose provider token errors or claim the channel is already connected.
 
