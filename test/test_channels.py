@@ -432,5 +432,58 @@ def save_env_value(key, value):
         self.assertNotIn("private-envelope", result)
 
 
+class SlackIdentityTests(unittest.TestCase):
+    def test_reads_verified_identity_without_writing_settings(self):
+        values = {"SLACK_BOT_TOKEN": "xoxb-fixture", "SLACK_APP_TOKEN": "xapp-fixture"}
+        with (
+            patch.object(runtime, "snapshot_channel", return_value=values),
+            patch.object(runtime, "_app_id_from_app_token", return_value="A12345678"),
+            patch.object(
+                runtime,
+                "_slack_api_call",
+                side_effect=[
+                    {"bot_id": "B12345678", "team_id": "T12345678"},
+                    {"bot": {"app_id": "A12345678"}},
+                ],
+            ),
+            patch.object(runtime, "_write_channel_values") as write,
+        ):
+            self.assertEqual(
+                runtime.slack_identity(), {"app_id": "A12345678", "workspace_id": "T12345678"}
+            )
+            write.assert_not_called()
+        self.assertEqual(values, {})
+
+    def test_rejects_mismatched_bot_and_socket_tokens(self):
+        values = {"SLACK_BOT_TOKEN": "xoxb-fixture", "SLACK_APP_TOKEN": "xapp-fixture"}
+        with (
+            patch.object(runtime, "snapshot_channel", return_value=values),
+            patch.object(runtime, "_app_id_from_app_token", return_value="A99999999"),
+            patch.object(
+                runtime,
+                "_slack_api_call",
+                side_effect=[
+                    {"bot_id": "B12345678", "team_id": "T12345678"},
+                    {"bot": {"app_id": "A12345678"}},
+                ],
+            ),
+        ):
+            with self.assertRaises(ValueError):
+                runtime.slack_identity()
+        self.assertEqual(values, {})
+
+    def test_status_returns_only_connected_slack_links(self):
+        url = "https://slack.com/app_redirect?app=A12345678&team=T12345678"
+        row = {"provider": "slack", "status": "connected", "chat_url": url}
+        self.assertEqual(tool._public_status({"channels": [row]})["channels"][0]["chat_url"], url)
+        for changed in (
+            {"chat_url": "https://evil.example"},
+            {"status": "failed"},
+            {"provider": "telegram"},
+        ):
+            result = tool._public_status({"channels": [row | changed]})
+            self.assertIsNone(result["channels"][0]["chat_url"])
+
+
 if __name__ == "__main__":
     unittest.main()

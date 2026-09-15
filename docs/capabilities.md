@@ -705,6 +705,10 @@ coding-tool instructions: never put them in chat, project files, shell profiles
 or MCP configs. Hermes supplies the listener; no separate agent scaffold is needed.
 The platform retains encrypted credentials; the runtime applies them through
 `configure_channels` without changing the owner, email, model or user files.
+Connected Slack status includes a validated `chat_url` to the bot's direct
+conversation. The runtime can discover missing links on existing connections
+without reinstalling settings or restarting Hermes. Slack uses Hermes even
+when the Computer's installed coding system is Codex or Claude Code.
 
 `tinyhat-complete-setup` coordinates the selected system and channel through
 actual replies, including separate CLI and Linux desktop login checks for
