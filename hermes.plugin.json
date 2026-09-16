@@ -206,6 +206,20 @@
       "aliases": ["tinyhat-connect-channel"],
       "path": "skills/tinyhat-connect-channel/SKILL.md",
       "purpose": "Connect an existing Computer to Telegram, Slack, or both without changing its owner."
+    },
+    {
+      "name": "tinyhat-route-message",
+      "qualified_name": "tinyhat:tinyhat-route-message",
+      "aliases": ["tinyhat-route-message"],
+      "path": "skills/tinyhat-route-message/SKILL.md",
+      "purpose": "Select a native task from authenticated channel context."
+    },
+    {
+      "name": "tinyhat-respond",
+      "qualified_name": "tinyhat:tinyhat-respond",
+      "aliases": ["tinyhat-respond"],
+      "path": "skills/tinyhat-respond/SKILL.md",
+      "purpose": "Use flexible native channel messages for a task, following owner preferences."
     }
   ],
   "tools": [

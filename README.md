@@ -9,7 +9,8 @@ the part that can evolve faster. It adds the agent-facing skills and tools
 that explain how to use Tinyhat platform capabilities without exposing
 private platform URLs, machine credentials, bot tokens, or tenant data.
 
-This repo is deliberately small. It supports Hermes only, ships a compact set
+The Hermes plugin loader registers this repo's tools. Its routing and response
+skills also guide native Codex and Claude Code channel sessions. It ships a compact set
 of packaged skills, a small Tinyhat
 context hook, and now includes the first real Tinyhat platform capability:
 a private secret handoff that lets the user enter a secret in a Telegram
@@ -70,6 +71,8 @@ in as part of its current task.
 | `skills/tinyhat-skill-authoring/SKILL.md` | Portable skill-writing guidance for names, trigger boundaries, progressive disclosure, and context limits. |
 | `skills/tinyhat-private-secret/SKILL.md` | Browser-encrypted secret handoff guidance. |
 | `skills/tinyhat-connect-channel/SKILL.md` | Telegram/Slack setup on an existing Computer, including guided manifest creation and private handoff to another device. |
+| `skills/tinyhat-route-message/SKILL.md` | Select an existing native task or start another using message, reply, and recent-task context. |
+| `skills/tinyhat-respond/SKILL.md` | Let the agent choose when to send, edit, stream, or stay quiet using owner-scoped channel tools. |
 | `skills/tinyhat-complete-setup/SKILL.md` | Finish the selected system's CLI/desktop login and verify a working channel conversation. |
 | `skills/tinyhat-slack/SKILL.md` | Legacy Slack disconnect guidance; new connections use `tinyhat-connect-channel`. |
 | `skills/tinyhat-credentials/SKILL.md` | Value-blind credential discovery and confirmed Computer-side removal guidance. |
@@ -102,9 +105,12 @@ the running `tinyhat_plugin_version` tool and `/tinyhat-plugin-version`
 command report the version from `hermes.plugin.json`; the checklist keeps that
 live value aligned with every package and loader manifest.
 
-There is no legacy framework adapter in this branch. Additional framework
-adapters will come later as separate, small files once the Hermes path is
-proven.
+The runtime owns native Codex/Claude Code process supervision. This plugin owns
+the two skills and `capabilities/channels/methods.json`, a reviewed catalog of
+provider methods and their destination fields. Updating a response skill changes
+the next turn's guidance without adding a fixed response pipeline. The catalog
+does not carry credentials or select recipients; the runtime binds every action
+to the authenticated incoming conversation and checks edit ownership.
 
 ## Trust Boundary
 
@@ -792,3 +798,24 @@ See [Computer channel setup](docs/capabilities.md#computer-channels).
 Connected Slack channels return a verified chat link that the agent can share
 with the owner. Slack messages are handled by Hermes, including on Computers
 with Codex or Claude Code installed.
+
+## Native channel sessions
+
+The runtime can route owner messages to Hermes, Codex or Claude Code.
+`tinyhat-route-message` chooses an existing or new native task using conversation
+context; `tinyhat-respond` governs sends, edits, drafts, streams and silence.
+The owner can request a different response style. No fixed one-message/one-reply
+rule is imposed. The runtime supplies private scoped messaging tools and enforces
+recipient/message ownership. It never forwards a CLI final answer automatically.
+
+The provider method catalog lives in `capabilities/channels/methods.json`.
+New content parameters pass through to the provider; new methods need a reviewed
+scope entry. This avoids a separate SDK release for every message-format change.
+`capabilities/mail/ingress.py` shares the authenticated owner-email inbox ledger
+with the Hermes adapter. Native sessions use the same verified sender checks.
+
+Installation, native login and framework selection are distinct. The Computer
+page handles selection; the provider's own CLI/desktop handles login. Runtime
+installation, receiver supervision and native sessions remain in the runtime
+repository. Existing Hermes capability tools are not automatically exported to
+Codex/Claude Code; those use their native tools and the hosted platform API guide.

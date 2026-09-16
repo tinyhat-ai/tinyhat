@@ -32,7 +32,7 @@ Call `tinyhat_channels` with `action: "prepare"`. Wait for `status` to show `sla
 
 Get the owner's permission before creating or installing the Slack agent for them. Use Slack's guided agent creation dialog at https://api.slack.com/apps?new_app=1. That address opens the creation dialog; do not substitute another URL. Choose **From a manifest**, add the Computer's Agent-view JSON, select the owner's workspace, and finish the guided setup. Create the agent from the manifest, without rebuilding its settings manually or replacing it with the generic AI-agent template. Retrieve tokens as described below.
 
-Take only the bot token (`xoxb-`) and Socket Mode app token (`xapp-`, `connections:write`) from Slack's setup/token instructions, including its Claude Code or Codex instructions. Ignore any step that writes them into a project file, `.env`, shell profile or MCP config, and never paste them into chat. Submit them only through the Computer page's private credential form or the `credentials_file` flow below. Hermes already runs the agent, so do not scaffold or start a second Slack listener. Keep the required Agent-view capabilities and owner allowlist. Do not use the legacy Assistant-view manifest.
+Take only the bot token (`xoxb-`) and Socket Mode app token (`xapp-`, `connections:write`) from Slack's setup/token instructions, including its Claude Code or Codex instructions. Ignore any step that writes them into a project file, `.env`, shell profile or MCP config, and never paste them into chat. Submit them only through the Computer page's private credential form or the `credentials_file` flow below. The selected Computer framework owns the receiver; do not scaffold or start a second Slack listener. Keep the required Agent-view capabilities and owner allowlist. Do not use the legacy Assistant-view manifest.
 
 Slack may open Agent settings rather than a combined token handoff. In that case,
 **Install App → Install to workspace → Allow** provides the bot token. **Basic
@@ -54,8 +54,11 @@ Use authenticated `GET /hapi/v2/computers/{computer_id}/channels/slack/manifest`
 for the JSON directly, then encrypted `POST /hapi/v2/computers/{computer_id}/channels/slack`
 for credentials. The public guide specifies the encryption envelope. Opening
 the Computer form is optional; the API supports the complete handoff. Slack
-always uses the Hermes gateway, including Computers with Codex or Claude Code
-installed. Do not infer the Slack model from the selected coding-system label.
+uses the selected Agent framework on the Computer. Inspect authenticated
+`GET /hapi/v2/computers/{computer_id}/framework` and, after native provider login
+and the owner's choice, submit `POST .../framework/select` with `framework` set
+to `hermes`, `codex` or `claude_code`. Wait for confirmed active status; a queued
+command is not a completed switch.
 
 A queued/busy response means setup is pending. Poll status at five-second intervals briefly, then slow down. If setup fails, show a short retry instruction; never disclose provider token errors or claim the channel is already connected.
 

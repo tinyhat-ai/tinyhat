@@ -215,7 +215,11 @@ def install_channel(assignment: str, channel: dict) -> dict:
 
 
 def slack_manifest() -> dict:
-    return _generate_hermes_slack_manifest()
+    manifest = _generate_hermes_slack_manifest()
+    events = manifest.setdefault("settings", {}).setdefault("event_subscriptions", {}).setdefault("bot_events", [])
+    if "agent_session_stopped" not in events:
+        events.append("agent_session_stopped")
+    return manifest
 
 
 def slack_identity() -> dict[str, str]:

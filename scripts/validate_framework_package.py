@@ -73,6 +73,8 @@ REQUIRED_SKILLS = [
     "tinyhat-email-address",
     "tinyhat-complete-setup",
     "tinyhat-connect-channel",
+    "tinyhat-route-message",
+    "tinyhat-respond",
 ]
 FORBIDDEN_PATHS = (
     "openclaw.plugin.json",
@@ -874,6 +876,8 @@ def validate_hermes_adapter(root: Path) -> None:
         "tinyhat-email-onboarding": "skills/tinyhat-email-onboarding/SKILL.md",
         "tinyhat-email-address": "skills/tinyhat-email-address/SKILL.md",
         "tinyhat-connect-channel": "skills/tinyhat-connect-channel/SKILL.md",
+        "tinyhat-route-message": "skills/tinyhat-route-message/SKILL.md",
+        "tinyhat-respond": "skills/tinyhat-respond/SKILL.md",
         "tinyhat-complete-setup": "skills/tinyhat-complete-setup/SKILL.md",
     }
     for skill in skills:
@@ -951,7 +955,7 @@ def validate_docs(root: Path) -> None:
     checks = {
         "README.md": (
             "teaches an agent what the Tinyhat",
-            "Hermes only",
+            "Hermes plugin loader",
             "tinyhat-tell-joke",
             "tinyhat-plugin-version",
             "tinyhat-skill-catalog",

@@ -100,5 +100,6 @@ def send_owner(args):
             "subject": args.get("subject"),
             "body": args.get("body"),
             "idempotency_key": args.get("idempotency_key"),
+            **({"in_reply_to": args["in_reply_to"]} if args.get("in_reply_to") else {}),
         },
     )
