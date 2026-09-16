@@ -36,6 +36,7 @@ SLACK_APP_TOKEN_APP_ID_RE = re.compile(
     re.IGNORECASE,
 )
 REQUIRED_CONNECTION_BOT_SCOPES = (
+    "files:read",
     "assistant:write",
     "chat:write",
     "im:write",

@@ -1,24 +1,71 @@
 {
   "telegram": {
-    "sendMessage": {"target": "chat_id"},
-    "sendRichMessage": {"target": "chat_id"},
-    "sendMessageDraft": {"target": "chat_id", "draft": "draft_id"},
-    "sendRichMessageDraft": {"target": "chat_id", "draft": "draft_id"},
-    "editMessageText": {"target": "chat_id", "message": "message_id"},
-    "editMessageCaption": {"target": "chat_id", "message": "message_id"},
-    "editMessageReplyMarkup": {"target": "chat_id", "message": "message_id"},
-    "deleteMessage": {"target": "chat_id", "message": "message_id"},
-    "sendChatAction": {"target": "chat_id"}
+    "sendMessage": {
+      "target": "chat_id"
+    },
+    "sendRichMessage": {
+      "target": "chat_id"
+    },
+    "sendMessageDraft": {
+      "target": "chat_id",
+      "draft": "draft_id"
+    },
+    "sendRichMessageDraft": {
+      "target": "chat_id",
+      "draft": "draft_id"
+    },
+    "editMessageText": {
+      "target": "chat_id",
+      "message": "message_id"
+    },
+    "editMessageCaption": {
+      "target": "chat_id",
+      "message": "message_id"
+    },
+    "editMessageReplyMarkup": {
+      "target": "chat_id",
+      "message": "message_id"
+    },
+    "deleteMessage": {
+      "target": "chat_id",
+      "message": "message_id"
+    },
+    "sendChatAction": {
+      "target": "chat_id"
+    }
   },
   "slack": {
-    "agents.sessions.setStatus": {"target": "channel_id", "thread_status": true},
-    "assistant.threads.setStatus": {"target": "channel_id", "thread_status": true},
-    "chat.postMessage": {"target": "channel"},
-    "chat.update": {"target": "channel", "message": "ts"},
-    "chat.delete": {"target": "channel", "message": "ts"},
-    "chat.startStream": {"target": "channel"},
-    "chat.appendStream": {"target": "channel", "message": "ts"},
-    "chat.stopStream": {"target": "channel", "message": "ts"}
+    "agents.sessions.setStatus": {
+      "target": "channel_id",
+      "thread_status": true
+    },
+    "assistant.threads.setStatus": {
+      "target": "channel_id",
+      "thread_status": true
+    },
+    "chat.postMessage": {
+      "target": "channel"
+    },
+    "chat.update": {
+      "target": "channel",
+      "message": "ts"
+    },
+    "chat.delete": {
+      "target": "channel",
+      "message": "ts"
+    },
+    "chat.startStream": {
+      "target": "channel",
+      "thread_status": true
+    },
+    "chat.appendStream": {
+      "target": "channel",
+      "message": "ts"
+    },
+    "chat.stopStream": {
+      "target": "channel",
+      "message": "ts"
+    }
   },
   "email": {
     "send": {}

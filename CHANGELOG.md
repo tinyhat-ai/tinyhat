@@ -1,5 +1,13 @@
 # Changelog
 
+## Unreleased
+
+- Give native channel agents concrete, user-adjustable defaults for receipt
+  feedback, typing, Telegram drafts, Slack streams, media and failure recovery.
+  No automatic one-reply-per-message behavior is added.
+- Include files:read in newly generated Slack agent manifests for owner images
+  and voice clips, and scope streaming to the incoming thread.
+
 ## 0.32.19 - 2026-09-16
 
 - Native routing requires Tinyhat Hermes runtime 0.0.70 and the compatible

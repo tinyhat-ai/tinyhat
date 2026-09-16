@@ -831,7 +831,7 @@ The catalog's scope keys are enforced by the runtime and package validator:
 | `target` | Required provider destination field, replaced by the authenticated conversation (`chat_id`, `channel`, or `channel_id`). |
 | `message` | Receipt field (`message_id` or `ts`); edits/deletes/stream updates may touch only messages this task created. |
 | `draft` | Telegram `draft_id`, assigned per task by the runtime. |
-| `thread_status` | Slack status belongs to this event's thread, with active-task ownership checked. |
+| `thread_status` | Slack status or stream belongs to this event's thread, with active-task ownership checked. |
 
 Unknown scope keys are rejected. Email exposes only `send: {}`; its owner is
 fixed by the platform and recipient overrides are forbidden.
@@ -841,3 +841,14 @@ page handles selection; the provider's own CLI/desktop handles login. Runtime
 installation, receiver supervision and native sessions remain in the runtime
 repository. Existing Hermes capability tools are not automatically exported to
 Codex/Claude Code; those use their native tools and the hosted platform API guide.
+
+### Native channel response feedback
+
+The `tinyhat-respond` skill defaults to prompt receipt feedback, typing/working
+status, incremental Telegram drafts or Slack streams, and a durable final reply.
+The owner can request silence, one updated message, or another style. The skill
+chooses the behavior; the runtime provides scoped native methods and an optional
+bounded Telegram typing helper. It never forwards every CLI final automatically.
+Voice transcripts and images are handled as part of the incoming request when
+the installed runtime supports media intake. Voice replies additionally require
+audio generation and upload tools; the skill does not claim an unavailable tool.
