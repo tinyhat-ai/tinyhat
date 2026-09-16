@@ -48,7 +48,9 @@ Each example needs a fresh `action_id`, such as `event42:typing:1`.
   "can_stop":true}`, then call it again with the entire updated text. The
   runtime keeps the same draft ID for this task so changes animate. Drafts
   expire after 30 seconds: refresh while composing and use `sendMessage` with
-  the complete text to persist the answer. An empty draft text clears it.
+  the complete text to persist the answer. Empty text shows a “Thinking…”
+  placeholder; it does not clear the draft. A draft disappears when its preview
+  expires or you send a message. If asked to become quiet, stop refreshing it.
 - Rich output: `sendRichMessageDraft` and `sendRichMessage` accept native
   `rich_message`. Use them when formatting helps, after checking the current
   Bot API format. Plain text is enough for most replies.
@@ -94,9 +96,11 @@ If the installed tools cannot send audio, say so and offer the text instead.
 ## Delivery and scope
 
 Send/edit/stream actions each need a unique `action_id`. Reuse it only to
-inspect or retry that exact operation, never with different content. An
-uncertain receipt is not permission to send a duplicate. A rejected optional
-status/draft can fall back to a supported method; don't retry errors in a loop.
+inspect that exact operation, never with different content. Reusing the ID
+returns the saved result; it does not resend. An uncertain receipt is not
+permission to send a duplicate. Explain what may not have arrived and ask for
+recovery when needed. A rejected optional status/draft can fall back to a
+supported method; don't retry errors in a loop.
 
 Credentials and recipients belong to the runtime. Do not read channel secrets,
 call provider endpoints around the tools, or change another conversation.

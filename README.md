@@ -831,7 +831,7 @@ The catalog's scope keys are enforced by the runtime and package validator:
 | `target` | Required provider destination field, replaced by the authenticated conversation (`chat_id`, `channel`, or `channel_id`). |
 | `message` | Receipt field (`message_id` or `ts`); edits/deletes/stream updates may touch only messages this task created. |
 | `draft` | Telegram `draft_id`, assigned per task by the runtime. |
-| `thread_status` | Slack status belongs to this event's thread, with active-task ownership checked. |
+| `thread_status` | Slack status or stream belongs to this event's thread, with active-task ownership checked. |
 
 Unknown scope keys are rejected. Email exposes only `send: {}`; its owner is
 fixed by the platform and recipient overrides are forbidden.
