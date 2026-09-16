@@ -361,7 +361,7 @@
       "purpose": "Human-visible test path for creating a private secret handoff."
     },
     {
-      "name": "sessions",
+      "name": "activity",
       "description": "Open active and recent sessions on this Computer."
     }
   ],

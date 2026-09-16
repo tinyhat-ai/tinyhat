@@ -802,7 +802,7 @@ Claude Code on a compatible runtime.
 ## Native channel sessions
 
 The runtime can route owner messages to Hermes, Codex or Claude Code.
-In Telegram, `/sessions` returns a button to the authenticated session list.
+In Telegram, `/activity` returns a button to the authenticated session list.
 Sessions stay on the Computer; the page reads them on demand without a server copy.
 `tinyhat-route-message` chooses an existing or new native task using conversation
 context; `tinyhat-respond` governs sends, edits, drafts, streams and silence.

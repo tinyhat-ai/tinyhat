@@ -214,5 +214,5 @@ def register(ctx: Any) -> None:
         _private_secret_command_handler,
         description="Start a secure Tinyhat Mini App handoff for a secret.",
     )
-    ctx.register_command("sessions", telegram_command, description="Open active and recent sessions.")
+    ctx.register_command("activity", telegram_command, description="Open active and recent sessions.")
     _register_skills(ctx)

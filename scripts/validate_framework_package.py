@@ -43,7 +43,7 @@ REQUIRED_COMMANDS = [
     "tinyhat-joke",
     "tinyhat-plugin-version",
     "tinyhat-secret",
-    "sessions",
+    "activity",
 ]
 REQUIRED_SKILLS = [
     "hat-authoring",
