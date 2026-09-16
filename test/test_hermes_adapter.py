@@ -3038,7 +3038,7 @@ class HermesAdapterTests(unittest.TestCase):
         self.assertNotIn("slash_commands", manifest["features"])
         self.assertEqual(
             manifest["oauth_config"]["scopes"]["bot"],
-            ["assistant:write", "chat:write", "users:read", "im:write"],
+            ["assistant:write", "chat:write", "users:read", "files:read", "im:write"],
         )
 
     def test_generic_secret_flow_refuses_reserved_slack_connection_values(self) -> None:

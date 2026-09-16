@@ -841,3 +841,14 @@ page handles selection; the provider's own CLI/desktop handles login. Runtime
 installation, receiver supervision and native sessions remain in the runtime
 repository. Existing Hermes capability tools are not automatically exported to
 Codex/Claude Code; those use their native tools and the hosted platform API guide.
+
+### Native channel response feedback
+
+The `tinyhat-respond` skill defaults to prompt receipt feedback, typing/working
+status, incremental Telegram drafts or Slack streams, and a durable final reply.
+The owner can request silence, one updated message, or another style. The skill
+chooses the behavior; the runtime provides scoped native methods and an optional
+bounded Telegram typing helper. It never forwards every CLI final automatically.
+Voice transcripts and images are handled as part of the incoming request when
+the installed runtime supports media intake. Voice replies additionally require
+audio generation and upload tools; the skill does not claim an unavailable tool.

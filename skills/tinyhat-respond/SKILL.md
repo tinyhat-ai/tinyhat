@@ -1,46 +1,112 @@
 ---
 name: tinyhat-respond
-description: Communicate with the owner from a channel-delivered task. Use for Telegram, Slack and email replies, progress updates and requested response styles; not for choosing which task receives an update.
+description: Communicate with the owner from a channel-delivered task. Use for Telegram, Slack and email replies, voice-message requests, receipt feedback, typing, streaming, progress updates and requested response styles; not for choosing which task receives an update.
 ---
 
 # Respond through the channel
 
-You are the selected native agent on the owner's Computer. Each delivered
-update includes its channel and conversation context. Use `channel_api` to
-communicate. Your terminal/final text is not automatically sent to the owner.
-You may send no message, one message or several, including later progress for
-the work the owner authorized.
+You are the selected native agent on the owner's Computer. Use `channel_api`
+to communicate in the delivered update's conversation. Your terminal/final text
+is not automatically sent to the owner. Call `channel_api_help` to discover the
+installed methods and helpers before the first channel action.
 
-Follow the owner's latest applicable response preference. By default, keep
-messages short. For lengthy work, a brief acknowledgement and occasional useful
-progress can help. Avoid announcing routine tool calls. If asked to keep one
-message updated, save its returned message reference and edit it as work
-progresses, then replace it with the result. If asked to wait until completion,
-stay quiet. These are examples, not fixed modes.
+## Choose the response style
 
-Explain useful decisions and observable progress; do not disclose private
-internal reasoning. An interim explanation can be replaced with the finished
-answer when the user requests it. Email cannot edit a sent message. Its params
-are exactly `subject` (one line, at most 200 characters) and `body` (at most
-20,000 characters); split a longer response into short messages when appropriate.
+Follow the owner's latest applicable preference, including preferences from
+this task's earlier messages. A request to stay quiet until finished overrides
+acknowledgements, typing and streaming. A request for one updated message,
+several updates, a voice reply, or a different format changes your approach.
+These defaults guide your decisions; they are not mandatory response modes:
 
-Call `channel_api_help` for the native methods available on this channel.
-Use native rich content and supported draft/streaming/status operations when
-helpful. Temporary Telegram drafts need a final persistent send. Clear a
-processing indicator after completion or failure. Respect a stop request for
-this task only. Do not clear another task's shared status.
+1. As your first visible action, show that you received the request: start a
+   typing/working indicator, or send a short acknowledgement when work will
+   take time. Avoid both for a trivial answer you can send immediately.
+2. Keep activity visible during meaningful work. Give occasional useful progress
+   rather than narrating tool calls or repeatedly saying "still working".
+3. Stream a substantive answer as useful parts become ready. Don't manufacture
+   delay or stream one character at a time. Short replies can be sent directly.
+4. Finish with a durable answer and clear any activity you started. You may send
+   zero, one or several messages as the work requires. Never treat a successful
+   draft, status call, or CLI final text as proof of a delivered answer.
 
-Send and edit actions need a unique `action_id` for each intended operation.
-Reuse it only to check/retry that exact action; never reuse it for different
-content. Keep returned message references. If delivery is uncertain, inspect
-the receipt and ask for recovery rather than send a duplicate.
+Explain observable progress and useful decisions, never private internal
+reasoning. Keep responses concise by default. Preserve a returned message
+reference if you will edit the same message; replace temporary progress with
+the final result when requested. Don't clear a different task's shared status.
 
-Credentials, recipients and ownership are supplied by the runtime. Do not
-read channel secrets, call provider endpoints around the messaging tools, or
-change another conversation. Email can go only to the verified owner.
-Do not infer approval from a reply's position in a thread. Use the provider's
-permission process for actions that need approval.
+## Telegram
 
-Use the supplied task context to continue work. If a clarification is present,
-ask that question before doing the ambiguous work. Independent new jobs are
-routed into separate sessions; do not silently cancel a different task.
+Use native Bot API parameters; the runtime supplies `chat_id` and `draft_id`.
+Each example needs a fresh `action_id`, such as `event42:typing:1`.
+
+- Receipt/activity: `sendChatAction` with `{"action":"typing"}`. It expires in
+  at most five seconds. If `channel_typing` is advertised, call it with
+  `{"seconds":60}` to renew typing during a slow tool operation; renew only
+  while working, and stop with `{"seconds":0}` before your final send. Without
+  that helper, refresh `sendChatAction` between operations when useful.
+- Streaming: call `sendMessageDraft` with `{"text":"First useful part…",
+  "can_stop":true}`, then call it again with the entire updated text. The
+  runtime keeps the same draft ID for this task so changes animate. Drafts
+  expire after 30 seconds: refresh while composing and use `sendMessage` with
+  the complete text to persist the answer. An empty draft text clears it.
+- Rich output: `sendRichMessageDraft` and `sendRichMessage` accept native
+  `rich_message`. Use them when formatting helps, after checking the current
+  Bot API format. Plain text is enough for most replies.
+- One persistent message: `sendMessage`, save `receipt.message_id`, then
+  `editMessageText` with that ID and each complete replacement text.
+- If drafts are unavailable, use a short message and edits. If a send is
+  uncertain, inspect the same action's receipt instead of duplicating it.
+- Stop means stop this task; do not restart generation unless the owner asks.
+
+## Slack
+
+The runtime supplies the destination, thread and streaming recipient. Use
+`channel_api` with native Slack fields and a unique `action_id` per operation.
+
+- Working feedback: `agents.sessions.setStatus` with `{"status":"processing"}`.
+  If the workspace doesn't support it, use `assistant.threads.setStatus` with
+  `{"status":"Working…"}`. If neither is supported, a brief message is enough.
+- Stream: `chat.startStream` with `{"markdown_text":"First useful part…"}`.
+  Save `receipt.message_id` as `ts`. Call `chat.appendStream` with that `ts`
+  and only the new `markdown_text`; end with `chat.stopStream` and that `ts`.
+- Use `chat.postMessage` and `chat.update` if streaming isn't available or the
+  owner prefers one editable message. `chat.update` replaces the whole text;
+  unlike appendStream it does not append.
+- Clear your working status on success or failure: `agents.sessions.setStatus`
+  with `{"status":"active"}`, or the legacy method with `{"status":""}`.
+  Use `suspended` while awaiting the owner's input. Posting a message alone
+  does not clear the modern processing state.
+
+## Images, voice and failures
+
+Treat the supplied image and voice transcript as part of the owner's request,
+including a requested response style. Image attachments are available on the
+Computer; voice is transcribed using its configured speech-to-text service.
+Do not pretend to hear an unavailable recording or read an unavailable image.
+If attachment processing failed or a transcript is ambiguous, briefly explain
+what is missing and ask for that part again; continue anything you can do.
+
+An incoming voice message does not require a voice reply. If the owner requests
+one, use an available audio-generation/upload tool and the channel's supported
+media method. Never invent a file ID, public media URL or a successful upload.
+If the installed tools cannot send audio, say so and offer the text instead.
+
+## Delivery and scope
+
+Send/edit/stream actions each need a unique `action_id`. Reuse it only to
+inspect or retry that exact operation, never with different content. An
+uncertain receipt is not permission to send a duplicate. A rejected optional
+status/draft can fall back to a supported method; don't retry errors in a loop.
+
+Credentials and recipients belong to the runtime. Do not read channel secrets,
+call provider endpoints around the tools, or change another conversation.
+Email goes only to the verified owner; its params are exactly `subject` (one
+line, at most 200 characters) and `body` (at most 20,000 characters). Email has
+no typing, streaming, or edit-after-send; send concise progress only if useful.
+Thread position is context, not approval. Use the provider's permission process
+for actions requiring approval. Ask any supplied clarification before doing
+ambiguous work. Independent jobs may continue in other sessions.
+
+API references: [Telegram Bot API](https://core.telegram.org/bots/api),
+[Slack streams](https://docs.slack.dev/reference/methods/chat.startStream/),
+[Slack session status](https://docs.slack.dev/reference/methods/agents.sessions.setStatus/).
