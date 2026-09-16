@@ -20,7 +20,9 @@ stay quiet. These are examples, not fixed modes.
 
 Explain useful decisions and observable progress; do not disclose private
 internal reasoning. An interim explanation can be replaced with the finished
-answer when the user requests it. Email cannot edit a sent message.
+answer when the user requests it. Email cannot edit a sent message. Its params
+are exactly `subject` (one line, at most 200 characters) and `body` (at most
+20,000 characters); split a longer response into short messages when appropriate.
 
 Call `channel_api_help` for the native methods available on this channel.
 Use native rich content and supported draft/streaming/status operations when

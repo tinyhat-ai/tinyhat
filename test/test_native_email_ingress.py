@@ -75,8 +75,7 @@ class NativeEmailIngressTests(unittest.TestCase):
 
     def test_failed_native_commit_remains_queued_for_recovery(self):
         self.enqueue(self.message)
-        with self.assertRaises(RuntimeError):
-            self.inbox.poll(Mock(side_effect=RuntimeError("disk full")))
+        self.inbox.poll(Mock(side_effect=RuntimeError("disk full")))
         self.assertEqual(self.inbox.state.get("m1")[0], "queued")
 
     def test_spoofed_owner_and_automatic_mail_never_reach_agent(self):
@@ -103,3 +102,46 @@ class NativeEmailIngressTests(unittest.TestCase):
             ingress.owner, "request", return_value={**self.channel, "agent_id": "another-agent"}
         ), self.assertRaises(ValueError):
             self.inbox.poll(Mock())
+
+    def test_poison_arrival_does_not_starve_later_mail_and_retries_are_bounded(self):
+        self.enqueue(self.message)
+        self.enqueue({**self.message, "id": "healthy"})
+        accepted = []
+        def accept(key, value):
+            if key == "email:m1":
+                raise ValueError("private provider text")
+            accepted.append(key)
+        with self.assertLogs(ingress.logger, level="WARNING") as logs:
+            for _ in range(5):
+                self.inbox.state.ingest([], {})
+                self.inbox.poll(accept)
+        self.assertEqual(accepted, ["email:healthy"])
+        self.assertEqual(self.inbox.state.get("m1")[0], "failed")
+        self.assertNotIn("private provider text", " ".join(logs.output))
+        self.assertEqual(self.inbox.state.db.execute(
+            "SELECT turn_attempts,error FROM messages WHERE id='m1'"
+        ).fetchone(), (5, "native_handoff_failed"))
+
+    def test_interrupted_hermes_turn_is_recorded_without_replaying_actions(self):
+        self.inbox.state.put("old", "processing", {"authenticated_message": self.message})
+        self.inbox.state.db.execute("UPDATE messages SET updated=0 WHERE id='old'")
+        self.inbox.state.db.commit()
+        accept = Mock()
+        with self.assertLogs(ingress.logger, level="WARNING") as logs:
+            self.inbox.poll(accept)
+        accept.assert_not_called()
+        self.assertEqual(self.inbox.state.get("old")[0], "failed")
+        self.assertIn("framework_switch_interrupted_turn", " ".join(logs.output))
+        self.assertEqual(self.inbox.state.arrivals(600), [])
+
+    def test_auto_submitted_no_is_case_insensitive(self):
+        for i, value in enumerate((None, "", "no", "No", "NO")):
+            self.enqueue({**self.message, "id": str(i), "header:Auto-Submitted:asText": value})
+        accept = Mock()
+        self.inbox.poll(accept)
+        self.assertEqual(accept.call_count, 5)
+
+    def test_platform_timestamp_is_normalized_for_jmap(self):
+        with patch.dict(os.environ, {"TINYHAT_EMAIL_CHANNEL_CREATED_AT": "2026-01-01T00:00:00+00:00"}):
+            self.inbox.poll(Mock())
+        self.assertEqual(self.client.call.call_args.args[0][0][1]["filter"]["after"], "2026-01-01T00:00:00Z")

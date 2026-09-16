@@ -6,9 +6,21 @@ import os
 import re
 import sqlite3
 import time
+from datetime import datetime, timezone
 
 MAX_AUTH_HEADER_BYTES = 16_384
 FIRST_PRINTABLE_ASCII = 32
+
+
+def utc_date(value):
+    """Normalize platform timestamps to the JMAP UTCDate wire format."""
+    return datetime.fromisoformat(value.replace("Z", "+00:00")).astimezone(
+        timezone.utc
+    ).isoformat().replace("+00:00", "Z")
+
+
+def automatic_message(message):
+    return (message.get("header:Auto-Submitted:asText") or "").lower() not in {"", "no"}
 
 
 def _hash(value):
@@ -182,6 +194,19 @@ class InboxState:
                 (key, now, json.dumps(payload), attempts + 1),
             )
         return True
+
+    def native_handoff_failed(self, key, reason, *, limit=5):
+        """Bound per-arrival retries without replaying a possibly executed turn."""
+        with self.db:
+            attempts = self.db.execute(
+                "SELECT turn_attempts FROM messages WHERE id=?", (key,)
+            ).fetchone()[0] + 1
+            failed = attempts >= limit
+            self.db.execute(
+                "UPDATE messages SET turn_attempts=?,error=?,state=?,updated=? WHERE id=?",
+                (attempts, reason, "failed" if failed else "queued", time.time(), key),
+            )
+        return failed
 
     def cursor(self):
         row = self.db.execute("SELECT value FROM cursor WHERE id=1").fetchone()

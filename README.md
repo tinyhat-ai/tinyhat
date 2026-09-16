@@ -796,8 +796,8 @@ current behavior until explicitly enrolled.
 
 See [Computer channel setup](docs/capabilities.md#computer-channels).
 Connected Slack channels return a verified chat link that the agent can share
-with the owner. Slack messages are handled by Hermes, including on Computers
-with Codex or Claude Code installed.
+with the owner. Hermes is the default receiver; the owner can select Codex or
+Claude Code on a compatible runtime.
 
 ## Native channel sessions
 
@@ -813,6 +813,26 @@ New content parameters pass through to the provider; new methods need a reviewed
 scope entry. This avoids a separate SDK release for every message-format change.
 `capabilities/mail/ingress.py` shares the authenticated owner-email inbox ledger
 with the Hermes adapter. Native sessions use the same verified sender checks.
+A failed native inbox handoff retries at most five times without blocking later
+mail. An interrupted Hermes turn is marked failed in that ledger and logged as
+`framework_switch_interrupted_turn`; it is not replayed in another framework
+because it may already have performed actions. Ask the owner to send a new
+instruction if they want that work resumed. Welcome generation and recovery of
+Hermes's pending/uncertain outbound email remain with Hermes; start there for
+onboarding and let sends settle before switching. Switching back resumes its
+outbox recovery, without replaying an interrupted turn.
+
+The catalog's scope keys are enforced by the runtime and package validator:
+
+| Key | Meaning |
+| --- | --- |
+| `target` | Required provider destination field, replaced by the authenticated conversation (`chat_id`, `channel`, or `channel_id`). |
+| `message` | Receipt field (`message_id` or `ts`); edits/deletes/stream updates may touch only messages this task created. |
+| `draft` | Telegram `draft_id`, assigned per task by the runtime. |
+| `thread_status` | Slack status belongs to this event's thread, with active-task ownership checked. |
+
+Unknown scope keys are rejected. Email exposes only `send: {}`; its owner is
+fixed by the platform and recipient overrides are forbidden.
 
 Installation, native login and framework selection are distinct. The Computer
 page handles selection; the provider's own CLI/desktop handles login. Runtime

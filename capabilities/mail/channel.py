@@ -22,7 +22,7 @@ from gateway.platforms.base import BasePlatformAdapter, MessageEvent, SendResult
 from gateway.session import SessionSource
 
 from . import owner
-from .channel_state import InboxState, _hash, authentication_failure
+from .channel_state import InboxState, _hash, authentication_failure, automatic_message, utc_date
 from .tool import _discover_session, _mailbox_id_by_role, _method_result, _plain_text_body
 
 logger = logging.getLogger(__name__)
@@ -67,14 +67,7 @@ class TinyhatEmailAdapter(BasePlatformAdapter):
             self._authserv_id = self._channel["authserv_id"]
             if not self._authserv_id:
                 raise ValueError("email_authserv_id_missing")
-            self._created_at = (
-                datetime.fromisoformat(
-                    os.environ["TINYHAT_EMAIL_CHANNEL_CREATED_AT"].replace("Z", "+00:00")
-                )
-                .astimezone(timezone.utc)
-                .isoformat()
-                .replace("+00:00", "Z")
-            )
+            self._created_at = utc_date(os.environ["TINYHAT_EMAIL_CHANNEL_CREATED_AT"])
             self._status_checked = time.monotonic()
             root = Path(os.environ.get("HERMES_HOME", str(Path.home() / ".hermes")))
             # Stable agent id, not the address: renaming must preserve the cursor.
@@ -265,9 +258,8 @@ class TinyhatEmailAdapter(BasePlatformAdapter):
             or (state[0] == "processing" and time.time() - state[1] < RETRY_TURN_SECONDS)
         ):
             return
-        auto = message.get("header:Auto-Submitted:asText", "") or ""
         senders = message.get("from") or []
-        if auto.lower() not in {"", "no"} or any(
+        if automatic_message(message) or any(
             s.get("email", "").lower()
             in {
                 self._channel["address"].lower(),

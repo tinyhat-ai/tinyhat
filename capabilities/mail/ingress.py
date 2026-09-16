@@ -5,14 +5,16 @@ receiver marks an arrival done only after its own durable inbox commits it.
 """
 
 import json
+import logging
 import os
 from pathlib import Path
 
 from . import owner
-from .channel_state import InboxState, _hash, authentication_failure
+from .channel_state import InboxState, _hash, authentication_failure, automatic_message, utc_date
 from .tool import _discover_session, _mailbox_id_by_role, _method_result, _plain_text_body
 
 PAGE_SIZE = 50
+logger = logging.getLogger(__name__)
 
 
 class OwnerInbox:
@@ -40,7 +42,7 @@ class OwnerInbox:
         query = {
             "accountId": self.client.account_id,
             "filter": {
-                "after": os.environ["TINYHAT_EMAIL_CHANNEL_CREATED_AT"],
+                "after": utc_date(os.environ["TINYHAT_EMAIL_CHANNEL_CREATED_AT"]),
                 "inMailbox": self.inbox,
             },
             "sort": [{"property": "receivedAt", "isAscending": True}],
@@ -108,31 +110,42 @@ class OwnerInbox:
             messages = _method_result(response, "Email/get", "g").get("list", [])
         self.state.ingest(messages, next_cursor)
         for key, state, raw in self.state.arrivals(600):
-            if state != "queued" or key == "onboarding-welcome":
+            if key == "onboarding-welcome":
+                continue  # Welcome/outbox delivery remains the Hermes adapter's job.
+            if state == "processing":
+                # A Hermes turn may already have performed external actions. Never
+                # silently replay it through a different framework after switching.
+                self.state.native_handoff_failed(key, "framework_switch_interrupted_turn", limit=0)
+                logger.warning("Tinyhat email turn stopped (framework_switch_interrupted_turn)")
                 continue
-            message = json.loads(raw)
-            auto = message.get("header:Auto-Submitted:asText")
-            if authentication_failure(
-                message, channel["owner_email"], channel["authserv_id"]
-            ) is not None or auto not in (None, "", "no"):
+            try:
+                message = json.loads(raw)
+                if authentication_failure(
+                    message, channel["owner_email"], channel["authserv_id"]
+                ) is not None or automatic_message(message):
+                    self.state.put(key, "done")
+                    continue
+                accept(
+                    "email:" + key,
+                    {
+                        "provider": "email",
+                        "conversation": "owner",
+                        "sender": channel["owner_email"],
+                        "message_id": key,
+                        "subject": message.get("subject", ""),
+                        "email_message_ids": message.get("messageId", []),
+                        "text": _plain_text_body(message)[:20000],
+                        "received_at": message.get("receivedAt"),
+                        "reply_to": message.get("inReplyTo", []),
+                        "references": message.get("references", []),
+                    },
+                )
                 self.state.put(key, "done")
-                continue
-            accept(
-                "email:" + key,
-                {
-                    "provider": "email",
-                    "conversation": "owner",
-                    "sender": channel["owner_email"],
-                    "message_id": key,
-                    "subject": message.get("subject", ""),
-                    "email_message_ids": message.get("messageId", []),
-                    "text": _plain_text_body(message)[:20000],
-                    "received_at": message.get("receivedAt"),
-                    "reply_to": message.get("inReplyTo", []),
-                    "references": message.get("references", []),
-                },
-            )
-            self.state.put(key, "done")
+            except Exception:
+                # An individual failed handoff must not starve later arrivals.
+                # The native inbox deduplicates retries by the stable email key.
+                failed = self.state.native_handoff_failed(key, "native_handoff_failed")
+                logger.warning("Tinyhat email handoff %s", "failed" if failed else "will retry")
 
     def close(self):
         self.state.close()

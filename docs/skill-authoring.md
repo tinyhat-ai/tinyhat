@@ -151,11 +151,12 @@ to retry with names like `tinyhat:tinyhat-codex-auth`.
 It should be triggered before generic `.env` advice whenever a user asks
 to add or save an API key, token, password, or credential.
 
-`tinyhat-connect-channel` is the way to connect the current Hermes agent to
+`tinyhat-connect-channel` is the way to connect the current Computer to
 Slack or Telegram, using `tinyhat_channels`; `tinyhat_slack_connect` is legacy.
 Do not split Slack's two tokens into generic secret handoffs,
 ask for token values in chat, enable open workspace access, or add a parallel
-Slack adapter. Hermes supplies the manifest and owns Socket Mode.
+Slack adapter. Hermes supplies the manifest; the runtime selects exactly one
+receiver (Hermes, Codex or Claude Code) to own Socket Mode.
 Tinyhat removes slash-command definitions and the `commands` OAuth scope from
 that manifest because Slack command names are workspace-global and per-agent
 apps must not collide.

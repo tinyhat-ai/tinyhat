@@ -35,6 +35,13 @@ class OwnerMailTests(unittest.TestCase):
             self.assertNotIn("from", sent)
             self.assertEqual(sent["idempotency_key"], "reply-123")
 
+    def test_send_forwards_reply_header_only_when_present(self):
+        with patch.object(owner, "request", return_value={"status": "sent", "owner_email": "owner@example.test"}) as request:
+            owner.send_owner({"subject": "Reply", "body": "Hello", "in_reply_to": "<parent@example.test>"})
+            self.assertEqual(request.call_args.args[1]["in_reply_to"], "<parent@example.test>")
+            owner.send_owner({"subject": "New message", "body": "Hello"})
+            self.assertNotIn("in_reply_to", request.call_args.args[1])
+
     def test_rename_requires_explicit_notice_acknowledgement(self):
         with patch.object(owner, "request", return_value={"status": "ready"}) as request:
             result = json.loads(

@@ -22,6 +22,12 @@ _decrypt_ciphertext = importlib.import_module(
 
 
 class ChannelTests(unittest.TestCase):
+    def test_slack_manifest_stop_event_is_present_once(self):
+        manifest = {"settings": {"event_subscriptions": {"bot_events": ["message.im"]}}}
+        with patch.object(runtime, "_generate_hermes_slack_manifest", return_value=manifest):
+            self.assertIn("agent_session_stopped", runtime.slack_manifest()["settings"]["event_subscriptions"]["bot_events"])
+            self.assertEqual(runtime.slack_manifest()["settings"]["event_subscriptions"]["bot_events"].count("agent_session_stopped"), 1)
+
     def test_key_survives_retry_and_roundtrip_uses_only_computer_private_key(self):
         with (
             tempfile.TemporaryDirectory() as directory,
