@@ -1,5 +1,15 @@
 # Changelog
 
+## Unreleased
+
+- Add portable message-routing and response skills for native Codex and Claude
+  Code sessions, with recent-task and reply context instead of fixed thread routing.
+- Publish a reviewed Telegram/Slack method catalog for explicit sends, edits,
+  progress, and streaming. The runtime enforces owner/conversation boundaries;
+  skills control response style and timing.
+- Reuse authenticated owner-email ingress and delivery receipts across Hermes
+  and native receivers. Include Slack agent-session stop events in new manifests.
+
 All notable changes to the Tinyhat plugin are documented here.
 
 ## 0.32.18 - 2026-09-15

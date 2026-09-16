@@ -43,6 +43,7 @@ REQUIRED_COMMANDS = [
     "tinyhat-joke",
     "tinyhat-plugin-version",
     "tinyhat-secret",
+    "activity",
 ]
 REQUIRED_SKILLS = [
     "hat-authoring",
@@ -73,6 +74,8 @@ REQUIRED_SKILLS = [
     "tinyhat-email-address",
     "tinyhat-complete-setup",
     "tinyhat-connect-channel",
+    "tinyhat-route-message",
+    "tinyhat-respond",
 ]
 FORBIDDEN_PATHS = (
     "openclaw.plugin.json",
@@ -874,6 +877,8 @@ def validate_hermes_adapter(root: Path) -> None:
         "tinyhat-email-onboarding": "skills/tinyhat-email-onboarding/SKILL.md",
         "tinyhat-email-address": "skills/tinyhat-email-address/SKILL.md",
         "tinyhat-connect-channel": "skills/tinyhat-connect-channel/SKILL.md",
+        "tinyhat-route-message": "skills/tinyhat-route-message/SKILL.md",
+        "tinyhat-respond": "skills/tinyhat-respond/SKILL.md",
         "tinyhat-complete-setup": "skills/tinyhat-complete-setup/SKILL.md",
     }
     for skill in skills:
@@ -951,7 +956,7 @@ def validate_docs(root: Path) -> None:
     checks = {
         "README.md": (
             "teaches an agent what the Tinyhat",
-            "Hermes only",
+            "Hermes plugin loader",
             "tinyhat-tell-joke",
             "tinyhat-plugin-version",
             "tinyhat-skill-catalog",
@@ -1276,6 +1281,33 @@ def validate_google_workspace_contract(root: Path) -> None:
         )
 
 
+def validate_channel_methods(root: Path) -> None:
+    try:
+        catalog = json.loads((root / "capabilities/channels/methods.json").read_text())
+    except (OSError, ValueError):
+        fail("channel method catalog must be valid JSON")
+    require(isinstance(catalog, dict) and set(catalog) == {"telegram", "slack", "email"},
+            "channel method catalog must name telegram, slack and email")
+    require(catalog["email"] == {"send": {}}, "email has only an owner-scoped send")
+    for provider in ("telegram", "slack"):
+        methods = catalog[provider]
+        require(isinstance(methods, dict) and bool(methods), "channel methods must be an object")
+        for method, rule in methods.items():
+            require(isinstance(method, str) and bool(re.fullmatch(r"[A-Za-z][A-Za-z.]+", method)),
+                    "invalid channel method name")
+            require(isinstance(rule, dict) and not set(rule) - {"target", "message", "draft", "thread_status"},
+                    "unknown channel scope key")
+            require(rule.get("target") in ({"chat_id"} if provider == "telegram" else {"channel", "channel_id"}),
+                    "channel method requires its provider destination field")
+            if "message" in rule:
+                require(rule["message"] == ("message_id" if provider == "telegram" else "ts"),
+                        "invalid channel message receipt field")
+            if "draft" in rule:
+                require(provider == "telegram" and rule["draft"] == "draft_id", "invalid draft scope")
+            if "thread_status" in rule:
+                require(provider == "slack" and rule["thread_status"] is True, "invalid thread status scope")
+
+
 def main() -> int:
     root = repo_root()
     version = validate_versions(root)
@@ -1284,6 +1316,7 @@ def main() -> int:
     validate_google_scope_manifest(root)
     validate_docs(root)
     validate_google_workspace_contract(root)
+    validate_channel_methods(root)
     print(f"framework-package: ok (version {version})")
     return 0
 

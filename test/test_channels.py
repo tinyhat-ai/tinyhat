@@ -22,6 +22,20 @@ _decrypt_ciphertext = importlib.import_module(
 
 
 class ChannelTests(unittest.TestCase):
+    def test_slack_manifest_stop_event_is_present_once(self):
+        manifest = {"settings": {"event_subscriptions": {"bot_events": ["message.im"]}}}
+        with patch.object(runtime, "_generate_hermes_slack_manifest", return_value=manifest):
+            self.assertIn(
+                "agent_session_stopped",
+                runtime.slack_manifest()["settings"]["event_subscriptions"]["bot_events"],
+            )
+            self.assertEqual(
+                runtime.slack_manifest()["settings"]["event_subscriptions"]["bot_events"].count(
+                    "agent_session_stopped"
+                ),
+                1,
+            )
+
     def test_key_survives_retry_and_roundtrip_uses_only_computer_private_key(self):
         with (
             tempfile.TemporaryDirectory() as directory,
@@ -483,6 +497,36 @@ class SlackIdentityTests(unittest.TestCase):
         ):
             result = tool._public_status({"channels": [row | changed]})
             self.assertIsNone(result["channels"][0]["chat_url"])
+
+
+class SessionLinkTests(unittest.TestCase):
+    def test_sessions_returns_exactly_one_authenticated_page_button(self):
+        sessions = importlib.import_module("tinyhat.capabilities.channels.sessions")
+        url = "https://computer.tinyhat.ai/tinyhat/computers/computer_42/sessions#email=owner%40example.com"
+        with (
+            patch.object(sessions, "button", return_value={"text": "Open sessions", "url": url}),
+            patch.object(
+                sessions, "_telegram_credentials", return_value=("bot-token", "owner-chat")
+            ),
+            patch.object(sessions, "_telegram_send_message", return_value={"ok": True}) as send,
+        ):
+            self.assertEqual(sessions.telegram_command(), "")
+            self.assertEqual(send.call_args.kwargs["chat_id"], "owner-chat")
+            self.assertEqual(
+                send.call_args.kwargs["reply_markup"],
+                {"inline_keyboard": [[{"text": "Open sessions", "url": url}]]},
+            )
+
+    def test_invalid_link_does_not_reveal_credentials(self):
+        sessions = importlib.import_module("tinyhat.capabilities.channels.sessions")
+        client = Mock()
+        client.get_json.return_value = {"url": "javascript:alert(1)"}
+        with (
+            patch.object(sessions, "build_platform_client", return_value=(client, Mock())),
+            patch.object(sessions, "computer_api_path", return_value="/channels/sessions-link"),
+        ):
+            with self.assertRaises(ValueError):
+                sessions.button()
 
 
 if __name__ == "__main__":

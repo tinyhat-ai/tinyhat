@@ -702,13 +702,13 @@ For Slack creation, follow the guided **From a manifest** dialog with the
 Computer's Agent-view JSON, then submit the tokens through the private Computer
 form or the skill's `credentials_file` flow. Take only token values from Slack's
 coding-tool instructions: never put them in chat, project files, shell profiles
-or MCP configs. Hermes supplies the listener; no separate agent scaffold is needed.
+or MCP configs. The selected framework supplies the listener; no separate agent scaffold is needed.
 The platform retains encrypted credentials; the runtime applies them through
 `configure_channels` without changing the owner, email, model or user files.
 Connected Slack status includes a validated `chat_url` to the bot's direct
 conversation. The runtime can discover missing links on existing connections
-without reinstalling settings or restarting Hermes. Slack uses Hermes even
-when the Computer's installed coding system is Codex or Claude Code.
+without reinstalling settings or restarting the receiver. Hermes is the default;
+selecting Codex or Claude Code routes Slack to native sessions on compatible runtimes.
 
 `tinyhat-complete-setup` coordinates the selected system and channel through
 actual replies, including separate CLI and Linux desktop login checks for

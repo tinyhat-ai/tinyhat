@@ -6,6 +6,7 @@ from pathlib import Path
 from typing import Any
 
 from . import context, schemas, tools
+from .capabilities.channels.sessions import telegram_command
 from .capabilities.mail.registration import register as register_email
 
 
@@ -213,4 +214,5 @@ def register(ctx: Any) -> None:
         _private_secret_command_handler,
         description="Start a secure Tinyhat Mini App handoff for a secret.",
     )
+    ctx.register_command("activity", telegram_command, description="Open active and recent sessions.")
     _register_skills(ctx)
