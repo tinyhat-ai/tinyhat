@@ -1,6 +1,11 @@
 # Changelog
 
-## Unreleased
+## 0.32.19 - 2026-09-16
+
+- Native routing requires Tinyhat Hermes runtime 0.0.70 and the compatible
+  Computer framework APIs in [tinyloophub/tinyloop#1342](https://github.com/tinyloophub/tinyloop/pull/1342).
+  Deploy the compatible platform before promoting this plugin to default
+  channels. Sessions and provider credentials remain on the Computer.
 
 - Add portable message-routing and response skills for native Codex and Claude
   Code sessions, with recent-task and reply context instead of fixed thread routing.
