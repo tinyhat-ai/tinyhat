@@ -142,7 +142,7 @@
       "qualified_name": "tinyhat:tinyhat-account-upgrade",
       "aliases": ["tinyhat-account-upgrade"],
       "path": "skills/tinyhat-account-upgrade/SKILL.md",
-      "purpose": "Prepares the existing owner’s Stripe Projects upgrade using Computer identity; the owner approves on the review page."
+      "purpose": "Prepares the existing owner\u2019s Stripe Projects upgrade using Computer identity; the owner approves on the review page."
     },
     {
       "name": "tinyhat-agentphone",
@@ -359,6 +359,10 @@
       "name": "tinyhat-secret",
       "tool": "tinyhat_private_secret_handoff",
       "purpose": "Human-visible test path for creating a private secret handoff."
+    },
+    {
+      "name": "sessions",
+      "description": "Open active and recent sessions on this Computer."
     }
   ],
   "release": {
