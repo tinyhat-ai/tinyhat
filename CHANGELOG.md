@@ -1,6 +1,11 @@
 # Changelog
 
-## Unreleased
+## 0.32.20 - 2026-09-16
+
+- Updated native channel feedback and media handling require Tinyhat Hermes
+  runtime 0.0.72 and the existing compatible Computer framework APIs.
+  Promote the runtime before this plugin. Existing Slack agents need to grant
+  `files:read` to receive owner image and audio attachments.
 
 - Give native channel agents concrete, user-adjustable defaults for receipt
   feedback, typing, Telegram drafts, Slack streams, media and failure recovery.
