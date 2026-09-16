@@ -30,6 +30,9 @@ class NativeEmailIngressTests(unittest.TestCase):
         self.client.call.return_value = {
             "methodResponses": [["Email/query", {"queryState": "cursor", "ids": []}, "q"]]
         }
+        self.client.call.side_effect = lambda calls: {
+            "methodResponses": [[calls[0][0], {"queryState": "cursor", "newQueryState": "cursor", "ids": [], "added": []}, "q"]]
+        }
         self.patches = [
             patch.dict(
                 os.environ,
@@ -113,6 +116,8 @@ class NativeEmailIngressTests(unittest.TestCase):
             accepted.append(key)
         with self.assertLogs(ingress.logger, level="WARNING") as logs:
             for _ in range(5):
+                self.inbox.state.db.execute("UPDATE messages SET retry_at=0")
+                self.inbox.state.db.commit()
                 self.inbox.state.ingest([], {})
                 self.inbox.poll(accept)
         self.assertEqual(accepted, ["email:healthy"])
@@ -121,6 +126,34 @@ class NativeEmailIngressTests(unittest.TestCase):
         self.assertEqual(self.inbox.state.db.execute(
             "SELECT turn_attempts,error FROM messages WHERE id='m1'"
         ).fetchone(), (5, "native_handoff_failed"))
+
+    def test_capacity_backpressure_preserves_mail_until_inbox_has_room(self):
+        self.enqueue(self.message)
+        accept = Mock(side_effect=BufferError("full"))
+        # More retries than the poison-message budget, spread over ten minutes.
+        start = 2000000000
+        with patch("time.time", return_value=start):
+            for minute in range(10):
+                with patch("time.time", return_value=start + minute * 60):
+                    self.inbox.poll(accept)
+                    self.inbox.poll(accept)  # backoff suppresses a rapid repeat
+            self.assertEqual(accept.call_count, 10)
+            self.assertEqual(self.inbox.state.get("m1")[0], "queued")
+            self.assertEqual(self.inbox.state.db.execute(
+                "SELECT turn_attempts FROM messages WHERE id='m1'"
+            ).fetchone()[0], 0)
+            accept.side_effect = None
+            with patch("time.time", return_value=start + 600):
+                self.inbox.poll(accept)
+        self.assertEqual(self.inbox.state.get("m1")[0], "done")
+
+    def test_failed_handoff_waits_before_retry(self):
+        self.enqueue(self.message)
+        accept = Mock(side_effect=ValueError("bad"))
+        with self.assertLogs(ingress.logger, level="WARNING"):
+            self.inbox.poll(accept)
+            self.inbox.poll(accept)
+        self.assertEqual(accept.call_count, 1)
 
     def test_interrupted_hermes_turn_is_recorded_without_replaying_actions(self):
         self.inbox.state.put("old", "processing", {"authenticated_message": self.message})

@@ -141,6 +141,9 @@ class OwnerInbox:
                     },
                 )
                 self.state.put(key, "done")
+            except BufferError:
+                # Runtime inbox capacity is backpressure, not a poison message.
+                self.state.defer_native_handoff(key)
             except Exception:
                 # An individual failed handoff must not starve later arrivals.
                 # The native inbox deduplicates retries by the stable email key.

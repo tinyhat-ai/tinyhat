@@ -203,10 +203,19 @@ class InboxState:
             ).fetchone()[0] + 1
             failed = attempts >= limit
             self.db.execute(
-                "UPDATE messages SET turn_attempts=?,error=?,state=?,updated=? WHERE id=?",
-                (attempts, reason, "failed" if failed else "queued", time.time(), key),
+                "UPDATE messages SET turn_attempts=?,error=?,state=?,updated=?,retry_at=? WHERE id=?",
+                (attempts, reason, "failed" if failed else "queued", time.time(),
+                 time.time() + min(3600, 30 * 2**attempts), key),
             )
         return failed
+
+    def defer_native_handoff(self, key):
+        """Capacity is temporary: retain the email without consuming its retry budget."""
+        with self.db:
+            self.db.execute(
+                "UPDATE messages SET retry_at=?,updated=? WHERE id=? AND state='queued'",
+                (time.time() + 60, time.time(), key),
+            )
 
     def cursor(self):
         row = self.db.execute("SELECT value FROM cursor WHERE id=1").fetchone()
@@ -233,8 +242,8 @@ class InboxState:
 
     def arrivals(self, retry_seconds):
         return self.db.execute(
-            "SELECT id,state,payload FROM messages WHERE state='queued' OR (state='processing' AND updated<?) ORDER BY updated LIMIT 50",
-            (time.time() - retry_seconds,),
+            "SELECT id,state,payload FROM messages WHERE (state='queued' AND retry_at<=?) OR (state='processing' AND updated<?) ORDER BY updated LIMIT 50",
+            (time.time(), time.time() - retry_seconds),
         ).fetchall()
 
     def delivery_attempt(self, key, error, delay, limit, *, terminal=False):
