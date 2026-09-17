@@ -2,6 +2,17 @@
 
 ## Unreleased
 
+## 0.32.23 - 2026-09-17
+
+- Use Tinyhat Hermes runtime 0.0.76 to preserve receipt feedback through routing
+  and keep Slack progress and answers in the same thread. Promote that runtime
+  before this plugin. Existing platform APIs remain compatible.
+- Send one personal, concise welcome email with an agent-written subject.
+  Keep rejected or incomplete welcomes out of ordinary notification fallbacks.
+  Update the plugin pin, image and fleet before or alongside the companion
+  welcome renderer in [tinyloophub/tinyloop#1356](https://github.com/tinyloophub/tinyloop/pull/1356).
+  The existing renderer safely accepts this plugin during rollout.
+
 - Start channel activity before composing replies, keep Slack status and answers
   in one thread, and use native step statuses or stream task updates for progress.
   Describe the first real step before work, even without a progress request,
