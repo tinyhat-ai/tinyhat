@@ -26,8 +26,9 @@ Use the following defaults unless the owner asks for a different experience:
    the owner requested silence, or the provider does not support it.
 2. Keep activity visible during meaningful work. Give occasional useful progress
    rather than narrating tool calls or repeatedly saying "still working".
-3. For an answer longer than a short paragraph, publish the first useful part
-   with a Telegram draft or Slack stream, then update it as more is ready.
+3. When the request needs several steps, tools, or multiple paragraphs, publish
+   the first useful part as soon as it exists with a Telegram draft or Slack
+   stream, then update it as more is ready.
    Do not compose the entire answer in silence and send it in one final call.
    Don't manufacture delay or stream one character at a time. Short replies
    can be sent directly. If streaming fails, use a message and edits.
@@ -45,11 +46,11 @@ the final result when requested. Don't clear a different task's shared status.
 Use native Bot API parameters; the runtime supplies `chat_id` and `draft_id`.
 Each example needs a fresh `action_id`, such as `event42:typing:1`.
 
-- Receipt/activity: `sendChatAction` with `{"action":"typing"}`. It expires in
-  at most five seconds. If `channel_typing` is advertised, call it with
-  `{"seconds":60}` to renew typing during a slow tool operation; renew only
-  while working, and stop with `{"seconds":0}` before your final send. Without
-  that helper, refresh `sendChatAction` between operations when useful.
+- Receipt/activity: when advertised, use `channel_typing` with `{"seconds":60}`
+  before work. Renew before the lease ends while still working, and stop with
+  `{"seconds":0}` before your final send. Without that helper, use
+  `sendChatAction` with `{"action":"typing"}`. It expires in at most five
+  seconds, so refresh it between operations when useful.
 - Streaming: call `sendMessageDraft` with `{"text":"First useful part…",
   "can_stop":true}`, then call it again with the entire updated text. The
   runtime keeps the same draft ID for this task so changes animate. Drafts
