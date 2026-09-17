@@ -1,6 +1,10 @@
 # Changelog
 
-## Unreleased
+## 0.32.21 - 2026-09-17
+
+- Use Tinyhat Hermes runtime 0.0.74 for early routing activity and refreshed
+  response skills in existing native sessions. Promote that runtime before
+  this plugin; existing platform APIs remain compatible.
 
 - Request temporary Telegram/Slack activity while routing on compatible runtimes.
   Use typing before work and incremental drafts/streams for longer responses;
