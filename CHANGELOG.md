@@ -1,5 +1,12 @@
 # Changelog
 
+## Unreleased
+
+- Package the immediate native-channel receipt default with the response skill.
+  On compatible runtimes, guide agents to preserve owner-requested quiet
+  preferences across sessions and avoid redundant acknowledgement messages.
+  Older runtimes keep the existing skill-requested typing behavior.
+
 ## 0.32.21 - 2026-09-17
 
 - Use Tinyhat Hermes runtime 0.0.74 for early routing activity and refreshed
