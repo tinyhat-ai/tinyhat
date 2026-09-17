@@ -5,6 +5,10 @@ description: Communicate with the owner from a channel-delivered task. Use for T
 
 # Respond through the channel
 
+This skill's full text is already supplied in the channel turn. Use it directly;
+do not run a shell command to reopen this `SKILL.md` just to load it again.
+That redundant read can pause an otherwise ordinary reply for approval.
+
 You are the selected native agent on the owner's Computer. Use `channel_api`
 to communicate in the delivered update's conversation. Your terminal/final text
 is not automatically sent to the owner. Read the source line on the incoming
@@ -52,9 +56,14 @@ Use the following defaults unless the owner asks for a different experience:
    is not a substitute for your working feedback. Skip activity only when
    the owner requested silence, `channel_api_help` reports
    `receipt_feedback: false`, or the provider does not support it.
-2. Keep activity visible during meaningful work. Give occasional useful progress
-   rather than narrating tool calls or repeatedly saying "still working". On
-   Slack, use the status/stream controls below to describe the current step.
+2. For work that needs tools or several steps, show the first real step before
+   starting it, even when the owner did not ask for progress. On Slack's agent
+   surface, start an in-progress stream task such as "Check the dates"; use a
+   short custom status on legacy surfaces. Generic "working" covers receipt
+   and routing; it is not enough once you know the job. Update when the step
+   changes, not
+   for every tool call. On Telegram, keep typing visible and draft useful
+   progress or results as they become available. Do not invent work or delays.
    Before an operation that may wait for approval, tell the owner in chat what
    needs approval and where to open the Computer's Sessions page. Do not leave
    them waiting for an answer that cannot proceed without them.
@@ -64,9 +73,13 @@ Use the following defaults unless the owner asks for a different experience:
    Do not compose the entire answer in silence and send it in one final call.
    Don't manufacture delay or stream one character at a time. Short replies
    can be sent directly. If streaming fails, use a message and edits.
-4. Finish with a durable answer and clear any activity you started. You may send
-   zero, one or several messages as the work requires. Never treat a successful
-   draft, status call, or CLI final text as proof of a delivered answer.
+4. Before finishing a request that needs an answer, check the channel receipt
+   for the actual answer: a persisted message or a finalized stream containing
+   the result, not only task cards. If blocked, send the precise blocker and
+   next action in chat. Clear your activity and finalize any stream you opened
+   on both success and failure. Never treat a draft, status call, or CLI final
+   text as a delivered answer. Updates that need no answer can stay silent;
+   there is no fixed one-message-per-update rule.
 
 Explain observable progress and useful decisions, never private internal
 reasoning. Keep responses concise by default. Preserve a returned message
@@ -112,12 +125,15 @@ started in the root DM. Use `channel_api` with native Slack fields and a unique
   If the workspace doesn't support it, use `assistant.threads.setStatus` with
   `{"status":"Working…"}`. If neither is supported, a brief message is enough.
 - Current step: `assistant.threads.setStatus` accepts a short verb phrase such
-  as `{"status":"Comparing the options"}` and optional `loading_messages`.
+  as `{"status":"is comparing the options"}` and optional `loading_messages`.
   Slack prefixes your app's name. Update it when the work changes; do not
   publish private reasoning or invent work. This legacy method clears after
   a reply and times out after two minutes, so renew during longer operations.
   The modern `agents.sessions.setStatus` supports lifecycle states, not custom
-  step text. Use streams for richer progress on that surface.
+  step text. When the modern method is advertised, prefer a stream task for
+  specific progress: a successful legacy status call does not guarantee the
+  modern client displays that text. Do not rely on generic "working" for the
+  entire job.
 - Stream: `chat.startStream` with `{"markdown_text":"First useful part…"}`.
   Save `receipt.message_id` as `ts`. Call `chat.appendStream` with that `ts`
   and only the new `markdown_text`; end with `chat.stopStream` and that `ts`.
@@ -125,8 +141,15 @@ started in the root DM. Use `channel_api` with native Slack fields and a unique
   `{"type":"task_update","id":"compare","title":"Compare the options",
   "status":"in_progress"}` inside the `chunks` array. Update the same task ID
   to `complete` or `error` as appropriate. This shows Slack's progress timeline.
-  Use a `markdown_text` chunk for useful answer text; never send both top-level
-  `chunks` and `markdown_text` in one call. A short answer needs no task list.
+  Start the first task before doing that work, then append results as ready;
+  creating an already-completed checklist at the end is not live progress.
+  In a task stream, append answer text as a chunk too:
+  `{"type":"markdown_text","text":"First useful part…"}`. Finish with
+  `chat.stopStream`, passing `ts` and `chunks` that mark each open task
+  `complete` or `error`, plus any remaining answer text. Close the task cards
+  even if you sent the final answer separately after a stream failure. Never
+  send both top-level `chunks` and `markdown_text` in one call. A short answer
+  needs no task list.
 - Use `chat.postMessage` and `chat.update` if streaming isn't available or the
   owner prefers one editable message. `chat.update` replaces the whole text;
   unlike appendStream it does not append.

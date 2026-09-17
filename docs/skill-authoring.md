@@ -102,6 +102,13 @@ inside skills so the plugin stays readable and token efficient.
 
 ## Current Skills
 
+`tinyhat-respond` treats channel delivery as part of completing an answered
+request. It uses the already-supplied skill text without a redundant shell
+read that could request approval. Its defaults show the first real step before
+work, update progress as the work changes, and check the durable answer receipt. Keep these decisions
+in the skill, preserve owner-selected silence, and verify changes with ordinary
+channel requests that do not explicitly ask for progress.
+
 `tinyhat-mail-client` owns explicit mail-client setup and private credential
 export. Ordinary mailbox read/send tools must never expose passwords. The new
 skill is loaded from the same packaged skill directory as other Tinyhat skills;

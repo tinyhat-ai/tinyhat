@@ -731,9 +731,11 @@ activity before choosing a task when the helper is available, so the owner
 gets feedback during routing too. Longer answers begin with a draft/stream
 as useful content becomes ready, rather than waiting for the complete answer.
 Slack status, progress and replies stay in the same thread. The skill starts
-activity before composing, uses native step statuses or streaming task updates
-for longer work, and explains approval waits in chat. It never forwards every
-CLI final automatically.
+activity before composing and describes the first real step before doing it,
+even when the owner did not ask for progress. It updates native step statuses
+or streaming tasks as the work changes, explains approval waits in chat, and
+checks that the actual answer was sent before finishing. It never forwards
+every CLI final automatically.
 Voice transcripts and images are handled as part of the incoming request when
 the installed runtime supports media intake. Voice replies additionally require
 audio generation and upload tools; the skill does not claim an unavailable tool.
