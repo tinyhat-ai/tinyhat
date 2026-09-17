@@ -4,7 +4,11 @@
 
 - Start channel activity before composing replies, keep Slack status and answers
   in one thread, and use native step statuses or stream task updates for progress.
-  Explain approval waits in chat while preserving owner-selected quiet responses.
+  Describe the first real step before work, even without a progress request,
+  and verify delivery of the answer or blocker before finishing. Explain
+  approval waits in chat while preserving owner-selected quiet responses.
+  Use the already-loaded response policy without reopening it through a shell,
+  avoiding unnecessary skill-read approvals before ordinary replies.
 
 ## 0.32.22 - 2026-09-17
 
