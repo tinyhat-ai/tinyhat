@@ -1,6 +1,10 @@
 # Changelog
 
-## Unreleased
+## 0.32.22 - 2026-09-17
+
+- Use Tinyhat Hermes runtime 0.0.75 for immediate receipt feedback and durable
+  quiet preferences. Promote that runtime before this plugin; existing platform
+  APIs remain compatible.
 
 - Package the immediate native-channel receipt default with the response skill.
   On compatible runtimes, guide agents to preserve owner-requested quiet
