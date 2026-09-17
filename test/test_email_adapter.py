@@ -192,6 +192,22 @@ class EmailAdapterTests(unittest.IsolatedAsyncioTestCase):
             send.assert_not_called()
         self.assertEqual(self.adapter._state.get(channel.WELCOME)[0], "processing")
 
+    async def test_gateway_retry_keeps_rejected_welcome_retryable_without_a_fallback_email(self):
+        self.adapter._state.put(channel.WELCOME, "processing", {"metadata": {"welcome": True}})
+        with patch.object(owner, "request") as send:
+            for note in (
+                "Subject: " + "x" * 61 + "\n\nYour computer is ready.",
+                "Subject: Hello\nBcc: stranger@example.test\n\nReady.",
+                "Billing or credits exhausted: HTTP 402 private details",
+            ):
+                with self.subTest(note=note):
+                    result = await self.adapter._send_with_retry(
+                        "owner", note, reply_to=channel.WELCOME, metadata={"notify": True}
+                    )
+                    self.assertFalse(result.success)
+                    self.assertEqual(self.adapter._state.get(channel.WELCOME)[0], "processing")
+            send.assert_not_called()
+
     async def test_body_only_welcome_remains_compatible(self):
         self.adapter._state.put(
             channel.WELCOME,
@@ -230,7 +246,9 @@ class EmailAdapterTests(unittest.IsolatedAsyncioTestCase):
     async def test_uncertain_unthreaded_welcome_is_not_sent_as_a_new_notification(self):
         self.adapter._state.put(channel.WELCOME, "processing", {"metadata": {"welcome": True}})
         with patch.object(owner, "request", return_value={"status": "unknown"}) as send:
-            result = await self.adapter.send("owner", "Subject: Ready when you are\n\nHello.")
+            result = await self.adapter._send_with_retry(
+                "owner", "Subject: Ready when you are\n\nHello."
+            )
             self.assertFalse(result.success)
             self.adapter._state.close()
             self.adapter._state = InboxState(Path(self.temp.name) / "state.sqlite3")

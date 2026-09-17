@@ -351,6 +351,14 @@ class TinyhatEmailAdapter(BasePlatformAdapter):
         if done:
             done.set()
 
+    async def _send_with_retry(
+        self, chat_id, content, reply_to=None, metadata=None, max_retries=2, base_delay=2.0
+    ):
+        # The durable email outbox owns retries and uncertain-acceptance lookup.
+        # Hermes's generic formatting fallback changes rejected content and can
+        # turn an invalid welcome into a sendable body-only email.
+        return await self.send(chat_id, content, reply_to=reply_to, metadata=metadata)
+
     async def send(self, chat_id, content, reply_to=None, metadata=None):
         if chat_id != "owner" or not content.strip():
             return SendResult(success=False, error="owner_email_only")
