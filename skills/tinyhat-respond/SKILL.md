@@ -7,8 +7,11 @@ description: Communicate with the owner from a channel-delivered task. Use for T
 
 You are the selected native agent on the owner's Computer. Use `channel_api`
 to communicate in the delivered update's conversation. Your terminal/final text
-is not automatically sent to the owner. Call `channel_api_help` to discover the
-installed methods and helpers before the first channel action.
+is not automatically sent to the owner. Read the source line on the incoming
+message and call `channel_api_help` to confirm its provider, reply thread,
+installed methods and activity preference. A CLI commentary such as "I'm
+checking" is invisible in chat; use the channel tools for anything the owner
+needs to see.
 
 ## Choose the response style
 
@@ -43,13 +46,18 @@ Use the following defaults unless the owner asks for a different experience:
 
 1. Before researching, planning, or running tools, start `channel_typing` with
    `{"seconds":60}` on Telegram or Slack when available. Renew during work.
-   Otherwise use the native activity methods below. Do this even for a short
-   answer: thinking and tool latency are already a wait for the owner. Skip
-   activity only when sending an immediate answer in your first channel call,
+   Otherwise use the native activity methods below. Make this your first action
+   after discovery, before composing even a short answer: thinking and tool
+   latency are already a wait for the owner. The receiver's initial receipt
+   is not a substitute for your working feedback. Skip activity only when
    the owner requested silence, `channel_api_help` reports
    `receipt_feedback: false`, or the provider does not support it.
 2. Keep activity visible during meaningful work. Give occasional useful progress
-   rather than narrating tool calls or repeatedly saying "still working".
+   rather than narrating tool calls or repeatedly saying "still working". On
+   Slack, use the status/stream controls below to describe the current step.
+   Before an operation that may wait for approval, tell the owner in chat what
+   needs approval and where to open the Computer's Sessions page. Do not leave
+   them waiting for an answer that cannot proceed without them.
 3. When the request needs several steps, tools, or multiple paragraphs, publish
    the first useful part as soon as it exists with a Telegram draft or Slack
    stream, then update it as more is ready.
@@ -93,17 +101,32 @@ Each example needs a fresh `action_id`, such as `event42:typing:1`.
 
 ## Slack
 
-The runtime supplies the destination, thread and streaming recipient. Use
-`channel_api` with native Slack fields and a unique `action_id` per operation.
+The runtime supplies the destination, thread and streaming recipient. Keep
+status, progress and answer in that same thread, including a message that
+started in the root DM. Use `channel_api` with native Slack fields and a unique
+`action_id` per operation. Never describe a CLI-only update as a Slack reply.
 
 - Working feedback: `agents.sessions.setStatus` with `{"status":"processing"}`.
   When advertised, `channel_typing` provides a bounded working-status lease
   and clears its own status at the end of the turn. It sends no chat message.
   If the workspace doesn't support it, use `assistant.threads.setStatus` with
   `{"status":"Working…"}`. If neither is supported, a brief message is enough.
+- Current step: `assistant.threads.setStatus` accepts a short verb phrase such
+  as `{"status":"Comparing the options"}` and optional `loading_messages`.
+  Slack prefixes your app's name. Update it when the work changes; do not
+  publish private reasoning or invent work. This legacy method clears after
+  a reply and times out after two minutes, so renew during longer operations.
+  The modern `agents.sessions.setStatus` supports lifecycle states, not custom
+  step text. Use streams for richer progress on that surface.
 - Stream: `chat.startStream` with `{"markdown_text":"First useful part…"}`.
   Save `receipt.message_id` as `ts`. Call `chat.appendStream` with that `ts`
   and only the new `markdown_text`; end with `chat.stopStream` and that `ts`.
+  For a multi-step job, start or append `chunks` instead of `markdown_text`:
+  `{"type":"task_update","id":"compare","title":"Compare the options",
+  "status":"in_progress"}` inside the `chunks` array. Update the same task ID
+  to `complete` or `error` as appropriate. This shows Slack's progress timeline.
+  Use a `markdown_text` chunk for useful answer text; never send both top-level
+  `chunks` and `markdown_text` in one call. A short answer needs no task list.
 - Use `chat.postMessage` and `chat.update` if streaming isn't available or the
   owner prefers one editable message. `chat.update` replaces the whole text;
   unlike appendStream it does not append.
