@@ -325,3 +325,8 @@ See [Computer channel setup](capabilities.md#computer-channels).
 Return the platform's connected `chat_url` when sharing a Slack conversation.
 Never construct a link from unverified credentials or expose tokens. The runtime
 may read the installed Slack identity without rewriting channel settings.
+
+Native channel response defaults belong in `tinyhat-respond`; receipt feedback
+during task selection belongs in `tinyhat-route-message`. Both honor the owner's
+silence preferences. The router may use only the temporary activity helper;
+sending, editing, streaming, and task execution remain the selected worker's job.

@@ -1,5 +1,11 @@
 # Changelog
 
+## Unreleased
+
+- Request temporary Telegram/Slack activity while routing on compatible runtimes.
+  Use typing before work and incremental drafts/streams for longer responses;
+  preserve owner preferences for silence or other response styles.
+
 ## 0.32.20 - 2026-09-16
 
 - Updated native channel feedback and media handling require Tinyhat Hermes
