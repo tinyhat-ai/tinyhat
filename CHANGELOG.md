@@ -1,5 +1,11 @@
 # Changelog
 
+## Unreleased
+
+- Start channel activity before composing replies, keep Slack status and answers
+  in one thread, and use native step statuses or stream task updates for progress.
+  Explain approval waits in chat while preserving owner-selected quiet responses.
+
 ## 0.32.22 - 2026-09-17
 
 - Use Tinyhat Hermes runtime 0.0.75 for immediate receipt feedback and durable
