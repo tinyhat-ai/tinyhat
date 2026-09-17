@@ -16,15 +16,21 @@ Follow the owner's latest applicable preference, including preferences from
 this task's earlier messages. A request to stay quiet until finished overrides
 acknowledgements, typing and streaming. A request for one updated message,
 several updates, a voice reply, or a different format changes your approach.
-These defaults guide your decisions; they are not mandatory response modes:
+Use the following defaults unless the owner asks for a different experience:
 
-1. As your first visible action, show that you received the request: start a
-   typing/working indicator, or send a short acknowledgement when work will
-   take time. Avoid both for a trivial answer you can send immediately.
+1. Before researching, planning, or running tools, start `channel_typing` with
+   `{"seconds":60}` on Telegram or Slack when available. Renew during work.
+   Otherwise use the native activity methods below. Do this even for a short
+   answer: thinking and tool latency are already a wait for the owner. Skip
+   activity only when sending an immediate answer in your first channel call,
+   the owner requested silence, or the provider does not support it.
 2. Keep activity visible during meaningful work. Give occasional useful progress
    rather than narrating tool calls or repeatedly saying "still working".
-3. Stream a substantive answer as useful parts become ready. Don't manufacture
-   delay or stream one character at a time. Short replies can be sent directly.
+3. For an answer longer than a short paragraph, publish the first useful part
+   with a Telegram draft or Slack stream, then update it as more is ready.
+   Do not compose the entire answer in silence and send it in one final call.
+   Don't manufacture delay or stream one character at a time. Short replies
+   can be sent directly. If streaming fails, use a message and edits.
 4. Finish with a durable answer and clear any activity you started. You may send
    zero, one or several messages as the work requires. Never treat a successful
    draft, status call, or CLI final text as proof of a delivered answer.
@@ -66,6 +72,8 @@ The runtime supplies the destination, thread and streaming recipient. Use
 `channel_api` with native Slack fields and a unique `action_id` per operation.
 
 - Working feedback: `agents.sessions.setStatus` with `{"status":"processing"}`.
+  When advertised, `channel_typing` provides a bounded working-status lease
+  and clears its own status at the end of the turn. It sends no chat message.
   If the workspace doesn't support it, use `assistant.threads.setStatus` with
   `{"status":"Working…"}`. If neither is supported, a brief message is enough.
 - Stream: `chat.startStream` with `{"markdown_text":"First useful part…"}`.
