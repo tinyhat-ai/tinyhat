@@ -18,6 +18,7 @@ update and recent conversation. Unless they asked for silence/no typing, call
 `channel_typing` with `{"seconds":60}` when that helper is available for Telegram
 or Slack. This is temporary receipt feedback while routing; it sends no reply.
 If the owner requests silence, stop temporary activity with `{"seconds":0}`.
+Skip activity when `channel_api_help` reports `receipt_feedback: false`.
 Skip it for email or if the helper is unavailable. A feedback error must not
 prevent routing. Do not call any send/edit/stream tools from the router.
 

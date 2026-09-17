@@ -18,7 +18,7 @@ class ChannelCatalogTests(unittest.TestCase):
     def test_receipt_policy_is_packaged_as_a_boolean_default(self):
         policy = json.loads((ROOT / "skills/tinyhat-respond/receipt.json").read_text())
         self.assertEqual(set(policy), {"enabled"})
-        self.assertIs(type(policy["enabled"]), bool)
+        self.assertIs(policy["enabled"], True)
         package = json.loads((ROOT / "package.json").read_text())
         self.assertIn("skills", package["files"])
 
