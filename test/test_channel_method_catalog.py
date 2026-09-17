@@ -15,6 +15,13 @@ spec.loader.exec_module(validator)
 
 
 class ChannelCatalogTests(unittest.TestCase):
+    def test_receipt_policy_is_packaged_as_a_boolean_default(self):
+        policy = json.loads((ROOT / "skills/tinyhat-respond/receipt.json").read_text())
+        self.assertEqual(set(policy), {"enabled"})
+        self.assertIs(type(policy["enabled"]), bool)
+        package = json.loads((ROOT / "package.json").read_text())
+        self.assertIn("skills", package["files"])
+
     def test_current_catalog_is_valid(self):
         validator.validate_channel_methods(ROOT)
 

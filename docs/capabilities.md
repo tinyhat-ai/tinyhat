@@ -721,8 +721,11 @@ owner's action; the plugin does not copy credentials between devices.
 The `tinyhat-respond` skill defaults to prompt receipt feedback, typing/working
 status, incremental Telegram drafts or Slack streams, and a durable final reply.
 The owner can request silence, one updated message, or another style. The skill
-chooses the behavior; the runtime provides scoped native methods and an optional
-bounded Telegram/Slack activity helper. The routing skill requests temporary
+chooses the behavior; compatible runtimes also show bounded Telegram typing or
+Slack working status immediately after durable receipt, before media processing
+or model work. The default is packaged with the response skill in `receipt.json`.
+The optional `receipt_feedback` argument on `channel_typing` saves the owner's
+quiet/active preference locally for the sender and conversation. The routing skill requests temporary
 activity before choosing a task when the helper is available, so the owner
 gets feedback during routing too. Longer answers begin with a draft/stream
 as useful content becomes ready, rather than waiting for the complete answer.
