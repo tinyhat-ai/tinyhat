@@ -1,28 +1,44 @@
 ---
 name: tinyhat-email-onboarding
-description: "Write the first welcome email after a Tinyhat computer and its email channel are ready. Use for the initial email only, not model sign-in, channel setup, or account-upgrade execution."
+description: "Write the first personal welcome email when a Tinyhat computer and its replyable email are ready. Use for this initial introduction only, not ordinary replies, model sign-in, channel setup, or account upgrades."
 ---
 
-# Welcome your owner
+# Write one personal welcome
 
-Write a warm, short first email from the agent running on the new Computer.
-Return only its body. The channel supplies the subject, progress visual and
-reply button, and sends once; do not call a mail or messaging tool.
+Write a short note from you to your owner, in your own words. Return:
 
-- Say you are their agent, running on an always-on Tinyhat cloud computer.
-- Explain they can reply to this email to work with you right away.
-- Mention the Mail shortcut only if the launcher is executable and the desktop
-  entry and private settings file exist, using the existence-only check in
-  `tinyhat:tinyhat-mail-client`. Never read that file into the transcript. Do not send the separate platform-to-inbox
-  welcome yourself; the platform owns it.
-- Briefly name the next steps: choose Telegram or Slack for chatting; connect
-  their ChatGPT, Claude Code or Grok model; then optionally enable autonomous
-  services with their details, agreement and a monthly spending limit.
-- These are next steps, not completed capabilities. Do not start those flows,
-  collect identity details, create Stripe accounts, or ask for payment now.
-- Ask one easy opening question: what would they like help with first?
+Subject: <your subject>
 
-Use at most 100 words, short paragraphs, no technical configuration or secret
-values. Do not invent their name, occupation, interests, or completed setup.
-Use known owner-provided context only. Included model credit is temporary;
-do not promise unlimited use or claim a subscription is already connected.
+<your email body>
+
+The channel sends this once and adds the correct Computer link. Do not call a
+mail or messaging tool, write a second announcement, or invent a URL.
+
+## Required points
+
+- Introduce yourself as their agent and say their Tinyhat computer is ready.
+- Say they can reply to this email to work with you.
+- Ask what they would like help with first. If they already gave you a task,
+  acknowledge that task instead of asking them to repeat it.
+- Leave the Computer link to the channel. Do not claim a model account, Slack,
+  Telegram, or paid service is connected unless the available facts confirm it.
+
+## Voice and subject
+
+Keep the body under 100 words, in two or three short paragraphs. Be personal,
+calm and direct. Use a known name or goal when available; never guess personal
+facts from an email address. Follow the owner's language and tone preferences.
+
+Choose a natural subject of three to seven words, at most 60 characters.
+It should suit this first introduction: for example, “Ready when you are” or
+“Your Tinyhat is ready.” These are examples, not a fixed template. No “Re:” or
+“Fwd:”, generic “A message from…”, fake urgency, emojis or exclamation marks.
+
+Use everyday language. No headings, bullets, Markdown, technical setup terms,
+or list of products to connect. Do not mention Hermes, providers, cloud
+infrastructure, autonomous mode, configuration, or temporary model credit.
+No sales pitch or AI filler such as “I'm thrilled,” “unlock,” “seamless,”
+“supercharge,” “your journey,” or “take productivity to the next level.”
+Do not promise unlimited use or work you have not done.
+
+Do not send the separate welcome to the agent's own inbox; the platform owns it.

@@ -316,6 +316,10 @@ the review page. No tool field records consent. Machine authentication identifie
 the assigned owner and never authorizes final approval. Cloud agents must not
 collect email sign-in codes or sign in to the owner’s account.
 
+`tinyhat-email-onboarding` owns the first email’s subject and voice. It returns a
+`Subject:` line, a blank line, and a short personal body. The channel sends once;
+the platform adds the authenticated Computer link.
+
 For the welcome and confirmed mailbox rename, see [email onboarding](../README.md#email-onboarding) and the packaged `tinyhat-email-onboarding` and `tinyhat-email-address` skills.
 
 

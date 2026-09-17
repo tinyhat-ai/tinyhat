@@ -778,7 +778,11 @@ fail, the channel stops that turn and sends one fixed notice to the owner,
 without another model call or raw provider errors. A new reply starts a new
 turn. Model attempts and the eight-attempt SMTP delivery budget are separate.
 
-`tinyhat-email-onboarding` writes the first brief welcome.
+`tinyhat-email-onboarding` writes one personal welcome with an agent-chosen subject.
+It confirms the Computer is ready, invites an email reply, and asks what to work
+on first. The platform adds the Computer link and preserves the agent’s wording.
+Internal replies without a reply identifier keep the same welcome delivery key;
+restarts and the later final reply cannot send that welcome a second time.
 The platform separately sends a notice to the agent's inbox; that automated
 message does not start a Hermes session. On compatible desktop images,
 `tinyhat-mail-client` explains the preconfigured Thunderbird Mail shortcut and

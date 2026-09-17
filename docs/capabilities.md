@@ -690,7 +690,7 @@ review link after deployment.
 
 ## Email onboarding
 
-The `tinyhat_email` Hermes channel and `tinyhat_email_address` tool provide a replyable owner-only welcome and confirmed mailbox renaming. See [email onboarding](../README.md#email-onboarding) for delivery, authentication, and rename limits.
+The `tinyhat_email` Hermes channel and `tinyhat_email_address` tool provide one personal, replyable owner-only welcome and confirmed mailbox renaming. The onboarding skill guides the subject and short body; the transport preserves them and adds the Computer link. See [email onboarding](../README.md#email-onboarding) for delivery, authentication, and rename limits.
 
 
 ## Computer channels

@@ -13,6 +13,10 @@ from pathlib import Path
 from unittest.mock import AsyncMock, patch
 from urllib.error import HTTPError
 
+from package_support import load_local_tinyhat
+
+load_local_tinyhat(Path(__file__).resolve().parents[1])
+
 from tinyhat.capabilities.mail import owner
 from tinyhat.capabilities.mail.channel_state import InboxState
 from tinyhat.capabilities.mail.tool import MailboxError
@@ -141,6 +145,118 @@ class EmailAdapterTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual([p["subject"] for p in self.sent], ["First", "Second"])
         self.assertEqual(self.sent[1]["in_reply_to"], "<two@example.test>")
         self.assertNotEqual(self.sent[0]["idempotency_key"], self.sent[1]["idempotency_key"])
+
+    async def test_unthreaded_welcome_and_final_reply_send_one_personal_email(self):
+        note = "Subject: Ready when you are\n\nHi Sam,\n\nYour computer is ready. Reply here to work with me."
+
+        async def generated(event):
+            self.assertEqual(event.auto_skill, "tinyhat:tinyhat-email-onboarding")
+            # Some Hermes internal responses omit the originating message id.
+            await self.adapter.send("owner", note, metadata={"notify": True})
+            # A second unthreaded emission during this turn is also a duplicate.
+            await self.adapter.send("owner", note, metadata={"notify": True})
+            # The normal final delivery must not send a second welcome.
+            await self.adapter.send("owner", note, reply_to=event.message_id)
+            await self.adapter.on_processing_complete(event, "success")
+
+        self.adapter.handle_message = generated
+        with patch.object(owner, "request", side_effect=self.deliver):
+            await self.adapter._welcome()
+            await self.adapter._welcome()
+            await self.adapter._recover_outbox()
+        self.assertEqual(len(self.sent), 1)
+        self.assertEqual(self.sent[0]["idempotency_key"], channel.WELCOME)
+        self.assertTrue(self.sent[0]["welcome"])
+        self.assertEqual(self.sent[0]["subject"], "Ready when you are")
+        self.assertEqual(self.sent[0]["body"], note.split("\n\n", 1)[1])
+        self.assertTrue(self.adapter._channel["welcome_sent_at"])
+        self.assertEqual(self.adapter._state.get(channel.WELCOME)[0], "done")
+        with patch.object(owner, "request", side_effect=self.deliver):
+            await self.adapter.send("owner", "Your requested reminder.", metadata={"notify": True})
+        self.assertEqual(len(self.sent), 2)
+        self.assertNotIn("welcome", self.sent[-1])
+
+    async def test_welcome_subject_header_injection_is_not_delivered(self):
+        self.adapter._state.put(channel.WELCOME, "processing", {"metadata": {"welcome": True}})
+        with patch.object(owner, "request") as send:
+            for note in (
+                "Subject: Hello\nBcc: stranger@example.test\n\nReady.",
+                "Subject: \n\nReady.",
+                "Subject: " + "x" * 61 + "\n\nReady.",
+                "Subject: Hello",
+            ):
+                with self.subTest(note=note):
+                    result = await self.adapter.send("owner", note, reply_to=channel.WELCOME)
+                    self.assertFalse(result.success)
+                    self.assertEqual(result.error, "welcome_email_invalid")
+            send.assert_not_called()
+        self.assertEqual(self.adapter._state.get(channel.WELCOME)[0], "processing")
+
+    async def test_gateway_retry_keeps_rejected_welcome_retryable_without_a_fallback_email(self):
+        self.adapter._state.put(channel.WELCOME, "processing", {"metadata": {"welcome": True}})
+        with patch.object(owner, "request") as send:
+            for note in (
+                "Subject: " + "x" * 61 + "\n\nYour computer is ready.",
+                "Subject: Hello\nBcc: stranger@example.test\n\nReady.",
+                "Billing or credits exhausted: HTTP 402 private details",
+            ):
+                with self.subTest(note=note):
+                    result = await self.adapter._send_with_retry(
+                        "owner", note, reply_to=channel.WELCOME, metadata={"notify": True}
+                    )
+                    self.assertFalse(result.success)
+                    self.assertEqual(self.adapter._state.get(channel.WELCOME)[0], "processing")
+            send.assert_not_called()
+
+    async def test_body_only_welcome_remains_compatible(self):
+        self.adapter._state.put(
+            channel.WELCOME,
+            "processing",
+            {"metadata": {"welcome": True, "subject": "Ready when you are"}},
+        )
+        with patch.object(owner, "request", side_effect=self.deliver):
+            result = await self.adapter.send(
+                "owner", "Your computer is ready.", reply_to=channel.WELCOME
+            )
+        self.assertTrue(result.success)
+        self.assertEqual(self.sent[0]["body"], "Your computer is ready.")
+
+    async def test_owner_reply_is_not_reclassified_as_pending_welcome(self):
+        self.adapter._state.put(channel.WELCOME, "processing", {"metadata": {"welcome": True}})
+        self.adapter._state.put(
+            "owner-question", "processing", {"metadata": {"subject": "Re: Plans"}}
+        )
+        with patch.object(owner, "request", side_effect=self.deliver):
+            await self.adapter.send("owner", "Here is the plan.", reply_to="owner-question")
+        self.assertEqual(self.sent[0]["subject"], "Re: Plans")
+        self.assertNotIn("welcome", self.sent[0])
+        self.assertEqual(self.adapter._state.get(channel.WELCOME)[0], "processing")
+
+    async def test_welcome_accepts_unicode_subject_and_email_line_endings(self):
+        self.adapter._state.put(channel.WELCOME, "processing", {"metadata": {"welcome": True}})
+        with patch.object(owner, "request", side_effect=self.deliver):
+            result = await self.adapter.send(
+                "owner",
+                "Subject: Prêt quand vous voulez\r\n\r\nBonjour,\r\nVotre ordinateur est prêt.",
+            )
+        self.assertTrue(result.success)
+        self.assertEqual(self.sent[0]["subject"], "Prêt quand vous voulez")
+        self.assertEqual(self.sent[0]["body"], "Bonjour,\nVotre ordinateur est prêt.")
+
+    async def test_uncertain_unthreaded_welcome_is_not_sent_as_a_new_notification(self):
+        self.adapter._state.put(channel.WELCOME, "processing", {"metadata": {"welcome": True}})
+        with patch.object(owner, "request", return_value={"status": "unknown"}) as send:
+            result = await self.adapter._send_with_retry(
+                "owner", "Subject: Ready when you are\n\nHello."
+            )
+            self.assertFalse(result.success)
+            self.adapter._state.close()
+            self.adapter._state = InboxState(Path(self.temp.name) / "state.sqlite3")
+            self.addCleanup(self.adapter._state.close)
+            retry = await self.adapter.send("owner", "Subject: Ready when you are\n\nHello.")
+        self.assertFalse(retry.success)
+        self.assertEqual(send.call_count, 1)
+        self.assertEqual(self.adapter._state.get(channel.WELCOME)[0], "uncertain")
 
     async def test_empty_welcome_remains_retryable_and_dropped_event_is_bounded(self):
         async def empty(event):

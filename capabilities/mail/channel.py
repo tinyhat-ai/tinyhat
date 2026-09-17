@@ -244,10 +244,10 @@ class TinyhatEmailAdapter(BasePlatformAdapter):
         await self._dispatch(
             WELCOME,
             {
-                "subject": "Your Tinyhat computer is ready",
+                "subject": "Ready when you are",
                 "welcome": True,
             },
-            "Write the first welcome email for your owner. Your Tinyhat computer and this replyable email channel are ready. Use the tinyhat-email-onboarding skill. Return only the email body; the channel sends it once. Do not call a sending tool.",
+            "Write the first welcome email for your owner. Your Tinyhat computer and this replyable email channel are ready. Use the tinyhat-email-onboarding skill. Return Subject: followed by your short subject, a blank line, then your personal email body. The channel adds the Computer link and sends once. Do not call a sending tool.",
         )
 
     async def _receive(self, message):
@@ -351,11 +351,32 @@ class TinyhatEmailAdapter(BasePlatformAdapter):
         if done:
             done.set()
 
+    async def _send_with_retry(
+        self, chat_id, content, reply_to=None, metadata=None, max_retries=2, base_delay=2.0
+    ):
+        # The durable email outbox owns retries and uncertain-acceptance lookup.
+        # Hermes's generic formatting fallback changes rejected content and can
+        # turn an invalid welcome into a sendable body-only email.
+        return await self.send(chat_id, content, reply_to=reply_to, metadata=metadata)
+
     async def send(self, chat_id, content, reply_to=None, metadata=None):
         if chat_id != "owner" or not content.strip():
             return SendResult(success=False, error="owner_email_only")
         if metadata is not None and not metadata.get("notify"):
             return SendResult(success=True)  # Progress/setup hints are not emails.
+        if not reply_to:
+            pending = self._state.get(WELCOME)
+            if pending and (
+                WELCOME in self._waiters
+                or (
+                    not self._channel.get("welcome_sent_at")
+                    and pending[0] in {"processing", "outbox", "uncertain"}
+                )
+            ):
+                # Some Hermes internal-turn delivery paths omit reply_to. Keep
+                # the pending welcome's stable identity rather than inventing a
+                # notification key and retrying the welcome ten minutes later.
+                reply_to = WELCOME
         if reply_to:
             state = self._state.get(reply_to)
             if state and state[0] == "done":
@@ -382,6 +403,22 @@ class TinyhatEmailAdapter(BasePlatformAdapter):
             if context.get("welcome"):
                 return SendResult(success=False, error="welcome_model_unavailable")
             content = "I'm having trouble completing that request right now. Please reply to try again shortly."
+        if context.get("welcome"):
+            # The skill owns prose and subject rules. Parse just the email
+            # envelope; old body-only turns remain compatible during upgrades.
+            first, separator, body = content.replace("\r\n", "\n").strip().partition("\n\n")
+            if first.lower().startswith("subject:"):
+                subject = first[len("subject:") :].strip()
+                if (
+                    not separator
+                    or not body.strip()
+                    or not subject
+                    or len(subject) > 60
+                    or any(ord(char) < 32 or ord(char) == 127 for char in subject)
+                ):
+                    return SendResult(success=False, error="welcome_email_invalid")
+                context = {**context, "subject": subject}
+                content = body.strip()
         payload = {
             **context,
             "idempotency_key": WELCOME if context.get("welcome") else "email-" + _hash(key),
