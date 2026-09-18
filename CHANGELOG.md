@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Keep optional Hat installation out of ordinary greetings. Resume only a known
+  pending Hat or an explicit request, and silently continue when none is pending.
+  Use shorter, personal onboarding language without setup reports or slogans.
+
 ## 0.32.23 - 2026-09-17
 
 - Use Tinyhat Hermes runtime 0.0.76 to preserve receipt feedback through routing

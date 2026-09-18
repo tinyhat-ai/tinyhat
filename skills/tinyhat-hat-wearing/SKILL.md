@@ -48,13 +48,18 @@ the creator must add this Tinyhat user. Do not reveal other allowed users.
 
 ## Resume after assignment
 
-On the first interaction on a newly assigned Hat-enabled Computer, call:
+Only when trusted setup context identifies a pending Hat, or the user asks to
+resume its installation, call:
 
 ```json
 {"action":"resume_installation"}
 ```
 
 Use the same progress and completion rules above. A resume is idempotent.
+
+A new Computer or a greeting alone does not imply a Hat installation. If
+`status=none`, continue the user's conversation silently. Do not announce that
+there is no Hat, repeat a setup checklist, or ask the user to install one.
 
 Creator-supplied credential transfer does not require an agent or creator-side
 chat turn. The platform dispatches a bounded command to the exact Computer

@@ -68,7 +68,8 @@ class HatToolTests(unittest.TestCase):
         self.assertEqual(result["status"], "none")
         self.assertFalse(result["installation_started"])
         self.assertIsNone(result["onboarding_message"])
-        self.assertIn("no user-facing warning", result["agent_instruction"])
+        self.assertIn("Silently continue", result["agent_instruction"])
+        self.assertIn("Do not mention", result["agent_instruction"])
 
     def test_wear_checks_out_read_only_repo_installs_skills_and_starts_transfer(
         self,

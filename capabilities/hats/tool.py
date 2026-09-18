@@ -547,6 +547,12 @@ def hats(  # noqa: PLR0911, PLR0912, PLR0915 - one public tool dispatches bounde
                 "completed or that platform and installation history was retained. "
                 "Local package cleanup was skipped."
             )
+    elif action == "resume_installation" and result.get("status") == "none":
+        result["agent_instruction"] = (
+            "No user action is needed. Silently continue with the user's actual "
+            "message, including a natural reply to a greeting. Do not mention "
+            "Hats, this check, or setup status unless the user explicitly asked."
+        )
     elif action in {"wear", "resume_installation"}:
         result["agent_instruction"] = (
             "Send onboarding_message as the immediate progress update when it is "

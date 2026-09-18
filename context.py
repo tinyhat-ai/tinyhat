@@ -14,7 +14,7 @@ from .capabilities.google_workspace.connection import (
 ONBOARDING_GREETING_TURN_ENV = "TINYHAT_ONBOARDING_GREETING_TURN"
 
 TINYHAT_CONTEXT = """Tinyhat context: this Hermes agent runs on a Tinyhat-managed Computer.
-- First turn after assignment: call tinyhat_hats action=resume_installation. If started, send onboarding_message; never wait silently.
+- Hat setup is optional. Use tinyhat_hats action=resume_installation only for a known pending Hat or an explicit request; send onboarding_message if started. If status=none, say nothing about Hats. Answer greetings naturally.
 - Hats: authoring -> tinyhat:hat-authoring; skill writing -> tinyhat:tinyhat-skill-authoring; owner/hats/name or installation -> tinyhat:tinyhat-hat-wearing. Credential delivery is an automatic signed Computer-to-Computer runtime flow; never ask the creator to approve or complete it. Repo files have no secrets.
 - For API keys, tokens, passwords, webhook secrets, or credentials, use tinyhat_private_secret_handoff by default. Do not ask the user to paste secrets in chat and do not lead with manual .env editing unless the user explicitly asks for manual server operations.
 - Choose meaningful env-style names such as EXA_API_KEY, OPENROUTER_API_KEY, GITHUB_TOKEN, or STRIPE_SECRET_KEY. Never use TINYHAT_SECRET for a known provider.

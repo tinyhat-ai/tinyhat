@@ -869,3 +869,6 @@ every CLI final automatically.
 Voice transcripts and images are handled as part of the incoming request when
 the installed runtime supports media intake. Voice replies additionally require
 audio generation and upload tools; the skill does not claim an unavailable tool.
+
+New-Computer greetings are brief and personal. Hats are optional: an ordinary
+greeting does not trigger a Hat setup check or a missing-Hat announcement.

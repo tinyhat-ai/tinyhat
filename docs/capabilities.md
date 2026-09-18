@@ -182,6 +182,10 @@ checkouts for the current and former handles and creator Computer-local package
 state are also removed. Tinyhat retains the platform and installation history,
 and already-installed consumer agents and their local state are not deleted.
 
+Hat setup is optional. Resume installation only for a known pending Hat or an
+explicit request. A greeting alone must not trigger setup; when there is no
+pending Hat, continue the conversation without announcing that fact.
+
 An authorized user can send the Hat URL or canonical handle to an existing
 agent for immediate free installation. A new user can start from the Hat page
 and enters the ordinary credit-first Computer onboarding flow with no Hat

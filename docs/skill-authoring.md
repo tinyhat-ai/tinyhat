@@ -341,3 +341,9 @@ Native channel response defaults belong in `tinyhat-respond`; receipt feedback
 during task selection belongs in `tinyhat-route-message`. Both honor the owner's
 silence preferences. The router may use only the temporary activity helper;
 sending, editing, streaming, and task execution remain the selected worker's job.
+
+## Optional setup and greetings
+
+Keep optional setup out of ordinary conversation. A new Computer or “Hi” alone
+is not a Hat-installation trigger. Resume only a known pending Hat or an explicit
+request; a `status=none` result is silent unless the user asked about it.
