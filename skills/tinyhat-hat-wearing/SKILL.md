@@ -1,6 +1,6 @@
 ---
 name: tinyhat-hat-wearing
-description: Install, wear, resume, or finish an accessible Tinyhat Hat on this agent from its handle or URL. Use when a user sends a Hat link or handle, asks this existing agent to use a Hat, or when a newly assigned Hat-enabled Computer needs onboarding. Do not use for creating or editing a Hat; use hat-authoring for that.
+description: Install, wear, resume, or finish an accessible Tinyhat Hat on this agent from its handle or URL. Use when a user sends a Hat link or handle, asks this existing agent to use a Hat, or a Tinyhat message in this conversation reports a pending Hat setup. Do not use for creating or editing a Hat; use hat-authoring for that.
 ---
 
 # Wear a Tinyhat Hat
@@ -48,8 +48,8 @@ the creator must add this Tinyhat user. Do not reveal other allowed users.
 
 ## Resume after assignment
 
-Only when trusted setup context identifies a pending Hat, or the user asks to
-resume its installation, call:
+Only when the user asks to install or resume a Hat, or a Tinyhat message in
+this conversation reports a pending Hat setup, call:
 
 ```json
 {"action":"resume_installation"}

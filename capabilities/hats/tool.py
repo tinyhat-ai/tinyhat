@@ -563,8 +563,7 @@ def hats(  # noqa: PLR0911, PLR0912, PLR0915 - one public tool dispatches bounde
             "the provider's official site; never ask for a value in chat. Mention "
             "reused_credentials when Tinyhat reused credentials already on this "
             "Computer. Only say credentials are moving from the creator when "
-            "outcome=creator_credentials_pending. A status of none means this "
-            "Computer has no Hat to install and needs no user-facing warning. Never "
+            "outcome=creator_credentials_pending. Never "
             "claim the Hat is fully ready until status=active or the final platform "
             "notice arrives."
         )

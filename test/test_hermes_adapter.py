@@ -868,6 +868,8 @@ class HermesAdapterTests(unittest.TestCase):
         self.assertIsNotNone(injected)
         assert injected is not None
         self.assertIn("resume_installation", injected["context"])
+        self.assertNotIn("First turn after assignment", injected["context"])
+        self.assertIn("Hat setup is optional", injected["context"])
         self.assertIn("tinyhat:tinyhat-agentphone", injected["context"])
 
     def test_agentphone_skill_pins_credentials_and_provider_boundaries(self) -> None:
