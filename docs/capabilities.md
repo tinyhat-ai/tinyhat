@@ -182,6 +182,10 @@ checkouts for the current and former handles and creator Computer-local package
 state are also removed. Tinyhat retains the platform and installation history,
 and already-installed consumer agents and their local state are not deleted.
 
+Hat setup is optional. Resume installation only for a known pending Hat or an
+explicit request. A greeting alone must not trigger setup; when there is no
+pending Hat, continue the conversation without announcing that fact.
+
 An authorized user can send the Hat URL or canonical handle to an existing
 agent for immediate free installation. A new user can start from the Hat page
 and enters the ordinary credit-first Computer onboarding flow with no Hat
@@ -294,15 +298,12 @@ wrapper, then leading work commands are suppressed even with a
 terminal question mark, and the modal frame suppresses the looser
 fragment, billing, and agent/service-bound word routes),
 or on the first turn of a
-session. On the first conversation turn after setup or an in-place
-upgrade the context also adds a one-time funding-note directive ahead
-of the context — a new
-user's onboarding reply presents the $5 starting model credit, adding more
-from Tinyhat credit, and optional ChatGPT/Codex subscription as one onboarding
-step; a returning user gets one
-brief line, an already-connected subscription skips it — tracked by a
-durable marker so later /new sessions do not re-arm it; tool-owned
-native first replies satisfy the note. The context tells
+session. First-contact guidance keeps greetings short and natural, with one
+brief sentence about the $5 starting model credit, adding more, and the optional
+subscription in the same reply. It skips that note when a subscription is already
+connected and explains details only when asked. Starting credit is not the
+current balance. Channel readiness must be verified before
+claiming it. A durable marker prevents repeating that guidance. The context tells
 the agent to prefer Tinyhat private secret entry for credentials,
 Tinyhat's installed Codex commands for OpenAI Codex auth, the Hermes-owned
 Slack connection flow, identity-only bare

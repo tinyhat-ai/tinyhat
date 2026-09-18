@@ -1,6 +1,6 @@
 ---
 name: tinyhat-hat-wearing
-description: Install, wear, resume, or finish an accessible Tinyhat Hat on this agent from its handle or URL. Use when a user sends a Hat link or handle, asks this existing agent to use a Hat, or when a newly assigned Hat-enabled Computer needs onboarding. Do not use for creating or editing a Hat; use hat-authoring for that.
+description: Install, wear, resume, or finish an accessible Tinyhat Hat on this agent from its handle or URL. Use when a user sends a Hat link or handle, asks this existing agent to use a Hat, or a Tinyhat message in this conversation reports a pending Hat setup. Do not use for creating or editing a Hat; use hat-authoring for that.
 ---
 
 # Wear a Tinyhat Hat
@@ -48,13 +48,18 @@ the creator must add this Tinyhat user. Do not reveal other allowed users.
 
 ## Resume after assignment
 
-On the first interaction on a newly assigned Hat-enabled Computer, call:
+Only when the user asks to install or resume a Hat, or a Tinyhat message in
+this conversation reports a pending Hat setup, call:
 
 ```json
 {"action":"resume_installation"}
 ```
 
 Use the same progress and completion rules above. A resume is idempotent.
+
+A new Computer or a greeting alone does not imply a Hat installation. If
+`status=none`, continue the user's conversation silently. Do not announce that
+there is no Hat, repeat a setup checklist, or ask the user to install one.
 
 Creator-supplied credential transfer does not require an agent or creator-side
 chat turn. The platform dispatches a bounded command to the exact Computer

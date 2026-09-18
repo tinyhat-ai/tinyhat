@@ -868,6 +868,8 @@ class HermesAdapterTests(unittest.TestCase):
         self.assertIsNotNone(injected)
         assert injected is not None
         self.assertIn("resume_installation", injected["context"])
+        self.assertNotIn("First turn after assignment", injected["context"])
+        self.assertIn("Hat setup is optional", injected["context"])
         self.assertIn("tinyhat:tinyhat-agentphone", injected["context"])
 
     def test_agentphone_skill_pins_credentials_and_provider_boundaries(self) -> None:
@@ -1000,36 +1002,17 @@ class HermesAdapterTests(unittest.TestCase):
             "first conversation on this",
             directive,
         )
-        self.assertIn(
-            "make it one of the onboarding steps",
-            directive,
-        )
-        self.assertIn(
-            "numbered or bulleted step when the reply lists",
-            directive,
-        )
-        self.assertIn(
-            "one standalone step line",
-            directive,
-        )
-        self.assertIn(
-            "same reply as any introduction or profile-build offer",
-            directive,
-        )
-        self.assertIn(
-            "Never demote it to a footnote,",
-            directive,
-        )
-        self.assertIn(
-            "add more from your Tinyhat credit any time",
-            directive,
-        )
-        self.assertIn("Present the model-funding choices prominently", directive)
+        self.assertIn("Keep a simple greeting to one short sentence", directive)
+        self.assertIn("Then add one brief, plain-language sentence", directive)
+        self.assertIn("Keep it in the same reply, not a separate message", directive)
+        self.assertIn("starting credit, not a claim about the current balance", directive)
+        self.assertNotIn("Mention funding only when they ask", directive)
+        self.assertIn("tinyhat_model_budget", directive)
         self.assertIn("skip this note silently", directive)
         self.assertIn("action=status", directive)
         self.assertIn("tool-owned native response", directive)
         self.assertIn("Never repeat this note", directive)
-        self.assertIn("never block the user's actual request", directive)
+        self.assertIn("verifying its current status", directive)
         self.assertIn(
             "infer funds from history/Computer charges",
             tinyhat_context.TINYHAT_CONTEXT,
@@ -1381,12 +1364,11 @@ class HermesAdapterTests(unittest.TestCase):
         self.assertIn("about US$5 of AI model credit", text)
         self.assertIn("add more at any time from their Tinyhat credit", text)
         self.assertIn("another optional way to fund model use", text)
-        self.assertIn("one-time funding note exactly once per Computer", text)
-        self.assertIn("as **one of the onboarding steps**", text)
-        self.assertIn("Never demote it to a footnote", text)
-        self.assertIn("skip it silently when a subscription is already connected", text)
-        self.assertIn("Present it once — not in every reply", text)
-        self.assertIn("durable per-Computer marker", text)
+        self.assertIn("An ordinary greeting is not a request for an onboarding tour", text)
+        self.assertIn("add one brief, plain-language sentence", text)
+        self.assertIn("Keep it in the same reply", text)
+        self.assertIn("skip it if a subscription is already connected", text)
+        self.assertIn("The starting credit is not the current balance", text)
         self.assertIn("tool-owned native response", text)
         self.assertIn("Never block or delay the user's actual request", text)
         self.assertIn("Never estimate remaining model funding", text)

@@ -14,7 +14,7 @@ from .capabilities.google_workspace.connection import (
 ONBOARDING_GREETING_TURN_ENV = "TINYHAT_ONBOARDING_GREETING_TURN"
 
 TINYHAT_CONTEXT = """Tinyhat context: this Hermes agent runs on a Tinyhat-managed Computer.
-- First turn after assignment: call tinyhat_hats action=resume_installation. If started, send onboarding_message; never wait silently.
+- Hat setup is optional. Use tinyhat_hats action=resume_installation only for a user install/resume request or a Tinyhat message here reporting pending Hat setup. Send onboarding_message if started; stay silent if status=none. Greet naturally.
 - Hats: authoring -> tinyhat:hat-authoring; skill writing -> tinyhat:tinyhat-skill-authoring; owner/hats/name or installation -> tinyhat:tinyhat-hat-wearing. Credential delivery is an automatic signed Computer-to-Computer runtime flow; never ask the creator to approve or complete it. Repo files have no secrets.
 - For API keys, tokens, passwords, webhook secrets, or credentials, use tinyhat_private_secret_handoff by default. Do not ask the user to paste secrets in chat and do not lead with manual .env editing unless the user explicitly asks for manual server operations.
 - Choose meaningful env-style names such as EXA_API_KEY, OPENROUTER_API_KEY, GITHUB_TOKEN, or STRIPE_SECRET_KEY. Never use TINYHAT_SECRET for a known provider.
@@ -43,41 +43,22 @@ AGENTPHONE_ACTION_CONTEXT = """Tinyhat direct phone capability for this request:
 - Before saying calls or text messages are unavailable, check only whether AGENTPHONE_API_KEY, AGENTPHONE_PHONE_ID, and AGENTPHONE_PHONE_NUMBER are present. If they are present, use the shell and the current provider instructions exactly as the local skill describes. Never print or reveal a credential.
 - The owner's explicit request authorizes that exact call or text. Report only the provider-confirmed result."""
 
-# Added ahead of the injected context at most once per Computer (durable
-# marker below): the one-time funding note. The marker cannot tell a
-# brand-new Computer from an established one that just received this
-# plugin in an in-place upgrade, so the note never asserts "this is your
-# first conversation" — it instructs step placement for onboarding
-# replies and degrades to one brief line for returning users, and it is
-# skipped outright when a subscription is already connected.
-#
-# Framed as a [System note: ...] on purpose: Hermes appends its own
-# first-message system note (introduce yourself, mention /help, offer a
-# profile build), and the model executes that script for the onboarding
-# reply. A bullet inside the Tinyhat context blob loses to it; a system
-# note in the same register, coordinated with the profile note, does not.
+# One-time onboarding guidance shares the same context budget as platform
+# instructions. It must not turn an ordinary greeting into a product tour.
 FUNDING_REMINDER_DIRECTIVE = (
-    "[System note: One-time funding note for this Computer — it is shown "
-    "exactly once (the first conversation turn after setup or an in-place "
-    "upgrade) and never again. Present the model-funding choices prominently "
-    "in this reply. When this "
-    "reply is a new user's onboarding message, make it one of the "
-    "onboarding steps — a numbered or bulleted step when the reply lists "
-    "getting-started steps, otherwise one standalone step line — kept in "
-    "the same reply as any introduction or profile-build offer another "
-    "first-message note requests. For a clearly returning user, one "
-    "brief standalone line is enough. Never demote it to a footnote, "
-    'aside, or parenthetical. Example step: "You start with $5 of AI model '
-    "credit. You can add more from your Tinyhat credit any time, or connect "
-    'your ChatGPT/Codex subscription with /codex_auth." If the subscription '
-    "is already connected (check "
-    "tinyhat_codex_auth with action=status when unsure), skip this note "
-    "silently. Precedence: if this reply is a tool-owned native response "
-    "(for example the Codex auth prerequisite photo or a Connect Google "
-    "button), or the user is already asking to connect their "
-    "subscription, that flow satisfies the note — do not add a separate "
-    "text reply for it. Never repeat this note in later replies and "
-    "never block the user's actual request on it.]"
+    "[System note: One-time funding note for this Computer. Respond to the "
+    "person's actual message first. Keep a simple greeting to one short "
+    "sentence, without a setup checklist, profile interview, or capability list. "
+    "Then add one brief, plain-language sentence about the starter credit and "
+    "funding choices: new Agents start with about $5 of AI model credit; "
+    "they can add more from Tinyhat credit or optionally use /codex_auth. "
+    "Keep it in the same reply, not a separate message or an onboarding tour. "
+    "Explain the details only when asked. This is starting credit, not a claim "
+    "about the current balance; use tinyhat_model_budget for actual balances. "
+    "Mention a channel as connected only after verifying its current status. If a subscription is "
+    "already connected (tinyhat_codex_auth action=status when unsure), "
+    "skip this note silently. Let a tool-owned native response stand alone. "
+    "Never repeat this note or block the user's actual request on it.]"
 )
 
 

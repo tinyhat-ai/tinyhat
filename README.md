@@ -521,12 +521,11 @@ Tinyhat-managed OpenAI Codex / ChatGPT subscription sign-in flow — and
 the funding model behind it: a new Agent starts with about $5 of AI model
 credit so it works immediately. The owner can add more from Tinyhat credit at
 any time, or optionally connect their own ChatGPT / Codex subscription. The
-skill has the Agent present these choices as one of the onboarding steps in a new
-user's onboarding reply — once per Computer, without nagging (a durable
-marker, tool-owned native first replies satisfying the note, a brief
-line for returning users after an in-place upgrade, and a silent skip
-when already connected) — check `{"action": "status"}` before claiming
-it is not connected, and never estimate remaining model funding.
+skill introduces these choices once in one brief sentence after answering the
+first message, and explains details when asked. A simple greeting stays short
+and natural. Skip the note if a subscription is already connected. Check `{"action": "status"}`
+before claiming a subscription is disconnected, and never estimate remaining
+model funding.
 The separate `tinyhat_credit` tool reports the user's credit balance and recent
 transactions, including Computer usage with its applied hourly rate and credit
 added to the AI model budget. When
@@ -580,16 +579,13 @@ underlying infrastructure, so low-level technical access remains possible
 today, which is why the policy is binding and why Tinyhat is building
 private Computers designed to remove even that technical possibility.
 
-The context hook also carries the funding model and a once-per-Computer
-funding note. On the first conversation turn after setup or an in-place
-upgrade it adds a one-time directive ahead of the context: a new user's
-onboarding reply presents the $5 starting model credit, adding more from
-Tinyhat credit, and optional ChatGPT/Codex subscription as one onboarding step
-(a numbered or bulleted step when the reply
-lists getting-started steps, a standalone step line otherwise, never a
-footnote), a clearly returning user gets one brief line, and an
-already-connected subscription skips the note silently. The claim is recorded with a durable
-marker so a later `/new` or `/reset` session does not re-arm it. The
+The context hook also carries the funding model. Its one-time first-contact
+note keeps a hello short and natural, then adds one brief sentence about starter
+credit, adding more, and the optional subscription. It preserves the first-reply
+funding introduction without a setup tour or a separate message. A connected
+subscription skips the note; details wait until asked. Starting credit must not
+be described as the current balance.
+A durable marker prevents repeating this first-contact directive. The
 onboarding turn's payload is composed under Hermes's hook-context spill
 cap (directive first, whole tail bullets dropped when needed — except
 bullets the first message itself matches through the same routing
@@ -600,7 +596,7 @@ order) so the note reaches the model inline instead of being spilled
 to a disk preview.
 Tool-owned native first replies (the Codex auth prerequisite photo, a
 Connect Google button) or an explicit connect request satisfy the
-step on their own. Funding questions route through bounded matching:
+reply on their own. Funding questions route through bounded matching:
 start-anchored full-question grammar (optionally behind a polite
 modal wrapper — "can you tell me what this costs?", "could you
 explain your rates?") matches first; leading work commands are then
@@ -869,3 +865,6 @@ every CLI final automatically.
 Voice transcripts and images are handled as part of the incoming request when
 the installed runtime supports media intake. Voice replies additionally require
 audio generation and upload tools; the skill does not claim an unavailable tool.
+
+New-Computer greetings are brief and personal. Hats are optional: an ordinary
+greeting does not trigger a Hat setup check or a missing-Hat announcement.
