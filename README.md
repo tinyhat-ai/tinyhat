@@ -521,8 +521,9 @@ Tinyhat-managed OpenAI Codex / ChatGPT subscription sign-in flow — and
 the funding model behind it: a new Agent starts with about $5 of AI model
 credit so it works immediately. The owner can add more from Tinyhat credit at
 any time, or optionally connect their own ChatGPT / Codex subscription. The
-skill explains these choices when the user asks about funding or getting started.
-A simple greeting gets a short, natural reply. Check `{"action": "status"}`
+skill introduces these choices once in one brief sentence after answering the
+first message, and explains details when asked. A simple greeting stays short
+and natural. Skip the note if a subscription is already connected. Check `{"action": "status"}`
 before claiming a subscription is disconnected, and never estimate remaining
 model funding.
 The separate `tinyhat_credit` tool reports the user's credit balance and recent
@@ -579,10 +580,11 @@ today, which is why the policy is binding and why Tinyhat is building
 private Computers designed to remove even that technical possibility.
 
 The context hook also carries the funding model. Its one-time first-contact
-note keeps a hello short and natural; funding choices are explained when the
-user asks about costs or getting started. This intentionally replaces the older
-mandatory first-reply funding step. It does not remove the starter credit,
-subscription option, balance tools, or support for funding questions.
+note keeps a hello short and natural, then adds one brief sentence about starter
+credit, adding more, and the optional subscription. It preserves the first-reply
+funding introduction without a setup tour or a separate message. A connected
+subscription skips the note; details wait until asked. Starting credit must not
+be described as the current balance.
 A durable marker prevents repeating this first-contact directive. The
 onboarding turn's payload is composed under Hermes's hook-context spill
 cap (directive first, whole tail bullets dropped when needed — except

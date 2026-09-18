@@ -298,9 +298,11 @@ wrapper, then leading work commands are suppressed even with a
 terminal question mark, and the modal frame suppresses the looser
 fragment, billing, and agent/service-bound word routes),
 or on the first turn of a
-session. First-contact guidance keeps greetings short and natural; it explains
-the $5 starting model credit and optional subscription only when the user asks
-about funding or getting started. Channel readiness must be verified before
+session. First-contact guidance keeps greetings short and natural, with one
+brief sentence about the $5 starting model credit, adding more, and the optional
+subscription in the same reply. It skips that note when a subscription is already
+connected and explains details only when asked. Starting credit is not the
+current balance. Channel readiness must be verified before
 claiming it. A durable marker prevents repeating that guidance. The context tells
 the agent to prefer Tinyhat private secret entry for credentials,
 Tinyhat's installed Codex commands for OpenAI Codex auth, the Hermes-owned

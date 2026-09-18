@@ -5,8 +5,9 @@
 - Keep optional Hat installation out of ordinary greetings. Resume only a known
   pending Hat or an explicit request, and silently continue when none is pending.
   Use shorter, personal onboarding language without setup reports or slogans.
-  Keep funding advice out of ordinary greetings and verify channel readiness
-  before claiming a connection.
+  Preserve the first-contact starter-credit and subscription introduction as
+  one brief sentence in the same reply, skipping connected subscriptions.
+  Verify channel readiness before claiming a connection.
 
 ## 0.32.23 - 2026-09-17
 
