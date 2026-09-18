@@ -578,16 +578,12 @@ underlying infrastructure, so low-level technical access remains possible
 today, which is why the policy is binding and why Tinyhat is building
 private Computers designed to remove even that technical possibility.
 
-The context hook also carries the funding model and a once-per-Computer
-funding note. On the first conversation turn after setup or an in-place
-upgrade it adds a one-time directive ahead of the context: a new user's
-onboarding reply presents the $5 starting model credit, adding more from
-Tinyhat credit, and optional ChatGPT/Codex subscription as one onboarding step
-(a numbered or bulleted step when the reply
-lists getting-started steps, a standalone step line otherwise, never a
-footnote), a clearly returning user gets one brief line, and an
-already-connected subscription skips the note silently. The claim is recorded with a durable
-marker so a later `/new` or `/reset` session does not re-arm it. The
+The context hook also carries the funding model. Its one-time first-contact
+note keeps a hello short and natural; funding choices are explained when the
+user asks about costs or getting started. This intentionally replaces the older
+mandatory first-reply funding step. It does not remove the starter credit,
+subscription option, balance tools, or support for funding questions.
+A durable marker prevents repeating this first-contact directive. The
 onboarding turn's payload is composed under Hermes's hook-context spill
 cap (directive first, whole tail bullets dropped when needed — except
 bullets the first message itself matches through the same routing
@@ -598,7 +594,7 @@ order) so the note reaches the model inline instead of being spilled
 to a disk preview.
 Tool-owned native first replies (the Codex auth prerequisite photo, a
 Connect Google button) or an explicit connect request satisfy the
-step on their own. Funding questions route through bounded matching:
+reply on their own. Funding questions route through bounded matching:
 start-anchored full-question grammar (optionally behind a polite
 modal wrapper — "can you tell me what this costs?", "could you
 explain your rates?") matches first; leading work commands are then

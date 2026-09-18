@@ -281,13 +281,10 @@ with `{"action": "prerequisite"}` so the user receives the ChatGPT
 Settings > Security screenshot and `/codex_auth` on its own line. The
 skill should not send an extra text reply, duplicate links, or start the
 helper twice. It may use `{"action": "status"}`, `{"action": "log"}`, or
-`{"action": "limits"}` for follow-up inspection. The once-per-Computer
-funding note is directed by the platform context with a durable
-marker: a new user's onboarding reply presents the funding choices as one of
-the onboarding steps, a returning user gets one
-brief line, and an already-connected subscription skips it. Tool-owned
-native first replies satisfy it, and the agent must never estimate remaining
-model funding. The separate `tinyhat:tinyhat-credit` skill shows
+`{"action": "limits"}` for follow-up inspection. First-contact guidance keeps a hello short and natural. Explain funding
+choices when the user asks about cost or getting started; do not turn an ordinary
+greeting into a setup or funding checklist. Tool-owned native replies stand
+alone, and the agent must never estimate remaining model funding. The separate `tinyhat:tinyhat-credit` skill shows
 the user's balance and recent transactions, reads this Agent's current total,
 remaining, and used AI model budget, and can add an exact amount to that budget
 when the user asks.

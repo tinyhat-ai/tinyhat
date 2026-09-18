@@ -9,7 +9,7 @@ Use this when the user wants this Tinyhat-managed Hermes agent to use
 their OpenAI Codex / ChatGPT subscription instead of Tinyhat-funded
 platform credits.
 
-## Funding Model And The Onboarding Step
+## Explain Funding When Relevant
 
 A new agent starts with about US$5 of AI model credit so it works immediately.
 The owner can add more at any time from their Tinyhat credit: load
