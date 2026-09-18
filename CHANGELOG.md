@@ -2,6 +2,14 @@
 
 ## Unreleased
 
+## 0.32.24 - 2026-09-18
+
+- Pair with Tinyhat Hermes runtime 0.0.77, including the default-voice alignment
+  in [tinyloophub/tinyhat--runtimes--hermes#194](https://github.com/tinyloophub/tinyhat--runtimes--hermes/pull/194).
+  Deploy the compatible platform from
+  [tinyloophub/tinyloop#1359](https://github.com/tinyloophub/tinyloop/pull/1359),
+  then promote runtime 0.0.77 before this plugin.
+
 - Keep optional Hat installation out of ordinary greetings. Resume only a known
   pending Hat or an explicit request, and silently continue when none is pending.
   Use shorter, personal onboarding language without setup reports or slogans.
