@@ -20,38 +20,17 @@ is another optional way to fund model use.
 When neither model credit nor a connected subscription is available, the
 Agent cannot answer model-backed requests until the owner adds funding.
 
-The platform context shows a one-time funding note exactly once per
-Computer — on the first conversation turn after setup or an in-place
-upgrade. In a new user's onboarding reply, present these funding choices as
-**one of the onboarding steps** — a numbered or
-bulleted step when the reply lists getting-started steps, or a
-standalone step line of its own when it does not. For a clearly
-returning user (the Computer was upgraded mid-life), one brief
-standalone line is enough. Never demote it to a footnote, aside, or
-parenthetical, and skip it silently when a subscription is already
-connected. Example step: "You start with $5 of AI model credit. You can add
-more from your Tinyhat credit any time, or connect your ChatGPT/Codex
-subscription with /codex_auth."
-Rules for that step:
+Explain these choices briefly when the user asks about cost, model access, or
+getting started. An ordinary greeting is not a request for an onboarding tour:
+answer it naturally without a funding pitch or a list of capabilities.
 
-- Present it once — not in every reply, and never as a nag. The
-  platform context tracks this with a durable per-Computer marker, so
-  a later /new or /reset session does not re-arm the step for a user
-  who already saw it.
-- Precedence: if the first reply is a tool-owned native response (for
-  example the Codex auth prerequisite photo or a Connect Google button),
-  or the user is already asking to connect their subscription, that flow
-  satisfies the step — do not add a separate text reply for it.
-- Never block or delay the user's actual request on it.
-- If unsure whether a subscription is already connected, check
-  `tinyhat_codex_auth` with `{"action": "status"}` before claiming it
-  is not connected.
-- Never estimate remaining model funding or exact spend. The separate
-  `tinyhat:tinyhat-credit` skill can show the user's credit balance, this
-  Agent's model budget, and recent transactions, including credit added to the
-  model budget.
-- When the user says yes, start the flow below; do not re-explain the
-  funding model first.
+- Never block or delay the user's actual request on funding advice.
+- A tool-owned native response stands alone; do not add a second explanation.
+- If unsure whether a subscription is connected, check `tinyhat_codex_auth`
+  with `{"action": "status"}` before claiming it is not connected.
+- Never estimate remaining model funding or exact spend. Use
+  `tinyhat:tinyhat-credit` for actual balances and recent transactions.
+- When the user asks to connect their subscription, start the flow below.
 
 Do not ask a multiple-choice clarification for common wording like
 "connect my ChatGPT account" or "use my Codex subscription". Treat that

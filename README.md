@@ -521,12 +521,10 @@ Tinyhat-managed OpenAI Codex / ChatGPT subscription sign-in flow — and
 the funding model behind it: a new Agent starts with about $5 of AI model
 credit so it works immediately. The owner can add more from Tinyhat credit at
 any time, or optionally connect their own ChatGPT / Codex subscription. The
-skill has the Agent present these choices as one of the onboarding steps in a new
-user's onboarding reply — once per Computer, without nagging (a durable
-marker, tool-owned native first replies satisfying the note, a brief
-line for returning users after an in-place upgrade, and a silent skip
-when already connected) — check `{"action": "status"}` before claiming
-it is not connected, and never estimate remaining model funding.
+skill explains these choices when the user asks about funding or getting started.
+A simple greeting gets a short, natural reply. Check `{"action": "status"}`
+before claiming a subscription is disconnected, and never estimate remaining
+model funding.
 The separate `tinyhat_credit` tool reports the user's credit balance and recent
 transactions, including Computer usage with its applied hourly rate and credit
 added to the AI model budget. When

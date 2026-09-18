@@ -298,15 +298,10 @@ wrapper, then leading work commands are suppressed even with a
 terminal question mark, and the modal frame suppresses the looser
 fragment, billing, and agent/service-bound word routes),
 or on the first turn of a
-session. On the first conversation turn after setup or an in-place
-upgrade the context also adds a one-time funding-note directive ahead
-of the context — a new
-user's onboarding reply presents the $5 starting model credit, adding more
-from Tinyhat credit, and optional ChatGPT/Codex subscription as one onboarding
-step; a returning user gets one
-brief line, an already-connected subscription skips it — tracked by a
-durable marker so later /new sessions do not re-arm it; tool-owned
-native first replies satisfy the note. The context tells
+session. First-contact guidance keeps greetings short and natural; it explains
+the $5 starting model credit and optional subscription only when the user asks
+about funding or getting started. Channel readiness must be verified before
+claiming it. A durable marker prevents repeating that guidance. The context tells
 the agent to prefer Tinyhat private secret entry for credentials,
 Tinyhat's installed Codex commands for OpenAI Codex auth, the Hermes-owned
 Slack connection flow, identity-only bare
