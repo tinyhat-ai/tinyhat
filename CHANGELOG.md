@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+## 0.32.25 - 2026-09-23
+
 - Add the `tinyhat_services` tool and `tinyhat-services` skill for an assigned
   Computer to discover Providers, create its Stripe Project, connect Providers,
   and create, link, attach, detach, change, or remove Resources after one
@@ -13,7 +15,7 @@
   `sync_environment` writes Project credentials under
   `~/.config/tinyhat/stripe-projects/` on the Computer. Requires the Computer services
   platform API in [tinyloophub/tinyloop#1380](https://github.com/tinyloophub/tinyloop/pull/1380)
-  to be deployed before this plugin is released.
+  to be deployed before this plugin is promoted to managed Computers.
 
 ## 0.32.24 - 2026-09-18
 
