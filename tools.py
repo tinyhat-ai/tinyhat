@@ -18,6 +18,7 @@ from .capabilities.contact_details.tool import contact_details as handle_contact
 from .capabilities.credit.tool import (
     allocate_openrouter_credit as handle_allocate_openrouter_credit,
 )
+from .capabilities.services import tool as services_tools
 from .capabilities.credit.tool import (
     credit_summary as handle_credit_summary,
 )
@@ -50,6 +51,7 @@ from .tool_errors import tool_error_json
 
 # Explicit facade binding remains exported when unused imports are cleaned up.
 account_upgrade = account_upgrade_tools.account_upgrade
+services = services_tools.services
 email_address = owner_email_tools.email_address
 
 CODEX_AUTH_SCREENSHOT = (

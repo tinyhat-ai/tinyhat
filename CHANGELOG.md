@@ -2,6 +2,19 @@
 
 ## Unreleased
 
+- Add the `tinyhat_services` tool and `tinyhat-services` skill for an assigned
+  Computer to discover Providers, create its Stripe Project, connect Providers,
+  and create, link, attach, detach, change, or remove Resources after one
+  account-wide owner authorization. Verified free services can be provisioned
+  directly; paid catalog prices currently lack fixed quotes and are refused.
+  Show the signed-in provider handoff in Telegram when needed. The agent can
+  submit owner-provided facts through the private API without storing them in
+  the intent.
+  `sync_environment` writes Project credentials under
+  `~/.config/tinyhat/stripe-projects/` on the Computer. Requires the Computer services
+  platform API in [tinyloophub/tinyloop#1380](https://github.com/tinyloophub/tinyloop/pull/1380)
+  to be deployed before this plugin is released.
+
 ## 0.32.24 - 2026-09-18
 
 - Pair with Tinyhat Hermes runtime 0.0.77, including the default-voice alignment

@@ -1,5 +1,70 @@
 """Tinyhat Hermes plugin tool schemas."""
 
+TINYHAT_SERVICES_SCHEMA = {
+    "type": "object",
+    "description": "Discover Stripe Projects services and manage this Computer's Project after the owner's one-time service authorization. Use run with a UUID for each autonomous, budgeted change; return the working result to the owner.",
+    "properties": {
+        "action": {
+            "type": "string",
+            "enum": [
+                "status",
+                "sync_project",
+                "catalog_providers",
+                "catalog_services",
+                "connections",
+                "connection_request",
+                "sync_environment",
+                "resources",
+                "resource",
+                "run",
+                "intent",
+                "execute",
+            ],
+        },
+        "provider_name": {"type": "string", "maxLength": 100},
+        "page_url": {"type": "string", "maxLength": 1600},
+        "resource_id": {"type": "string", "maxLength": 160},
+        "request_id": {"type": "string", "maxLength": 160},
+        "intent_id": {"type": "string", "pattern": r"^[a-f0-9-]{36}$"},
+        "operation_id": {"type": "string", "pattern": r"^[a-f0-9-]{36}$"},
+        "request": {
+            "type": "object",
+            "additionalProperties": False,
+            "properties": {
+                "action": {
+                    "type": "string",
+                    "enum": [
+                        "create_project",
+                        "connect_provider",
+                        "create_resource",
+                        "link_resource",
+                        "attach_resource",
+                        "detach_resource",
+                        "update_resource",
+                        "remove_resource",
+                        "unlink_resource",
+                        "rotate_resource",
+                        "unlink_provider_connection",
+                        "submit_account_information",
+                        "submit_resource_information",
+                    ],
+                },
+                "provider": {"type": "string", "maxLength": 120},
+                "service_ref": {"type": "string", "maxLength": 160},
+                "resource_id": {"type": "string", "maxLength": 160},
+                "connection_id": {"type": "string", "maxLength": 160},
+                "account_request_id": {"type": "string", "maxLength": 160},
+                "name": {"type": "string", "maxLength": 120},
+                "configuration": {"type": "object"},
+                "environment": {"type": "string", "enum": ["dev", "prod"]},
+            },
+            "required": ["action"],
+        },
+    },
+    "required": ["action"],
+    "additionalProperties": False,
+}
+
 TINYHAT_ACCOUNT_UPGRADE_SCHEMA = {
     "type": "object",
     "description": "Prepare an upgrade for this Computer's existing individual owner for Stripe Projects. Check status first. Prepare accurate human-provided details, then send the review button and wait for the owner to approve on the review page. This tool cannot accept terms. Does not purchase services or grant spending credit.",
@@ -960,10 +1025,16 @@ TINYHAT_CHANNELS_SCHEMA = {
     "type": "object",
     "description": "Connect this Computer to Telegram or Slack at its owner's request. Neither channel requires the other. Return an expiring Telegram pairing link/QR, or encrypt a private Slack credentials file for this Computer. Never accept tokens as tool arguments.",
     "properties": {
-        "action": {"type": "string", "enum": ["status", "prepare", "telegram_link", "slack_connect"]},
+        "action": {
+            "type": "string",
+            "enum": ["status", "prepare", "telegram_link", "slack_connect"],
+        },
         "bot_name": {"type": "string", "maxLength": 64},
         "bot_username": {"type": "string", "minLength": 5, "maxLength": 32},
-        "credentials_file": {"type": "string", "description": "Absolute path to a private JSON file, mode 600, containing bot_token, app_token and allowed_users. Only read a file the owner authorized."},
+        "credentials_file": {
+            "type": "string",
+            "description": "Absolute path to a private JSON file, mode 600, containing bot_token, app_token and allowed_users. Only read a file the owner authorized.",
+        },
     },
     "required": ["action"],
     "additionalProperties": False,

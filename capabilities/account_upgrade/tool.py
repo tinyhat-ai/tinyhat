@@ -23,6 +23,8 @@ STATUS_FIELDS = {
     "message",
     "requirements",
     "spending_limit_cents",
+    "autonomous_services_authorized",
+    "services_authorization_url",
     "reserved_limit_cents",
     "available_limit_cents",
     "currency",

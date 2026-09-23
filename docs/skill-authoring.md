@@ -114,6 +114,13 @@ export. Ordinary mailbox read/send tools must never expose passwords. The new
 skill is loaded from the same packaged skill directory as other Tinyhat skills;
 it adds no tool or framework-specific adapter.
 
+`tinyhat-services` turns requests such as “create a website” into completed
+jobs. After the owner's one-time authorization, it uses a fresh UUID for each
+budgeted service action, verifies the provider's result, and returns a working
+link. It does not ask for per-action Tinyhat reviews. If Stripe's catalog does
+not give a verifiable fixed price or free tier, the platform refuses an
+autonomous purchase; the skill must explain the exact blocker.
+
 `tinyhat-skill-authoring` is the general playbook an agent loads before it
 creates, reviews, or revises a user skill. It gives customer-authored Hat skills
 the same portable name and folder rules, explicit trigger and non-trigger

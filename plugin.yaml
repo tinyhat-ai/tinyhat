@@ -8,6 +8,7 @@ provides_tools:
   - tinyhat_get_platform_status
   - tinyhat_credit
   - tinyhat_account_upgrade
+  - tinyhat_services
   - tinyhat_model_budget
   - tinyhat_openrouter_credit_allocate
   - tinyhat_contact_details
