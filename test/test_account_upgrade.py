@@ -41,7 +41,7 @@ class AccountUpgradeTests(unittest.TestCase):
     def payload(self):
         return {
             "action": "prepare",
-            "individual": {"given_name": "Synthetic"},
+            "individual": {"country": "CA"},
         }
 
     def test_registration_and_existing_customer_discovery(self):
@@ -69,6 +69,28 @@ class AccountUpgradeTests(unittest.TestCase):
             },
         )
         self.builder.assert_called_with(timeout_seconds=45)
+
+    def test_prepare_sends_only_country_even_from_older_agent_payload(self):
+        payload = self.payload()
+        payload["individual"].update({"given_name": "private", "phone": "+12045550123"})
+        tool.account_upgrade(payload)
+        self.client.post_json.assert_called_once_with(
+            f"{tool.BASE}/upgrade", {"individual": {"country": "CA"}, "revision": None}
+        )
+
+    def test_prepare_requires_country(self):
+        result = json.loads(tool.account_upgrade({"action": "prepare", "individual": {}}))
+        self.assertEqual(result["error"], "individual_details_required")
+        self.client.post_json.assert_not_called()
+
+    def test_upgrade_skill_names_live_profile_path(self):
+        skill = (REPO_ROOT / "skills/tinyhat-account-upgrade/SKILL.md").read_text()
+        normalized = " ".join(skill.split())
+        self.assertIn("**Profile** (person icon)", normalized)
+        self.assertIn("**Upgrade your agent → Continue**", normalized)
+        self.assertNotIn("Your Computers → Upgrade your account", normalized)
+        needs_information = skill.split("- `needs_information`:", 1)[1].split("- `setup_required`", 1)[0]
+        self.assertNotIn("use `verification_link`", needs_information)
 
     def test_agent_cannot_supply_consent_or_an_approval_action(self):
         for field in ("consent", "human_authorized", "approved"):
@@ -308,6 +330,17 @@ class AccountUpgradeTests(unittest.TestCase):
                 result = tool.account_upgrade({"action": "verification_link"})
                 self.assertEqual(json.loads(result)["error"], "invalid_platform_response")
                 self.assertNotIn("private", result)
+
+    def test_unavailable_hosted_link_points_to_embedded_form(self):
+        self.client.post_json.side_effect = PlatformError(
+            "private Stripe response",
+            status_code=503,
+            response={"error": {"code": "stripe_hosted_unavailable"}},
+        )
+        result = json.loads(tool.account_upgrade({"action": "verification_link"}))
+        self.assertEqual(result["error"], "stripe_hosted_unavailable")
+        self.assertIn("Profile", result["message"])
+        self.assertNotIn("private Stripe response", json.dumps(result))
 
     def test_local_token_does_not_masquerade_as_cloud_identity(self):
         self.builder.return_value = (self.client, "local_dev")

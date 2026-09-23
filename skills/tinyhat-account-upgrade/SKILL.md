@@ -22,9 +22,9 @@ a laptop account token onto the Computer.
 ## Explain the upgrade
 
 “This optional upgrade creates your individual Stripe account so I can help you
-connect services. Tinyhat funds approved services within your monthly allowance.
-You will review your information and approve Tinyhat and Stripe's terms on a
-review form. This does not buy a service or add Computer credit.”
+connect services. Tinyhat funds services within your monthly allowance. You
+review the upgrade and terms once, then Stripe asks for any identity details it
+needs on its own form. This does not buy a service or add Computer credit.”
 
 Show the actual allowance, including $0. Never promise free services or immediate
 provider availability. Explain that the one approval includes sharing personal
@@ -32,17 +32,18 @@ details and identity verification, including credit-agency checks where
 applicable. Show current terms/privacy/disclosure URLs from status when asked.
 
 Prefer the private form when the owner does not want to share details in chat,
-or ownership of the current conversation is unclear. Ask them to use **Your
-Computers → Upgrade your account** in the same Tinyhat environment. Never invent
+or ownership of the current conversation is unclear. Ask them to open their
+**Profile** (person icon) on computer.tinyhat.ai, then **Upgrade your agent →
+Continue**. Never invent
 a production sign-up shortcut or substitute another account. Opening a page or
 receiving a link accepts nothing.
 
 ## Prepare accurate details, then wait
 
-Collect the owner's legal first and last name, date of birth (18+), international
-phone number, two-letter country code, residential street address, optional unit,
-city, province/state where applicable, and postal code. Never guess missing data.
-Do not ask for card numbers, bank details, Stripe keys or identity documents.
+Ask only for the owner's two-letter country code. Stripe collects legal name,
+date of birth and any other identity information in its embedded form after the
+owner approves. Never guess missing data or ask for card numbers, bank details,
+Stripe keys or identity documents in chat.
 
 Call `tinyhat_account_upgrade` with `action: "prepare"` and `individual` using
 the tool schema. For corrections include the latest `revision` from status.
@@ -63,8 +64,8 @@ The tool has no final approval action.
 - If no button was sent, give `telegram_review_url` privately to the Telegram
   owner, or `approval_url` for another private channel. `review_link` resends
   the existing draft. Neither URL authenticates its holder or approves anything.
-- The owner reviews **all** details and current terms, checks one consent box,
-  and clicks **Approve and upgrade account**. A forwarded link cannot authorize
+- The owner reviews their email, country and current terms, checks one consent box,
+  and clicks **Upgrade my agent**. A forwarded link cannot authorize
   another user to review or approve the owner's account.
 - If anything is wrong, the owner can edit on the page or return to chat and ask
   you for corrections. Check status, prepare corrected details with that
@@ -92,8 +93,9 @@ files and saved agent memory. Do not repeat full details in a public chat.
 - `pending`: use `continue` after `retry_after_seconds` (normally three seconds).
   Make at most ten checks in one attempt. If still pending, report processing
   and resume with status when asked; do not repeatedly submit.
-- `needs_information`: ask the owner to reopen **Your Computers → Upgrade your
-  account** in their own browser and complete the embedded Stripe form there.
+- `needs_information`: ask the owner to open their **Profile** (person icon) on
+  computer.tinyhat.ai, then **Upgrade your agent → Continue**, and complete the
+  embedded Stripe form there.
   Do not offer a hosted Stripe verification link: this Stripe cohort currently
   rejects new Developer Account Links. After they finish, check `continue`.
   If the form fails, have them retry or use **Check with Stripe** on that page;
@@ -104,5 +106,8 @@ files and saved agent memory. Do not repeat full details in a public chat.
 - Conflict: check the current revision. Only unapproved drafts can be corrected;
   approved or uncertain Stripe requests require support for changes.
 - Lost response: check status before retrying. Preserve the existing request.
-- `ready`: show the monthly allowance. Each provider still needs its own terms,
-  approval, availability checks and spending reservation before purchase.
+- `ready`: show the monthly allowance. The owner's one-time authorization lets
+  the agent set up eligible free or fixed-price services within that allowance
+  without asking for another purchase approval. Check provider availability,
+  terms and spending reservation before each write; some providers may still
+  need the owner to complete their own sign-in or verification.

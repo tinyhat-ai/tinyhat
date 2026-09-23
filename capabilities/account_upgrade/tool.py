@@ -59,10 +59,12 @@ def _validate(payload: dict[str, Any], action: str) -> str | None:
                 "invalid_arguments",
                 "Use the current revision returned by status when correcting a draft.",
             )
-        if not isinstance(payload.get("individual"), dict):
+        individual = payload.get("individual")
+        country = individual.get("country") if isinstance(individual, dict) else None
+        if not isinstance(country, str) or not re.fullmatch(r"[A-Za-z]{2}", country.strip()):
             return _error(
                 "individual_details_required",
-                "Ask for the individual's accurate details or offer the private upgrade form.",
+                "Ask only for the owner's two-letter country code or offer the private upgrade form.",
             )
     return None
 
@@ -72,6 +74,7 @@ def _request_failure(action: str, exc: Exception) -> str:
         "owner_email_required": "Verify your email in your existing Tinyhat profile first. In Telegram, open Configure and your Profile. Do not sign up for another account.",
         "computer_owner_unavailable": "Tinyhat could not confirm this Computer's current owner. Check its assignment before retrying.",
         "computer_owner_changed": "Tinyhat could not confirm this Computer's current owner. Check its assignment before retrying.",
+        "stripe_hosted_unavailable": "Ask the owner to open Profile (person icon) on computer.tinyhat.ai, then Upgrade your agent and Continue to finish Stripe's embedded form. Do not retry the hosted link.",
     }
     response = (
         exc.response if isinstance(exc, PlatformError) and isinstance(exc.response, dict) else {}
@@ -272,7 +275,10 @@ def account_upgrade(args: dict[str, Any] | None = None, **_: Any) -> str:
         elif action == "prepare":
             result = client.post_json(
                 f"{BASE}/upgrade",
-                {"individual": payload["individual"], "revision": payload.get("revision")},
+                {
+                    "individual": {"country": payload["individual"]["country"].strip().upper()},
+                    "revision": payload.get("revision"),
+                },
             )
         else:
             suffix = "verification-link" if action == "verification_link" else "upgrade/continue"
