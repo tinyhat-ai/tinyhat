@@ -1,8 +1,8 @@
 """Usage: python -m unittest discover -s test -p test_services.py"""
 
-import json
 import base64
 import hashlib
+import json
 import os
 import sys
 import tempfile
@@ -23,8 +23,10 @@ load_local_tinyhat(REPO_ROOT)
 import tinyhat  # noqa: E402
 from test_hermes_adapter import FakeHermesContext  # noqa: E402
 from tinyhat import schemas  # noqa: E402
-from tinyhat.capabilities.services import tool  # noqa: E402
-from tinyhat.capabilities.services import environment  # noqa: E402
+from tinyhat.capabilities.services import (  # noqa: E402
+    environment,
+    tool,
+)
 from tinyhat.platform import PlatformError  # noqa: E402
 
 
@@ -77,12 +79,15 @@ class ServicesTests(unittest.TestCase):
         self.assertNotIn("approve", schemas.TINYHAT_SERVICES_SCHEMA["properties"]["action"]["enum"])
 
     def test_account_resource_association_still_requires_owner_review(self):
-        allowed = schemas.TINYHAT_SERVICES_SCHEMA["properties"]["request"]["properties"]["action"]["enum"]
+        allowed = schemas.TINYHAT_SERVICES_SCHEMA["properties"]["request"]["properties"]["action"][
+            "enum"
+        ]
         self.assertIn("attach_resource", allowed)
         self.assertIn("detach_resource", allowed)
         self.client.post_json.return_value = {
             "id": "a" * 36,
-            "review_url": "https://computer.tinyhat.ai/tinyhat/computers/computer_4/services/review/" + "a" * 36,
+            "review_url": "https://computer.tinyhat.ai/tinyhat/computers/computer_4/services/review/"
+            + "a" * 36,
             "status": "awaiting_approval",
         }
         request = {"action": "attach_resource", "resource_id": "resource_123456789"}
@@ -137,33 +142,53 @@ class ServicesTests(unittest.TestCase):
                     url.replace("dev-computer.example.test", "evil.example"), self.client.base_url
                 )
             )
+            self.assertFalse(
+                tool._review_url(
+                    url.replace("dev-computer.example.test", "dev-computer.example.test:8443"),
+                    self.client.base_url,
+                )
+            )
+            self.assertTrue(
+                tool._review_url(
+                    url.replace("https://dev-computer.example.test", "http://127.0.0.1:8040"),
+                    "http://127.0.0.1:8040",
+                )
+            )
 
     def test_review_button_and_non_telegram_fallback(self):
-        url = (
-            "https://computer.tinyhat.ai/tinyhat/computers/computer_4/services/review/"
-            + "a" * 36
-        )
-        with patch("tinyhat.tools._telegram_credentials", return_value=("test-token", 123)), patch(
-            "tinyhat.tools._telegram_send_message", return_value={"ok": True}
-        ) as send:
+        url = "https://computer.tinyhat.ai/tinyhat/computers/computer_4/services/review/" + "a" * 36
+        with (
+            patch("tinyhat.tools._telegram_credentials", return_value=("test-token", 123)),
+            patch("tinyhat.tools._telegram_send_message", return_value={"ok": True}) as send,
+        ):
             self.assertTrue(tool._send_service_review_button(url))
-            self.assertEqual(send.call_args.kwargs["reply_markup"]["inline_keyboard"][0][0]["url"], url)
-            self.assertTrue(tool._send_service_review_button(url, {
-                "action": "submit_account_information", "provider_name": "Example Provider"
-            }))
+            self.assertEqual(
+                send.call_args.kwargs["reply_markup"]["inline_keyboard"][0][0]["url"], url
+            )
+            self.assertTrue(
+                tool._send_service_review_button(
+                    url,
+                    {"action": "submit_account_information", "provider_name": "Example Provider"},
+                )
+            )
             self.assertIn("Example Provider needs", send.call_args.kwargs["text"])
         with patch("tinyhat.tools._telegram_credentials", side_effect=RuntimeError("unavailable")):
             self.assertFalse(tool._send_service_review_button(url))
 
     def test_page_round_trip_and_computer_identity(self):
         page_url = "/v2/provisioning/resources?project=project_123&page=abc"
-        self.assertEqual(json.loads(tool.services({"action": "resources", "page_url": page_url})), {"data": []})
+        self.assertEqual(
+            json.loads(tool.services({"action": "resources", "page_url": page_url})), {"data": []}
+        )
         self.client.get_json.assert_called_once_with(
-            tool.BASE + "/resources?page_url=%2Fv2%2Fprovisioning%2Fresources%3Fproject%3Dproject_123%26page%3Dabc"
+            tool.BASE
+            + "/resources?page_url=%2Fv2%2Fprovisioning%2Fresources%3Fproject%3Dproject_123%26page%3Dabc"
         )
         self.client.get_json.reset_mock()
         self.assertEqual(
-            json.loads(tool.services({"action": "connection_request", "request_id": "facctrq_123456789"})),
+            json.loads(
+                tool.services({"action": "connection_request", "request_id": "facctrq_123456789"})
+            ),
             {"data": []},
         )
         self.client.get_json.assert_called_once_with(
@@ -199,18 +224,49 @@ class ServicesTests(unittest.TestCase):
         self.assertEqual(result["error"], "provider_allowance_required")
         self.assertEqual(result["message"], "Reserve an allowance first.")
 
-    def test_timeout_is_uncertain_only_for_submitted_writes(self):
+    def test_timeout_is_uncertain_for_prepare_and_execute(self):
         self.client.post_json.side_effect = PlatformError("timed out")
         result = json.loads(tool.services({"action": "execute", "intent_id": "a" * 36}))
         self.assertEqual(result["error"], "service_request_uncertain")
         self.assertIn("Check its status", result["message"])
+        result = json.loads(
+            tool.services(
+                {
+                    "action": "prepare",
+                    "request": {"action": "create_resource", "provider": "prvdr_future"},
+                }
+            )
+        )
+        self.assertEqual(result["error"], "service_request_uncertain")
+        self.assertIn("do not prepare this action again", result["message"])
         self.client.post_json.side_effect = None
         self.client.get_json.side_effect = PlatformError("timed out")
         result = json.loads(tool.services({"action": "status"}))
         self.assertEqual(result["error"], "service_unavailable")
 
+    def test_provider_credential_fields_are_removed_from_tool_output(self):
+        self.client.get_json.return_value = {
+            "id": "resource_123456789",
+            "status": "complete",
+            "access_configuration": {"TOKEN": "private-fixture-value"},
+            "details": [{"client_secret": "another-private-value", "name": "safe"}],
+        }
+        result = json.loads(
+            tool.services({"action": "resource", "resource_id": "resource_123456789"})
+        )
+        self.assertEqual(result["id"], "resource_123456789")
+        self.assertEqual(result["details"], [{"name": "safe"}])
+        self.assertNotIn("private-fixture-value", json.dumps(result))
+        self.assertNotIn("another-private-value", json.dumps(result))
+
     def test_project_credentials_are_decrypted_only_on_computer(self):
         secret = "provider-secret-never-in-tool-output"
+
+        data = {
+            "resource_access_configurations": [
+                {"resource_id": "resource_123456789", "access_configuration": {"TOKEN": secret}}
+            ]
+        }
 
         def encrypted_reply(_path, payload):
             public_key = serialization.load_pem_public_key(payload["public_key_pem"].encode())
@@ -224,7 +280,6 @@ class ServicesTests(unittest.TestCase):
             aad = f"tinyhat-stripe-project-v1:{project_id}:{digest}"
             key = os.urandom(32)
             nonce = os.urandom(12)
-            data = {"resource_access_configurations": [{"resource_id": "resource_123456789", "access_configuration": {"TOKEN": secret}}]}
             encrypted = AESGCM(key).encrypt(
                 nonce,
                 json.dumps({"stripe_environment_info": json.dumps(data)}).encode(),
@@ -232,7 +287,9 @@ class ServicesTests(unittest.TestCase):
             )
             wrapped = public_key.encrypt(
                 key,
-                padding.OAEP(mgf=padding.MGF1(hashes.SHA256()), algorithm=hashes.SHA256(), label=None),
+                padding.OAEP(
+                    mgf=padding.MGF1(hashes.SHA256()), algorithm=hashes.SHA256(), label=None
+                ),
             )
             return {
                 "project_id": project_id,
@@ -247,8 +304,9 @@ class ServicesTests(unittest.TestCase):
             }
 
         self.client.post_json.side_effect = encrypted_reply
-        with tempfile.TemporaryDirectory() as directory, patch.object(
-            environment, "_private_directory", return_value=Path(directory)
+        with (
+            tempfile.TemporaryDirectory() as directory,
+            patch.object(environment, "_private_directory", return_value=Path(directory)),
         ):
             result = json.loads(tool.services({"action": "sync_environment"}))
             self.assertEqual(result["project_id"], "project_1234567890abcdef")
@@ -258,6 +316,9 @@ class ServicesTests(unittest.TestCase):
             self.assertEqual(saved.stat().st_mode & 0o777, 0o600)
             self.assertIn(secret, saved.read_text())
         self.client.post_json.assert_called_once()
+        data = ["invalid Stripe credential payload"]
+        result = json.loads(tool.services({"action": "sync_environment"}))
+        self.assertEqual(result["error"], "service_unavailable")
 
 
 if __name__ == "__main__":

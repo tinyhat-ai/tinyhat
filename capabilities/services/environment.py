@@ -12,8 +12,8 @@ import tempfile
 from pathlib import Path
 from typing import Any
 
-from cryptography.hazmat.primitives import hashes, serialization
 from cryptography.exceptions import InvalidTag
+from cryptography.hazmat.primitives import hashes, serialization
 from cryptography.hazmat.primitives.asymmetric import padding, rsa
 from cryptography.hazmat.primitives.ciphers.aead import AESGCM
 
@@ -54,15 +54,15 @@ def _decrypt(envelope: dict[str, Any], project_id: str, private_key) -> dict:
         ciphertext = base64.b64decode(envelope["ciphertext"], validate=True)
         symmetric_key = private_key.decrypt(
             wrapped,
-            padding.OAEP(
-                mgf=padding.MGF1(hashes.SHA256()), algorithm=hashes.SHA256(), label=None
-            ),
+            padding.OAEP(mgf=padding.MGF1(hashes.SHA256()), algorithm=hashes.SHA256(), label=None),
         )
         values = json.loads(AESGCM(symmetric_key).decrypt(nonce, ciphertext, aad.encode()))
         data = json.loads(values["stripe_environment_info"])
     except (KeyError, ValueError, TypeError, binascii.Error, InvalidTag):
         raise ValueError("Tinyhat returned an invalid credential envelope.") from None
-    if not isinstance(data.get("resource_access_configurations"), list):
+    if not isinstance(data, dict) or not isinstance(
+        data.get("resource_access_configurations"), list
+    ):
         raise ValueError("Stripe did not return usable Project credentials.")
     return data
 
@@ -70,10 +70,14 @@ def _decrypt(envelope: dict[str, Any], project_id: str, private_key) -> dict:
 def sync_environment(client, base: str) -> dict:
     """Keep revealed credentials out of platform responses, chat, and Git."""
     private_key = rsa.generate_private_key(public_exponent=65537, key_size=3072)
-    public_key_pem = private_key.public_key().public_bytes(
-        serialization.Encoding.PEM,
-        serialization.PublicFormat.SubjectPublicKeyInfo,
-    ).decode()
+    public_key_pem = (
+        private_key.public_key()
+        .public_bytes(
+            serialization.Encoding.PEM,
+            serialization.PublicFormat.SubjectPublicKeyInfo,
+        )
+        .decode()
+    )
     result = client.post_json(base + "/environment-info", {"public_key_pem": public_key_pem})
     project_id = result.get("project_id")
     envelope = result.get("envelope")

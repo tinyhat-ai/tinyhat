@@ -10,10 +10,21 @@ from urllib.parse import quote, urlsplit
 from ...platform import PlatformError, build_platform_client
 from ...tool_errors import tool_error_json
 from ..account_upgrade.tool import _review_hosts
+from .environment import sync_environment
 
 BASE = "/hapi/v2/computers/me/services"
 MAX_PAGE_URL = 1600
 HTTP_SERVER_ERROR = 500
+SENSITIVE_RESPONSE_KEYS = (
+    "access_configuration",
+    "credential",
+    "secret",
+    "token",
+    "api_key",
+    "password",
+    "private_key",
+    "authorization",
+)
 READS = {
     "status": "/project",
     "catalog_providers": "/catalog/providers",
@@ -68,10 +79,15 @@ def _review_url(url: Any, base_url: str) -> bool:
     if not isinstance(url, str):
         return False
     parsed = urlsplit(url)
+    try:
+        port = parsed.port
+    except ValueError:
+        return False
     return (
         parsed.scheme in {"https", "http"}
         and (parsed.scheme == "https" or parsed.hostname in {"localhost", "127.0.0.1"})
         and parsed.hostname in _review_hosts(base_url)
+        and (port in {None, 443} or parsed.hostname in {"localhost", "127.0.0.1"})
         and not parsed.username
         and not parsed.password
         and re.fullmatch(
@@ -84,14 +100,31 @@ def _review_url(url: Any, base_url: str) -> bool:
     )
 
 
+def _safe_model_result(value: Any) -> Any:
+    """Keep known provider credential fields out of model-visible tool output."""
+    if isinstance(value, dict):
+        return {
+            key: _safe_model_result(item)
+            for key, item in value.items()
+            if key == "credential_file"
+            or not any(part in key.lower() for part in SENSITIVE_RESPONSE_KEYS)
+        }
+    if isinstance(value, list):
+        return [_safe_model_result(item) for item in value]
+    return value
+
+
 def _send_service_review_button(url: str, summary: dict[str, Any] | None = None) -> bool:
     try:
-        from ...tools import _telegram_credentials, _telegram_send_message  # noqa: PLC0415
+        from ...tools import _telegram_credentials, _telegram_send_message
 
         token, chat_id = _telegram_credentials()
         summary = summary if isinstance(summary, dict) else {}
         provider = summary.get("provider_name")
-        needs_details = summary.get("action") in {"submit_account_information", "submit_resource_information"}
+        needs_details = summary.get("action") in {
+            "submit_account_information",
+            "submit_resource_information",
+        }
         text = (
             f"{provider} needs a few details from you. Open this private form."
             if needs_details and isinstance(provider, str) and provider
@@ -193,8 +226,6 @@ def services(args: dict[str, Any] | None = None, **_: Any) -> str:  # noqa: PLR0
         elif action == "connection_request":
             result = client.get_json(f"{BASE}/provider-connection-requests/{payload['request_id']}")
         elif action == "sync_environment":
-            from .environment import sync_environment
-
             result = sync_environment(client, BASE)
         elif action == "prepare":
             request = payload["request"]
@@ -212,15 +243,19 @@ def services(args: dict[str, Any] | None = None, **_: Any) -> str:  # noqa: PLR0
                 else client.get_json(path)
             )
         if action in {"prepare", "create_project"} and isinstance(result.get("review_url"), str):
-            result["telegram_button_sent"] = _send_service_review_button(result["review_url"], result.get("summary"))
-        return json.dumps(result, sort_keys=True)
+            result["telegram_button_sent"] = _send_service_review_button(
+                result["review_url"], result.get("summary")
+            )
+        return json.dumps(_safe_model_result(result), sort_keys=True)
     except PlatformError as exc:
-        uncertain = action in {*WRITES, "execute"} and (
+        uncertain = action in {*WRITES, "prepare", "execute"} and (
             exc.status_code is None or exc.status_code >= HTTP_SERVER_ERROR
         )
         code = "service_request_uncertain" if uncertain else "service_unavailable"
         message = (
-            "The outcome is uncertain. Check its status before retrying this write."
+            "A review request may already exist. Ask the owner to check their pending reviews; do not prepare this action again until it is resolved."
+            if uncertain and action == "prepare"
+            else "The outcome is uncertain. Check its status before retrying this write."
             if uncertain
             else "Tinyhat could not complete this request."
         )
