@@ -8,6 +8,7 @@ The current capability list is intentionally small.
 | `tinyhat_get_platform_status` | Available now | Reads this authenticated Computer's safe platform state, assignment, configuration revisions, and package inventory. |
 | `tinyhat_credit` | Platform API required | Reads the authenticated owner's current credit balance and up to ten recent transactions, including the Computer name, time range, and applied hourly rate for Computer usage charges. It cannot change credit. |
 | `tinyhat_model_budget` | Platform API required | Reads this Agent's current total AI model budget, remaining amount, and used amount. It cannot change the budget. |
+| `tinyhat_services` | Platform API required | Discovers the current Stripe Projects catalog, manages this Computer's Project, and prepares Provider and Resource changes for a signed-in owner to review before one-time submission. |
 | `tinyhat_openrouter_credit_allocate` | Platform API required | Adds an exact amount of the owner's credit to this Agent's model budget. |
 | `tinyhat_contact_details` | Platform API required | Returns this Agent's managed phone number and email address, and idempotently assigns missing contacts when the platform enables them. It accepts no identity, contact, or credential input. |
 | `tinyhat-complete-setup` skill | Compatible channel APIs and desktop-enabled runtime required | Guides setup through Computer access, a working Telegram/Slack conversation, and separate CLI/desktop provider sign-in. |

@@ -117,6 +117,13 @@
       "purpose": "Explains Tinyhat-managed Hermes defaults for secrets, Codex auth, and platform boundaries."
     },
     {
+      "name": "tinyhat-services",
+      "qualified_name": "tinyhat:tinyhat-services",
+      "aliases": ["tinyhat-services"],
+      "path": "skills/tinyhat-services/SKILL.md",
+      "purpose": "Discovers Stripe Projects services and prepares Computer-scoped Provider and Resource changes for owner review."
+    },
+    {
       "name": "tinyhat-local-app-sharing",
       "qualified_name": "tinyhat:tinyhat-local-app-sharing",
       "aliases": ["tinyhat-local-app-sharing"],
@@ -242,6 +249,11 @@
       "name": "tinyhat_account_upgrade",
       "handler": "tools.account_upgrade",
       "skill": "tinyhat-account-upgrade"
+    },
+    {
+      "name": "tinyhat_services",
+      "handler": "tools.services",
+      "skill": "tinyhat-services"
     },
     {
       "name": "tinyhat_model_budget",

@@ -1,5 +1,41 @@
 """Tinyhat Hermes plugin tool schemas."""
 
+TINYHAT_SERVICES_SCHEMA = {
+    "type": "object",
+    "description": "Discover Stripe Projects providers and services for this Computer, prepare reviewed connection/resource changes, and check their status. A signed-in owner approves writes on Tinyhat; this tool cannot approve them.",
+    "properties": {
+        "action": {"type": "string", "enum": [
+            "status", "create_project", "sync_project", "catalog_providers", "catalog_services",
+            "connections", "connection_request", "resources", "resource", "prepare", "intent", "execute",
+        ]},
+        "provider_name": {"type": "string", "maxLength": 100},
+        "page_url": {"type": "string", "maxLength": 1600},
+        "resource_id": {"type": "string", "maxLength": 160},
+        "request_id": {"type": "string", "maxLength": 160},
+        "intent_id": {"type": "string", "pattern": r"^[a-f0-9-]{36}$"},
+        "request": {
+            "type": "object", "additionalProperties": False,
+            "properties": {
+                "action": {"type": "string", "enum": [
+                    "connect_provider", "create_resource", "link_resource", "update_resource",
+                    "remove_resource", "unlink_resource", "rotate_resource",
+                    "unlink_provider_connection",
+                ]},
+                "provider": {"type": "string", "maxLength": 120},
+                "service_ref": {"type": "string", "maxLength": 160},
+                "resource_id": {"type": "string", "maxLength": 160},
+                "connection_id": {"type": "string", "maxLength": 160},
+                "name": {"type": "string", "maxLength": 120},
+                "configuration": {"type": "object"},
+                "environment": {"type": "string", "enum": ["dev", "prod"]},
+            },
+            "required": ["action"],
+        },
+    },
+    "required": ["action"],
+    "additionalProperties": False,
+}
+
 TINYHAT_ACCOUNT_UPGRADE_SCHEMA = {
     "type": "object",
     "description": "Prepare an upgrade for this Computer's existing individual owner for Stripe Projects. Check status first. Prepare accurate human-provided details, then send the review button and wait for the owner to approve on the review page. This tool cannot accept terms. Does not purchase services or grant spending credit.",

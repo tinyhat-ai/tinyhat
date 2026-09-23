@@ -70,6 +70,12 @@ def register(ctx: Any) -> None:
         handler=tools.account_upgrade,
     )
     ctx.register_tool(
+        name="tinyhat_services",
+        toolset="tinyhat",
+        schema=schemas.TINYHAT_SERVICES_SCHEMA,
+        handler=tools.services,
+    )
+    ctx.register_tool(
         name="tinyhat_plugin_version",
         toolset="tinyhat",
         schema=schemas.TINYHAT_PLUGIN_VERSION_SCHEMA,

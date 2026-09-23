@@ -14,6 +14,7 @@ Use this as the default routing map:
 | User intent | Default Tinyhat route |
 | --- | --- |
 | Upgrade the owner account or enable Stripe Projects services | Load `tinyhat:tinyhat-account-upgrade`; check `tinyhat_account_upgrade` status before preparing details; the owner approves only on the review page. |
+| Discover or provision a Provider service for this Computer | Load `tinyhat:tinyhat-services` and use `tinyhat_services`. The owner approves each connection or Resource change on Tinyhat's review page. |
 | Add or save an API key, token, password, webhook secret, or credential | Call `tinyhat_private_secret_handoff` once. |
 | Connect this agent to Slack or Telegram | Load `tinyhat:tinyhat-connect-channel` and call `tinyhat_channels` with `action: "status"`, then follow the chosen channel's setup. Keep the existing Computer and owner. |
 | Disconnect this agent from Slack | Load `tinyhat:tinyhat-slack` and call `tinyhat_slack_disconnect` once. The tool sends the two-stage Telegram confirmation, then a detached plugin worker revokes the bot token and removes the complete local bundle before the platform uses its generic Hermes restart path. Do not send a duplicate reply. |
