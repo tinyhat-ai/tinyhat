@@ -659,7 +659,10 @@ flags are no longer supported. Existing customers retain the same owner account
 and do not need to register again.
 
 Versioned routes remain `/hapi/v2/computers/me/account/upgrade` (GET status, POST
-draft), `/upgrade/continue` and `/verification-link`. Compatible review APIs
+draft) and `/upgrade/continue`. The legacy `/verification-link` route is
+unavailable while hosted Developer Account Links are disabled for this Stripe
+cohort; owners finish outstanding Projects onboarding in the authenticated
+embedded form on **Your Computers → Upgrade your account**. Compatible review APIs
 must deploy first. Computer identity cannot call the browser approval endpoint.
 This tool does not grant spending credit or purchase a service. Raw provider
 errors never echo personal details or credentials.

@@ -328,6 +328,9 @@ a review button; the owner checks the full profile and terms and approves on
 the review page. No tool field records consent. Machine authentication identifies
 the assigned owner and never authorizes final approval. Cloud agents must not
 collect email sign-in codes or sign in to the owner’s account.
+When Stripe reports `needs_information`, send the owner back to the authenticated
+account-upgrade page to finish its embedded Stripe form. Do not direct them to
+a hosted Stripe verification link while Developer Account Links are unavailable.
 
 `tinyhat-email-onboarding` owns the first email’s subject and voice. It returns a
 `Subject:` line, a blank line, and a short personal body. The channel sends once;

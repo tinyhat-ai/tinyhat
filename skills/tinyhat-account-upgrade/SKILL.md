@@ -92,8 +92,12 @@ files and saved agent memory. Do not repeat full details in a public chat.
 - `pending`: use `continue` after `retry_after_seconds` (normally three seconds).
   Make at most ten checks in one attempt. If still pending, report processing
   and resume with status when asked; do not repeatedly submit.
-- `needs_information`: use `verification_link`, give its private Stripe URL only
-  to the owner, and let them complete verification. Then check `continue`.
+- `needs_information`: ask the owner to reopen **Your Computers → Upgrade your
+  account** in their own browser and complete the embedded Stripe form there.
+  Do not offer a hosted Stripe verification link: this Stripe cohort currently
+  rejects new Developer Account Links. After they finish, check `continue`.
+  If the form fails, have them retry or use **Check with Stripe** on that page;
+  if it still cannot complete, direct them to support with the displayed status.
 - `setup_required` or `recovery_required`: explain the safe message. Do not
   recreate the account, invent data, or change Stripe capabilities.
 - Rate limit: wait at least a minute, then check status.
