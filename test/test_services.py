@@ -1,10 +1,18 @@
 """Usage: python -m unittest discover -s test -p test_services.py"""
 
 import json
+import base64
+import hashlib
+import os
 import sys
+import tempfile
 import unittest
 from pathlib import Path
 from unittest.mock import Mock, patch
+
+from cryptography.hazmat.primitives import hashes, serialization
+from cryptography.hazmat.primitives.asymmetric import padding
+from cryptography.hazmat.primitives.ciphers.aead import AESGCM
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(REPO_ROOT.parent))
@@ -16,6 +24,7 @@ import tinyhat  # noqa: E402
 from test_hermes_adapter import FakeHermesContext  # noqa: E402
 from tinyhat import schemas  # noqa: E402
 from tinyhat.capabilities.services import tool  # noqa: E402
+from tinyhat.capabilities.services import environment  # noqa: E402
 from tinyhat.platform import PlatformError  # noqa: E402
 
 
@@ -150,6 +159,56 @@ class ServicesTests(unittest.TestCase):
         self.client.get_json.side_effect = PlatformError("timed out")
         result = json.loads(tool.services({"action": "status"}))
         self.assertEqual(result["error"], "service_unavailable")
+
+    def test_project_credentials_are_decrypted_only_on_computer(self):
+        secret = "provider-secret-never-in-tool-output"
+
+        def encrypted_reply(_path, payload):
+            public_key = serialization.load_pem_public_key(payload["public_key_pem"].encode())
+            digest = hashlib.sha256(
+                public_key.public_bytes(
+                    serialization.Encoding.DER,
+                    serialization.PublicFormat.SubjectPublicKeyInfo,
+                )
+            ).hexdigest()
+            project_id = "project_1234567890abcdef"
+            aad = f"tinyhat-stripe-project-v1:{project_id}:{digest}"
+            key = os.urandom(32)
+            nonce = os.urandom(12)
+            data = {"resource_access_configurations": [{"resource_id": "resource_123456789", "access_configuration": {"TOKEN": secret}}]}
+            encrypted = AESGCM(key).encrypt(
+                nonce,
+                json.dumps({"stripe_environment_info": json.dumps(data)}).encode(),
+                aad.encode(),
+            )
+            wrapped = public_key.encrypt(
+                key,
+                padding.OAEP(mgf=padding.MGF1(hashes.SHA256()), algorithm=hashes.SHA256(), label=None),
+            )
+            return {
+                "project_id": project_id,
+                "envelope": {
+                    "algorithm": "RSA-OAEP-256+A256GCM",
+                    "key_fingerprint": digest,
+                    "aad": aad,
+                    "wrapped_key": base64.b64encode(wrapped).decode(),
+                    "nonce": base64.b64encode(nonce).decode(),
+                    "ciphertext": base64.b64encode(encrypted).decode(),
+                },
+            }
+
+        self.client.post_json.side_effect = encrypted_reply
+        with tempfile.TemporaryDirectory() as directory, patch.object(
+            environment, "_private_directory", return_value=Path(directory)
+        ):
+            result = json.loads(tool.services({"action": "sync_environment"}))
+            self.assertEqual(result["project_id"], "project_1234567890abcdef")
+            self.assertEqual(result["resource_count"], 1)
+            self.assertNotIn(secret, json.dumps(result))
+            saved = Path(result["credential_file"])
+            self.assertEqual(saved.stat().st_mode & 0o777, 0o600)
+            self.assertIn(secret, saved.read_text())
+        self.client.post_json.assert_called_once()
 
 
 if __name__ == "__main__":

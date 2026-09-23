@@ -35,6 +35,8 @@ INTENT_ACTIONS = {
     "unlink_resource",
     "rotate_resource",
     "unlink_provider_connection",
+    "submit_account_information",
+    "submit_resource_information",
 }
 PREPARE_FIELDS = {
     "action",
@@ -43,8 +45,8 @@ PREPARE_FIELDS = {
     "resource_id",
     "name",
     "configuration",
-    "environment",
     "connection_id",
+    "account_request_id",
     "limit_cents",
 }
 
@@ -103,6 +105,7 @@ def services(args: dict[str, Any] | None = None, **_: Any) -> str:  # noqa: PLR0
         *WRITES,
         "resource",
         "connection_request",
+        "sync_environment",
         "prepare",
         "intent",
         "execute",
@@ -176,6 +179,10 @@ def services(args: dict[str, Any] | None = None, **_: Any) -> str:  # noqa: PLR0
             result = client.get_json(f"{BASE}/resources/{resource_id}")
         elif action == "connection_request":
             result = client.get_json(f"{BASE}/provider-connection-requests/{payload['request_id']}")
+        elif action == "sync_environment":
+            from .environment import sync_environment
+
+            result = sync_environment(client, BASE)
         elif action == "prepare":
             request = payload["request"]
             result = client.post_json(f"{BASE}/intents", request)
