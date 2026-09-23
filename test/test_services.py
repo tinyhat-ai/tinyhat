@@ -125,13 +125,20 @@ class ServicesTests(unittest.TestCase):
                 + operation_id
             ),
         }
-        with patch("tinyhat.tools._telegram_send_message") as send:
+        with (
+            patch("tinyhat.tools._telegram_credentials", return_value=("test-token", 123)),
+            patch("tinyhat.tools._telegram_send_message") as send,
+        ):
             result = json.loads(tool.services({
                 "action": "run", "operation_id": operation_id,
                 "request": {"action": "connect_provider", "provider": "prvdr_future"},
             }))
         self.assertEqual(result["remote_status"], "complete")
         send.assert_not_called()
+
+    def test_unavailable_allowance_action_is_not_offered_to_agent(self):
+        actions = schemas.TINYHAT_SERVICES_SCHEMA["properties"]["request"]["properties"]["action"]["enum"]
+        self.assertNotIn("reserve_provider_allowance", actions)
 
     def test_catalog_and_reviewed_write_use_only_computer_identity(self):
         result = json.loads(

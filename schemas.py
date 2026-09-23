@@ -35,7 +35,6 @@ TINYHAT_SERVICES_SCHEMA = {
                     "type": "string",
                     "enum": [
                         "create_project",
-                        "reserve_provider_allowance",
                         "connect_provider",
                         "create_resource",
                         "link_resource",
@@ -58,7 +57,6 @@ TINYHAT_SERVICES_SCHEMA = {
                 "name": {"type": "string", "maxLength": 120},
                 "configuration": {"type": "object"},
                 "environment": {"type": "string", "enum": ["dev", "prod"]},
-                "limit_cents": {"type": "integer", "minimum": 1, "maximum": 100000000},
             },
             "required": ["action"],
         },
