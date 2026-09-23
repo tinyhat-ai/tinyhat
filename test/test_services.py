@@ -73,6 +73,36 @@ class ServicesTests(unittest.TestCase):
         self.assertEqual(uncertain["error"], "service_request_uncertain")
         self.assertIn("same operation ID", uncertain["message"])
 
+    def test_pending_provider_sign_in_sends_owner_tinyhat_button(self):
+        operation_id = "00000000-0000-4000-8000-000000000022"
+        owner_url = (
+            "https://computer.tinyhat.ai/tinyhat/computers/computer_4/services/review/"
+            + operation_id
+        )
+        self.client.post_json.return_value = {
+            "id": operation_id,
+            "action": "connect_provider",
+            "status": "submitted",
+            "remote_status": "pending_auth",
+            "owner_action_url": owner_url,
+            "summary": {"provider_name": "Cloudflare"},
+        }
+        with (
+            patch("tinyhat.tools._telegram_credentials", return_value=("test-token", 123)),
+            patch("tinyhat.tools._telegram_send_message", return_value={"ok": True}) as send,
+        ):
+            result = json.loads(tool.services({
+                "action": "run",
+                "operation_id": operation_id,
+                "request": {"action": "connect_provider", "provider": "prvdr_future"},
+            }))
+        self.assertTrue(result["telegram_button_sent"])
+        self.assertEqual(result["owner_action_url"], owner_url)
+        button = send.call_args.kwargs["reply_markup"]["inline_keyboard"][0][0]
+        self.assertEqual(button, {"text": "Continue with provider", "url": owner_url})
+        self.assertIn("Sign in to Cloudflare", send.call_args.kwargs["text"])
+        self.assertNotIn("provider.example", json.dumps(result))
+
     def test_catalog_and_reviewed_write_use_only_computer_identity(self):
         result = json.loads(
             tool.services({"action": "catalog_services", "provider_name": "Future Provider"})

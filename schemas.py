@@ -8,7 +8,6 @@ TINYHAT_SERVICES_SCHEMA = {
             "type": "string",
             "enum": [
                 "status",
-                "create_project",
                 "sync_project",
                 "catalog_providers",
                 "catalog_services",
@@ -17,7 +16,6 @@ TINYHAT_SERVICES_SCHEMA = {
                 "sync_environment",
                 "resources",
                 "resource",
-                "prepare",
                 "run",
                 "intent",
                 "execute",

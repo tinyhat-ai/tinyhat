@@ -131,7 +131,9 @@ def _uncertain_message(action: str) -> str:
     return "The outcome is uncertain. Check its status before retrying this write."
 
 
-def _send_service_review_button(url: str, summary: dict[str, Any] | None = None) -> bool:
+def _send_service_review_button(
+    url: str, summary: dict[str, Any] | None = None, *, provider_sign_in: bool = False
+) -> bool:
     try:
         from ...tools import _telegram_credentials, _telegram_send_message
 
@@ -143,7 +145,11 @@ def _send_service_review_button(url: str, summary: dict[str, Any] | None = None)
             "submit_resource_information",
         }
         text = (
-            f"{provider} needs a few details from you. Open this private form."
+            f"Sign in to {provider} to finish connecting it."
+            if provider_sign_in and isinstance(provider, str) and provider
+            else "Sign in with the provider to finish connecting it."
+            if provider_sign_in
+            else f"{provider} needs a few details from you. Open this private form."
             if needs_details and isinstance(provider, str) and provider
             else "Your provider needs a few details. Open this private form."
             if needs_details
@@ -153,7 +159,7 @@ def _send_service_review_button(url: str, summary: dict[str, Any] | None = None)
             token=token,
             chat_id=chat_id,
             text=text,
-            reply_markup={"inline_keyboard": [[{"text": "Review service", "url": url}]]},
+            reply_markup={"inline_keyboard": [[{"text": "Continue with provider" if provider_sign_in else "Review service", "url": url}]]},
         )
         return bool(result.get("ok"))
     except Exception:
@@ -278,6 +284,12 @@ def services(args: dict[str, Any] | None = None, **_: Any) -> str:  # noqa: PLR0
         if action in {"prepare", "create_project"} and isinstance(result.get("review_url"), str):
             result["telegram_button_sent"] = _send_service_review_button(
                 result["review_url"], result.get("summary")
+            )
+        if action == "run" and isinstance(result.get("owner_action_url"), str):
+            if not _review_url(result["owner_action_url"], client.base_url):
+                return _error("service_request_uncertain", _uncertain_message(action))
+            result["telegram_button_sent"] = _send_service_review_button(
+                result["owner_action_url"], result.get("summary"), provider_sign_in=True
             )
         # Stripe's catalog is public schema metadata: field names such as
         # max_tokens and secret_name must remain visible for dynamic discovery.
