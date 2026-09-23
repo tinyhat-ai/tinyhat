@@ -117,7 +117,7 @@ def _safe_model_result(value: Any) -> Any:
 
 
 def _uncertain_message(action: str) -> str:
-    if action == "prepare":
+    if action in {"prepare", "create_project"}:
         return (
             "A review request may already exist. Ask the owner to check their pending "
             "reviews; do not prepare this action again until it is resolved."
@@ -228,9 +228,7 @@ def services(args: dict[str, Any] | None = None, **_: Any) -> str:  # noqa: PLR0
             if action == "create_project" and not _review_url(
                 result.get("review_url"), client.base_url
             ):
-                return _error(
-                    "invalid_platform_response", "Tinyhat returned an invalid review link."
-                )
+                return _error("service_request_uncertain", _uncertain_message(action))
         elif action == "resource":
             resource_id = payload["resource_id"]
             result = client.get_json(f"{BASE}/resources/{resource_id}")
@@ -242,9 +240,7 @@ def services(args: dict[str, Any] | None = None, **_: Any) -> str:  # noqa: PLR0
             request = payload["request"]
             result = client.post_json(f"{BASE}/intents", request)
             if not _review_url(result.get("review_url"), client.base_url):
-                return _error(
-                    "invalid_platform_response", "Tinyhat returned an invalid review link."
-                )
+                return _error("service_request_uncertain", _uncertain_message(action))
         else:
             intent_id = payload["intent_id"]
             path = f"{BASE}/intents/{intent_id}"

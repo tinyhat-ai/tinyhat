@@ -126,7 +126,12 @@ class ServicesTests(unittest.TestCase):
                 }
             )
         )
-        self.assertEqual(result["error"], "invalid_platform_response")
+        self.assertEqual(result["error"], "service_request_uncertain")
+        self.assertIn("do not prepare this action again", result["message"])
+        self.client.post_json.return_value = {}
+        result = json.loads(tool.services({"action": "create_project"}))
+        self.assertEqual(result["error"], "service_request_uncertain")
+        self.assertIn("do not prepare this action again", result["message"])
 
     def test_development_review_origin_is_operator_configured(self):
         url = (
