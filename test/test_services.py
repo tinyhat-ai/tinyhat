@@ -239,10 +239,56 @@ class ServicesTests(unittest.TestCase):
         )
         self.assertEqual(result["error"], "service_request_uncertain")
         self.assertIn("do not prepare this action again", result["message"])
+        self.client.post_json.side_effect = TimeoutError("response timed out")
+        result = json.loads(
+            tool.services(
+                {
+                    "action": "prepare",
+                    "request": {"action": "create_resource", "provider": "prvdr_future"},
+                }
+            )
+        )
+        self.assertEqual(result["error"], "service_request_uncertain")
+        self.assertIn("do not prepare this action again", result["message"])
+        result = json.loads(tool.services({"action": "execute", "intent_id": "a" * 36}))
+        self.assertEqual(result["error"], "service_request_uncertain")
+        self.client.post_json.side_effect = PlatformError(
+            "gateway failed",
+            status_code=500,
+            response={"error": {"code": "internal_error", "message": "Retry shortly."}},
+        )
+        result = json.loads(
+            tool.services(
+                {
+                    "action": "prepare",
+                    "request": {"action": "create_resource", "provider": "prvdr_future"},
+                }
+            )
+        )
+        self.assertEqual(result["error"], "service_request_uncertain")
         self.client.post_json.side_effect = None
         self.client.get_json.side_effect = PlatformError("timed out")
         result = json.loads(tool.services({"action": "status"}))
         self.assertEqual(result["error"], "service_unavailable")
+
+    def test_catalog_schema_fields_are_not_redacted(self):
+        self.client.get_json.return_value = {
+            "data": [
+                {
+                    "id": "svc_future",
+                    "requires_authorization": True,
+                    "configuration_schema": {
+                        "properties": {
+                            "max_tokens": {"type": "integer"},
+                            "secret_name": {"type": "string"},
+                        }
+                    },
+                }
+            ]
+        }
+        result = json.loads(tool.services({"action": "catalog_services"}))
+        self.assertTrue(result["data"][0]["requires_authorization"])
+        self.assertIn("secret_name", result["data"][0]["configuration_schema"]["properties"])
 
     def test_provider_credential_fields_are_removed_from_tool_output(self):
         self.client.get_json.return_value = {

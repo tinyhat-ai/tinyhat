@@ -36,6 +36,7 @@ WRITES = {
     "create_project": "/project",
     "sync_project": "/project/sync",
 }
+UNCERTAIN_WRITES = {*WRITES, "prepare", "execute"}
 INTENT_ACTIONS = {
     "reserve_provider_allowance",
     "connect_provider",
@@ -112,6 +113,15 @@ def _safe_model_result(value: Any) -> Any:
     if isinstance(value, list):
         return [_safe_model_result(item) for item in value]
     return value
+
+
+def _uncertain_message(action: str) -> str:
+    if action == "prepare":
+        return (
+            "A review request may already exist. Ask the owner to check their pending "
+            "reviews; do not prepare this action again until it is resolved."
+        )
+    return "The outcome is uncertain. Check its status before retrying this write."
 
 
 def _send_service_review_button(url: str, summary: dict[str, Any] | None = None) -> bool:
@@ -246,27 +256,34 @@ def services(args: dict[str, Any] | None = None, **_: Any) -> str:  # noqa: PLR0
             result["telegram_button_sent"] = _send_service_review_button(
                 result["review_url"], result.get("summary")
             )
-        return json.dumps(_safe_model_result(result), sort_keys=True)
+        # Stripe's catalog is public schema metadata: field names such as
+        # max_tokens and secret_name must remain visible for dynamic discovery.
+        visible = (
+            result
+            if action in {"catalog_providers", "catalog_services"}
+            else _safe_model_result(result)
+        )
+        return json.dumps(visible, sort_keys=True)
     except PlatformError as exc:
-        uncertain = action in {*WRITES, "prepare", "execute"} and (
+        uncertain = action in UNCERTAIN_WRITES and (
             exc.status_code is None or exc.status_code >= HTTP_SERVER_ERROR
         )
         code = "service_request_uncertain" if uncertain else "service_unavailable"
         message = (
-            "A review request may already exist. Ask the owner to check their pending reviews; do not prepare this action again until it is resolved."
-            if uncertain and action == "prepare"
-            else "The outcome is uncertain. Check its status before retrying this write."
-            if uncertain
-            else "Tinyhat could not complete this request."
+            _uncertain_message(action) if uncertain else "Tinyhat could not complete this request."
         )
-        if isinstance(exc.response, dict):
+        if not uncertain and isinstance(exc.response, dict):
             error = exc.response.get("error")
             if isinstance(error, dict) and isinstance(error.get("code"), str):
                 code = error["code"]
                 if isinstance(error.get("message"), str):
                     message = error["message"][:400]
         return _error(code, message)
-    except (OSError, TypeError, ValueError):
+    except OSError:
+        if action in UNCERTAIN_WRITES:
+            return _error("service_request_uncertain", _uncertain_message(action))
+        return _error("service_unavailable", "Tinyhat could not complete this request.")
+    except (TypeError, ValueError):
         return _error(
             "service_unavailable",
             "Tinyhat could not confirm this service request. Check its status.",
