@@ -76,6 +76,20 @@ class ServicesTests(unittest.TestCase):
         self.client.post_json.assert_called_with(tool.BASE + "/project", {})
         self.assertNotIn("approve", schemas.TINYHAT_SERVICES_SCHEMA["properties"]["action"]["enum"])
 
+    def test_account_resource_association_still_requires_owner_review(self):
+        allowed = schemas.TINYHAT_SERVICES_SCHEMA["properties"]["request"]["properties"]["action"]["enum"]
+        self.assertIn("attach_resource", allowed)
+        self.assertIn("detach_resource", allowed)
+        self.client.post_json.return_value = {
+            "id": "a" * 36,
+            "review_url": "https://computer.tinyhat.ai/tinyhat/computers/computer_4/services/review/" + "a" * 36,
+            "status": "awaiting_approval",
+        }
+        request = {"action": "attach_resource", "resource_id": "resource_123456789"}
+        result = json.loads(tool.services({"action": "prepare", "request": request}))
+        self.assertEqual(result["status"], "awaiting_approval")
+        self.client.post_json.assert_called_once_with(tool.BASE + "/intents", request)
+
     def test_rejects_foreign_identity_and_unsafe_inputs(self):
         self.assertEqual(
             json.loads(tool.services({"action": "status", "account_id": "other"}))["error"],
@@ -123,6 +137,37 @@ class ServicesTests(unittest.TestCase):
                     url.replace("dev-computer.example.test", "evil.example"), self.client.base_url
                 )
             )
+
+    def test_review_button_and_non_telegram_fallback(self):
+        url = (
+            "https://computer.tinyhat.ai/tinyhat/computers/computer_4/services/review/"
+            + "a" * 36
+        )
+        with patch("tinyhat.tools._telegram_credentials", return_value=("test-token", 123)), patch(
+            "tinyhat.tools._telegram_send_message", return_value={"ok": True}
+        ) as send:
+            self.assertTrue(tool._send_service_review_button(url))
+            self.assertEqual(send.call_args.kwargs["reply_markup"]["inline_keyboard"][0][0]["url"], url)
+        with patch("tinyhat.tools._telegram_credentials", side_effect=RuntimeError("unavailable")):
+            self.assertFalse(tool._send_service_review_button(url))
+
+    def test_page_round_trip_and_computer_identity(self):
+        page_url = "/v2/provisioning/resources?project=project_123&page=abc"
+        self.assertEqual(json.loads(tool.services({"action": "resources", "page_url": page_url})), {"data": []})
+        self.client.get_json.assert_called_once_with(
+            tool.BASE + "/resources?page_url=%2Fv2%2Fprovisioning%2Fresources%3Fproject%3Dproject_123%26page%3Dabc"
+        )
+        self.client.get_json.reset_mock()
+        self.assertEqual(
+            json.loads(tool.services({"action": "connection_request", "request_id": "facctrq_123456789"})),
+            {"data": []},
+        )
+        self.client.get_json.assert_called_once_with(
+            tool.BASE + "/provider-connection-requests/facctrq_123456789"
+        )
+        self.builder.return_value = (self.client, "local_dev")
+        refused = json.loads(tool.services({"action": "status"}))
+        self.assertEqual(refused["error"], "computer_identity_required")
 
     def test_definite_refusal_preserves_actionable_message(self):
         self.client.post_json.side_effect = PlatformError(
