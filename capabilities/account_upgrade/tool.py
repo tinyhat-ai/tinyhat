@@ -22,6 +22,7 @@ STATUS_FIELDS = {
     "stage",
     "message",
     "requirements",
+    "stripe_form_required",
     "spending_limit_cents",
     "autonomous_services_authorized",
     "services_authorization_url",
@@ -75,6 +76,7 @@ def _request_failure(action: str, exc: Exception) -> str:
         "computer_owner_unavailable": "Tinyhat could not confirm this Computer's current owner. Check its assignment before retrying.",
         "computer_owner_changed": "Tinyhat could not confirm this Computer's current owner. Check its assignment before retrying.",
         "stripe_hosted_unavailable": "Ask the owner to open Profile (person icon) on computer.tinyhat.ai, then Upgrade your agent and Continue to finish Stripe's embedded form. Do not retry the hosted link.",
+        "country_unavailable": "Stripe Projects is not available for that country. Check the country with the owner; do not substitute another country. The owner can check their Profile or contact Tinyhat support.",
     }
     response = (
         exc.response if isinstance(exc, PlatformError) and isinstance(exc.response, dict) else {}

@@ -89,7 +89,7 @@ class AccountUpgradeTests(unittest.TestCase):
         self.assertIn("**Profile** (person icon)", normalized)
         self.assertIn("**Upgrade your agent → Continue**", normalized)
         self.assertNotIn("Your Computers → Upgrade your account", normalized)
-        needs_information = skill.split("- `needs_information`:", 1)[1].split("- `setup_required`", 1)[0]
+        needs_information = skill.split("- `needs_information`", 1)[1].split("- `setup_required`", 1)[0]
         self.assertNotIn("use `verification_link`", needs_information)
 
     def test_agent_cannot_supply_consent_or_an_approval_action(self):
@@ -341,6 +341,35 @@ class AccountUpgradeTests(unittest.TestCase):
         self.assertEqual(result["error"], "stripe_hosted_unavailable")
         self.assertIn("Profile", result["message"])
         self.assertNotIn("private Stripe response", json.dumps(result))
+
+    def test_country_unavailable_does_not_invite_guessing(self):
+        self.client.post_json.side_effect = PlatformError(
+            "private provider response",
+            status_code=422,
+            response={"error": {"code": "country_unavailable"}},
+        )
+        result = json.loads(tool.account_upgrade(self.payload()))
+        self.assertEqual(result["error"], "country_unavailable")
+        self.assertIn("do not substitute another country", result["message"])
+        self.assertNotIn("private provider response", json.dumps(result))
+
+    def test_status_exposes_form_and_service_authorization_separately(self):
+        self.client.get_json.return_value = {
+            "status": "needs_information",
+            "stripe_form_required": False,
+            "requirements": ["stripe_projects_eligibility"],
+        }
+        result = json.loads(tool.account_upgrade({"action": "status"}))
+        self.assertIs(result["stripe_form_required"], False)
+        self.assertEqual(result["requirements"], ["stripe_projects_eligibility"])
+        self.client.get_json.return_value = {
+            "status": "ready",
+            "autonomous_services_authorized": False,
+            "services_authorization_url": "https://computer.tinyhat.ai/tinyhat/account/upgrade",
+        }
+        result = json.loads(tool.account_upgrade({"action": "status"}))
+        self.assertIs(result["autonomous_services_authorized"], False)
+        self.assertIn("services_authorization_url", result)
 
     def test_local_token_does_not_masquerade_as_cloud_identity(self):
         self.builder.return_value = (self.client, "local_dev")

@@ -22,9 +22,11 @@ a laptop account token onto the Computer.
 ## Explain the upgrade
 
 “This optional upgrade creates your individual Stripe account so I can help you
-connect services. Tinyhat funds services within your monthly allowance. You
-review the upgrade and terms once, then Stripe asks for any identity details it
-needs on its own form. This does not buy a service or add Computer credit.”
+connect services. Tinyhat funds services within your monthly allowance. Your
+approval can let me connect providers, accept their terms, share contact details
+and facts you give me, and set up eligible free services without asking each time.
+You review the terms first, then Stripe asks for any identity details it needs
+on its own form. This does not buy a service or add Computer credit.”
 
 Show the actual allowance, including $0. Never promise free services or immediate
 provider availability. Explain that the one approval includes sharing personal
@@ -33,8 +35,8 @@ applicable. Show current terms/privacy/disclosure URLs from status when asked.
 
 Prefer the private form when the owner does not want to share details in chat,
 or ownership of the current conversation is unclear. Ask them to open their
-**Profile** (person icon) on computer.tinyhat.ai, then **Upgrade your agent →
-Continue**. Never invent
+**Profile** (person icon) on computer.tinyhat.ai, then **Upgrade your agent**.
+Choose **Get started** or **Continue**, whichever the page shows. Never invent
 a production sign-up shortcut or substitute another account. Opening a page or
 receiving a link accepts nothing.
 
@@ -93,21 +95,27 @@ files and saved agent memory. Do not repeat full details in a public chat.
 - `pending`: use `continue` after `retry_after_seconds` (normally three seconds).
   Make at most ten checks in one attempt. If still pending, report processing
   and resume with status when asked; do not repeatedly submit.
-- `needs_information`: ask the owner to open their **Profile** (person icon) on
-  computer.tinyhat.ai, then **Upgrade your agent → Continue**, and complete the
-  embedded Stripe form there.
-  Do not offer a hosted Stripe verification link: this Stripe cohort currently
-  rejects new Developer Account Links. After they finish, check `continue`.
-  If the form fails, have them retry or use **Check with Stripe** on that page;
-  if it still cannot complete, direct them to support with the displayed status.
+- `needs_information` with `stripe_form_required: true`: ask the owner to open
+  their **Profile** (person icon) on computer.tinyhat.ai, then **Upgrade your
+  agent → Continue**, and complete the embedded Stripe form there. Do not offer
+  a hosted Stripe verification link: this Stripe cohort currently rejects new
+  Developer Account Links. After they finish, check `continue`. If the form
+  fails, have them retry or use **Check with Stripe** on that page; if it still
+  cannot complete, direct them to support with the displayed status.
+- `needs_information` without `stripe_form_required`: Stripe may still be
+  checking eligibility. Ask the owner to use **Check again** on the same page
+  or check status later; do not claim that a form is waiting for them.
 - `setup_required` or `recovery_required`: explain the safe message. Do not
   recreate the account, invent data, or change Stripe capabilities.
 - Rate limit: wait at least a minute, then check status.
 - Conflict: check the current revision. Only unapproved drafts can be corrected;
   approved or uncertain Stripe requests require support for changes.
 - Lost response: check status before retrying. Preserve the existing request.
-- `ready`: show the monthly allowance. The owner's one-time authorization lets
-  the agent set up eligible free or fixed-price services within that allowance
-  without asking for another purchase approval. Check provider availability,
-  terms and spending reservation before each write; some providers may still
-  need the owner to complete their own sign-in or verification.
+- `ready`: show the monthly allowance and check
+  `autonomous_services_authorized`. If false, give the owner the returned
+  `services_authorization_url` for the one-time grant before setting up any
+  service. Do not infer consent from readiness. If true, follow the
+  `tinyhat-services` skill for the actual write rules: eligible free services
+  can proceed without another Tinyhat approval; paid services still need a
+  verified fixed price and are currently unavailable through the catalog.
+  Providers may require their own sign-in or verification.
