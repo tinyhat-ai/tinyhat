@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- Let an assigned Computer request a reviewed monthly Provider allowance, show
+  owner review buttons directly in Telegram when available, and surface safe
+  Stripe error details and connection progress. Requires the Computer services
+  platform API in [tinyloophub/tinyloop#1380](https://github.com/tinyloophub/tinyloop/pull/1380)
+  to be deployed before this plugin is released.
+
 ## 0.32.24 - 2026-09-18
 
 - Pair with Tinyhat Hermes runtime 0.0.77, including the default-voice alignment
