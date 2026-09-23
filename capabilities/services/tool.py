@@ -84,15 +84,25 @@ def _review_url(url: Any, base_url: str) -> bool:
     )
 
 
-def _send_service_review_button(url: str) -> bool:
+def _send_service_review_button(url: str, summary: dict[str, Any] | None = None) -> bool:
     try:
         from ...tools import _telegram_credentials, _telegram_send_message  # noqa: PLC0415
 
         token, chat_id = _telegram_credentials()
+        summary = summary if isinstance(summary, dict) else {}
+        provider = summary.get("provider_name")
+        needs_details = summary.get("action") in {"submit_account_information", "submit_resource_information"}
+        text = (
+            f"{provider} needs a few details from you. Open this private form."
+            if needs_details and isinstance(provider, str) and provider
+            else "Your provider needs a few details. Open this private form."
+            if needs_details
+            else "Review this service change before I continue."
+        )
         result = _telegram_send_message(
             token=token,
             chat_id=chat_id,
-            text="A service change is ready for your review. Check the details before approving.",
+            text=text,
             reply_markup={"inline_keyboard": [[{"text": "Review service", "url": url}]]},
         )
         return bool(result.get("ok"))
@@ -202,7 +212,7 @@ def services(args: dict[str, Any] | None = None, **_: Any) -> str:  # noqa: PLR0
                 else client.get_json(path)
             )
         if action in {"prepare", "create_project"} and isinstance(result.get("review_url"), str):
-            result["telegram_button_sent"] = _send_service_review_button(result["review_url"])
+            result["telegram_button_sent"] = _send_service_review_button(result["review_url"], result.get("summary"))
         return json.dumps(result, sort_keys=True)
     except PlatformError as exc:
         uncertain = action in {*WRITES, "execute"} and (

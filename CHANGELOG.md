@@ -2,9 +2,14 @@
 
 ## Unreleased
 
-- Let an assigned Computer request a reviewed monthly Provider allowance, show
-  owner review buttons directly in Telegram when available, and surface safe
-  Stripe error details and connection progress. Requires the Computer services
+- Add the `tinyhat_services` tool and `tinyhat-services` skill for an assigned
+  Computer to discover Providers, create its Stripe Project, connect Providers,
+  and create, link, attach, detach, change, or remove Resources with owner review.
+  The owner enters Provider-requested details on Tinyhat's private form, which
+  submits directly without storing those details in the intent. Show review
+  buttons in Telegram when available and surface safe connection progress.
+  `sync_environment` writes Project credentials under
+  `~/.config/tinyhat/stripe-projects/` on the Computer. Requires the Computer services
   platform API in [tinyloophub/tinyloop#1380](https://github.com/tinyloophub/tinyloop/pull/1380)
   to be deployed before this plugin is released.
 

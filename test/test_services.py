@@ -148,6 +148,10 @@ class ServicesTests(unittest.TestCase):
         ) as send:
             self.assertTrue(tool._send_service_review_button(url))
             self.assertEqual(send.call_args.kwargs["reply_markup"]["inline_keyboard"][0][0]["url"], url)
+            self.assertTrue(tool._send_service_review_button(url, {
+                "action": "submit_account_information", "provider_name": "Example Provider"
+            }))
+            self.assertIn("Example Provider needs", send.call_args.kwargs["text"])
         with patch("tinyhat.tools._telegram_credentials", side_effect=RuntimeError("unavailable")):
             self.assertFalse(tool._send_service_review_button(url))
 
