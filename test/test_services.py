@@ -7,6 +7,7 @@ import os
 import sys
 import tempfile
 import unittest
+from http.client import IncompleteRead
 from pathlib import Path
 from unittest.mock import Mock, patch
 
@@ -251,6 +252,28 @@ class ServicesTests(unittest.TestCase):
         self.assertEqual(result["error"], "service_request_uncertain")
         self.assertIn("do not prepare this action again", result["message"])
         result = json.loads(tool.services({"action": "execute", "intent_id": "a" * 36}))
+        self.assertEqual(result["error"], "service_request_uncertain")
+        self.client.post_json.side_effect = IncompleteRead(b"partial")
+        result = json.loads(
+            tool.services(
+                {
+                    "action": "prepare",
+                    "request": {"action": "create_resource", "provider": "prvdr_future"},
+                }
+            )
+        )
+        self.assertEqual(result["error"], "service_request_uncertain")
+        result = json.loads(tool.services({"action": "execute", "intent_id": "a" * 36}))
+        self.assertEqual(result["error"], "service_request_uncertain")
+        self.client.post_json.side_effect = UnicodeDecodeError("utf-8", b"\xff", 0, 1, "invalid")
+        result = json.loads(
+            tool.services(
+                {
+                    "action": "prepare",
+                    "request": {"action": "create_resource", "provider": "prvdr_future"},
+                }
+            )
+        )
         self.assertEqual(result["error"], "service_request_uncertain")
         self.client.post_json.side_effect = PlatformError(
             "gateway failed",

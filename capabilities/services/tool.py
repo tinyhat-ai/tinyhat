@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import re
+from http.client import HTTPException
 from typing import Any
 from urllib.parse import quote, urlsplit
 
@@ -279,7 +280,7 @@ def services(args: dict[str, Any] | None = None, **_: Any) -> str:  # noqa: PLR0
                 if isinstance(error.get("message"), str):
                     message = error["message"][:400]
         return _error(code, message)
-    except OSError:
+    except (OSError, HTTPException, UnicodeDecodeError):
         if action in UNCERTAIN_WRITES:
             return _error("service_request_uncertain", _uncertain_message(action))
         return _error("service_unavailable", "Tinyhat could not complete this request.")
