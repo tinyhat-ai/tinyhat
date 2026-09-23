@@ -50,6 +50,29 @@ class ServicesTests(unittest.TestCase):
         self.assertIs(context.tools["tinyhat_services"]["handler"], tool.services)
         self.assertIs(context.tools["tinyhat_services"]["schema"], schemas.TINYHAT_SERVICES_SCHEMA)
 
+    def test_authorized_run_uses_stable_operation_id_without_review(self):
+        operation_id = "00000000-0000-4000-8000-000000000001"
+        request = {"action": "create_project"}
+        self.assertIn("run", schemas.TINYHAT_SERVICES_SCHEMA["properties"]["action"]["enum"])
+        self.client.post_json.return_value = {
+            "id": operation_id,
+            "status": "submitted",
+            "remote_id": "project_123456789",
+        }
+        result = json.loads(
+            tool.services({"action": "run", "operation_id": operation_id, "request": request})
+        )
+        self.assertEqual(result["status"], "submitted")
+        self.client.post_json.assert_called_once_with(
+            tool.BASE + "/actions", {"operation_id": operation_id, "request": request}
+        )
+        self.client.post_json.side_effect = PlatformError("timed out")
+        uncertain = json.loads(
+            tool.services({"action": "run", "operation_id": operation_id, "request": request})
+        )
+        self.assertEqual(uncertain["error"], "service_request_uncertain")
+        self.assertIn("same operation ID", uncertain["message"])
+
     def test_catalog_and_reviewed_write_use_only_computer_identity(self):
         result = json.loads(
             tool.services({"action": "catalog_services", "provider_name": "Future Provider"})

@@ -2,7 +2,7 @@
 
 TINYHAT_SERVICES_SCHEMA = {
     "type": "object",
-    "description": "Discover Stripe Projects providers and services for this Computer, prepare reviewed connection/resource changes, and check their status. A signed-in owner approves writes on Tinyhat; this tool cannot approve them.",
+    "description": "Discover Stripe Projects services and manage this Computer's Project after the owner's one-time service authorization. Use run with a UUID for each autonomous, budgeted change; return the working result to the owner.",
     "properties": {
         "action": {
             "type": "string",
@@ -18,6 +18,7 @@ TINYHAT_SERVICES_SCHEMA = {
                 "resources",
                 "resource",
                 "prepare",
+                "run",
                 "intent",
                 "execute",
             ],
@@ -27,6 +28,7 @@ TINYHAT_SERVICES_SCHEMA = {
         "resource_id": {"type": "string", "maxLength": 160},
         "request_id": {"type": "string", "maxLength": 160},
         "intent_id": {"type": "string", "pattern": r"^[a-f0-9-]{36}$"},
+        "operation_id": {"type": "string", "pattern": r"^[a-f0-9-]{36}$"},
         "request": {
             "type": "object",
             "additionalProperties": False,
@@ -34,6 +36,7 @@ TINYHAT_SERVICES_SCHEMA = {
                 "action": {
                     "type": "string",
                     "enum": [
+                        "create_project",
                         "reserve_provider_allowance",
                         "connect_provider",
                         "create_resource",

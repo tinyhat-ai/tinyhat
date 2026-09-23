@@ -6,7 +6,7 @@ workers, and private helpers together.
 - `contact_details/`: the Agent's managed phone number and email address.
 - `credit/`: owner credit and Agent model-budget operations.
 - `account_upgrade/`: individual owner upgrade drafts and human review buttons for Stripe Projects.
-- `services/`: Computer-scoped Stripe Projects catalog, Project and reviewed Resource operations, including account-resource attachment.
+- `services/`: Computer-scoped Stripe Projects catalog and autonomous budgeted Project, Provider, and Resource operations after one owner authorization, including account-resource attachment.
 - `mail/`: the Agent's private Tinyhat mailbox.
 - `google_workspace/`: Google connection, permission, app, and worker flows.
 - `hats/`: Hat creation, installation, repositories, and private values.

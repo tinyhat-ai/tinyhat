@@ -1,4 +1,4 @@
-"""Machine-identity client for reviewed, Computer-scoped Stripe Projects APIs."""
+"""Machine-identity client for budgeted, Computer-scoped Stripe Projects APIs."""
 
 from __future__ import annotations
 
@@ -37,8 +37,9 @@ WRITES = {
     "create_project": "/project",
     "sync_project": "/project/sync",
 }
-UNCERTAIN_WRITES = {*WRITES, "prepare", "execute"}
+UNCERTAIN_WRITES = {*WRITES, "prepare", "execute", "run"}
 INTENT_ACTIONS = {
+    "create_project",
     "reserve_provider_allowance",
     "connect_provider",
     "create_resource",
@@ -117,6 +118,11 @@ def _safe_model_result(value: Any) -> Any:
 
 
 def _uncertain_message(action: str) -> str:
+    if action == "run":
+        return (
+            "The service action may already have happened. Check its status with "
+            "the same operation ID; never repeat it with a new ID."
+        )
     if action in {"prepare", "create_project"}:
         return (
             "A review request may already exist. Ask the owner to check their pending "
@@ -164,13 +170,16 @@ def services(args: dict[str, Any] | None = None, **_: Any) -> str:  # noqa: PLR0
         "connection_request",
         "sync_environment",
         "prepare",
+        "run",
         "intent",
         "execute",
     }:
         return _error("invalid_action", "Choose a documented service action.")
     allowed = {"action"}
-    if action == "prepare":
+    if action in {"prepare", "run"}:
         allowed.add("request")
+        if action == "run":
+            allowed.add("operation_id")
     elif action in {"resource"}:
         allowed.add("resource_id")
     elif action == "connection_request":
@@ -183,7 +192,7 @@ def services(args: dict[str, Any] | None = None, **_: Any) -> str:  # noqa: PLR0
         return _error(
             "invalid_arguments", "Do not supply account, Computer, or Stripe key identifiers."
         )
-    if action == "prepare":
+    if action in {"prepare", "run"}:
         request = payload.get("request")
         if (
             not isinstance(request, dict)
@@ -194,6 +203,11 @@ def services(args: dict[str, Any] | None = None, **_: Any) -> str:  # noqa: PLR0
             return _error(
                 "invalid_arguments", "Choose a supported service action and its exact settings."
             )
+        if action == "run" and not (
+            isinstance(payload.get("operation_id"), str)
+            and re.fullmatch(r"[a-f0-9-]{36}", payload["operation_id"])
+        ):
+            return _error("invalid_arguments", "Generate and keep a UUID for this service action.")
     elif action == "resource" and not _identifier(payload.get("resource_id")):
         return _error("invalid_arguments", "Choose a Resource ID returned by this Computer.")
     elif action == "connection_request" and not _identifier(payload.get("request_id")):
@@ -240,6 +254,18 @@ def services(args: dict[str, Any] | None = None, **_: Any) -> str:  # noqa: PLR0
             request = payload["request"]
             result = client.post_json(f"{BASE}/intents", request)
             if not _review_url(result.get("review_url"), client.base_url):
+                return _error("service_request_uncertain", _uncertain_message(action))
+        elif action == "run":
+            result = client.post_json(
+                f"{BASE}/actions",
+                {
+                    "operation_id": payload["operation_id"],
+                    "request": payload["request"],
+                },
+            )
+            if result.get("id") != payload["operation_id"] or result.get("status") not in {
+                "submitted", "uncertain", "failed", "stale", "executing", "authorized"
+            }:
                 return _error("service_request_uncertain", _uncertain_message(action))
         else:
             intent_id = payload["intent_id"]
