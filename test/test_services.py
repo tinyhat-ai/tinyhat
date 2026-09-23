@@ -73,6 +73,16 @@ class ServicesTests(unittest.TestCase):
         self.assertEqual(uncertain["error"], "service_request_uncertain")
         self.assertIn("same operation ID", uncertain["message"])
 
+    def test_expired_unsubmitted_operation_is_reported_as_expired(self):
+        operation_id = "00000000-0000-4000-8000-000000000023"
+        self.client.post_json.return_value = {"id": operation_id, "status": "expired"}
+        result = json.loads(tool.services({
+            "action": "run", "operation_id": operation_id,
+            "request": {"action": "create_project"},
+        }))
+        self.assertEqual(result["status"], "expired")
+        self.assertNotIn("error", result)
+
     def test_pending_provider_sign_in_sends_owner_tinyhat_button(self):
         operation_id = "00000000-0000-4000-8000-000000000022"
         owner_url = (
@@ -102,6 +112,26 @@ class ServicesTests(unittest.TestCase):
         self.assertEqual(button, {"text": "Continue with provider", "url": owner_url})
         self.assertIn("Sign in to Cloudflare", send.call_args.kwargs["text"])
         self.assertNotIn("provider.example", json.dumps(result))
+
+    def test_completed_provider_connection_does_not_send_sign_in_button(self):
+        operation_id = "00000000-0000-4000-8000-000000000024"
+        self.client.post_json.return_value = {
+            "id": operation_id,
+            "action": "connect_provider",
+            "status": "submitted",
+            "remote_status": "complete",
+            "owner_action_url": (
+                "https://computer.tinyhat.ai/tinyhat/computers/computer_4/services/review/"
+                + operation_id
+            ),
+        }
+        with patch("tinyhat.tools._telegram_send_message") as send:
+            result = json.loads(tool.services({
+                "action": "run", "operation_id": operation_id,
+                "request": {"action": "connect_provider", "provider": "prvdr_future"},
+            }))
+        self.assertEqual(result["remote_status"], "complete")
+        send.assert_not_called()
 
     def test_catalog_and_reviewed_write_use_only_computer_identity(self):
         result = json.loads(

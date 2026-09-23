@@ -270,7 +270,7 @@ def services(args: dict[str, Any] | None = None, **_: Any) -> str:  # noqa: PLR0
                 },
             )
             if result.get("id") != payload["operation_id"] or result.get("status") not in {
-                "submitted", "uncertain", "failed", "stale", "executing", "authorized"
+                "submitted", "uncertain", "failed", "stale", "expired", "executing", "authorized"
             }:
                 return _error("service_request_uncertain", _uncertain_message(action))
         else:
@@ -285,7 +285,7 @@ def services(args: dict[str, Any] | None = None, **_: Any) -> str:  # noqa: PLR0
             result["telegram_button_sent"] = _send_service_review_button(
                 result["review_url"], result.get("summary")
             )
-        if action == "run" and isinstance(result.get("owner_action_url"), str):
+        if action == "run" and result.get("remote_status") == "pending_auth" and isinstance(result.get("owner_action_url"), str):
             if not _review_url(result["owner_action_url"], client.base_url):
                 return _error("service_request_uncertain", _uncertain_message(action))
             result["telegram_button_sent"] = _send_service_review_button(
