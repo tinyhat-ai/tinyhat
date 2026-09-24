@@ -28,6 +28,7 @@ STATUS_FIELDS = {
     "services_authorization_url",
     "reserved_limit_cents",
     "available_limit_cents",
+    "provider_allowances",
     "currency",
     "interval",
     "terms_version",
