@@ -24,7 +24,9 @@ a laptop account token onto the Computer.
 “This optional upgrade creates your individual Stripe account so I can help you
 connect services. Tinyhat funds services within your monthly allowance. Your
 approval can let me connect providers, accept their terms, share contact details
-and facts you give me, and set up eligible free services without asking each time.
+and facts you give me, and set up free services or fixed-price paid plans within
+your monthly allowance without asking about each purchase. Usage-priced services
+remain unavailable.
 You review the terms first, then Stripe asks for any identity details it needs
 on its own form. This does not buy a service or add Computer credit.”
 
@@ -115,7 +117,10 @@ files and saved agent memory. Do not repeat full details in a public chat.
   `autonomous_services_authorized`. If false, give the owner the returned
   `services_authorization_url` for the one-time grant before setting up any
   service. Do not infer consent from readiness. If true, follow the
-  `tinyhat-services` skill for the actual write rules: eligible free services
-  can proceed without another Tinyhat approval; paid services still need a
-  verified fixed price and are currently unavailable through the catalog.
+  `tinyhat-services` skill for the actual write rules. Check
+  `autonomous_paid_services_authorized` before any paid setup: older grants
+  covered only free services and need one new approval on the same account page.
+  Fixed-price paid plans can then proceed within a confirmed provider allowance;
+  usage-priced or unpriced plans remain blocked. No Tinyhat approval is needed
+  for each purchase.
   Providers may require their own sign-in or verification.

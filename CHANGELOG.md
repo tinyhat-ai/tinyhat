@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+- Let agents set up fixed-price paid Stripe Projects plans within the owner's
+  confirmed provider allowance after one paid-service authorization. Existing
+  free-service grants need one renewal before paid setup; usage-priced plans
+  remain blocked. Show agents where to find a safe Stripe refusal and request ID.
+  Requires [tinyloophub/tinyloop#1390](https://github.com/tinyloophub/tinyloop/pull/1390)
+  to be deployed before this plugin is promoted to managed Computers.
+
 ## 0.32.26 - 2026-09-23
 
 - Guide the Agent through the current Stripe account upgrade flow. The draft

@@ -70,6 +70,20 @@ class AccountUpgradeTests(unittest.TestCase):
         )
         self.builder.assert_called_with(timeout_seconds=45)
 
+    def test_status_shows_provider_allowances_without_unrelated_fields(self):
+        self.client.get_json.return_value = {
+            "status": "ready",
+            "available_limit_cents": 500,
+            "provider_allowances": {"prvdr_example": 500},
+            "autonomous_paid_services_authorized": True,
+            "stripe_secret_key": "private",
+        }
+        result = json.loads(tool.account_upgrade({"action": "status"}))
+        self.assertEqual(result["provider_allowances"], {"prvdr_example": 500})
+        self.assertIs(result["autonomous_paid_services_authorized"], True)
+        self.assertEqual(result["available_limit_cents"], 500)
+        self.assertNotIn("stripe_secret_key", result)
+
     def test_prepare_sends_only_country_even_from_older_agent_payload(self):
         payload = self.payload()
         payload["individual"].update({"given_name": "private", "phone": "+12045550123"})
