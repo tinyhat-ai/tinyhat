@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+## 0.32.27 - 2026-09-24
+
 - Let agents set up fixed-price paid Stripe Projects plans within the owner's
   confirmed provider allowance after one paid-service authorization. Existing
   free-service grants need one renewal before paid setup; usage-priced plans
