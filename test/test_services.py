@@ -136,9 +136,10 @@ class ServicesTests(unittest.TestCase):
         self.assertEqual(result["remote_status"], "complete")
         send.assert_not_called()
 
-    def test_unavailable_allowance_action_is_not_offered_to_agent(self):
+    def test_allowance_action_is_offered_to_agent(self):
         actions = schemas.TINYHAT_SERVICES_SCHEMA["properties"]["request"]["properties"]["action"]["enum"]
-        self.assertNotIn("reserve_provider_allowance", actions)
+        self.assertIn("reserve_provider_allowance", actions)
+        self.assertIn("limit_cents", schemas.TINYHAT_SERVICES_SCHEMA["properties"]["request"]["properties"])
 
     def test_catalog_and_reviewed_write_use_only_computer_identity(self):
         result = json.loads(
