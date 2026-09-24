@@ -4,9 +4,10 @@
 
 ## 0.32.26 - 2026-09-23
 
-- Guide the Agent through the current Stripe account upgrade flow. When an
-  embedded form is unavailable, use the authenticated hosted Stripe onboarding
-  link and check the resulting account status before claiming completion.
+- Guide the Agent through the current Stripe account upgrade flow. The draft
+  asks for a country code; Stripe gathers identity details in the embedded
+  form. If that form is unavailable, retry, check the Stripe account status,
+  then seek support rather than offering the legacy hosted link.
 - Respect the owner's one-time service authorization and explain remaining
   requirements without asking for approval on each service.
   Requires the compatible platform change in
