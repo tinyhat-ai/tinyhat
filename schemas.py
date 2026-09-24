@@ -58,7 +58,12 @@ TINYHAT_SERVICES_SCHEMA = {
                 "name": {"type": "string", "maxLength": 120},
                 "configuration": {"type": "object"},
                 "environment": {"type": "string", "enum": ["dev", "prod"]},
-                "limit_cents": {"type": "integer", "minimum": 1, "maximum": 100000000},
+                "limit_cents": {
+                    "type": "integer",
+                    "minimum": 1,
+                    "maximum": 100000000,
+                    "description": "Provider's new absolute monthly USD limit in cents, not an increment. An existing provider limit cannot be lowered here.",
+                },
             },
             "required": ["action"],
         },

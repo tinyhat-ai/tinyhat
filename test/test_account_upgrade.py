@@ -75,10 +75,12 @@ class AccountUpgradeTests(unittest.TestCase):
             "status": "ready",
             "available_limit_cents": 500,
             "provider_allowances": {"prvdr_example": 500},
+            "autonomous_paid_services_authorized": True,
             "stripe_secret_key": "private",
         }
         result = json.loads(tool.account_upgrade({"action": "status"}))
         self.assertEqual(result["provider_allowances"], {"prvdr_example": 500})
+        self.assertIs(result["autonomous_paid_services_authorized"], True)
         self.assertEqual(result["available_limit_cents"], 500)
         self.assertNotIn("stripe_secret_key", result)
 

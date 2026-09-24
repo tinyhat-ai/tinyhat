@@ -121,7 +121,7 @@
       "qualified_name": "tinyhat:tinyhat-services",
       "aliases": ["tinyhat-services"],
       "path": "skills/tinyhat-services/SKILL.md",
-      "purpose": "Discovers Stripe Projects services and prepares Computer-scoped Provider and Resource changes for owner review."
+      "purpose": "Discovers and manages Stripe Projects services for this Computer after the owner's one-time authorization."
     },
     {
       "name": "tinyhat-local-app-sharing",

@@ -141,6 +141,29 @@ class ServicesTests(unittest.TestCase):
         self.assertIn("reserve_provider_allowance", actions)
         self.assertIn("limit_cents", schemas.TINYHAT_SERVICES_SCHEMA["properties"]["request"]["properties"])
 
+    def test_allowance_request_reaches_platform_unchanged(self):
+        operation_id = "00000000-0000-4000-8000-000000000025"
+        request = {
+            "action": "reserve_provider_allowance",
+            "provider": "prvdr_example",
+            "service_ref": "svc_fixed_monthly",
+            "limit_cents": 900,
+        }
+        self.client.post_json.return_value = {
+            "id": operation_id,
+            "status": "submitted",
+            "remote_status": "active",
+            "summary": {"monthly_allowance_cents": 900},
+        }
+        result = json.loads(tool.services({
+            "action": "run", "operation_id": operation_id, "request": request,
+        }))
+        self.assertEqual(result["remote_status"], "active")
+        self.assertEqual(result["summary"]["monthly_allowance_cents"], 900)
+        self.client.post_json.assert_called_once_with(
+            tool.BASE + "/actions", {"operation_id": operation_id, "request": request}
+        )
+
     def test_catalog_and_reviewed_write_use_only_computer_identity(self):
         result = json.loads(
             tool.services({"action": "catalog_services", "provider_name": "Future Provider"})

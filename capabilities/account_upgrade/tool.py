@@ -25,6 +25,7 @@ STATUS_FIELDS = {
     "stripe_form_required",
     "spending_limit_cents",
     "autonomous_services_authorized",
+    "autonomous_paid_services_authorized",
     "services_authorization_url",
     "reserved_limit_cents",
     "available_limit_cents",
