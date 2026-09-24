@@ -2,6 +2,17 @@
 
 ## Unreleased
 
+## 0.32.26 - 2026-09-23
+
+- Guide the Agent through the current Stripe account upgrade flow. When an
+  embedded form is unavailable, use the authenticated hosted Stripe onboarding
+  link and check the resulting account status before claiming completion.
+- Respect the owner's one-time service authorization and explain remaining
+  requirements without asking for approval on each service.
+  Requires the compatible platform change in
+  [tinyloophub/tinyloop#1385](https://github.com/tinyloophub/tinyloop/pull/1385)
+  to be deployed before promoting this version to managed Computers.
+
 ## 0.32.25 - 2026-09-23
 
 - Add the `tinyhat_services` tool and `tinyhat-services` skill for an assigned
