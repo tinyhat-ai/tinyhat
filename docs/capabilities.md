@@ -640,7 +640,9 @@ arbitrary shell commands in chat.
 ## Individual account upgrade
 
 `tinyhat_account_upgrade` prepares the assigned individual owner's Stripe
-Projects upgrade using Computer identity. `prepare` saves details and returns
+Projects upgrade using Computer identity. `prepare` sends only the owner's
+two-letter country code; Stripe collects identity details in its embedded form
+after approval. The draft returns
 `awaiting_approval`; in Telegram it sends a native **Review account upgrade**
 button. `review_link` resends it. The private review URL remains in the result
 so an owner in another private channel can also open it. No personal details are included in the button message or tool response.
@@ -659,7 +661,11 @@ flags are no longer supported. Existing customers retain the same owner account
 and do not need to register again.
 
 Versioned routes remain `/hapi/v2/computers/me/account/upgrade` (GET status, POST
-draft), `/upgrade/continue` and `/verification-link`. Compatible review APIs
+draft) and `/upgrade/continue`. The legacy `/verification-link` route is
+unavailable while hosted Developer Account Links are disabled for this Stripe
+cohort; owners finish outstanding Projects onboarding in the authenticated
+embedded form under **Profile → Upgrade your agent → Continue** on
+computer.tinyhat.ai. Compatible review APIs
 must deploy first. Computer identity cannot call the browser approval endpoint.
 This tool does not grant spending credit or purchase a service. Raw provider
 errors never echo personal details or credentials.
